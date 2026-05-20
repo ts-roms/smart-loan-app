@@ -1,0 +1,239 @@
+import { useMemberLedger } from '@loan/api-client';
+import {
+  Badge,
+  Button,
+  Drawer,
+  DrawerBody,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+  SkeletonLine,
+} from '@loan/ui';
+import { formatDate, formatMoney } from '@loan/shared-utils';
+import { ArrowUpRight, HandCoins, PiggyBank, UserCircle } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+
+/**
+ * Click-to-inspect wrapper for a cooperative member. Wraps a child trigger
+ * (typically the member's name); clicking opens a right-side drawer with
+ * their cooperative position: lifetime CBU / Mortuary / Emergency, savings
+ * net balance, and recent transactions.
+ *
+ * Usage:
+ *   <MemberLedgerLink customerId={c.customerId}>
+ *     {nameOf(c.customerId)}
+ *   </MemberLedgerLink>
+ */
+export function MemberLedgerLink({
+  customerId,
+  children,
+}: {
+  customerId: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!customerId) return <>{children}</>;
+  return (
+    <Drawer open={open} onOpenChange={setOpen}>
+      <DrawerTrigger asChild>
+        <button
+          type="button"
+          className="text-left hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          aria-label="Open member ledger"
+        >
+          {children}
+        </button>
+      </DrawerTrigger>
+      <DrawerContent>
+        <MemberLedgerInspector customerId={customerId} />
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+function MemberLedgerInspector({ customerId }: { customerId: string }) {
+  const ledger = useMemberLedger(customerId);
+
+  if (ledger.isLoading) {
+    return (
+      <>
+        <DrawerHeader>
+          <DrawerTitle>Member ledger</DrawerTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          <SkeletonLine />
+          <SkeletonLine />
+          <SkeletonLine />
+        </DrawerBody>
+      </>
+    );
+  }
+  if (!ledger.data) {
+    return (
+      <>
+        <DrawerHeader>
+          <DrawerTitle>Member ledger</DrawerTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          <p className="text-sm text-white/55">Member not found.</p>
+        </DrawerBody>
+      </>
+    );
+  }
+
+  const { customer, totals, recentContributions, recentSavings } = ledger.data;
+  const fullName = [customer.firstName, customer.middleName, customer.lastName]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <>
+      <DrawerHeader>
+        <div className="flex items-start gap-2">
+          <UserCircle className="h-5 w-5 mt-0.5 text-sky-300" />
+          <div className="flex-1 min-w-0">
+            <DrawerTitle>{fullName}</DrawerTitle>
+            <DrawerDescription>
+              {customer.email ?? '—'} · {customer.phone}
+              <br />
+              <span className="font-mono">
+                {customer.governmentIdType} {customer.governmentIdNumber}
+              </span>
+            </DrawerDescription>
+          </div>
+        </div>
+      </DrawerHeader>
+
+      <DrawerBody>
+        {/* Totals */}
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+            <HandCoins className="h-3 w-3" />
+            Lifetime contributions
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Stat label="CBU" value={formatMoney(totals.capitalBuildUp)} />
+            <Stat label="Mortuary" value={formatMoney(totals.mortuaryFund)} />
+            <Stat label="Emergency" value={formatMoney(totals.emergencyFund)} />
+          </div>
+          <div className="text-[10px] text-white/45 mt-1">
+            Across {totals.contributionsCount} contribution
+            {totals.contributionsCount === 1 ? '' : 's'}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+            <PiggyBank className="h-3 w-3" />
+            Savings balance
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Stat
+              label="Net"
+              value={formatMoney(totals.savingsNet)}
+              accent={totals.savingsNet >= 0 ? 'emerald' : 'rose'}
+            />
+            <Stat
+              label="Deposits"
+              value={formatMoney(totals.savingsDeposits)}
+              sub={`${totals.depositCount} txn`}
+            />
+            <Stat
+              label="Withdrawals"
+              value={formatMoney(totals.savingsWithdrawals)}
+              sub={`${totals.withdrawalCount} txn`}
+            />
+          </div>
+        </div>
+
+        {/* Recent activity */}
+        {recentContributions.length > 0 && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">
+              Recent contributions
+            </div>
+            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+              {recentContributions.slice(0, 8).map((c) => {
+                const total =
+                  Number(c.capitalBuildUp) + Number(c.mortuaryFund) + Number(c.emergencyFund);
+                return (
+                  <div key={c.id} className="px-2.5 py-1.5 text-xs flex items-center justify-between">
+                    <div className="text-white/65">{formatDate(c.contributedAt)}</div>
+                    <div className="font-mono font-semibold">{formatMoney(total)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {recentSavings.length > 0 && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">
+              Recent savings
+            </div>
+            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+              {recentSavings.slice(0, 8).map((s) => (
+                <div
+                  key={s.id}
+                  className="px-2.5 py-1.5 text-xs flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/65">{formatDate(s.txnDate)}</span>
+                    <Badge variant={s.kind === 'DEPOSIT' ? 'success' : 'muted'}>
+                      {s.kind}
+                    </Badge>
+                  </div>
+                  <div
+                    className={`font-mono ${s.kind === 'DEPOSIT' ? 'text-emerald-300' : 'text-rose-300'}`}
+                  >
+                    {formatMoney(Number(s.amount))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </DrawerBody>
+
+      <DrawerFooter>
+        <Button variant="outline" asChild>
+          <Link to={`/customers/${customer.id}`} className="inline-flex items-center gap-1">
+            <ArrowUpRight className="h-3 w-3" />
+            Open customer profile
+          </Link>
+        </Button>
+      </DrawerFooter>
+    </>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: 'emerald' | 'rose';
+}) {
+  const color =
+    accent === 'emerald'
+      ? 'text-emerald-300'
+      : accent === 'rose'
+        ? 'text-rose-300'
+        : 'text-white';
+  return (
+    <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
+      <div className="text-[10px] uppercase tracking-wider text-white/45">{label}</div>
+      <div className={`font-mono text-sm mt-0.5 ${color}`}>{value}</div>
+      {sub && <div className="text-[10px] text-white/45 mt-0.5">{sub}</div>}
+    </div>
+  );
+}

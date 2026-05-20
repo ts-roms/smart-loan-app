@@ -1,0 +1,16 @@
+{
+  "name": "@loan/jobs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "cron-parser": "^4.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "~5.7.2"
+  }
+}

@@ -1,0 +1,57 @@
+# Keep the build context lean — anything matching these patterns is not
+# sent to the Docker daemon when building images.
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+*.swp
+
+# Node + build artifacts (we want the builder stage to install fresh)
+node_modules
+**/node_modules
+dist
+**/dist
+.next
+**/.next
+build
+**/build
+coverage
+**/coverage
+*.tsbuildinfo
+
+# Local state we don't want baked into images
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+**/!.env.example
+
+# Logs, caches
+*.log
+npm-debug.log*
+.pnpm-store
+.cache
+.nx/cache
+.turbo
+
+# Git
+.git
+.gitignore
+
+# Docs / CI
+.github
+*.md
+!apps/web/nginx.conf
+docker-compose*.yml
+Dockerfile*
+
+# Local uploads (mounted as a named volume at runtime, not baked in)
+uploads
+**/uploads
+
+# Prisma local generated client only — migrations themselves MUST be
+# included so `prisma migrate deploy` works inside the container.
+libs/db/node_modules

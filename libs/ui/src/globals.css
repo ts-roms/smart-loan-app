@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --background: 222 28% 6%;
+    --foreground: 210 30% 96%;
+    --muted: 217 17% 18%;
+    --muted-foreground: 215 16% 65%;
+    --border: 217 25% 22%;
+    --input: 217 25% 22%;
+    --ring: 198 90% 60%;
+    --primary: 198 90% 60%;
+    --primary-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 30% 96%;
+  }
+
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    background: radial-gradient(1200px 600px at 10% 0%, rgba(56, 189, 248, 0.06), transparent 60%),
+                radial-gradient(900px 500px at 100% 100%, rgba(168, 85, 247, 0.05), transparent 55%),
+                hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/[0.04] border border-white/10 backdrop-blur-md;
+  }
+  .glass-strong {
+    @apply bg-white/[0.06] border border-white/15 backdrop-blur-md;
+  }
+
+  /* Themed scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.16);
+    background-clip: padding-box;
+  }
+}

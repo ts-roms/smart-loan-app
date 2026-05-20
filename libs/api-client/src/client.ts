@@ -1,0 +1,143 @@
+/**
+ * Tiny fetch wrapper used by every TanStack Query hook in this lib.
+ * Extracts the server's human `message` into `ApiError.message` so the UI
+ * can render "Invalid credentials" instead of "API 401".
+ *
+ * Refresh-on-401: when a request comes back with HTTP 401 and the caller
+ * supplied a `refreshSession` hook, the client transparently calls it
+ * once, replaces the access token via `onTokenRefreshed`, and retries the
+ * original request. A failed refresh hands the error back to the UI which
+ * triggers logout.
+ */
+export interface ApiClientOptions {
+  baseUrl: string;
+  getToken?: () => string | null | undefined;
+  /** Returns the current refresh token, or null if there isn't one. */
+  getRefreshToken?: () => string | null | undefined;
+  /** Called when /auth/refresh returns a new access+refresh pair. */
+  onTokenRefreshed?: (next: {
+    accessToken: string;
+    refreshToken: string;
+    refreshTokenExpiresAt: string;
+  }) => void;
+  /** Called when refresh fails — the client should sign the user out. */
+  onRefreshFailed?: () => void;
+}
+
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly body?: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export class ApiClient {
+  /** In-flight refresh promise so concurrent 401s share one /auth/refresh call. */
+  private refreshing: Promise<string | null> | null = null;
+
+  constructor(private readonly opts: ApiClientOptions) {}
+
+  async request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+    const token = this.opts.getToken?.();
+    const headers = new Headers(init.headers);
+    // For FormData, let the browser set Content-Type (with the multipart boundary).
+    // For anything else with a body, default to JSON.
+    const isFormData =
+      typeof FormData !== 'undefined' && init.body instanceof FormData;
+    if (init.body != null && !isFormData && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+
+    const res = await fetch(`${this.opts.baseUrl}${path}`, { ...init, headers });
+    if (res.status === 401 && retry && !path.startsWith('/auth/')) {
+      // Try the refresh dance — once. If it succeeds, we recurse with
+      // `retry=false` so a still-401 response just propagates.
+      const nextToken = await this.tryRefresh();
+      if (nextToken) {
+        return this.request<T>(path, init, false);
+      }
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      const parsed = safeParse(text);
+      const message =
+        parsed && typeof parsed === 'object' && 'message' in parsed &&
+        typeof (parsed as { message: unknown }).message === 'string'
+          ? (parsed as { message: string }).message
+          : `API ${res.status}`;
+      throw new ApiError(res.status, message, parsed);
+    }
+    if (res.status === 204) return undefined as T;
+    return (await res.json()) as T;
+  }
+
+  /**
+   * Single-flight refresh — if multiple requests fail with 401 at once,
+   * only one /auth/refresh round-trip fires; the rest await its promise.
+   */
+  private async tryRefresh(): Promise<string | null> {
+    const refresh = this.opts.getRefreshToken?.();
+    if (!refresh) return null;
+    if (!this.refreshing) {
+      this.refreshing = (async () => {
+        try {
+          const res = await fetch(`${this.opts.baseUrl}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken: refresh }),
+          });
+          if (!res.ok) {
+            this.opts.onRefreshFailed?.();
+            return null;
+          }
+          const data = (await res.json()) as {
+            accessToken: string;
+            refreshToken: string;
+            refreshTokenExpiresAt: string;
+          };
+          this.opts.onTokenRefreshed?.(data);
+          return data.accessToken;
+        } catch {
+          this.opts.onRefreshFailed?.();
+          return null;
+        } finally {
+          // Clear the in-flight slot so a future 401 can refresh again.
+          this.refreshing = null;
+        }
+      })();
+    }
+    return this.refreshing;
+  }
+
+  get<T>(path: string): Promise<T> {
+    return this.request<T>(path, { method: 'GET' });
+  }
+  post<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) });
+  }
+}
+
+function safeParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+let singleton: ApiClient | null = null;
+
+export function configureApiClient(opts: ApiClientOptions): ApiClient {
+  singleton = new ApiClient(opts);
+  return singleton;
+}
+
+export function getApiClient(): ApiClient {
+  if (!singleton) throw new Error('ApiClient not configured. Call configureApiClient() at startup.');
+  return singleton;
+}

@@ -1,0 +1,49 @@
+{
+  "name": "@loan/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.ts",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "serve": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.app.json --noEmit",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@fastify/helmet": "^12.0.1",
+    "@fastify/multipart": "^9.0.1",
+    "@fastify/rate-limit": "^10.1.1",
+    "@fastify/sensible": "^6.0.1",
+    "@fastify/static": "^8.0.3",
+    "@fastify/swagger": "^9.4.0",
+    "@fastify/swagger-ui": "^5.2.1",
+    "@loan/accounting": "workspace:*",
+    "@loan/auth": "workspace:*",
+    "@loan/credit-scoring": "workspace:*",
+    "@loan/db": "workspace:*",
+    "@loan/features": "workspace:*",
+    "@loan/kyc": "workspace:*",
+    "@loan/decisioning": "workspace:*",
+    "@loan/jobs": "workspace:*",
+    "@loan/loans": "workspace:*",
+    "@loan/notifications": "workspace:*",
+    "@loan/payments": "workspace:*",
+    "@loan/pdf": "workspace:*",
+    "@loan/screening": "workspace:*",
+    "@loan/shared-types": "workspace:*",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0",
+    "@sentry/node": "^8.45.1",
+    "otplib": "^12.0.1",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "~5.7.2"
+  }
+}

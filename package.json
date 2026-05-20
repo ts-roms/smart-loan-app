@@ -1,0 +1,38 @@
+{
+  "name": "smart-loan-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Smart Loan — advanced loan application with credit scoring + KYC",
+  "scripts": {
+    "dev": "nx run-many -t serve -p web api --parallel=2",
+    "dev:web": "nx serve web",
+    "dev:api": "nx serve api",
+    "build": "nx run-many -t build --all",
+    "lint": "nx run-many -t lint --all",
+    "test": "nx run-many -t test --all",
+    "typecheck": "nx run-many -t typecheck --all",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @loan/db prisma:migrate",
+    "db:generate": "pnpm --filter @loan/db prisma:generate",
+    "db:seed": "pnpm --filter @loan/db prisma:seed",
+    "db:studio": "pnpm --filter @loan/db prisma:studio",
+    "docker:up": "docker compose --profile full up -d --build",
+    "docker:down": "docker compose --profile full down",
+    "docker:logs": "docker compose --profile full logs -f",
+    "docker:rebuild": "docker compose --profile full build --no-cache",
+    "docker:nuke": "docker compose --profile full down -v",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "nx": "^20.3.0",
+    "prettier": "^3.4.2",
+    "typescript": "~5.7.2"
+  },
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@loan/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@fastify/jwt": "^9.0.1",
+    "argon2": "^0.41.1",
+    "fastify-plugin": "^5.0.1"
+  },
+  "peerDependencies": {
+    "fastify": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "fastify": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "fastify": "^5.2.0",
+    "typescript": "~5.7.2"
+  }
+}

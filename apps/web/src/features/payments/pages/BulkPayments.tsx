@@ -1,0 +1,282 @@
+import { useRecordPaymentsBulk } from '@loan/api-client';
+import type { BulkPaymentRow, BulkPaymentRowResult } from '@loan/api-client';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  useToast,
+} from '@loan/ui';
+import { formatMoney } from '@loan/shared-utils';
+import { FileSpreadsheet, Trash2, Upload } from 'lucide-react';
+import { useMemo, useRef, useState, type ChangeEvent } from 'react';
+
+import { useAuth } from '../../../providers/auth';
+
+/**
+ * Bulk payment recording. The CSV format is the same shape the API expects:
+ *
+ *     loanNumber,amount,paidOn,reference
+ *     LN-2026-000001,5000,2026-05-20,GCASH-ABC123
+ *     LN-2026-000002,3500,,
+ *
+ * `paidOn` defaults to today. `reference` is optional. Comments (#…) and
+ * blank lines are skipped. Use `loanId` instead of `loanNumber` if you have
+ * UUIDs.
+ *
+ * Submission is per-row: each row is independent, so a single bad row
+ * doesn't block the rest. Failed rows are shown with their error.
+ */
+export function BulkPaymentsPage() {
+  const { user } = useAuth();
+  const toast = useToast();
+  const bulk = useRecordPaymentsBulk();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [raw, setRaw] = useState('loanNumber,amount,paidOn,reference\n');
+  const [stopOnError, setStopOnError] = useState(false);
+  const [results, setResults] = useState<BulkPaymentRowResult[] | null>(null);
+
+  const canSubmit = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
+
+  const parsed = useMemo(() => parseCsv(raw), [raw]);
+
+  const onPickFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => setRaw(String(reader.result ?? ''));
+    reader.readAsText(f);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const onSubmit = async () => {
+    if (parsed.rows.length === 0) {
+      toast.error('No rows to post');
+      return;
+    }
+    if (parsed.errors.length > 0) {
+      toast.error(`Fix ${parsed.errors.length} parse error(s) first`);
+      return;
+    }
+    try {
+      const r = await bulk.mutateAsync({ rows: parsed.rows, stopOnError });
+      setResults(r.results);
+      toast.success(`${r.succeeded} posted, ${r.failed} failed`);
+    } catch (err) {
+      toast.error((err as Error).message ?? 'Failed');
+    }
+  };
+
+  const reset = () => {
+    setRaw('loanNumber,amount,paidOn,reference\n');
+    setResults(null);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2">
+          <FileSpreadsheet className="h-4 w-4" />
+          Bulk payments
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={onPickFile}
+            className="hidden"
+          />
+          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+            <Upload className="h-3 w-3" />
+            Upload CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={reset}>
+            <Trash2 className="h-3 w-3" />
+            Clear
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="text-xs text-white/55">
+          Format: <code>loanNumber,amount,paidOn,reference</code>. Header row optional.
+          Use <code>loanId</code> in the header instead of <code>loanNumber</code> if you have UUIDs.
+        </div>
+        <textarea
+          value={raw}
+          onChange={(e) => setRaw(e.target.value)}
+          rows={12}
+          className="w-full font-mono text-xs rounded-md border border-white/15 bg-white/[0.04] p-2"
+          spellCheck={false}
+        />
+
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-3">
+            <Badge variant={parsed.errors.length > 0 ? 'danger' : 'muted'}>
+              {parsed.rows.length} row(s) parsed
+            </Badge>
+            {parsed.errors.length > 0 && (
+              <Badge variant="danger">{parsed.errors.length} parse error(s)</Badge>
+            )}
+            {parsed.totalAmount > 0 && (
+              <span className="text-white/55">
+                Total: <span className="font-mono">{formatMoney(parsed.totalAmount)}</span>
+              </span>
+            )}
+          </div>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={stopOnError}
+              onChange={(e) => setStopOnError(e.target.checked)}
+            />
+            Stop on first error
+          </label>
+        </div>
+
+        {parsed.errors.length > 0 && (
+          <ul className="text-xs space-y-1 text-rose-300">
+            {parsed.errors.map((e, i) => (
+              <li key={i}>Line {e.line}: {e.message}</li>
+            ))}
+          </ul>
+        )}
+
+        {parsed.rows.length > 0 && (
+          <details className="text-sm" open>
+            <summary className="cursor-pointer text-xs uppercase tracking-wider text-white/45">
+              Preview ({parsed.rows.length} rows)
+            </summary>
+            <table className="w-full mt-2">
+              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+                <tr>
+                  <th className="py-1 px-2">#</th>
+                  <th className="py-1 px-2">Loan</th>
+                  <th className="py-1 px-2 text-right">Amount</th>
+                  <th className="py-1 px-2">Paid on</th>
+                  <th className="py-1 px-2">Reference</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {parsed.rows.map((r, i) => (
+                  <tr key={i} className="text-xs">
+                    <td className="py-1 px-2 text-white/45">{i + 1}</td>
+                    <td className="py-1 px-2 font-mono">{r.loanNumber ?? r.loanId}</td>
+                    <td className="py-1 px-2 text-right font-mono">
+                      {formatMoney(r.amount)}
+                    </td>
+                    <td className="py-1 px-2 text-white/65">{r.paidOn ?? 'today'}</td>
+                    <td className="py-1 px-2 text-white/65">{r.reference ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        )}
+
+        <div>
+          <Button
+            onClick={onSubmit}
+            disabled={!canSubmit || bulk.isPending || parsed.rows.length === 0 || parsed.errors.length > 0}
+          >
+            {bulk.isPending
+              ? 'Posting…'
+              : `Post ${parsed.rows.length} payment${parsed.rows.length === 1 ? '' : 's'}`}
+          </Button>
+        </div>
+
+        {results && (
+          <div className="rounded-md border border-white/10 p-3">
+            <div className="text-xs uppercase tracking-wider text-white/45 mb-2">Results</div>
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+                <tr>
+                  <th className="py-1 px-2">#</th>
+                  <th className="py-1 px-2">Loan</th>
+                  <th className="py-1 px-2">Status</th>
+                  <th className="py-1 px-2">Detail</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {results.map((r) => (
+                  <tr key={r.index} className="text-xs">
+                    <td className="py-1 px-2 text-white/45">{r.index + 1}</td>
+                    <td className="py-1 px-2 font-mono">{r.loanNumber}</td>
+                    <td className="py-1 px-2">
+                      <Badge variant={r.ok ? 'success' : 'danger'}>
+                        {r.ok ? 'Posted' : 'Failed'}
+                      </Badge>
+                    </td>
+                    <td className="py-1 px-2 text-white/65">
+                      {r.ok ? `payment ${r.paymentId?.slice(0, 8)}` : r.error}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface ParseResult {
+  rows: BulkPaymentRow[];
+  errors: { line: number; message: string }[];
+  totalAmount: number;
+}
+
+function parseCsv(raw: string): ParseResult {
+  const rows: BulkPaymentRow[] = [];
+  const errors: { line: number; message: string }[] = [];
+  let total = 0;
+  const lines = raw.split(/\r?\n/);
+  let headerCols: string[] | null = null;
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li]!.trim();
+    if (!line || line.startsWith('#')) continue;
+    const cols = line.split(',').map((c) => c.trim());
+    // First non-empty line containing alpha looks like a header.
+    if (!headerCols && cols.some((c) => /[a-z]/i.test(c) && !/^\d/.test(c))) {
+      headerCols = cols.map((c) => c.toLowerCase());
+      continue;
+    }
+    const cols2 = cols.map((c) => (c === '' ? undefined : c));
+    const map: Record<string, string | undefined> = {};
+    if (headerCols) {
+      for (let i = 0; i < headerCols.length; i++) {
+        const key = headerCols[i]!;
+        map[key] = cols2[i];
+      }
+    } else {
+      map.loannumber = cols2[0];
+      map.amount = cols2[1];
+      map.paidon = cols2[2];
+      map.reference = cols2[3];
+    }
+    const loanNumber = map.loannumber ?? map['loan_number'];
+    const loanId = map.loanid ?? map['loan_id'];
+    const amount = Number(map.amount);
+    if (!loanNumber && !loanId) {
+      errors.push({ line: li + 1, message: 'Missing loanNumber or loanId' });
+      continue;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      errors.push({ line: li + 1, message: `Invalid amount: ${map.amount}` });
+      continue;
+    }
+    rows.push({
+      loanNumber,
+      loanId,
+      amount,
+      paidOn: map.paidon ?? map['paid_on'] ?? undefined,
+      reference: map.reference,
+    });
+    total += amount;
+  }
+  return { rows, errors, totalAmount: Math.round(total * 100) / 100 };
+}

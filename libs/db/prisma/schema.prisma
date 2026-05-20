@@ -1,0 +1,1522 @@
+// Prisma schema — smart-loan-app
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users (internal staff + customer accounts) ──────────────────────────────
+
+enum UserRole {
+  ADMIN          // full access
+  LOAN_OFFICER   // approves/rejects loans, runs KYC
+  ACCOUNTANT     // records payments, reconciles
+  CUSTOMER       // self-serve borrower
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          UserRole  @default(CUSTOMER)
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  /// Save-once personnel signature. When personnel ask to download a
+  /// generated document "with my signature", we embed the image stored at
+  /// this URL. Null = no signature saved; the signature block on PDFs is
+  /// just omitted in that case. Captured/managed via /auth/me/signature.
+  defaultSignatureUrl   String?
+  signatureSavedAt      DateTime?
+
+  /// "Mark as read" cursor for the notification bell. Notifications
+  /// created after this timestamp count as unseen; opening the bell or
+  /// hitting the dedicated endpoint advances it to now().
+  lastSeenNotificationAt DateTime?
+
+  /// TOTP shared secret (base32). Null = 2FA not set up. Even when set,
+  /// `totpEnabled` must be true for the login flow to require a code —
+  /// gives the user a "configure but don't enable yet" mode.
+  totpSecret    String?
+  totpEnabled   Boolean   @default(false)
+  /// Single-use recovery codes (sha256 hashes). On a successful use the
+  /// code is removed from this list; running out → user must reset 2FA.
+  totpRecoveryCodes String[] @default([])
+
+  // What this user did across the system (auditable trail)
+  kycSubmissions   KycSubmission[]    @relation("KycSubmittedBy")
+  kycDecisions     KycSubmission[]    @relation("KycDecidedBy")
+  loanApplications LoanApplication[]  @relation("LoanSubmittedBy")
+  loanDecisions    LoanApplication[]  @relation("LoanDecidedBy")
+  loanDisbursals   LoanApplication[]  @relation("LoanDisbursedBy")
+  loanPayments     LoanPayment[]      @relation("PaymentRecordedBy")
+  surveyResponses  SurveyResponse[]   @relation("SurveyComputedBy")
+  journalEntries   JournalEntry[]     @relation("JournalPostedBy")
+  collectionNotes  CollectionNote[]   @relation("CollectionNoteBy")
+  promisesToPay    PromiseToPay[]    @relation("PtpCreatedBy")
+  paymentIntents   PaymentIntent[]    @relation("PaymentIntentBy")
+  auditEvents      AuditEvent[]       @relation("AuditActor")
+  roleAssignments  UserRoleAssignment[] @relation("UserRoleAssignedTo")
+  delegationsGranted Delegation[]     @relation("Delegator")
+  delegationsHeld    Delegation[]     @relation("Delegate")
+  refreshTokens      RefreshToken[]   @relation("UserRefreshTokens")
+
+  // A customer may have a linked self-serve User account
+  customer Customer? @relation("CustomerLogin", fields: [customerId], references: [id], onDelete: SetNull)
+  customerId String?  @unique
+}
+
+// ─── Customers (borrowers) — full KYC profile ────────────────────────────────
+
+enum GovernmentIdType {
+  PASSPORT
+  DRIVERS_LICENSE
+  NATIONAL_ID
+  SSS
+  TIN
+  OTHER
+}
+
+enum EmploymentStatus {
+  EMPLOYED
+  SELF_EMPLOYED
+  UNEMPLOYED
+  RETIRED
+  STUDENT
+}
+
+enum KycStatus {
+  /// No KYC submitted yet
+  NONE
+  /// Documents submitted, waiting for review
+  PENDING
+  /// All required docs verified
+  VERIFIED
+  /// At least one doc was rejected; customer must resubmit
+  REJECTED
+}
+
+model Customer {
+  id              String   @id @default(uuid())
+
+  // Personal
+  firstName       String
+  middleName      String?
+  lastName        String
+  dateOfBirth     DateTime
+  phone           String
+  email           String?
+  address         String
+  city            String
+  province        String?
+  postalCode      String?
+
+  // Government ID
+  governmentIdType   GovernmentIdType
+  governmentIdNumber String
+
+  // Employment + income
+  employmentStatus    EmploymentStatus
+  employerName        String?
+  jobTitle            String?
+  /// Verified monthly income in the system's home currency
+  monthlyIncome       Decimal  @db.Decimal(14, 2)
+  yearsAtCurrentJob   Decimal? @db.Decimal(5, 2)
+
+  // Computed KYC rollup (latest)
+  kycStatus       KycStatus @default(NONE)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User?           @relation("CustomerLogin")
+  kycSubmissions  KycSubmission[]
+  loanApplications LoanApplication[]
+  surveyResponses SurveyResponse[]
+  creditScores    CreditScore[]
+  amlScreenings   AmlScreening[]
+
+  // ── Cooperative-side activity (contributions, savings, fund movements). ──
+  // A customer-borrower is also a coop member; these relations let the
+  // same record show their loans AND their CBU/Mortuary/Emergency balances.
+  contributions      Contribution[]
+  savingsTxns        SavingsTransaction[]
+  fundTxns           FundTransaction[]
+  fundWithdrawals    FundWithdrawal[]
+
+  @@index([phone])
+  @@index([governmentIdType, governmentIdNumber])
+}
+
+// ─── KYC document submissions ────────────────────────────────────────────────
+
+enum KycDocumentType {
+  ID_FRONT
+  ID_BACK
+  PROOF_OF_INCOME      // payslip, ITR, COE
+  PROOF_OF_ADDRESS     // utility bill
+  SELFIE               // for face match
+  VEHICLE_OR           // Official Receipt (vehicle)
+  VEHICLE_CR           // Certificate of Registration (vehicle)
+  PROPERTY_TITLE       // TCT / Condo title
+  TAX_DECLARATION      // Tax dec for property
+}
+
+enum KycSubmissionStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model KycSubmission {
+  id            String              @id @default(uuid())
+  customerId    String
+  documentType  KycDocumentType
+  /// /uploads/kyc/<random>.jpg — served by API static plugin
+  documentUrl   String
+  status        KycSubmissionStatus @default(PENDING)
+  notes         String?
+  /// Why it was rejected, if applicable
+  reason        String?
+  submittedAt   DateTime            @default(now())
+  decidedAt     DateTime?
+
+  submittedById String
+  decidedById   String?
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  submittedBy User     @relation("KycSubmittedBy", fields: [submittedById], references: [id])
+  decidedBy   User?    @relation("KycDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([customerId, documentType])
+  @@index([status])
+}
+
+// ─── Credit scoring ──────────────────────────────────────────────────────────
+//
+// `CreditScore` is the latest computed snapshot — recomputed whenever the
+// customer fills the survey or significant behavioral data changes (loan
+// approved, payment made, default flagged). The `breakdown` JSON carries
+// per-factor contributions so the customer-facing "why this score?" page
+// can render an honest explanation.
+
+enum CreditTier {
+  A   // 750+ "excellent" — auto-approve eligible
+  B   // 700–749 "good"
+  C   // 600–699 "fair"
+  D   // 500–599 "poor"
+  F   // <500 "very poor" — auto-reject candidates
+}
+
+model CreditScore {
+  id          String     @id @default(uuid())
+  customerId  String
+  /// Numeric score, FICO-flavored range (300–850). See @loan/credit-scoring.
+  score       Int
+  tier        CreditTier
+  /// Per-factor explanation: `[{ factor, weight, value, points }, …]`
+  breakdown   Json
+  /// Link to the survey that produced this score, when one applies
+  sourceSurveyId String?
+  computedAt  DateTime   @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  source   SurveyResponse? @relation(fields: [sourceSurveyId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, computedAt(sort: Desc)])
+}
+
+// ─── Credit survey (multi-step questionnaire) ────────────────────────────────
+//
+// Each `SurveyResponse` is the full set of answers submitted at one time.
+// The catalog of questions itself lives in code (@loan/credit-scoring) so
+// it's typed and easy to evolve; only the answers are persisted.
+
+model SurveyResponse {
+  id            String   @id @default(uuid())
+  customerId    String
+  /// `{ questionId: answer, … }` — values are string|number|boolean
+  answers       Json
+  /// Computed score from these answers at submission time
+  score         Int
+  tier          CreditTier
+  /// Per-factor explanation (same shape as CreditScore.breakdown)
+  breakdown     Json
+  computedAt    DateTime @default(now())
+  computedById  String
+
+  customer    Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  computedBy  User           @relation("SurveyComputedBy", fields: [computedById], references: [id])
+  creditScores CreditScore[]
+
+  @@index([customerId, computedAt(sort: Desc)])
+}
+
+// ─── Loans (application → approved → disbursed → active → closed) ───────────
+
+enum LoanStatus {
+  DRAFT          // not yet submitted
+  SUBMITTED      // waiting for officer review
+  UNDER_REVIEW   // officer picked it up
+  APPROVED       // approved but not yet disbursed
+  REJECTED       // declined; terminal
+  DISBURSED      // funds released; payment schedule active
+  ACTIVE         // alias for in-repayment (kept distinct so reporting is easier)
+  CLOSED         // fully paid; terminal
+  DEFAULTED      // missed too many payments; terminal-ish
+  CANCELLED      // customer cancelled before approval
+  RESTRUCTURED   // replaced by a new loan; terminal on the original
+  WRITTEN_OFF    // lender gave up collecting; principal hits Bad Debt; terminal
+}
+
+// ─── Loan products (product catalog) ─────────────────────────────────────────
+//
+// Products are fully dynamic — the catalog is rows, not enum values. Admin can
+// create new products at runtime. `code` is the stable identifier referenced
+// by every LoanApplication.
+
+enum CollateralKind {
+  NONE
+  VEHICLE
+  PROPERTY
+}
+
+enum CollateralStatus {
+  /// Submitted with the application, not yet verified
+  PROPOSED
+  /// Officer verified ownership docs (OR/CR, title)
+  VERIFIED
+  /// Loan closed, lien released
+  RELEASED
+  /// Foreclosed / repossessed
+  SEIZED
+}
+
+/**
+ * Per-product configuration. Limits, defaults, and required docs.
+ * One row per LoanType. Admin-tunable without a code change.
+ */
+model LoanProduct {
+  id                  String   @id @default(uuid())
+  /// Stable identifier referenced by LoanApplication.productCode.
+  /// Conventionally uppercase snake (e.g. "SALARY", "EDUCATIONAL", "BUSINESS_SME").
+  code                String   @unique
+  name                String
+  description         String?
+  collateralKind      CollateralKind   @default(NONE)
+  /// Doc types required ON TOP OF the base KYC pack for this product.
+  requiredKycDocs     KycDocumentType[]
+
+  minPrincipal        Decimal  @db.Decimal(14, 2)
+  maxPrincipal        Decimal  @db.Decimal(14, 2)
+  minTermMonths       Int
+  maxTermMonths       Int
+  /// Annual rate as decimal: 0.18 = 18%/year
+  defaultRate         Decimal  @db.Decimal(6, 4)
+  minRate             Decimal  @db.Decimal(6, 4)
+  maxRate             Decimal  @db.Decimal(6, 4)
+  /// Maximum loan-to-value for secured loans (0.80 = 80% of appraised value).
+  /// Null for unsecured products. Per-tier overrides via `ltvByTier` take precedence.
+  maxLoanToValue      Decimal? @db.Decimal(5, 4)
+
+  // ── Fees ────────────────────────────────────────────────────────────
+  /// One-time processing fee, percent of principal (0.02 = 2%).
+  processingFeeRate   Decimal  @default(0) @db.Decimal(5, 4)
+  /// One-time processing fee, flat amount in PHP. Added on top of rate-based.
+  processingFeeFlat   Decimal  @default(0) @db.Decimal(14, 2)
+  /// Documentary stamp tax, percent of principal (PH default ≈ 1.5/200 = 0.0075).
+  documentaryStampRate Decimal @default(0) @db.Decimal(5, 4)
+  /// Daily late-fee rate, percent of installment (0.01 = 1%/day).
+  lateFeeDailyRate    Decimal  @default(0.01) @db.Decimal(5, 4)
+  /// Late-fee cap as fraction of installment (0.1 = 10%).
+  lateFeeCapFraction  Decimal  @default(0.1) @db.Decimal(5, 4)
+  /// Free days after due date before fees accrue.
+  lateFeeGraceDays    Int      @default(3)
+  /// Pre-termination fee, percent of remaining principal at close.
+  preTerminationFeeRate Decimal @default(0) @db.Decimal(5, 4)
+
+  // ── Interest method + frequency ────────────────────────────────────
+  interestMethod      InterestMethod      @default(DECLINING)
+  paymentFrequency    PaymentFrequency    @default(MONTHLY)
+
+  // ── Tier-based pricing (optional) ──────────────────────────────────
+  /// JSON map of credit tier → rate. Format: { "A": 0.08, "B": 0.10, … }
+  /// If set, apply uses tierAtApply to look up the rate.
+  /// A tier mapped to `null` means rejected for this product.
+  rateByTier          Json?
+  /// JSON map of credit tier → max LTV. Format: { "A": 0.80, "B": 0.70, … }
+  /// Overrides `maxLoanToValue` when set.
+  ltvByTier           Json?
+
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // ── ECL provisioning (IFRS 9 / PFRS 9) ─────────────────────────────
+  /// Probability of default — 12-month for Stage 1, lifetime for Stage 2/3.
+  /// Decimal in [0,1]. Default 0.05 is a placeholder; tune per cohort.
+  eclPd12m            Decimal  @default(0.05) @db.Decimal(6, 4)
+  eclPdLifetime       Decimal  @default(0.20) @db.Decimal(6, 4)
+  /// Loss given default — fraction of EAD expected to be lost net of
+  /// recoveries. 0.45 is a typical PH NBFI baseline for unsecured retail.
+  eclLgd              Decimal  @default(0.45) @db.Decimal(6, 4)
+
+  loans               LoanApplication[]
+}
+
+enum InterestMethod {
+  /// Standard amortization — interest computed on remaining balance each period.
+  DECLINING
+  /// Add-on / flat — interest pre-calculated on full principal, split evenly.
+  /// Common for short-term personal loans in PH.
+  FLAT
+}
+
+enum PaymentFrequency {
+  MONTHLY
+  BIWEEKLY
+  WEEKLY
+}
+
+// ─── Collateral (typed per kind) ─────────────────────────────────────────────
+
+model Vehicle {
+  id             String   @id @default(uuid())
+  /// 'CAR' or 'MOTORCYCLE' — finer than LoanType, kept loose for future kinds.
+  kind           String
+  make           String
+  model          String
+  year           Int
+  plateNumber    String?
+  chassisNumber  String?
+  engineNumber   String?
+  color          String?
+  /// Appraised value used for LTV computation.
+  appraisedValue Decimal  @db.Decimal(14, 2)
+  status         CollateralStatus @default(PROPOSED)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  loan           LoanApplication?
+}
+
+model Property {
+  id             String   @id @default(uuid())
+  /// 'HOUSE_AND_LOT' | 'CONDO' | 'LOT_ONLY' | 'COMMERCIAL' | …
+  propertyType   String
+  address        String
+  city           String
+  province       String?
+  postalCode     String?
+  /// Land title (TCT) or condo certificate number
+  titleNumber    String?
+  taxDecNumber   String?
+  /// In square meters
+  areaSqm        Decimal? @db.Decimal(10, 2)
+  appraisedValue Decimal  @db.Decimal(14, 2)
+  status         CollateralStatus @default(PROPOSED)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  loan           LoanApplication?
+}
+
+model LoanApplication {
+  id              String     @id @default(uuid())
+  /// Human-readable: "LN-2026-000123"
+  number          String     @unique
+  customerId      String
+
+  /// FK to LoanProduct.code. Legacy rows are backfilled to "SALARY".
+  productCode     String     @default("SALARY")
+  product         LoanProduct @relation(fields: [productCode], references: [code], onDelete: Restrict)
+
+  /// URL of the live-capture selfie taken at apply. Used for face-match
+  /// against ID_FRONT KYC doc + as a fraud signal.
+  applicationSelfieUrl String?
+
+  /// If this loan restructured an older one, the original loan's id.
+  /// Mutually exclusive with `restructuredById`. Kept on the new loan so
+  /// the timeline is easy to walk forward.
+  restructuredFromId String?  @unique
+  restructuredFrom   LoanApplication?  @relation("Restructure", fields: [restructuredFromId], references: [id])
+  restructuredBy     LoanApplication?  @relation("Restructure")
+
+  /// Write-off bookkeeping. `writeOffAmount` is whatever principal remained
+  /// outstanding at the time of write-off (what we Dr'd Bad Debt for).
+  writeOffAmount  Decimal?  @db.Decimal(14, 2)
+  writeOffReason  String?
+  writtenOffAt    DateTime?
+  writtenOffById  String?
+
+  // ── E-signature audit trail ──────────────────────────────────────────
+  /// URL of the borrower's captured signature PNG (typically /uploads/signatures/<id>.png).
+  borrowerSignatureUrl String?
+  borrowerSignedAt     DateTime?
+  /// Source IP at signing — captured for audit. May be IPv6.
+  borrowerSignedFromIp String?
+  officerSignatureUrl String?
+  officerSignedAt     DateTime?
+  officerSignedById   String?
+  /// If the officer signed under delegation, the Delegation id. Lets the
+  /// PDF render "Signed by X under delegation from Y".
+  officerSignedUnderDelegationId String?
+  officerSignedUnderDelegation   Delegation? @relation("OfficerSignedUnderDelegation", fields: [officerSignedUnderDelegationId], references: [id], onDelete: SetNull)
+
+  /// IFRS 9 expected-credit-loss staging.
+  ///   STAGE_1 = performing            → 12-month ECL
+  ///   STAGE_2 = significant increase  → lifetime ECL (no default yet)
+  ///   STAGE_3 = credit-impaired       → lifetime ECL, individual treatment
+  /// Updated by the periodic ECL job based on DPD + risk signals; never
+  /// edited directly by hand.
+  eclStage          EclStage @default(STAGE_1)
+  /// Most recent computed ECL amount in PHP. Snapshot only — the
+  /// authoritative history lives in EclRun.
+  eclProvision      Decimal? @db.Decimal(18, 2)
+  eclComputedAt     DateTime?
+
+  /// SHA-256 of the agreement PDF as rendered at signing time. Lets us
+  /// detect whether the document was tampered with after signature.
+  agreementHash       String?
+
+  // Terms requested
+  principal       Decimal    @db.Decimal(14, 2)
+  termMonths      Int
+  /// Annual rate as decimal: 0.18 = 18%/year
+  annualInterestRate Decimal @db.Decimal(6, 4)
+  purpose         String?
+
+  // Underwriting context — frozen at application time
+  creditScoreAtApply Int?
+  tierAtApply        CreditTier?
+
+  status            LoanStatus @default(SUBMITTED)
+  decisionReason    String?
+
+  submittedAt       DateTime   @default(now())
+  decidedAt         DateTime?
+  disbursedAt       DateTime?
+  closedAt          DateTime?
+
+  submittedById     String
+  decidedById       String?
+  disbursedById     String?
+
+  // Optional collateral. At most one of these is populated, gated by product.
+  vehicleId         String?   @unique
+  propertyId        String?   @unique
+  vehicle           Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  property          Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  submittedBy User     @relation("LoanSubmittedBy", fields: [submittedById], references: [id])
+  decidedBy   User?    @relation("LoanDecidedBy", fields: [decidedById], references: [id])
+  disbursedBy User?    @relation("LoanDisbursedBy", fields: [disbursedById], references: [id])
+
+  schedule LoanSchedule[]
+  payments LoanPayment[]
+  collectionNotes CollectionNote[]
+  promisesToPay   PromiseToPay[]
+  paymentIntents  PaymentIntent[]
+  coMakers        CoMaker[]
+  messages        LoanMessage[]
+
+  @@index([customerId, status])
+  @@index([status, submittedAt])
+  @@index([productCode])
+}
+
+// ─── Amortization schedule + actual payments ────────────────────────────────
+//
+// One `LoanSchedule` row per scheduled installment (monthly). `LoanPayment`
+// rows are actual money received; the repository ties them back to the
+// next-due schedule row at payment time.
+
+model LoanSchedule {
+  id            String   @id @default(uuid())
+  loanId        String
+  /// 1-indexed installment number
+  installmentNo Int
+  dueDate       DateTime
+  /// Principal portion of this installment
+  principalDue  Decimal  @db.Decimal(14, 2)
+  /// Interest portion of this installment
+  interestDue   Decimal  @db.Decimal(14, 2)
+  /// `principalDue + interestDue`
+  totalDue      Decimal  @db.Decimal(14, 2)
+  /// Cumulative principal paid up to and including this row
+  principalPaid Decimal  @default(0) @db.Decimal(14, 2)
+  paidInFullAt  DateTime?
+
+  loan LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@unique([loanId, installmentNo])
+  @@index([dueDate])
+}
+
+model LoanPayment {
+  id          String   @id @default(uuid())
+  loanId      String
+  amount      Decimal  @db.Decimal(14, 2)
+  paidOn      DateTime @default(now())
+  reference   String?
+  /// Free-form note (e.g. "settled via GCash REF abc123")
+  notes       String?
+  recordedById String
+
+  loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  recordedBy User            @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
+  intent     PaymentIntent?
+
+  @@index([loanId, paidOn(sort: Desc)])
+}
+
+// ─── Accounting (general ledger, double-entry) ───────────────────────────────
+//
+// We keep books "right beside" the loan domain so disbursements and payments
+// post journal entries inside the same Prisma transaction. The ledger is
+// append-only: corrections happen via reversing entries, never edits.
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum NormalBalance {
+  DEBIT
+  CREDIT
+}
+
+model Account {
+  id            String         @id @default(uuid())
+  /// Numeric account code, e.g. "1100" — sorts lexically in standard order.
+  code          String         @unique
+  name          String
+  type          AccountType
+  normalBalance NormalBalance
+  description   String?
+  active        Boolean        @default(true)
+  /// System accounts are referenced by code from auto-posting code and
+  /// cannot be deleted (they may be deactivated only by an admin).
+  system        Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  lines         JournalLine[]
+
+  @@index([type])
+  @@index([code])
+}
+
+enum JournalSource {
+  /// An accountant typed it in by hand.
+  MANUAL
+  /// Auto-posted by LoanRepository.disburse.
+  LOAN_DISBURSEMENT
+  /// Auto-posted by LoanRepository.recordPayment.
+  LOAN_PAYMENT
+  /// Reversing entry to back out a prior entry.
+  REVERSAL
+  /// Period-end adjusting entry.
+  ADJUSTMENT
+  /// Monthly interest accrual (Dr Interest Receivable / Cr Interest Income).
+  INTEREST_ACCRUAL
+  /// Daily late-fee accrual on overdue installments.
+  LATE_FEE_ACCRUAL
+  /// Period-end ECL allowance movement — DR Impairment Loss / CR Allowance
+  /// for Doubtful Accounts (or the reverse for write-backs). Posted by the
+  /// ECL run job; tagged by EclRun id for idempotency.
+  ECL_PROVISION
+  /// Cooperative module posts — keep them grouped at the bottom so the
+  /// JournalSource UI filters can offer a "Cooperative" preset.
+  COOP_CONTRIBUTION
+  COOP_SAVINGS
+  COOP_FUND_IN
+  COOP_FUND_OUT
+  COOP_EXPENSE
+  COOP_OTHER_INCOME
+  COOP_BIG_BROTHER
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+}
+
+/// One row per (year, month). Once CLOSED, no postings can hit it
+/// (caller must reopen first). Year-end close is just December close.
+model AccountingPeriod {
+  id          String       @id @default(uuid())
+  year        Int
+  month       Int          // 1–12
+  status      PeriodStatus @default(OPEN)
+  closedAt    DateTime?
+  closedById  String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  entries     JournalEntry[]
+
+  @@unique([year, month])
+  @@index([status])
+}
+
+model JournalEntry {
+  id          String         @id @default(uuid())
+  /// Human-readable: "JE-2026-000123"
+  number      String         @unique
+  /// Date the entry affects the books (may differ from postedAt).
+  entryDate   DateTime
+  memo        String?
+  source      JournalSource  @default(MANUAL)
+  /// For auto-posted entries: the originating loan/payment id, so we
+  /// can detect duplicates and link from the loan detail page.
+  sourceRefType String?
+  sourceRefId   String?
+
+  postedAt    DateTime       @default(now())
+  postedById  String
+
+  /// The accounting period this entry hit. Resolved from entryDate at
+  /// post time. Nullable for legacy entries that pre-date the periods table.
+  periodId    String?
+  period      AccountingPeriod? @relation(fields: [periodId], references: [id])
+
+  /// If this entry was reversed, the id of the reversing entry.
+  reversedById String?       @unique
+  reversedBy   JournalEntry? @relation("JournalReversal", fields: [reversedById], references: [id])
+  reverses     JournalEntry? @relation("JournalReversal")
+
+  postedBy    User           @relation("JournalPostedBy", fields: [postedById], references: [id])
+  lines       JournalLine[]
+
+  @@index([entryDate])
+  @@index([source, sourceRefId])
+  @@index([sourceRefType, sourceRefId])
+  @@index([periodId])
+}
+
+model JournalLine {
+  id        String  @id @default(uuid())
+  entryId   String
+  accountId String
+  /// Debit amount (mutually exclusive with credit — one of these is 0).
+  debit     Decimal @default(0) @db.Decimal(14, 2)
+  credit    Decimal @default(0) @db.Decimal(14, 2)
+  memo      String?
+
+  entry   JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([entryId])
+  @@index([accountId])
+}
+
+// ─── Collections (overdue follow-up workflow) ────────────────────────────────
+
+enum CollectionNoteType {
+  CALL
+  SMS
+  EMAIL
+  VISIT
+  OTHER
+}
+
+model CollectionNote {
+  id          String              @id @default(uuid())
+  loanId      String
+  type        CollectionNoteType  @default(OTHER)
+  body        String
+  createdAt   DateTime            @default(now())
+  createdById String
+
+  loan        LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  createdBy   User            @relation("CollectionNoteBy", fields: [createdById], references: [id])
+
+  @@index([loanId, createdAt(sort: Desc)])
+}
+
+enum PromiseStatus {
+  /// Customer committed to a future payment.
+  PROMISED
+  /// They paid on or before the promise date.
+  HONORED
+  /// Promise date passed without payment.
+  BROKEN
+  /// Cancelled by the customer or officer.
+  CANCELLED
+}
+
+model PromiseToPay {
+  id            String        @id @default(uuid())
+  loanId        String
+  amount        Decimal       @db.Decimal(14, 2)
+  promisedDate  DateTime
+  status        PromiseStatus @default(PROMISED)
+  note          String?
+  createdAt     DateTime      @default(now())
+  resolvedAt    DateTime?
+  createdById   String
+
+  loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  createdBy  User            @relation("PtpCreatedBy", fields: [createdById], references: [id])
+
+  @@index([loanId, promisedDate])
+  @@index([status])
+}
+
+// ─── Payment gateway (provider-agnostic intents + webhook trail) ─────────────
+
+enum PaymentProvider {
+  MOCK
+  GCASH
+  MAYA
+}
+
+enum PaymentIntentStatus {
+  CREATED
+  PROCESSING
+  PAID
+  FAILED
+  EXPIRED
+}
+
+model PaymentIntent {
+  id              String              @id @default(uuid())
+  loanId          String
+  provider        PaymentProvider     @default(MOCK)
+  /// Provider-side id (e.g. "ch_abc123" or "mock_...").
+  externalId      String
+  /// Idempotency key the API supplied at create; safe to retry.
+  idempotencyKey  String              @unique
+  amount          Decimal             @db.Decimal(14, 2)
+  paymentUrl      String
+  status          PaymentIntentStatus @default(CREATED)
+  /// When status flipped to PAID/FAILED/EXPIRED.
+  resolvedAt      DateTime?
+  /// If PAID, link to the LoanPayment row that recorded it.
+  paymentId       String?             @unique
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  createdById     String
+
+  loan      LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  payment   LoanPayment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  createdBy User            @relation("PaymentIntentBy", fields: [createdById], references: [id])
+
+  @@unique([provider, externalId])
+  @@index([loanId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+// ─── Audit log (append-only) ─────────────────────────────────────────────────
+//
+// Records every privileged action: decide, disburse, payment, reversal,
+// product create/edit, KYC override, etc. The schema is generic enough that
+// any route can call AuditLogRepository.record() without coordination.
+
+model AuditEvent {
+  id          String   @id @default(uuid())
+  /// Coarse action label, e.g. "LOAN_DECIDE", "JOURNAL_REVERSE", "PRODUCT_CREATE".
+  action      String
+  /// User who performed the action.
+  actorId     String
+  /// Optional pointer to the affected row.
+  targetType  String?
+  targetId    String?
+  /// Free-form context — reason, before/after snapshot, payload, etc.
+  payload     Json?
+  createdAt   DateTime @default(now())
+
+  actor       User     @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@index([action])
+}
+
+// ─── Background jobs (scheduler) ─────────────────────────────────────────────
+//
+// `ScheduledJob` is the registry — one row per named recurring job. `JobRun`
+// is the audit trail of each execution.
+//
+// The scheduler runs in-process via node-cron. For horizontal scaling,
+// swap to BullMQ + Redis later; the JobRun history schema stays.
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model ScheduledJob {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  /// Standard cron expression, e.g. "0 1 * * *" = daily 01:00.
+  cron        String
+  enabled     Boolean  @default(true)
+  lastRunAt   DateTime?
+  /// Computed by the scheduler each tick; informational only.
+  nextRunAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  runs        JobRun[]
+
+  @@index([enabled])
+}
+
+model JobRun {
+  id          String   @id @default(uuid())
+  jobId       String
+  status      JobStatus @default(PENDING)
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  /// Free-form result payload (e.g. {posted, skipped}).
+  result      Json?
+  error       String?
+  /// Whether the run was triggered by the schedule (false = manual).
+  manual      Boolean   @default(false)
+
+  job         ScheduledJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, startedAt(sort: Desc)])
+  @@index([status])
+}
+
+// ─── Notifications (email / SMS dispatch) ────────────────────────────────────
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  IN_APP
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+/// Coarse event labels; the dispatcher maps each to a template at send time.
+enum NotificationEvent {
+  LOAN_APPROVED
+  LOAN_REJECTED
+  LOAN_DISBURSED
+  PAYMENT_RECEIVED
+  PAYMENT_DUE_SOON
+  PAYMENT_OVERDUE
+  PROMISE_TO_PAY
+  WELCOME
+  TEST
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  event       NotificationEvent
+  channel     NotificationChannel
+  /// Email address or phone number, depending on channel.
+  recipient   String
+  /// Rendered subject/title.
+  subject     String?
+  /// Rendered body.
+  body        String
+  status      NotificationStatus @default(QUEUED)
+  /// Provider-side id if the provider returned one (e.g. SendGrid msg id).
+  providerRef String?
+  error       String?
+  /// Optional pointer to the entity the notification refers to.
+  refType     String?
+  refId       String?
+  /// Optional customer link for filtering.
+  customerId  String?
+
+  createdAt   DateTime @default(now())
+  sentAt      DateTime?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([status])
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([event])
+}
+
+// ─── AML / PEP / sanctions screening ─────────────────────────────────────────
+
+enum AmlStatus {
+  /// Awaiting first screen.
+  PENDING
+  /// No matches.
+  CLEAR
+  /// Hit one or more watchlists.
+  MATCH
+  /// Officer needs to manually review borderline match.
+  REVIEW
+  /// Officer cleared the customer despite a match (overridden).
+  OVERRIDDEN
+}
+
+model AmlScreening {
+  id           String   @id @default(uuid())
+  customerId   String
+  status       AmlStatus @default(PENDING)
+  /// Provider-side id (which provider ran the screen).
+  provider     String   @default("MOCK")
+  /// Provider's own reference for this screen.
+  providerRef  String?
+  /// Array of `{ list, name, score, details }` for matches found.
+  matches      Json?
+  notes        String?
+  screenedAt   DateTime @default(now())
+  /// If OVERRIDDEN, who cleared it.
+  overriddenById String?
+  overriddenAt   DateTime?
+
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, screenedAt(sort: Desc)])
+  @@index([status])
+}
+
+/// Mock watchlist row. Real providers replace this with a vendor API.
+model AmlWatchlistEntry {
+  id        String   @id @default(uuid())
+  /// "PEP", "SANCTIONS", "ADVERSE_MEDIA", "INTERNAL".
+  list      String
+  fullName  String
+  aliases   String[]
+  /// Notes for the officer reviewing a match.
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([fullName])
+}
+
+// ─── Co-makers / co-borrowers / guarantors ───────────────────────────────────
+//
+// One LoanApplication can have multiple co-makers. We capture the same
+// underwriting data we'd want on the primary borrower (income, ID, etc.)
+// plus their relationship to the customer.
+
+enum CoMakerRole {
+  CO_BORROWER   // jointly liable
+  GUARANTOR     // backstop if primary defaults
+  CO_MAKER      // generic "second signer"
+}
+
+model CoMaker {
+  id                 String      @id @default(uuid())
+  loanId             String
+  fullName           String
+  role               CoMakerRole @default(CO_MAKER)
+  relationship       String?     // "Spouse" / "Parent" / "Sibling" / "Friend" / "Employer"
+  phone              String
+  email              String?
+  address            String?
+  governmentIdType   GovernmentIdType?
+  governmentIdNumber String?
+  /// Monthly income for capacity calculations.
+  monthlyIncome      Decimal?    @db.Decimal(14, 2)
+  /// URL of signed co-maker agreement, when available.
+  signedAgreementUrl String?
+  /// In-app signature PNG URL (canvas capture).
+  signatureUrl       String?
+  signedAt           DateTime?
+  notes              String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  loan               LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId])
+}
+
+// ─── Automated decisioning rules ─────────────────────────────────────────────
+//
+// Rules are evaluated in `priority` order (ascending; lowest first). The
+// first rule whose conditions all match decides the loan's initial status.
+// If no rule matches, the loan stays SUBMITTED for manual review.
+
+enum RuleAction {
+  AUTO_APPROVE
+  AUTO_REJECT
+  MANUAL_REVIEW
+}
+
+model DecisionRule {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  /// Lower = evaluated first. Conventionally: rejects use 10-90,
+  /// approvals 100-900, manual-review fallbacks 1000+.
+  priority    Int      @default(500)
+  /// JSON array of `{ field, op, value }` conditions; ALL must match.
+  /// See @loan/decisioning for the schema.
+  conditions  Json
+  action      RuleAction
+  /// Stored on the loan's `decisionReason` when this rule fires.
+  reason      String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([priority, active])
+}
+
+// ─── RBAC: permissions + dynamic roles ───────────────────────────────────────
+//
+// Layered on top of the existing `UserRole` enum. The enum stays for display
+// + JWT compatibility (it's the user's "primary role"); fine-grained access
+// checks go through `requirePermission`, which evaluates the union of
+// permissions across the user's assigned `Role` rows.
+//
+// Seeded canonical roles (ADMIN / LOAN_OFFICER / ACCOUNTANT / CUSTOMER) are
+// flagged `system: true` and cannot be deleted. Their permission sets can
+// still be edited if the lender wants tighter or looser defaults.
+
+model Permission {
+  id          String   @id @default(uuid())
+  /// Stable identifier referenced by code (e.g. "loans.approve").
+  key         String   @unique
+  label       String
+  description String?
+  /// UI grouping ("Loans", "Accounting", etc.)
+  category    String
+  /// System permissions can't be deleted (code references them).
+  system      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@index([category])
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  /// Stable identifier; uppercase for system roles, free-form for custom.
+  key         String   @unique
+  name        String
+  description String?
+  /// System roles can't be deleted.
+  system      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  users       UserRoleAssignment[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRoleAssignment {
+  userId      String
+  roleId      String
+  grantedAt   DateTime @default(now())
+  grantedById String?
+
+  user User @relation("UserRoleAssignedTo", fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([userId])
+}
+
+// ─── Delegation (proxy authority with date range + scoped permissions) ───────
+//
+// A user (delegator) can grant a subset of their permissions to another user
+// (delegate) for a date range. The delegate's own account performs the
+// action — their userId stays on the audit log — but the active delegation
+// expands the permission set requirePermission sees, so they pass checks
+// they normally wouldn't.
+//
+// For signatures specifically, the signing endpoint accepts the delegation
+// id so the loan agreement PDF can be honest about who signed under whose
+// authority.
+
+model Delegation {
+  id            String   @id @default(uuid())
+  delegatorId   String
+  delegateId    String
+  /// Permission keys included. Empty = all of delegator's role permissions.
+  permissions   String[]
+  startsAt      DateTime
+  endsAt        DateTime
+  /// Free-form reason, e.g. "Leave Mar 1-15", "Manager off-site Thursday".
+  note          String?
+  /// Revoked early? null = still active (subject to endsAt).
+  revokedAt     DateTime?
+  revokedById   String?
+  revokedReason String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  delegator User @relation("Delegator", fields: [delegatorId], references: [id])
+  delegate  User @relation("Delegate",  fields: [delegateId],  references: [id])
+
+  signedLoans LoanApplication[] @relation("OfficerSignedUnderDelegation")
+
+  @@index([delegateId, startsAt, endsAt])
+  @@index([delegatorId])
+  @@index([revokedAt])
+}
+
+// ─── In-app messaging (officer ↔ borrower) ──────────────────────────────────
+//
+// Lightweight thread per loan. Either party (the assigned officer or the
+// borrower's portal account) can post; the other sees the message in the
+// loan detail page. We track read-state cursors on the message rather
+// than per-thread so individual notifications can deep-link.
+
+enum LoanMessageAuthor {
+  OFFICER
+  BORROWER
+}
+
+model LoanMessage {
+  id          String   @id @default(uuid())
+  loanId      String
+  /// User id of whoever wrote it. The author's role at send-time is
+  /// captured separately so a role change later doesn't rewrite history.
+  authorId    String
+  authorRole  LoanMessageAuthor
+  body        String   @db.Text
+  /// Set when the recipient has acknowledged the message.
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  loan        LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId, createdAt])
+  @@index([readAt])
+}
+
+// ─── ECL provisioning (IFRS 9 / PFRS 9) ─────────────────────────────────────
+//
+// The expected-credit-loss model has three stages keyed off DPD and risk
+// signals. ECL = PD × LGD × EAD, where:
+//   PD  — probability of default (12-month for Stage 1; lifetime for 2/3)
+//   LGD — loss given default (per-product configurable)
+//   EAD — exposure at default (= outstanding principal here; simple approx)
+//
+// The periodic ECL job:
+//   1. For every active loan, recompute eclStage from DPD:
+//        0–29 DPD  → STAGE_1 (or keep current if SICR-flagged)
+//        30–89 DPD → STAGE_2
+//        ≥90 DPD   → STAGE_3
+//   2. Compute provision per the formula above using the matching PD.
+//   3. Posts a single GL movement for the period: DR Impairment Expense,
+//      CR Allowance for Loan Losses (a contra-asset).
+//   4. Saves an EclRun summary row so the auditor sees a history.
+
+enum EclStage {
+  STAGE_1
+  STAGE_2
+  STAGE_3
+}
+
+model EclRun {
+  id            String   @id @default(uuid())
+  /// First day of the period this run computes for (typically month start).
+  periodStart   DateTime
+  periodEnd     DateTime
+  /// As-of date the computation ran against — usually periodEnd.
+  asOf          DateTime @default(now())
+
+  /// Aggregate snapshot — the per-loan provisions live on LoanApplication
+  /// (eclProvision/eclStage); EclRun is the journal.
+  totalEad      Decimal  @db.Decimal(18, 2)
+  totalEcl      Decimal  @db.Decimal(18, 2)
+  stage1Count   Int
+  stage2Count   Int
+  stage3Count   Int
+  stage1Ecl     Decimal  @db.Decimal(18, 2)
+  stage2Ecl     Decimal  @db.Decimal(18, 2)
+  stage3Ecl     Decimal  @db.Decimal(18, 2)
+
+  /// Journal entry that booked the impairment movement, if any.
+  journalEntryId String?
+  computedById   String?
+  notes          String?
+
+  @@index([periodEnd])
+}
+
+// ─── Bank reconciliation ────────────────────────────────────────────────────
+//
+// Bank statement is an imported CSV (one row per transaction); each row
+// becomes a BankStatementLine. We auto-match against existing LoanPayment
+// (incoming) or LoanApplication.disbursedAt entries (outgoing) by amount
+// + date proximity + optional reference; unmatched rows surface in the
+// reconciliation UI for manual reconciliation.
+
+enum BankStatementStatus {
+  IMPORTED
+  RECONCILED
+  ARCHIVED
+}
+
+model BankStatement {
+  id            String   @id @default(uuid())
+  /// e.g. "BPI-Current-202605", picked by the user at import time.
+  label         String
+  /// The user-named bank account this statement covers. Could promote to a
+  /// FK to a BankAccount table later — single source of truth for now.
+  bankAccount   String
+  periodStart   DateTime
+  periodEnd     DateTime
+  /// Reported opening / closing balance from the bank.
+  openingBalance Decimal @db.Decimal(18, 2)
+  closingBalance Decimal @db.Decimal(18, 2)
+  importedById  String?
+  importedAt    DateTime @default(now())
+  status        BankStatementStatus @default(IMPORTED)
+
+  lines BankStatementLine[]
+
+  @@index([periodStart, periodEnd])
+  @@index([status])
+}
+
+model BankStatementLine {
+  id            String   @id @default(uuid())
+  statementId   String
+  txnDate       DateTime
+  description   String
+  /// Positive = credit (money in), negative = debit (money out).
+  amount        Decimal  @db.Decimal(18, 2)
+  reference     String?
+  /// Running balance per the bank, if present in the CSV.
+  runningBalance Decimal? @db.Decimal(18, 2)
+  /// Set when reconciled. Match type tells us *what* it was matched to —
+  /// a LoanPayment for incoming, a Loan disbursement for outgoing, or
+  /// MANUAL for everything else (bank fees, owner draws, etc).
+  matchedType   String?
+  matchedRefId  String?
+  matchedAt     DateTime?
+  matchedById   String?
+  /// Free-form note typed by the reconciler — useful for MANUAL matches.
+  matchNote     String?
+
+  statement     BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  @@index([statementId])
+  @@index([txnDate])
+  @@index([matchedAt])
+}
+
+// ─── Refresh tokens ─────────────────────────────────────────────────────────
+//
+// JWT access tokens are short-lived (24h). To keep users signed in beyond
+// that without forcing daily re-login, /auth/login also issues a long-lived
+// random refresh token. The web client stores both; on a 401 it calls
+// /auth/refresh and gets a fresh access token in exchange.
+//
+// We store only the SHA-256 of the refresh token so a DB leak doesn't yield
+// usable tokens. On every refresh we rotate — the old token is marked
+// revoked and replaced by a new one. If a revoked token is ever presented
+// (= token theft), we revoke the entire family for that user.
+
+model RefreshToken {
+  id            String   @id @default(uuid())
+  userId        String
+  /// SHA-256 of the opaque token returned to the client. Never the raw value.
+  tokenHash     String   @unique
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  /// When rotated, points at the replacement so we can detect re-use
+  /// (presenting a revoked token whose successor is still active).
+  replacedById  String?
+  createdAt     DateTime @default(now())
+
+  user          User @relation("UserRefreshTokens", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─── Cooperative modules ────────────────────────────────────────────────────
+//
+// Companion module set to the loan operations: members (= Customer rows)
+// contribute monthly to several funds and may also save voluntarily. We
+// also track the coop's own cash flow — funds in, withdrawals out, expenses,
+// other income, and external capital injections ("Big Brother").
+//
+// Every monetary movement here is auto-posted to the GL. See the
+// `cooperative*Entry` helpers in libs/accounting/src/posting.ts for the
+// exact debits/credits per type.
+
+/**
+ * Free-form "bucket" identifying which fund a movement touches. Used by
+ * FundTransaction, FundWithdrawal, Expense (sourceOfFunds) and OtherIncome
+ * (sourceTo). Kept as a string rather than an enum so admins can add new
+ * buckets without a migration; the canonical set is documented in the UI.
+ *
+ *   CAPITAL_BUILD_UP | MORTUARY_FUND | EMERGENCY_FUND |
+ *   SAVINGS | BIG_BROTHER | GENERAL | OTHER
+ */
+
+model Contribution {
+  id              String   @id @default(uuid())
+  customerId      String
+  /// Equity contribution — each member's stake in the coop.
+  capitalBuildUp  Decimal  @default(0) @db.Decimal(14, 2)
+  /// Death-benefit pool.
+  mortuaryFund    Decimal  @default(0) @db.Decimal(14, 2)
+  /// Short-term emergency assistance pool.
+  emergencyFund   Decimal  @default(0) @db.Decimal(14, 2)
+  notes           String?
+  contributedAt   DateTime @default(now())
+  recordedById    String?
+  /// Journal entry that booked this contribution. Null = posting deferred.
+  journalEntryId  String?
+
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, contributedAt])
+  @@index([contributedAt])
+}
+
+enum SavingsTxnKind {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+model SavingsTransaction {
+  id              String   @id @default(uuid())
+  customerId      String
+  kind            SavingsTxnKind @default(DEPOSIT)
+  amount          Decimal  @db.Decimal(14, 2)
+  notes           String?
+  txnDate         DateTime @default(now())
+  recordedById    String?
+  journalEntryId  String?
+
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, txnDate])
+  @@index([txnDate])
+}
+
+/**
+ * Generic fund inflow — anything that increases a fund balance and doesn't
+ * fit Contribution (member dues) or Savings (voluntary deposits). Examples:
+ * interest earned by the mortuary fund, transfers in from other accounts.
+ *
+ * `customerId` is optional because not all inflows are member-attributable.
+ */
+model FundTransaction {
+  id              String   @id @default(uuid())
+  customerId      String?
+  transactionRef  String?
+  sourceOfFunds   String
+  amount          Decimal  @db.Decimal(14, 2)
+  txnDate         DateTime @default(now())
+  /// Who recorded the row — UI shows their name as "Author".
+  authorId        String?
+  notes           String?
+  journalEntryId  String?
+
+  customer        Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([sourceOfFunds, txnDate])
+  @@index([customerId])
+}
+
+model FundWithdrawal {
+  id              String   @id @default(uuid())
+  customerId      String?
+  sourceOfFunds   String
+  amount          Decimal  @db.Decimal(14, 2)
+  notes           String?
+  txnDate         DateTime @default(now())
+  authorId        String?
+  journalEntryId  String?
+
+  customer        Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([sourceOfFunds, txnDate])
+  @@index([customerId])
+}
+
+model Expense {
+  id              String   @id @default(uuid())
+  type            String
+  amount          Decimal  @db.Decimal(14, 2)
+  sourceOfFunds   String
+  txnDate         DateTime @default(now())
+  /// Repeating expenses (rent, utilities). UI surfaces these so they can
+  /// be reviewed periodically; doesn't auto-create future instances —
+  /// that's a separate scheduling concern.
+  isRecurring     Boolean  @default(false)
+  /// Receipt / invoice URLs (uploaded via /uploads-api).
+  attachments     String[]
+  notes           String?
+  recordedById    String?
+  journalEntryId  String?
+
+  @@index([type, txnDate])
+  @@index([txnDate])
+}
+
+model OtherIncome {
+  id              String   @id @default(uuid())
+  type            String
+  amount          Decimal  @db.Decimal(14, 2)
+  /// Which fund this income credits — same string buckets as Funds.
+  sourceTo        String
+  txnDate         DateTime @default(now())
+  attachments     String[]
+  notes           String?
+  recordedById    String?
+  journalEntryId  String?
+
+  @@index([type, txnDate])
+  @@index([txnDate])
+}
+
+/**
+ * "Big Brother" = external capital provider (NGO, parent coop, donor).
+ * They inject capital for a fixed period. Modelled as a liability so the
+ * balance sheet reflects the eventual repayment obligation; equity-like
+ * treatment can be applied at period-end via a manual adjustment if the
+ * arrangement is a grant rather than a return-of-capital deal.
+ */
+model BigBrotherAccount {
+  id              String   @id @default(uuid())
+  /// Lender / sponsor name.
+  name            String
+  /// Their reference / account identifier.
+  account         String
+  capital         Decimal  @db.Decimal(18, 2)
+  periodFrom      DateTime
+  periodTo        DateTime
+  notes           String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  recordedById    String?
+  journalEntryId  String?
+
+  @@index([active])
+  @@index([periodFrom, periodTo])
+}

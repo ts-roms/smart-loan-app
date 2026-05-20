@@ -1,0 +1,17 @@
+{
+  "name": "@loan/pdf",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "pdfkit": "^0.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/pdfkit": "^0.13.5",
+    "typescript": "~5.7.2"
+  }
+}

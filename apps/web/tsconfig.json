@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "types": ["vite/client"],
+    "paths": {
+      "@loan/db":             ["../../libs/db/src/index.ts"],
+      "@loan/auth":           ["../../libs/auth/src/index.ts"],
+      "@loan/credit-scoring": ["../../libs/credit-scoring/src/index.ts"],
+      "@loan/loans":          ["../../libs/loans/src/index.ts"],
+      "@loan/kyc":            ["../../libs/kyc/src/index.ts"],
+      "@loan/api-client":     ["../../libs/api-client/src/index.ts"],
+      "@loan/ui":             ["../../libs/ui/src/index.ts"],
+      "@loan/features":       ["../../libs/features/src/index.ts"],
+      "@loan/shared-types":   ["../../libs/shared-types/src/index.ts"],
+      "@loan/shared-utils":   ["../../libs/shared-utils/src/index.ts"],
+      "@/*":                  ["src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

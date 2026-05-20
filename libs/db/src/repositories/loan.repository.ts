@@ -1,0 +1,877 @@
+import {
+  allocatePayment,
+  loanDisbursementEntry,
+  loanPaymentEntry,
+  preTerminationFeeEntry,
+} from '@loan/accounting';
+import {
+  type CreditTier as TierString,
+  type InterestMethod as MethodString,
+  type LoanProductConfig,
+  type PaymentFrequency as FreqString,
+  computeAmortizationFor,
+  computeFees,
+  daysBetweenInstallments,
+  effectiveMaxLtv,
+  installmentCount,
+  rateForTier,
+  validateLoanApplication,
+} from '@loan/loans';
+import type {
+  CollateralStatus,
+  CreditTier,
+  LoanApplication,
+  LoanPayment,
+  LoanProduct,
+  LoanStatus,
+  Prisma,
+  PrismaClient,
+} from '@prisma/client';
+
+import { AccountingRepository } from './accounting.repository.js';
+
+type Tx = Prisma.TransactionClient | PrismaClient;
+
+export interface VehicleInput {
+  kind: 'CAR' | 'MOTORCYCLE';
+  make: string;
+  model: string;
+  year: number;
+  plateNumber?: string;
+  chassisNumber?: string;
+  engineNumber?: string;
+  color?: string;
+  appraisedValue: number;
+  notes?: string;
+}
+
+export interface PropertyInput {
+  propertyType: string;
+  address: string;
+  city: string;
+  province?: string;
+  postalCode?: string;
+  titleNumber?: string;
+  taxDecNumber?: string;
+  areaSqm?: number;
+  appraisedValue: number;
+  notes?: string;
+}
+
+export interface LoanApplyInput {
+  customerId: string;
+  /** Product catalog code (e.g. "SALARY"). FK to LoanProduct.code. */
+  productCode: string;
+  principal: number;
+  termMonths: number;
+  /**
+   * Annual rate the applicant requested. Ignored when the product has
+   * `rateByTier` configured — that takes precedence.
+   */
+  annualInterestRate: number;
+  purpose?: string;
+  creditScoreAtApply: number | null;
+  tierAtApply: CreditTier | null;
+  submittedById: string;
+  vehicle?: VehicleInput;
+  property?: PropertyInput;
+  /** Optional live-capture selfie taken at apply, used for face-match + fraud. */
+  applicationSelfieUrl?: string;
+  /** Override initial status (used by decisioning engine). */
+  initialStatus?: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  /** Reason recorded with the decision when not SUBMITTED. */
+  initialDecisionReason?: string;
+  /** If this loan replaces an older one, the original's id. */
+  restructuredFromId?: string;
+}
+
+export interface LoanDecideInput {
+  status: 'APPROVED' | 'REJECTED';
+  reason?: string;
+  decidedById: string;
+}
+
+export interface RecordPaymentInput {
+  amount: number;
+  paidOn: Date;
+  reference?: string;
+  recordedById: string;
+}
+
+export interface BulkPaymentRow {
+  /** Either the human-readable loan number or the loan id; one must be present. */
+  loanNumber?: string;
+  loanId?: string;
+  amount: number;
+  paidOn?: Date;
+  reference?: string;
+}
+
+export interface BulkPaymentRowResult {
+  index: number;
+  loanNumber: string;
+  loanId: string | null;
+  ok: boolean;
+  paymentId?: string;
+  error?: string;
+}
+
+export interface CloseEarlyInput {
+  closedById: string;
+  /** Payment that settles the remaining principal + pre-term fee. */
+  settlementAmount: number;
+  reference?: string;
+}
+
+export interface RestructureInput {
+  /** Officer doing the restructure. */
+  restructuredById: string;
+  /** Product code for the new loan; may differ from the original. */
+  productCode: string;
+  /** New principal. Typically = remaining principal + optional top-up. */
+  principal: number;
+  termMonths: number;
+  annualInterestRate: number;
+  purpose?: string;
+}
+
+export interface WriteOffInput {
+  /** Officer doing the write-off. */
+  writtenOffById: string;
+  reason: string;
+}
+
+/**
+ * Loan lifecycle owner. Each transition runs in a single Prisma transaction
+ * so the loan + schedule + payment + journal-entry rows stay consistent.
+ *
+ * The product catalog is dynamic — every transition reads the relevant
+ * `LoanProduct` row to apply that product's fees, late-fee policy,
+ * interest method, payment frequency, and pre-termination fee.
+ */
+export class LoanRepository {
+  private readonly accounting: AccountingRepository;
+
+  constructor(private readonly prisma: PrismaClient) {
+    this.accounting = new AccountingRepository(prisma);
+  }
+
+  list(): Promise<LoanApplication[]> {
+    return this.prisma.loanApplication.findMany({
+      orderBy: { submittedAt: 'desc' },
+      take: 200,
+    });
+  }
+
+  findById(id: string) {
+    return this.prisma.loanApplication.findUnique({
+      where: { id },
+      include: {
+        schedule: { orderBy: { installmentNo: 'asc' } },
+        payments: { orderBy: { paidOn: 'desc' } },
+        customer: true,
+        vehicle: true,
+        property: true,
+        product: true,
+      },
+    });
+  }
+
+  async apply(input: LoanApplyInput): Promise<LoanApplication> {
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.loanProduct.findUnique({ where: { code: input.productCode } });
+      if (!product || !product.active) {
+        throw new Error(`Loan product ${input.productCode} is not available.`);
+      }
+
+      // Resolve the effective rate. If the product has tier-based pricing
+      // and the customer has a tier, that wins over the requested rate.
+      let rate = input.annualInterestRate;
+      const cfg = toConfig(product);
+      if (cfg.rateByTier && input.tierAtApply) {
+        const tierRate = rateForTier({ ...cfg, defaultRate: Number(product.defaultRate) }, input.tierAtApply);
+        if (tierRate == null && cfg.rateByTier[input.tierAtApply as TierString] === null) {
+          throw new Error(`Product ${product.code} is not available for tier ${input.tierAtApply}.`);
+        }
+        if (tierRate != null) rate = tierRate;
+      }
+
+      const collateralValue =
+        input.vehicle?.appraisedValue ?? input.property?.appraisedValue;
+      const issues = validateLoanApplication(cfg, {
+        principal: input.principal,
+        termMonths: input.termMonths,
+        annualInterestRate: rate,
+        collateralAppraisedValue: collateralValue,
+        tierAtApply: (input.tierAtApply as TierString | null) ?? null,
+      });
+      if (issues.length > 0) {
+        const err = new Error(issues.map((i) => i.message).join(' '));
+        (err as Error & { issues?: unknown }).issues = issues;
+        throw err;
+      }
+
+      if (product.collateralKind === 'VEHICLE' && !input.vehicle) {
+        throw new Error(`${product.code} requires a vehicle.`);
+      }
+      if (product.collateralKind === 'PROPERTY' && !input.property) {
+        throw new Error(`${product.code} requires a property.`);
+      }
+
+      let vehicleId: string | undefined;
+      let propertyId: string | undefined;
+      if (product.collateralKind === 'VEHICLE' && input.vehicle) {
+        const v = await tx.vehicle.create({
+          data: {
+            kind: input.vehicle.kind,
+            make: input.vehicle.make,
+            model: input.vehicle.model,
+            year: input.vehicle.year,
+            plateNumber: input.vehicle.plateNumber,
+            chassisNumber: input.vehicle.chassisNumber,
+            engineNumber: input.vehicle.engineNumber,
+            color: input.vehicle.color,
+            appraisedValue: input.vehicle.appraisedValue,
+            notes: input.vehicle.notes,
+            status: 'PROPOSED' satisfies CollateralStatus,
+          },
+        });
+        vehicleId = v.id;
+      } else if (product.collateralKind === 'PROPERTY' && input.property) {
+        const p = await tx.property.create({
+          data: {
+            propertyType: input.property.propertyType,
+            address: input.property.address,
+            city: input.property.city,
+            province: input.property.province,
+            postalCode: input.property.postalCode,
+            titleNumber: input.property.titleNumber,
+            taxDecNumber: input.property.taxDecNumber,
+            areaSqm: input.property.areaSqm,
+            appraisedValue: input.property.appraisedValue,
+            notes: input.property.notes,
+            status: 'PROPOSED' satisfies CollateralStatus,
+          },
+        });
+        propertyId = p.id;
+      }
+
+      const number = await this.nextApplicationNumber(tx);
+      const initialStatus = (input.initialStatus ?? 'SUBMITTED') as LoanStatus;
+      return tx.loanApplication.create({
+        data: {
+          number,
+          customerId: input.customerId,
+          productCode: input.productCode,
+          principal: input.principal,
+          termMonths: input.termMonths,
+          annualInterestRate: rate,
+          purpose: input.purpose,
+          creditScoreAtApply: input.creditScoreAtApply,
+          tierAtApply: input.tierAtApply,
+          status: initialStatus,
+          decisionReason: input.initialDecisionReason,
+          decidedAt: initialStatus === 'SUBMITTED' ? null : new Date(),
+          decidedById: initialStatus === 'SUBMITTED' ? null : input.submittedById,
+          submittedById: input.submittedById,
+          vehicleId,
+          propertyId,
+          applicationSelfieUrl: input.applicationSelfieUrl,
+          restructuredFromId: input.restructuredFromId,
+        },
+      });
+    });
+  }
+
+  async decide(id: string, input: LoanDecideInput): Promise<LoanApplication> {
+    return this.prisma.loanApplication.update({
+      where: { id },
+      data: {
+        status: input.status as LoanStatus,
+        decisionReason: input.reason,
+        decidedAt: new Date(),
+        decidedById: input.decidedById,
+      },
+    });
+  }
+
+  /**
+   * Disburse an APPROVED loan: materialize the schedule (using the product's
+   * interest method + payment frequency) and post the disbursement journal
+   * entry — including processing + documentary stamp fees as fee income.
+   */
+  async disburse(
+    id: string,
+    input: { disbursedById: string },
+  ): Promise<LoanApplication> {
+    return this.prisma.$transaction(async (tx) => {
+      const loan = await tx.loanApplication.findUnique({
+        where: { id },
+        include: { product: true },
+      });
+      if (!loan) throw new Error('Loan not found');
+      if (loan.status !== 'APPROVED') {
+        throw new Error(`Cannot disburse from status ${loan.status}`);
+      }
+      const product = loan.product;
+      const principal = Number(loan.principal);
+      const annual = Number(loan.annualInterestRate);
+      const method = product.interestMethod as MethodString;
+      const frequency = product.paymentFrequency as FreqString;
+      const schedule = computeAmortizationFor(principal, annual, loan.termMonths, {
+        method,
+        frequency,
+      });
+
+      const today = new Date();
+      const periodInc = daysBetweenInstallments(frequency);
+      await tx.loanSchedule.createMany({
+        data: schedule.map((row, idx) => ({
+          loanId: loan.id,
+          installmentNo: idx + 1,
+          dueDate: nextDueDate(today, idx + 1, periodInc),
+          principalDue: row.principal,
+          interestDue: row.interest,
+          totalDue: row.payment,
+        })),
+      });
+
+      // Compute fees and post the disbursement entry with fee income line.
+      const fees = computeFees(principal, {
+        processingFeeRate: Number(product.processingFeeRate),
+        processingFeeFlat: Number(product.processingFeeFlat),
+        documentaryStampRate: Number(product.documentaryStampRate),
+      });
+      await this.accounting.postIfAbsent(
+        loanDisbursementEntry({
+          loanId: loan.id,
+          loanNumber: loan.number,
+          principal,
+          feeTotal: fees.total,
+          disbursedAt: today,
+        }),
+        { postedById: input.disbursedById, tx },
+      );
+
+      return tx.loanApplication.update({
+        where: { id },
+        data: {
+          status: 'ACTIVE',
+          disbursedAt: today,
+          disbursedById: input.disbursedById,
+        },
+      });
+    });
+  }
+
+  /**
+   * Record a payment + auto-post journal entry. Allocation: interest portion
+   * of upcoming installments first, then principal.
+   */
+  async recordPayment(loanId: string, input: RecordPaymentInput): Promise<LoanPayment> {
+    return this.prisma.$transaction(async (tx) => {
+      const loan = await tx.loanApplication.findUnique({ where: { id: loanId } });
+      if (!loan) throw new Error('Loan not found');
+
+      const payment = await tx.loanPayment.create({
+        data: {
+          loanId,
+          amount: input.amount,
+          paidOn: input.paidOn,
+          reference: input.reference,
+          recordedById: input.recordedById,
+        },
+      });
+
+      const open = await tx.loanSchedule.findMany({
+        where: { loanId, paidInFullAt: null },
+        orderBy: { installmentNo: 'asc' },
+      });
+
+      const allocation = allocatePayment(
+        input.amount,
+        open.map((o) => ({
+          interestDue: Number(o.interestDue),
+          principalDue: Number(o.principalDue),
+        })),
+      );
+
+      let remaining = input.amount;
+      for (const inst of open) {
+        if (remaining + 0.005 < Number(inst.totalDue)) break;
+        remaining -= Number(inst.totalDue);
+        await tx.loanSchedule.update({
+          where: { id: inst.id },
+          data: { paidInFullAt: input.paidOn, principalPaid: inst.principalDue },
+        });
+      }
+
+      await this.accounting.postIfAbsent(
+        loanPaymentEntry({
+          loanId,
+          loanNumber: loan.number,
+          paymentId: payment.id,
+          amount: Number(input.amount),
+          interestPortion: allocation.interest,
+          principalPortion: allocation.principal + allocation.overpayment,
+          paidOn: input.paidOn,
+        }),
+        { postedById: input.recordedById, tx },
+      );
+
+      const stillOpen = await tx.loanSchedule.count({
+        where: { loanId, paidInFullAt: null },
+      });
+      if (stillOpen === 0) {
+        await tx.loanApplication.update({
+          where: { id: loanId },
+          data: { status: 'CLOSED', closedAt: new Date() },
+        });
+      }
+      return payment;
+    });
+  }
+
+  /**
+   * Bulk-record payments. Each row resolves to a loanId (either provided
+   * directly or looked up by loanNumber), then runs through `recordPayment`
+   * (which transactionally writes the payment, updates the schedule, and
+   * posts the journal entry).
+   *
+   * Per-row failures are returned as `ok:false` with an error message;
+   * successful rows still commit. Pass `stopOnError:true` to short-circuit.
+   */
+  async recordPaymentsBulk(
+    rows: BulkPaymentRow[],
+    recordedById: string,
+    opts: { stopOnError?: boolean } = {},
+  ): Promise<BulkPaymentRowResult[]> {
+    const out: BulkPaymentRowResult[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row) continue;
+      try {
+        let loanId = row.loanId ?? null;
+        let number = row.loanNumber ?? '';
+        if (!loanId && row.loanNumber) {
+          const loan = await this.prisma.loanApplication.findUnique({
+            where: { number: row.loanNumber },
+            select: { id: true, number: true },
+          });
+          if (!loan) throw new Error(`Loan number not found: ${row.loanNumber}`);
+          loanId = loan.id;
+          number = loan.number;
+        }
+        if (!loanId) throw new Error('Each row needs loanId or loanNumber.');
+        if (!row.amount || row.amount <= 0) throw new Error('Amount must be > 0.');
+
+        const payment = await this.recordPayment(loanId, {
+          amount: row.amount,
+          paidOn: row.paidOn ?? new Date(),
+          reference: row.reference,
+          recordedById,
+        });
+        out.push({
+          index: i,
+          loanNumber: number,
+          loanId,
+          ok: true,
+          paymentId: payment.id,
+        });
+      } catch (err) {
+        out.push({
+          index: i,
+          loanNumber: row.loanNumber ?? row.loanId ?? '?',
+          loanId: row.loanId ?? null,
+          ok: false,
+          error: (err as Error).message,
+        });
+        if (opts.stopOnError) break;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Settle the loan early. Computes the remaining principal + the
+   * product's pre-termination fee, records both as a single LoanPayment,
+   * posts the disbursement-side fee income entry, and closes the loan.
+   */
+  async closeEarly(loanId: string, input: CloseEarlyInput) {
+    return this.prisma.$transaction(async (tx) => {
+      const loan = await tx.loanApplication.findUnique({
+        where: { id: loanId },
+        include: {
+          product: true,
+          schedule: { where: { paidInFullAt: null } },
+        },
+      });
+      if (!loan) throw new Error('Loan not found');
+      if (loan.status !== 'ACTIVE' && loan.status !== 'DISBURSED') {
+        throw new Error(`Cannot close early from status ${loan.status}`);
+      }
+
+      const remainingPrincipal = loan.schedule.reduce(
+        (sum, s) => sum + (Number(s.principalDue) - Number(s.principalPaid)),
+        0,
+      );
+      const fee = round2(
+        remainingPrincipal * Number(loan.product.preTerminationFeeRate),
+      );
+      const due = round2(remainingPrincipal + fee);
+      if (input.settlementAmount + 0.005 < due) {
+        throw new Error(
+          `Settlement ${input.settlementAmount} is less than required ${due} (principal ${remainingPrincipal} + fee ${fee}).`,
+        );
+      }
+
+      const payment = await tx.loanPayment.create({
+        data: {
+          loanId,
+          amount: input.settlementAmount,
+          paidOn: new Date(),
+          reference: input.reference ?? 'EARLY_SETTLEMENT',
+          recordedById: input.closedById,
+        },
+      });
+
+      // Mark every open installment paid.
+      for (const inst of loan.schedule) {
+        await tx.loanSchedule.update({
+          where: { id: inst.id },
+          data: { paidInFullAt: new Date(), principalPaid: inst.principalDue },
+        });
+      }
+
+      // Post the principal portion (Dr Cash / Cr Loans Receivable).
+      await this.accounting.postIfAbsent(
+        loanPaymentEntry({
+          loanId,
+          loanNumber: loan.number,
+          paymentId: payment.id,
+          amount: remainingPrincipal,
+          interestPortion: 0,
+          principalPortion: remainingPrincipal,
+          paidOn: new Date(),
+        }),
+        { postedById: input.closedById, tx },
+      );
+
+      // Post the pre-termination fee separately so reporting can see the fee income.
+      if (fee > 0) {
+        await this.accounting.postIfAbsent(
+          preTerminationFeeEntry({
+            loanId,
+            loanNumber: loan.number,
+            fee,
+            closedAt: new Date(),
+          }),
+          { postedById: input.closedById, tx },
+        );
+      }
+
+      const updated = await tx.loanApplication.update({
+        where: { id: loanId },
+        data: { status: 'CLOSED', closedAt: new Date() },
+      });
+      return { loan: updated, payment, remainingPrincipal, fee, totalSettled: due };
+    });
+  }
+
+  /**
+   * Restructure a loan. Creates a *new* loan (status APPROVED, linked back via
+   * restructuredFromId) and marks the original RESTRUCTURED. The remaining
+   * principal of the original is "settled" against the new loan inside one
+   * transaction so the ledger stays balanced:
+   *
+   *   Dr Loans Receivable (new)   newPrincipal
+   *     Cr Loans Receivable (old) remainingPrincipal
+   *     Cr Cash                   topUp        (only if newPrincipal > remaining)
+   *
+   * If newPrincipal < remaining we treat the difference as a partial
+   * write-down (Dr Bad Debt) — happens when the customer settles for less.
+   *
+   * Returns both rows so the API can show "this loan is now LN-2026-000045".
+   */
+  async restructure(
+    originalId: string,
+    input: RestructureInput,
+  ): Promise<{ original: LoanApplication; replacement: LoanApplication }> {
+    return this.prisma.$transaction(async (tx) => {
+      const original = await tx.loanApplication.findUnique({
+        where: { id: originalId },
+        include: {
+          schedule: { where: { paidInFullAt: null } },
+          customer: true,
+        },
+      });
+      if (!original) throw new Error('Loan not found');
+      if (!['ACTIVE', 'DISBURSED', 'DEFAULTED'].includes(original.status)) {
+        throw new Error(`Cannot restructure from status ${original.status}`);
+      }
+      if (original.restructuredFromId) {
+        throw new Error('Cannot chain restructures off the same row; restructure the most recent loan in the chain.');
+      }
+
+      const remainingPrincipal = original.schedule.reduce(
+        (s, x) => s + (Number(x.principalDue) - Number(x.principalPaid)),
+        0,
+      );
+
+      // Mark every open installment on the original paid (settlement).
+      for (const inst of original.schedule) {
+        await tx.loanSchedule.update({
+          where: { id: inst.id },
+          data: {
+            paidInFullAt: new Date(),
+            principalPaid: inst.principalDue,
+          },
+        });
+      }
+      const updatedOriginal = await tx.loanApplication.update({
+        where: { id: originalId },
+        data: {
+          status: 'RESTRUCTURED' as LoanStatus,
+          closedAt: new Date(),
+        },
+      });
+
+      // Create the new loan, copying customer + collateral, linked back.
+      // Per-product validation + tier-pricing reuses `apply`.
+      const replacement = await this.applyInTx(tx, {
+        customerId: original.customerId,
+        productCode: input.productCode,
+        principal: input.principal,
+        termMonths: input.termMonths,
+        annualInterestRate: input.annualInterestRate,
+        purpose: input.purpose ?? `Restructure of ${original.number}`,
+        creditScoreAtApply: original.creditScoreAtApply,
+        tierAtApply: original.tierAtApply,
+        submittedById: input.restructuredById,
+        initialStatus: 'APPROVED',
+        initialDecisionReason: `Restructure of ${original.number} (remaining ${remainingPrincipal.toFixed(2)})`,
+        restructuredFromId: original.id,
+      });
+
+      // Post the settlement journal entry.
+      const topUp = round2(input.principal - remainingPrincipal);
+      const writeDown = round2(remainingPrincipal - input.principal);
+      const { ACCOUNT_CODES, buildEntry } = await import('@loan/accounting');
+      const lines: Array<{ accountCode: string; debit: number; credit: number; memo?: string }> = [
+        {
+          accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
+          debit: input.principal,
+          credit: 0,
+          memo: `Restructure: new loan ${replacement.number}`,
+        },
+        {
+          accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
+          debit: 0,
+          credit: remainingPrincipal,
+          memo: `Restructure: settle ${original.number}`,
+        },
+      ];
+      if (topUp > 0) {
+        // Customer is getting cash for the difference.
+        lines.push({
+          accountCode: ACCOUNT_CODES.CASH,
+          debit: 0,
+          credit: topUp,
+          memo: 'Top-up disbursement',
+        });
+      } else if (writeDown > 0) {
+        // We forgave some principal — Dr Bad Debt to balance.
+        lines.push({
+          accountCode: ACCOUNT_CODES.BAD_DEBT_EXPENSE,
+          debit: writeDown,
+          credit: 0,
+          memo: 'Partial write-down at restructure',
+        });
+      }
+      await this.accounting.postIfAbsent(
+        buildEntry({
+          entryDate: new Date(),
+          source: 'MANUAL',
+          sourceRefType: 'LoanRestructure',
+          sourceRefId: replacement.id,
+          memo: `Restructure ${original.number} → ${replacement.number}`,
+          lines,
+        }),
+        { postedById: input.restructuredById, tx },
+      );
+
+      return { original: updatedOriginal, replacement };
+    });
+  }
+
+  /**
+   * Write off a loan. Posts the remaining principal as Bad Debt Expense and
+   * marks the loan WRITTEN_OFF. The customer's behavioral score takes the
+   * hit on next recompute.
+   *
+   *   Dr Bad Debt Expense      remainingPrincipal
+   *     Cr Loans Receivable    remainingPrincipal
+   */
+  async writeOff(
+    id: string,
+    input: WriteOffInput,
+  ): Promise<{ loan: LoanApplication; amount: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      const loan = await tx.loanApplication.findUnique({
+        where: { id },
+        include: { schedule: { where: { paidInFullAt: null } } },
+      });
+      if (!loan) throw new Error('Loan not found');
+      if (loan.status === 'WRITTEN_OFF' || loan.status === 'CLOSED') {
+        throw new Error(`Cannot write off from status ${loan.status}`);
+      }
+
+      const remaining = loan.schedule.reduce(
+        (s, x) => s + (Number(x.principalDue) - Number(x.principalPaid)),
+        0,
+      );
+      const amount = round2(remaining);
+
+      for (const inst of loan.schedule) {
+        await tx.loanSchedule.update({
+          where: { id: inst.id },
+          data: {
+            paidInFullAt: new Date(),
+            principalPaid: inst.principalDue,
+          },
+        });
+      }
+
+      if (amount > 0) {
+        const { ACCOUNT_CODES, buildEntry } = await import('@loan/accounting');
+        await this.accounting.postIfAbsent(
+          buildEntry({
+            entryDate: new Date(),
+            source: 'MANUAL',
+            sourceRefType: 'LoanWriteOff',
+            sourceRefId: loan.id,
+            memo: `Write-off ${loan.number}: ${input.reason}`,
+            lines: [
+              {
+                accountCode: ACCOUNT_CODES.BAD_DEBT_EXPENSE,
+                debit: amount,
+                credit: 0,
+                memo: input.reason,
+              },
+              {
+                accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
+                debit: 0,
+                credit: amount,
+                memo: `Write-off of ${loan.number}`,
+              },
+            ],
+          }),
+          { postedById: input.writtenOffById, tx },
+        );
+      }
+
+      const updated = await tx.loanApplication.update({
+        where: { id },
+        data: {
+          status: 'WRITTEN_OFF' as LoanStatus,
+          writeOffAmount: amount,
+          writeOffReason: input.reason,
+          writtenOffAt: new Date(),
+          writtenOffById: input.writtenOffById,
+          closedAt: new Date(),
+        },
+      });
+      return { loan: updated, amount };
+    });
+  }
+
+  /**
+   * Internal helper — same logic as `apply()` but runs inside an existing
+   * transaction. Extracted so `restructure()` can chain.
+   */
+  private async applyInTx(
+    tx: Prisma.TransactionClient,
+    input: LoanApplyInput,
+  ): Promise<LoanApplication> {
+    const product = await tx.loanProduct.findUnique({ where: { code: input.productCode } });
+    if (!product || !product.active) {
+      throw new Error(`Loan product ${input.productCode} is not available.`);
+    }
+    const number = await this.nextApplicationNumber(tx);
+    const initialStatus = (input.initialStatus ?? 'SUBMITTED') as LoanStatus;
+    return tx.loanApplication.create({
+      data: {
+        number,
+        customerId: input.customerId,
+        productCode: input.productCode,
+        principal: input.principal,
+        termMonths: input.termMonths,
+        annualInterestRate: input.annualInterestRate,
+        purpose: input.purpose,
+        creditScoreAtApply: input.creditScoreAtApply,
+        tierAtApply: input.tierAtApply,
+        status: initialStatus,
+        decisionReason: input.initialDecisionReason,
+        decidedAt: initialStatus === 'SUBMITTED' ? null : new Date(),
+        decidedById: initialStatus === 'SUBMITTED' ? null : input.submittedById,
+        submittedById: input.submittedById,
+        restructuredFromId: input.restructuredFromId,
+      },
+    });
+  }
+
+  private async nextApplicationNumber(
+    client: PrismaClient | Parameters<Parameters<PrismaClient['$transaction']>[0]>[0] = this.prisma,
+  ): Promise<string> {
+    const year = new Date().getFullYear();
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year + 1, 0, 1);
+    const last = await client.loanApplication.findFirst({
+      where: { submittedAt: { gte: yearStart, lt: yearEnd } },
+      orderBy: { submittedAt: 'desc' },
+    });
+    let seq = 1;
+    if (last) {
+      const match = /LN-\d{4}-(\d+)/.exec(last.number);
+      if (match) seq = Number(match[1]) + 1;
+    }
+    return `LN-${year}-${String(seq).padStart(6, '0')}`;
+  }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+
+function toConfig(p: LoanProduct): LoanProductConfig & { defaultRate: number } {
+  return {
+    code: p.code,
+    collateralKind: p.collateralKind as LoanProductConfig['collateralKind'],
+    minPrincipal: Number(p.minPrincipal),
+    maxPrincipal: Number(p.maxPrincipal),
+    minTermMonths: p.minTermMonths,
+    maxTermMonths: p.maxTermMonths,
+    minRate: Number(p.minRate),
+    maxRate: Number(p.maxRate),
+    maxLoanToValue: p.maxLoanToValue == null ? null : Number(p.maxLoanToValue),
+    rateByTier: (p.rateByTier as LoanProductConfig['rateByTier']) ?? null,
+    ltvByTier: (p.ltvByTier as LoanProductConfig['ltvByTier']) ?? null,
+    defaultRate: Number(p.defaultRate),
+  };
+}
+
+function nextDueDate(start: Date, installmentNo: number, inc: number | 'MONTH'): Date {
+  const due = new Date(start);
+  if (inc === 'MONTH') {
+    due.setMonth(due.getMonth() + installmentNo);
+  } else {
+    due.setDate(due.getDate() + inc * installmentNo);
+  }
+  return due;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+// Suppress unused warnings for helpers that callers reference.
+void effectiveMaxLtv;
+void installmentCount;

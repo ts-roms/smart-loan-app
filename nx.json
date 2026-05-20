@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": ["default"],
+    "sharedGlobals": []
+  },
+  "targetDefaults": {
+    "build":     { "cache": true, "inputs": ["production", "^production"] },
+    "test":      { "cache": true },
+    "lint":      { "cache": true },
+    "typecheck": { "cache": true },
+    "serve":     { "cache": false }
+  }
+}
