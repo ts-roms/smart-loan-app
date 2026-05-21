@@ -2,7 +2,7 @@ import type {
   CollectionNoteType,
   KycValidationResult,
   PromiseStatus,
-} from '@loan/shared-types';
+} from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -26,18 +26,38 @@ import {
   useConfirm,
   usePrompt,
   useToast,
-} from '@loan/ui';
-import { formatDate, formatMoney } from '@loan/shared-utils';
-import { AlertTriangle, Copy, CreditCard, Download, ExternalLink, FileText, Link2, MessageSquare, Pen, Phone, Receipt, RefreshCw, Send } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
+} from "@loan/ui";
+import { formatDate, formatMoney } from "@loan/shared-utils";
+import {
+  AlertTriangle,
+  Copy,
+  CreditCard,
+  Download,
+  ExternalLink,
+  FileText,
+  Link2,
+  MessageSquare,
+  Pen,
+  Phone,
+  Receipt,
+  RefreshCw,
+  Send,
+} from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { useParams } from "react-router-dom";
 
-import { SignaturePad } from '../../../components/SignaturePad';
-import { downloadPdf } from '../../../lib/download-pdf';
-import { useAuth } from '../../../providers/auth';
-import { LoanStatusBadge } from '../components/StatusBadge';
-import { DOC_LABELS, TYPE_LABELS } from '../constants';
-import { LoanMessagePanel } from '../../messaging';
+import { SignaturePad } from "../../../components/SignaturePad";
+import { downloadPdf } from "../../../lib/download-pdf";
+import { useAuth } from "../../../providers/auth";
+import { LoanStatusBadge } from "../components/StatusBadge";
+import { PenaltyPanel } from "../components/PenaltyPanel";
+import { AnnualDocsPanel } from "../components/AnnualDocsPanel";
+import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
+import { FaceMatchPanel } from "../components/FaceMatchPanel";
+import { LeasePanel } from "../components/LeasePanel";
+import { DOC_LABELS, TYPE_LABELS } from "../constants";
+import { LoanMessagePanel } from "../../messaging";
+import { AssistantPanel, useExplainDecision } from "../../assistant";
 import {
   useActiveDelegations,
   useAddNote,
@@ -60,7 +80,7 @@ import {
   useSignAsOfficer,
   useUpload,
   useWriteOffLoan,
-} from '../hooks';
+} from "../hooks";
 
 /**
  * Loan detail page. Shows the application, lets an officer decide /
@@ -73,7 +93,7 @@ import {
  * enough that scrolling here is painful, or once another page needs them.
  */
 export function LoanDetailPage() {
-  const { id = '' } = useParams<{ id: string }>();
+  const { id = "" } = useParams<{ id: string }>();
   const loan = useLoan(id);
   const kycStatus = useLoanKycStatus(id);
   const { user } = useAuth();
@@ -84,27 +104,33 @@ export function LoanDetailPage() {
   const confirm = useConfirm();
   const askPrompt = usePrompt();
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [paymentRef, setPaymentRef] = useState('');
+  const [paymentRef, setPaymentRef] = useState("");
 
   if (loan.isLoading) return <SkeletonCard />;
-  if (!loan.data) return <p className="text-sm text-white/55">Loan not found.</p>;
+  if (!loan.data)
+    return <p className="text-sm text-white/55">Loan not found.</p>;
   const l = loan.data;
 
-  const canDecide = user?.role === 'ADMIN' || user?.role === 'LOAN_OFFICER';
-  const canDisburse = canDecide && l.status === 'APPROVED';
-  const canPay = ['DISBURSED', 'ACTIVE'].includes(l.status);
+  const canDecide = user?.role === "ADMIN" || user?.role === "LOAN_OFFICER";
+  const canDisburse = canDecide && l.status === "APPROVED";
+  const canPay = ["DISBURSED", "ACTIVE"].includes(l.status);
   const kycComplete = kycStatus.data?.complete === true;
-  const decisionPending = l.status === 'SUBMITTED' || l.status === 'UNDER_REVIEW';
+  const decisionPending =
+    l.status === "SUBMITTED" || l.status === "UNDER_REVIEW";
 
-  const onDecide = async (status: 'APPROVED' | 'REJECTED', overrideKyc = false) => {
+  const onDecide = async (
+    status: "APPROVED" | "REJECTED",
+    overrideKyc = false,
+  ) => {
     let reason: string | undefined;
-    if (status === 'REJECTED') {
+    if (status === "REJECTED") {
       const answer = await askPrompt({
-        title: 'Reject this loan?',
-        message: 'The rejection reason is shared with the customer and recorded in the audit log.',
-        label: 'Reason',
-        placeholder: 'e.g. insufficient income, missing documents',
-        confirmLabel: 'Reject',
+        title: "Reject this loan?",
+        message:
+          "The rejection reason is shared with the customer and recorded in the audit log.",
+        label: "Reason",
+        placeholder: "e.g. insufficient income, missing documents",
+        confirmLabel: "Reject",
       });
       if (answer === null) return; // cancelled
       reason = answer;
@@ -113,31 +139,31 @@ export function LoanDetailPage() {
       await decide.mutateAsync({ id: l.id, status, reason, overrideKyc });
       toast.success(`Loan ${status.toLowerCase()}`);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   const onApprove = async () => {
     if (!kycComplete) {
       const ok = await confirm({
-        title: 'KYC not complete — approve anyway?',
-        message: 'The override will be recorded in the audit trail.',
-        confirmLabel: 'Override and approve',
-        tone: 'destructive',
+        title: "KYC not complete — approve anyway?",
+        message: "The override will be recorded in the audit trail.",
+        confirmLabel: "Override and approve",
+        tone: "destructive",
       });
       if (!ok) return;
-      await onDecide('APPROVED', true);
+      await onDecide("APPROVED", true);
     } else {
-      await onDecide('APPROVED');
+      await onDecide("APPROVED");
     }
   };
 
   const onDisburse = async () => {
     try {
       await disburse.mutateAsync(l.id);
-      toast.success('Loan disbursed');
+      toast.success("Loan disbursed");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -149,11 +175,11 @@ export function LoanDetailPage() {
         amount: paymentAmount,
         reference: paymentRef || undefined,
       });
-      toast.success('Payment recorded');
+      toast.success("Payment recorded");
       setPaymentAmount(0);
-      setPaymentRef('');
+      setPaymentRef("");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -165,29 +191,39 @@ export function LoanDetailPage() {
           {l.number}
         </CardTitle>
         <div className="flex items-center gap-2">
-          <Badge variant="muted">{TYPE_LABELS[l.productCode] ?? l.productCode}</Badge>
+          <Badge variant="muted">
+            {TYPE_LABELS[l.productCode] ?? l.productCode}
+          </Badge>
           <LoanStatusBadge status={l.status} />
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <Info label="Product">{TYPE_LABELS[l.productCode] ?? l.productCode}</Info>
+          <Info label="Product">
+            {TYPE_LABELS[l.productCode] ?? l.productCode}
+          </Info>
           <Info label="Principal">{formatMoney(Number(l.principal))}</Info>
           <Info label="Term">{l.termMonths} months</Info>
-          <Info label="APR">{(Number(l.annualInterestRate) * 100).toFixed(2)}%</Info>
+          <Info label="APR">
+            {(Number(l.annualInterestRate) * 100).toFixed(2)}%
+          </Info>
           <Info label="Submitted">{formatDate(l.submittedAt)}</Info>
-          <Info label="Tier @ apply">{l.tierAtApply ?? '—'}</Info>
-          <Info label="Score @ apply">{l.creditScoreAtApply ?? '—'}</Info>
+          <Info label="Tier @ apply">{l.tierAtApply ?? "—"}</Info>
+          <Info label="Score @ apply">{l.creditScoreAtApply ?? "—"}</Info>
           <Info label="Decided">{formatDate(l.decidedAt)}</Info>
         </div>
         {l.vehicle && <CollateralPanel kind="VEHICLE" v={l.vehicle} />}
-        {l.property && <CollateralPanel kind="PROPERTY" p={l.property} /> }
+        {l.property && <CollateralPanel kind="PROPERTY" p={l.property} />}
         {l.applicationSelfieUrl && (
           <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-wider text-white/45 mb-2">
               Application selfie
             </div>
-            <a href={l.applicationSelfieUrl} target="_blank" rel="noopener noreferrer">
+            <a
+              href={l.applicationSelfieUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <img
                 src={l.applicationSelfieUrl}
                 alt="application selfie"
@@ -196,19 +232,47 @@ export function LoanDetailPage() {
             </a>
           </div>
         )}
+        {/*
+          Approval chain — only renders when this loan's product has one
+          configured (`currentApprovalStep != null` and rows exist). For
+          products without a chain, the legacy single-decide buttons in
+          DecisionPanel handle approval.
+        */}
+        <ApprovalChainPanel loan={l} />
+        {/*
+          Face-match panel: compares selfie ↔ ID locally via face-api.js.
+          Hidden when there's no selfie or no VERIFIED ID_FRONT — nothing
+          to compare. Officer clicks "Run face match" to compute; result
+          is persisted on the loan + audit-logged.
+        */}
+        <FaceMatchPanel loan={l} />
+        {/*
+          AI assistant — explain the loan's decisioning verdict in plain
+          language. Local LLM only; never sends data off-server. Officer
+          reviews + edits before doing anything with the output.
+        */}
+        <LoanAssistantPanel loanId={l.id} />
         {l.purpose && (
           <div className="text-sm">
-            <span className="text-white/55">Purpose: </span>{l.purpose}
+            <span className="text-white/55">Purpose: </span>
+            {l.purpose}
           </div>
         )}
         {l.decisionReason && (
           <div className="text-sm text-rose-300">
-            <span className="text-white/55">Reason: </span>{l.decisionReason}
+            <span className="text-white/55">Reason: </span>
+            {l.decisionReason}
           </div>
         )}
 
         <DocumentsPanel loanId={l.id} loanNumber={l.number} status={l.status} />
-        {!['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'REJECTED', 'CANCELLED'].includes(l.status) && (
+        {![
+          "DRAFT",
+          "SUBMITTED",
+          "UNDER_REVIEW",
+          "REJECTED",
+          "CANCELLED",
+        ].includes(l.status) && (
           <SignaturesPanel
             loanId={l.id}
             borrowerSignatureUrl={l.borrowerSignatureUrl}
@@ -217,6 +281,9 @@ export function LoanDetailPage() {
             officerSignedAt={l.officerSignedAt}
           />
         )}
+        <LeasePanel loanId={l.id} />
+        <PenaltyPanel loanId={l.id} />
+        <AnnualDocsPanel loanId={l.id} />
         {l.payments && l.payments.length > 0 && (
           <PaymentsPanel loanId={l.id} payments={l.payments} />
         )}
@@ -224,7 +291,7 @@ export function LoanDetailPage() {
         {/* Officer ↔ borrower thread. Lives below the operational
             panels so the conversation is easy to find but doesn't
             dominate the decisioning surface. */}
-        {!['DRAFT'].includes(l.status) && (
+        {!["DRAFT"].includes(l.status) && (
           <LoanMessagePanel loanId={l.id} perspective="OFFICER" />
         )}
 
@@ -235,9 +302,13 @@ export function LoanDetailPage() {
         {canDecide && decisionPending && (
           <div className="flex gap-2 border-t border-white/10 pt-3">
             <Button onClick={onApprove} disabled={decide.isPending}>
-              {kycComplete ? 'Approve' : 'Approve (override KYC)'}
+              {kycComplete ? "Approve" : "Approve (override KYC)"}
             </Button>
-            <Button variant="outline" onClick={() => onDecide('REJECTED')} disabled={decide.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => onDecide("REJECTED")}
+              disabled={decide.isPending}
+            >
               Reject
             </Button>
           </div>
@@ -245,15 +316,18 @@ export function LoanDetailPage() {
         {canDisburse && (
           <div className="border-t border-white/10 pt-3">
             <Button onClick={onDisburse} disabled={disburse.isPending}>
-              {disburse.isPending ? 'Disbursing…' : 'Disburse funds'}
+              {disburse.isPending ? "Disbursing…" : "Disburse funds"}
             </Button>
           </div>
         )}
 
-        {['ACTIVE', 'DISBURSED'].includes(l.status) && canDecide && (
+        {["ACTIVE", "DISBURSED"].includes(l.status) && canDecide && (
           <div className="border-t border-white/10 pt-3 flex flex-wrap gap-2">
             <CloseEarlyButton loanId={l.id} />
-            <RestructureButton loanId={l.id} currentProductCode={l.productCode} />
+            <RestructureButton
+              loanId={l.id}
+              currentProductCode={l.productCode}
+            />
             <WriteOffButton loanId={l.id} />
           </div>
         )}
@@ -261,7 +335,9 @@ export function LoanDetailPage() {
         {canPay && (
           <div className="border-t border-white/10 pt-3 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="text-xs uppercase tracking-wider text-white/55">Record payment</div>
+              <div className="text-xs uppercase tracking-wider text-white/55">
+                Record payment
+              </div>
               <PayOnlineButton loanId={l.id} />
             </div>
             <form onSubmit={onRecord} className="space-y-2">
@@ -270,7 +346,7 @@ export function LoanDetailPage() {
                   type="number"
                   min={1}
                   placeholder="Amount"
-                  value={paymentAmount || ''}
+                  value={paymentAmount || ""}
                   onChange={(e) => setPaymentAmount(Number(e.target.value))}
                   required
                 />
@@ -279,15 +355,18 @@ export function LoanDetailPage() {
                   value={paymentRef}
                   onChange={(e) => setPaymentRef(e.target.value)}
                 />
-                <Button type="submit" disabled={recordPayment.isPending || paymentAmount <= 0}>
-                  {recordPayment.isPending ? 'Saving…' : 'Record'}
+                <Button
+                  type="submit"
+                  disabled={recordPayment.isPending || paymentAmount <= 0}
+                >
+                  {recordPayment.isPending ? "Saving…" : "Record"}
                 </Button>
               </div>
             </form>
           </div>
         )}
 
-        {['ACTIVE', 'DISBURSED', 'DEFAULTED'].includes(l.status) && (
+        {["ACTIVE", "DISBURSED", "DEFAULTED"].includes(l.status) && (
           <CollectionsPanel loanId={l.id} />
         )}
       </CardContent>
@@ -299,16 +378,30 @@ export function LoanDetailPage() {
 // These render only inside LoanDetailPage. Promote to ../components/ when
 // (a) another page needs them or (b) the scroll cost makes this file painful.
 
-function Info({ label, children }: { label: string; children: React.ReactNode }) {
+function Info({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">{label}</div>
-      <div className="text-sm">{children ?? '—'}</div>
+      <div className="text-[10px] uppercase tracking-wider text-white/45">
+        {label}
+      </div>
+      <div className="text-sm">{children ?? "—"}</div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <label className="text-xs text-white/55">{label}</label>
@@ -323,16 +416,20 @@ function KycChecklist({ status }: { status: KycValidationResult }) {
     <div
       className={`rounded-md border p-3 ${
         isComplete
-          ? 'border-emerald-400/20 bg-emerald-500/5'
-          : 'border-amber-400/20 bg-amber-500/5'
+          ? "border-emerald-400/20 bg-emerald-500/5"
+          : "border-amber-400/20 bg-amber-500/5"
       }`}
     >
       <div className="text-xs uppercase tracking-wider text-white/55 mb-2 flex items-center justify-between">
         <span>KYC requirements for this loan</span>
-        <Badge variant={isComplete ? 'success' : 'warning'}>{status.status}</Badge>
+        <Badge variant={isComplete ? "success" : "warning"}>
+          {status.status}
+        </Badge>
       </div>
       {status.missing.length === 0 && status.rejected.length === 0 ? (
-        <div className="text-sm text-emerald-300">All required documents verified.</div>
+        <div className="text-sm text-emerald-300">
+          All required documents verified.
+        </div>
       ) : (
         <ul className="space-y-1 text-sm">
           {status.rejected.map((d) => (
@@ -379,41 +476,51 @@ interface PropertyData {
 
 function CollateralPanel(
   props:
-    | { kind: 'VEHICLE'; v: VehicleData }
-    | { kind: 'PROPERTY'; p: PropertyData },
+    | { kind: "VEHICLE"; v: VehicleData }
+    | { kind: "PROPERTY"; p: PropertyData },
 ) {
   return (
     <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
       <div className="text-xs uppercase tracking-wider text-white/45 mb-2 flex items-center justify-between">
-        <span>{props.kind === 'VEHICLE' ? 'Vehicle collateral' : 'Property collateral'}</span>
+        <span>
+          {props.kind === "VEHICLE"
+            ? "Vehicle collateral"
+            : "Property collateral"}
+        </span>
         <Badge variant="muted">
-          {props.kind === 'VEHICLE' ? props.v.status : props.p.status}
+          {props.kind === "VEHICLE" ? props.v.status : props.p.status}
         </Badge>
       </div>
-      {props.kind === 'VEHICLE' ? (
+      {props.kind === "VEHICLE" ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <Info label="Make">{props.v.make}</Info>
           <Info label="Model">{props.v.model}</Info>
           <Info label="Year">{props.v.year}</Info>
-          <Info label="Appraised">{formatMoney(Number(props.v.appraisedValue))}</Info>
-          <Info label="Plate">{props.v.plateNumber ?? '—'}</Info>
-          <Info label="Chassis">{props.v.chassisNumber ?? '—'}</Info>
-          <Info label="Engine">{props.v.engineNumber ?? '—'}</Info>
-          <Info label="Color">{props.v.color ?? '—'}</Info>
+          <Info label="Appraised">
+            {formatMoney(Number(props.v.appraisedValue))}
+          </Info>
+          <Info label="Plate">{props.v.plateNumber ?? "—"}</Info>
+          <Info label="Chassis">{props.v.chassisNumber ?? "—"}</Info>
+          <Info label="Engine">{props.v.engineNumber ?? "—"}</Info>
+          <Info label="Color">{props.v.color ?? "—"}</Info>
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <Info label="Type">{props.p.propertyType}</Info>
-          <Info label="Title #">{props.p.titleNumber ?? '—'}</Info>
-          <Info label="Tax dec #">{props.p.taxDecNumber ?? '—'}</Info>
-          <Info label="Appraised">{formatMoney(Number(props.p.appraisedValue))}</Info>
+          <Info label="Title #">{props.p.titleNumber ?? "—"}</Info>
+          <Info label="Tax dec #">{props.p.taxDecNumber ?? "—"}</Info>
+          <Info label="Appraised">
+            {formatMoney(Number(props.p.appraisedValue))}
+          </Info>
           <div className="col-span-2">
             <Info label="Address">
               {props.p.address}, {props.p.city}
-              {props.p.province ? `, ${props.p.province}` : ''}
+              {props.p.province ? `, ${props.p.province}` : ""}
             </Info>
           </div>
-          <Info label="Area">{props.p.areaSqm ? `${Number(props.p.areaSqm)} sqm` : '—'}</Info>
+          <Info label="Area">
+            {props.p.areaSqm ? `${Number(props.p.areaSqm)} sqm` : "—"}
+          </Info>
         </div>
       )}
     </div>
@@ -425,7 +532,7 @@ function CloseEarlyButton({ loanId }: { loanId: string }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState(0);
-  const [reference, setReference] = useState('');
+  const [reference, setReference] = useState("");
   const [result, setResult] = useState<{
     remainingPrincipal: number;
     fee: number;
@@ -445,16 +552,16 @@ function CloseEarlyButton({ loanId }: { loanId: string }) {
         fee: r.fee,
         totalSettled: r.totalSettled,
       });
-      toast.success('Loan closed early');
+      toast.success("Loan closed early");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed to close');
+      toast.error((err as Error).message ?? "Failed to close");
     }
   };
 
   const reset = () => {
     setOpen(false);
     setAmount(0);
-    setReference('');
+    setReference("");
     setResult(null);
   };
 
@@ -471,9 +578,15 @@ function CloseEarlyButton({ loanId }: { loanId: string }) {
             </DialogHeader>
             {result ? (
               <div className="space-y-2 text-sm">
-                <Info label="Remaining principal">{formatMoney(result.remainingPrincipal)}</Info>
-                <Info label="Pre-termination fee">{formatMoney(result.fee)}</Info>
-                <Info label="Total settled">{formatMoney(result.totalSettled)}</Info>
+                <Info label="Remaining principal">
+                  {formatMoney(result.remainingPrincipal)}
+                </Info>
+                <Info label="Pre-termination fee">
+                  {formatMoney(result.fee)}
+                </Info>
+                <Info label="Total settled">
+                  {formatMoney(result.totalSettled)}
+                </Info>
                 <DialogFooter>
                   <Button onClick={reset}>Done</Button>
                 </DialogFooter>
@@ -482,14 +595,14 @@ function CloseEarlyButton({ loanId }: { loanId: string }) {
               <div className="space-y-3">
                 <p className="text-sm text-white/65">
                   The system computes the remaining principal + the product's
-                  pre-termination fee. Enter the settlement amount the customer is
-                  paying.
+                  pre-termination fee. Enter the settlement amount the customer
+                  is paying.
                 </p>
                 <Input
                   type="number"
                   min={1}
                   placeholder="Settlement amount (₱)"
-                  value={amount || ''}
+                  value={amount || ""}
                   onChange={(e) => setAmount(Number(e.target.value))}
                 />
                 <Input
@@ -498,9 +611,14 @@ function CloseEarlyButton({ loanId }: { loanId: string }) {
                   onChange={(e) => setReference(e.target.value)}
                 />
                 <DialogFooter>
-                  <Button variant="outline" onClick={reset}>Cancel</Button>
-                  <Button onClick={onConfirm} disabled={closeEarly.isPending || amount <= 0}>
-                    {closeEarly.isPending ? 'Settling…' : 'Settle'}
+                  <Button variant="outline" onClick={reset}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={onConfirm}
+                    disabled={closeEarly.isPending || amount <= 0}
+                  >
+                    {closeEarly.isPending ? "Settling…" : "Settle"}
                   </Button>
                 </DialogFooter>
               </div>
@@ -527,7 +645,7 @@ function RestructureButton({
   const [principal, setPrincipal] = useState(0);
   const [termMonths, setTermMonths] = useState(12);
   const [ratePercent, setRatePercent] = useState(18);
-  const [purpose, setPurpose] = useState('');
+  const [purpose, setPurpose] = useState("");
 
   const onSubmit = async () => {
     if (principal <= 0) return;
@@ -543,7 +661,7 @@ function RestructureButton({
       toast.success(`Restructured → ${r.replacement.number}`);
       setOpen(false);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -561,9 +679,10 @@ function RestructureButton({
             </DialogHeader>
             <div className="space-y-3">
               <p className="text-sm text-white/65">
-                The original loan is marked RESTRUCTURED and a new loan replaces it.
-                If new principal &gt; remaining, the difference is disbursed as a top-up;
-                if smaller, the gap is booked as a partial write-down.
+                The original loan is marked RESTRUCTURED and a new loan replaces
+                it. If new principal &gt; remaining, the difference is disbursed
+                as a top-up; if smaller, the gap is booked as a partial
+                write-down.
               </p>
               <Field label="Product">
                 <Select value={productCode} onValueChange={setProductCode}>
@@ -571,30 +690,38 @@ function RestructureButton({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(products.data ?? []).filter((p) => p.active).map((p) => (
-                      <SelectItem key={p.id} value={p.code}>{p.name}</SelectItem>
-                    ))}
+                    {(products.data ?? [])
+                      .filter((p) => p.active)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.code}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </Field>
               <div className="grid grid-cols-3 gap-2">
                 <Field label="New principal (₱)">
                   <Input
-                    type="number" min={1}
-                    value={principal || ''}
+                    type="number"
+                    min={1}
+                    value={principal || ""}
                     onChange={(e) => setPrincipal(Number(e.target.value))}
                   />
                 </Field>
                 <Field label="Term (months)">
                   <Input
-                    type="number" min={1}
+                    type="number"
+                    min={1}
                     value={termMonths}
                     onChange={(e) => setTermMonths(Number(e.target.value))}
                   />
                 </Field>
                 <Field label="APR (%)">
                   <Input
-                    type="number" min={0} step={0.25}
+                    type="number"
+                    min={0}
+                    step={0.25}
                     value={ratePercent}
                     onChange={(e) => setRatePercent(Number(e.target.value))}
                   />
@@ -608,9 +735,14 @@ function RestructureButton({
                 />
               </Field>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button onClick={onSubmit} disabled={restructure.isPending || principal <= 0}>
-                  {restructure.isPending ? 'Restructuring…' : 'Restructure'}
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={onSubmit}
+                  disabled={restructure.isPending || principal <= 0}
+                >
+                  {restructure.isPending ? "Restructuring…" : "Restructure"}
                 </Button>
               </DialogFooter>
             </div>
@@ -625,7 +757,7 @@ function WriteOffButton({ loanId }: { loanId: string }) {
   const writeOff = useWriteOffLoan();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
 
   const onSubmit = async () => {
     if (!reason.trim()) return;
@@ -633,9 +765,9 @@ function WriteOffButton({ loanId }: { loanId: string }) {
       const r = await writeOff.mutateAsync({ id: loanId, reason });
       toast.success(`Wrote off ${formatMoney(r.amount)} as Bad Debt`);
       setOpen(false);
-      setReason('');
+      setReason("");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -653,9 +785,9 @@ function WriteOffButton({ loanId }: { loanId: string }) {
             </DialogHeader>
             <div className="space-y-3">
               <div className="rounded-md border border-rose-400/30 bg-rose-500/5 p-3 text-sm">
-                <strong className="text-rose-300">Terminal action.</strong> The remaining
-                principal is posted as Bad Debt Expense and the loan is closed. Cannot
-                be undone (only reversed via a journal entry).
+                <strong className="text-rose-300">Terminal action.</strong> The
+                remaining principal is posted as Bad Debt Expense and the loan
+                is closed. Cannot be undone (only reversed via a journal entry).
               </div>
               <Field label="Reason">
                 <Input
@@ -666,12 +798,14 @@ function WriteOffButton({ loanId }: { loanId: string }) {
                 />
               </Field>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
                 <Button
                   onClick={onSubmit}
                   disabled={writeOff.isPending || !reason.trim()}
                 >
-                  {writeOff.isPending ? 'Writing off…' : 'Confirm write-off'}
+                  {writeOff.isPending ? "Writing off…" : "Confirm write-off"}
                 </Button>
               </DialogFooter>
             </div>
@@ -699,7 +833,7 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
       const created = await create.mutateAsync({ loanId, amount });
       setIntentId(created.id);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -707,9 +841,9 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
     if (!intent.data?.paymentUrl) return;
     try {
       await navigator.clipboard.writeText(intent.data.paymentUrl);
-      toast.success('Link copied');
+      toast.success("Link copied");
     } catch {
-      toast.error('Copy failed');
+      toast.error("Copy failed");
     }
   };
 
@@ -734,20 +868,26 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
             {!intentId ? (
               <div className="space-y-3">
                 <p className="text-sm text-white/65">
-                  Generate a payment link. Customer opens the link, pays via the provider,
-                  and the loan payment is posted automatically when the webhook fires.
+                  Generate a payment link. Customer opens the link, pays via the
+                  provider, and the loan payment is posted automatically when
+                  the webhook fires.
                 </p>
                 <Input
                   type="number"
                   min={1}
                   placeholder="Amount (₱)"
-                  value={amount || ''}
+                  value={amount || ""}
                   onChange={(e) => setAmount(Number(e.target.value))}
                 />
                 <DialogFooter>
-                  <Button variant="outline" onClick={reset}>Cancel</Button>
-                  <Button onClick={onCreate} disabled={create.isPending || amount <= 0}>
-                    {create.isPending ? 'Generating…' : 'Generate link'}
+                  <Button variant="outline" onClick={reset}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={onCreate}
+                    disabled={create.isPending || amount <= 0}
+                  >
+                    {create.isPending ? "Generating…" : "Generate link"}
                   </Button>
                 </DialogFooter>
               </div>
@@ -755,19 +895,23 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-white/55">Status</span>
-                  <Badge variant={intent.data?.status === 'PAID' ? 'success' : 'warning'}>
-                    {intent.data?.status ?? 'CREATED'}
+                  <Badge
+                    variant={
+                      intent.data?.status === "PAID" ? "success" : "warning"
+                    }
+                  >
+                    {intent.data?.status ?? "CREATED"}
                   </Badge>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-white/55">Payment URL</label>
                   <div className="flex gap-2">
-                    <Input value={intent.data?.paymentUrl ?? ''} readOnly />
+                    <Input value={intent.data?.paymentUrl ?? ""} readOnly />
                     <Button variant="outline" size="sm" onClick={copyLink}>
                       <Copy className="h-3 w-3" />
                     </Button>
                     <a
-                      href={intent.data?.paymentUrl ?? '#'}
+                      href={intent.data?.paymentUrl ?? "#"}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-center h-9 px-2 rounded-md border border-white/15 hover:bg-white/[0.06]"
@@ -776,12 +920,13 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
                     </a>
                   </div>
                   <p className="text-xs text-white/45">
-                    Sandbox: opening the URL marks the intent PAID and auto-posts the payment.
+                    Sandbox: opening the URL marks the intent PAID and
+                    auto-posts the payment.
                   </p>
                 </div>
                 <DialogFooter>
                   <Button onClick={reset}>
-                    {intent.data?.status === 'PAID' ? 'Done' : 'Close'}
+                    {intent.data?.status === "PAID" ? "Done" : "Close"}
                   </Button>
                 </DialogFooter>
               </div>
@@ -801,25 +946,25 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
   const resolve = useResolvePromise();
   const toast = useToast();
 
-  const [noteBody, setNoteBody] = useState('');
-  const [noteType, setNoteType] = useState<CollectionNoteType>('CALL');
+  const [noteBody, setNoteBody] = useState("");
+  const [noteType, setNoteType] = useState<CollectionNoteType>("CALL");
   const [ptpAmount, setPtpAmount] = useState(0);
   const [ptpDate, setPtpDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
     return d.toISOString().slice(0, 10);
   });
-  const [ptpNote, setPtpNote] = useState('');
+  const [ptpNote, setPtpNote] = useState("");
 
   const onAddNote = async (e: FormEvent) => {
     e.preventDefault();
     if (!noteBody.trim()) return;
     try {
       await addNote.mutateAsync({ loanId, type: noteType, body: noteBody });
-      toast.success('Note added');
-      setNoteBody('');
+      toast.success("Note added");
+      setNoteBody("");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -833,11 +978,11 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
         promisedDate: ptpDate,
         note: ptpNote || undefined,
       });
-      toast.success('Promise recorded');
+      toast.success("Promise recorded");
       setPtpAmount(0);
-      setPtpNote('');
+      setPtpNote("");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -846,7 +991,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
       await resolve.mutateAsync({ id, loanId, status });
       toast.success(`Marked ${status.toLowerCase()}`);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -863,7 +1008,10 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
           <div className="text-xs text-white/55">Activity log</div>
           <form onSubmit={onAddNote} className="space-y-2">
             <div className="flex gap-2">
-              <Select value={noteType} onValueChange={(v) => setNoteType(v as CollectionNoteType)}>
+              <Select
+                value={noteType}
+                onValueChange={(v) => setNoteType(v as CollectionNoteType)}
+              >
                 <SelectTrigger className="h-9 w-28">
                   <SelectValue />
                 </SelectTrigger>
@@ -880,7 +1028,11 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
                 value={noteBody}
                 onChange={(e) => setNoteBody(e.target.value)}
               />
-              <Button type="submit" size="sm" disabled={addNote.isPending || !noteBody.trim()}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={addNote.isPending || !noteBody.trim()}
+              >
                 <Send className="h-3 w-3" />
               </Button>
             </div>
@@ -919,7 +1071,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
                 type="number"
                 placeholder="Amount"
                 min={1}
-                value={ptpAmount || ''}
+                value={ptpAmount || ""}
                 onChange={(e) => setPtpAmount(Number(e.target.value))}
               />
               <DatePicker
@@ -940,7 +1092,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
               className="w-full"
               disabled={createPromise.isPending || ptpAmount <= 0}
             >
-              {createPromise.isPending ? 'Recording…' : 'Record promise'}
+              {createPromise.isPending ? "Recording…" : "Record promise"}
             </Button>
           </form>
           {promises.isLoading ? (
@@ -956,18 +1108,22 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-mono">{formatMoney(Number(p.amount))}</span>{' '}
-                      <span className="text-white/45">by {formatDate(p.promisedDate)}</span>
+                      <span className="font-mono">
+                        {formatMoney(Number(p.amount))}
+                      </span>{" "}
+                      <span className="text-white/45">
+                        by {formatDate(p.promisedDate)}
+                      </span>
                     </div>
                     <Badge variant={ptpVariant(p.status)}>{p.status}</Badge>
                   </div>
                   {p.note && <div className="text-white/55">{p.note}</div>}
-                  {p.status === 'PROMISED' && (
+                  {p.status === "PROMISED" && (
                     <div className="flex gap-1 pt-1">
                       <button
                         type="button"
                         className="text-emerald-300 hover:underline"
-                        onClick={() => onResolve(p.id, 'HONORED')}
+                        onClick={() => onResolve(p.id, "HONORED")}
                       >
                         Honored
                       </button>
@@ -975,7 +1131,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
                       <button
                         type="button"
                         className="text-rose-300 hover:underline"
-                        onClick={() => onResolve(p.id, 'BROKEN')}
+                        onClick={() => onResolve(p.id, "BROKEN")}
                       >
                         Broken
                       </button>
@@ -983,7 +1139,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
                       <button
                         type="button"
                         className="text-white/55 hover:underline"
-                        onClick={() => onResolve(p.id, 'CANCELLED')}
+                        onClick={() => onResolve(p.id, "CANCELLED")}
                       >
                         Cancel
                       </button>
@@ -999,13 +1155,20 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
   );
 }
 
-function ptpVariant(status: PromiseStatus): 'success' | 'danger' | 'muted' | 'warning' {
+function ptpVariant(
+  status: PromiseStatus,
+): "success" | "danger" | "muted" | "warning" {
   switch (status) {
-    case 'HONORED': return 'success';
-    case 'BROKEN': return 'danger';
-    case 'CANCELLED': return 'muted';
-    case 'PROMISED': return 'warning';
-    default: return 'muted';
+    case "HONORED":
+      return "success";
+    case "BROKEN":
+      return "danger";
+    case "CANCELLED":
+      return "muted";
+    case "PROMISED":
+      return "warning";
+    default:
+      return "muted";
   }
 }
 
@@ -1021,23 +1184,31 @@ function DocumentsPanel({
   const toast = useToast();
   // Agreement only makes sense once the customer has accepted terms — i.e.
   // post-APPROVED. Statement is available any time once schedule exists.
-  const showAgreement = !['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'REJECTED', 'CANCELLED'].includes(status);
-  const showStatement = !['DRAFT', 'SUBMITTED', 'UNDER_REVIEW'].includes(status);
+  const showAgreement = ![
+    "DRAFT",
+    "SUBMITTED",
+    "UNDER_REVIEW",
+    "REJECTED",
+    "CANCELLED",
+  ].includes(status);
+  const showStatement = !["DRAFT", "SUBMITTED", "UNDER_REVIEW"].includes(
+    status,
+  );
   if (!showAgreement && !showStatement) return null;
 
   const mySig = useMySignature();
   const hasSig = Boolean(mySig.data?.signatureUrl);
 
-  const download = async (kind: 'agreement' | 'statement', signed = false) => {
+  const download = async (kind: "agreement" | "statement", signed = false) => {
     try {
-      const qs = signed ? '?sign=1' : '';
-      const suffix = signed ? '-signed' : '';
+      const qs = signed ? "?sign=1" : "";
+      const suffix = signed ? "-signed" : "";
       await downloadPdf(
         `/loans/${loanId}/${kind}.pdf${qs}`,
         `${kind}-${loanNumber}${suffix}.pdf`,
       );
     } catch (err) {
-      toast.error((err as Error).message ?? 'Download failed');
+      toast.error((err as Error).message ?? "Download failed");
     }
   };
 
@@ -1050,7 +1221,11 @@ function DocumentsPanel({
       <div className="flex flex-wrap gap-2">
         {showAgreement && (
           <>
-            <Button variant="outline" size="sm" onClick={() => download('agreement')}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => download("agreement")}
+            >
               <Download className="h-3 w-3" />
               Loan agreement
             </Button>
@@ -1058,7 +1233,7 @@ function DocumentsPanel({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => download('agreement', true)}
+                onClick={() => download("agreement", true)}
                 title="Embed your saved personnel signature as Prepared by"
               >
                 <Pen className="h-3 w-3" />
@@ -1069,7 +1244,11 @@ function DocumentsPanel({
         )}
         {showStatement && (
           <>
-            <Button variant="outline" size="sm" onClick={() => download('statement')}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => download("statement")}
+            >
               <Download className="h-3 w-3" />
               Statement of account
             </Button>
@@ -1077,7 +1256,7 @@ function DocumentsPanel({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => download('statement', true)}
+                onClick={() => download("statement", true)}
                 title="Embed your saved personnel signature as Prepared by"
               >
                 <Pen className="h-3 w-3" />
@@ -1089,7 +1268,11 @@ function DocumentsPanel({
       </div>
       {!hasSig && (showAgreement || showStatement) && (
         <p className="text-[10px] text-white/45 mt-2">
-          Tip: save a signature in <a className="underline" href="/settings">My settings</a> to enable signed downloads.
+          Tip: save a signature in{" "}
+          <a className="underline" href="/settings">
+            My settings
+          </a>{" "}
+          to enable signed downloads.
         </p>
       )}
     </div>
@@ -1115,14 +1298,14 @@ function PaymentsPanel({
   const hasSig = Boolean(mySig.data?.signatureUrl);
   const onReceipt = async (paymentId: string, signed = false) => {
     try {
-      const qs = signed ? '?sign=1' : '';
-      const suffix = signed ? '-signed' : '';
+      const qs = signed ? "?sign=1" : "";
+      const suffix = signed ? "-signed" : "";
       await downloadPdf(
         `/loans/${loanId}/payments/${paymentId}/receipt.pdf${qs}`,
         `receipt-${paymentId.slice(0, 8)}${suffix}.pdf`,
       );
     } catch (err) {
-      toast.error((err as Error).message ?? 'Download failed');
+      toast.error((err as Error).message ?? "Download failed");
     }
   };
   return (
@@ -1148,7 +1331,9 @@ function PaymentsPanel({
               <td className="py-1.5 px-2 font-mono text-xs">
                 {p.id.slice(0, 8).toUpperCase()}
               </td>
-              <td className="py-1.5 px-2 text-xs text-white/65">{p.reference ?? '—'}</td>
+              <td className="py-1.5 px-2 text-xs text-white/65">
+                {p.reference ?? "—"}
+              </td>
               <td className="py-1.5 px-2 text-right font-mono">
                 {formatMoney(Number(p.amount))}
               </td>
@@ -1195,25 +1380,29 @@ function SignaturesPanel({
   officerSignatureUrl: string | null;
   officerSignedAt: string | null;
 }) {
-  const [openPad, setOpenPad] = useState<'borrower' | 'officer' | null>(null);
-  const [delegationId, setDelegationId] = useState<string>('');
+  const [openPad, setOpenPad] = useState<"borrower" | "officer" | null>(null);
+  const [delegationId, setDelegationId] = useState<string>("");
   const upload = useUpload();
   const signOfficer = useSignAsOfficer();
-  const signBorrower = useSignAsBorrower('officer');
+  const signBorrower = useSignAsBorrower("officer");
   const toast = useToast();
   const activeDelegations = useActiveDelegations();
 
   // Delegations that grant loans.sign_officer (blanket or explicit).
   const eligibleDelegations = (activeDelegations.data ?? []).filter(
-    (d) => d.permissions.length === 0 || d.permissions.includes('loans.sign_officer'),
+    (d) =>
+      d.permissions.length === 0 ||
+      d.permissions.includes("loans.sign_officer"),
   );
 
   const onSign = async (blob: Blob) => {
     if (!openPad) return;
     try {
-      const file = new File([blob], `${openPad}-signature.png`, { type: 'image/png' });
-      const result = await upload.mutateAsync({ file, subdir: 'signatures' });
-      if (openPad === 'officer') {
+      const file = new File([blob], `${openPad}-signature.png`, {
+        type: "image/png",
+      });
+      const result = await upload.mutateAsync({ file, subdir: "signatures" });
+      if (openPad === "officer") {
         await signOfficer.mutateAsync({
           loanId,
           signatureUrl: result.url,
@@ -1222,15 +1411,18 @@ function SignaturesPanel({
       } else {
         await signBorrower.mutateAsync({ loanId, signatureUrl: result.url });
       }
-      toast.success(`${openPad === 'officer' ? 'Officer' : 'Borrower'} signature saved`);
+      toast.success(
+        `${openPad === "officer" ? "Officer" : "Borrower"} signature saved`,
+      );
       setOpenPad(null);
-      setDelegationId('');
+      setDelegationId("");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed to sign');
+      toast.error((err as Error).message ?? "Failed to sign");
     }
   };
 
-  const submitting = upload.isPending || signOfficer.isPending || signBorrower.isPending;
+  const submitting =
+    upload.isPending || signOfficer.isPending || signBorrower.isPending;
 
   return (
     <div className="border-t border-white/10 pt-3">
@@ -1243,13 +1435,13 @@ function SignaturesPanel({
           label="Borrower"
           url={borrowerSignatureUrl}
           signedAt={borrowerSignedAt}
-          onCapture={() => setOpenPad('borrower')}
+          onCapture={() => setOpenPad("borrower")}
         />
         <SignatureSlot
           label="Lender / Officer"
           url={officerSignatureUrl}
           signedAt={officerSignedAt}
-          onCapture={() => setOpenPad('officer')}
+          onCapture={() => setOpenPad("officer")}
         />
       </div>
       {openPad && (
@@ -1257,15 +1449,21 @@ function SignaturesPanel({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                Capture signature — {openPad === 'officer' ? 'Officer' : 'Borrower'}
+                Capture signature —{" "}
+                {openPad === "officer" ? "Officer" : "Borrower"}
               </DialogTitle>
             </DialogHeader>
-            {openPad === 'officer' && eligibleDelegations.length > 0 && (
+            {openPad === "officer" && eligibleDelegations.length > 0 && (
               <div className="mb-2 rounded-md border border-amber-400/40 bg-amber-400/10 p-2 text-xs">
                 <label className="block mb-1 text-amber-100">
                   Sign under delegation (optional)
                 </label>
-                <Select value={delegationId || '__none__'} onValueChange={(v) => setDelegationId(v === '__none__' ? '' : v)}>
+                <Select
+                  value={delegationId || "__none__"}
+                  onValueChange={(v) =>
+                    setDelegationId(v === "__none__" ? "" : v)
+                  }
+                >
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -1274,7 +1472,10 @@ function SignaturesPanel({
                     {eligibleDelegations.map((d) => (
                       <SelectItem key={d.id} value={d.id}>
                         Proxy — delegation {d.id.slice(0, 8)} (
-                        {d.permissions.length === 0 ? 'blanket' : 'sign_officer'})
+                        {d.permissions.length === 0
+                          ? "blanket"
+                          : "sign_officer"}
+                        )
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1312,8 +1513,8 @@ function SignatureSlot({
     <div className="rounded-md border border-white/10 bg-white/[0.02] p-3">
       <div className="text-xs uppercase tracking-wider text-white/45 mb-2 flex items-center justify-between">
         <span>{label}</span>
-        <Badge variant={url ? 'success' : 'muted'}>
-          {url ? 'Signed' : 'Not signed'}
+        <Badge variant={url ? "success" : "muted"}>
+          {url ? "Signed" : "Not signed"}
         </Badge>
       </div>
       {url ? (
@@ -1324,7 +1525,9 @@ function SignatureSlot({
             className="h-16 bg-white rounded p-1 border border-white/10"
           />
           {signedAt && (
-            <div className="text-[10px] text-white/45">on {formatDate(signedAt)}</div>
+            <div className="text-[10px] text-white/45">
+              on {formatDate(signedAt)}
+            </div>
           )}
           <Button variant="outline" size="sm" onClick={onCapture}>
             <Pen className="h-3 w-3" />
@@ -1338,5 +1541,27 @@ function SignatureSlot({
         </Button>
       )}
     </div>
+  );
+}
+
+/**
+ * AI assistant slot on the loan detail page. Builds one task (explain
+ * decision) and feeds it to the reusable AssistantPanel. The hook is
+ * called here (instead of inside AssistantPanel) so the mutation is
+ * scoped to the loan id; this lets us re-mount cleanly between loans.
+ */
+function LoanAssistantPanel({ loanId }: { loanId: string }) {
+  const explain = useExplainDecision();
+  return (
+    <AssistantPanel
+      tasks={[
+        {
+          id: "explain-decision",
+          label: "Explain decision",
+          hint: "Generate a plain-language explanation of why the engine reached its verdict.",
+          run: () => explain.mutateAsync({ loanId }),
+        },
+      ]}
+    />
   );
 }

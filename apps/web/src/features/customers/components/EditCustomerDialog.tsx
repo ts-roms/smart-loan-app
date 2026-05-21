@@ -1,0 +1,77 @@
+import { useUpdateCustomer } from "@loan/api-client";
+import type { Customer, CustomerCreateInput } from "@loan/shared-types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  useToast,
+} from "@loan/ui";
+import { Pencil } from "lucide-react";
+import { useState } from "react";
+
+import {
+  CustomerProfileForm,
+  customerToFormState,
+} from "./CustomerProfileForm";
+
+/**
+ * Edit-existing-profile dialog. Uses the same sectioned form as the
+ * create flow so the two paths can't drift apart. Hydrates the form
+ * from the customer row, sends a PATCH on save.
+ *
+ * The PATCH endpoint accepts every field via `customerBaseSchema.partial()`,
+ * so we just submit the full form state — the server only updates the
+ * fields that changed (Prisma ignores undefined keys).
+ */
+export function EditCustomerDialog({
+  customer,
+  onClose,
+}: {
+  customer: Customer;
+  onClose: () => void;
+}) {
+  const update = useUpdateCustomer();
+  const toast = useToast();
+
+  // Hydrate initial form state once. After that, the form owns it.
+  const [form, setForm] = useState<CustomerCreateInput>(() =>
+    customerToFormState(customer),
+  );
+
+  const submit = async () => {
+    try {
+      await update.mutateAsync({ id: customer.id, patch: form });
+      toast.success("Customer profile updated.");
+      onClose();
+    } catch (err) {
+      toast.error((err as Error).message ?? "Could not save");
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-4 w-4" />
+            Edit customer profile
+          </DialogTitle>
+          <DialogDescription>
+            Updating {customer.firstName} {customer.lastName} ·{" "}
+            <span className="font-mono">{customer.number}</span>.
+          </DialogDescription>
+        </DialogHeader>
+        <CustomerProfileForm
+          form={form}
+          setForm={setForm}
+          onSubmit={submit}
+          submitting={update.isPending}
+          submitLabel="Save changes"
+          onCancel={onClose}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}

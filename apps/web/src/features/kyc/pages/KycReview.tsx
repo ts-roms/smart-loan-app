@@ -2,8 +2,8 @@ import {
   useCustomers,
   useDecideKyc,
   useKycForCustomer,
-} from '@loan/api-client';
-import type { Customer, KycSubmission } from '@loan/shared-types';
+} from "@loan/api-client";
+import type { Customer, KycSubmission } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -14,13 +14,17 @@ import {
   SkeletonCard,
   usePrompt,
   useToast,
-} from '@loan/ui';
-import { formatDateTime } from '@loan/shared-utils';
-import { ExternalLink, FileCheck2 } from 'lucide-react';
-import { useMemo } from 'react';
+} from "@loan/ui";
+import { formatDateTime } from "@loan/shared-utils";
+import { ExternalLink, FileCheck2 } from "lucide-react";
+import { useMemo } from "react";
 
-import { DOC_TYPE_LABELS } from '../../customers';
-import { KycInspectorLink } from '../components/KycInspectorDrawer';
+// Direct import — pulling DOC_TYPE_LABELS via the customers barrel
+// would drag the CustomerDetail page chunk into the kyc chunk and
+// trip Rollup's circular-chunk warning.
+import { DOC_TYPE_LABELS } from "../../customers/constants";
+import { KycInspectorLink } from "../components/KycInspectorDrawer";
+import { findArticle, TourButton } from "../../help";
 
 /**
  * KYC queue for officers — every customer who has at least one PENDING
@@ -32,7 +36,10 @@ import { KycInspectorLink } from '../components/KycInspectorDrawer';
 export function KycReviewPage() {
   const customers = useCustomers();
   const pending = useMemo(
-    () => (customers.data ?? []).filter((c) => c.kycStatus === 'PENDING' || c.kycStatus === 'NONE'),
+    () =>
+      (customers.data ?? []).filter(
+        (c) => c.kycStatus === "PENDING" || c.kycStatus === "NONE",
+      ),
     [customers.data],
   );
 
@@ -40,17 +47,20 @@ export function KycReviewPage() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <FileCheck2 className="h-4 w-4 text-emerald-300" />
           KYC review queue
         </CardTitle>
+        <TourButton tourId="kyc" steps={findArticle("kyc")?.tour ?? []} />
       </CardHeader>
       <CardContent>
         {pending.length === 0 ? (
-          <p className="text-sm text-white/55">All customers are verified or rejected. </p>
+          <p className="text-sm text-white/55">
+            All customers are verified or rejected.{" "}
+          </p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4" data-tour="kyc-queue">
             {pending.map((c) => (
               <CustomerKycBlock key={c.id} customer={c} />
             ))}
@@ -67,15 +77,19 @@ function CustomerKycBlock({ customer }: { customer: Customer }) {
   const toast = useToast();
   const askPrompt = usePrompt();
 
-  const onDecide = async (sub: KycSubmission, status: 'VERIFIED' | 'REJECTED') => {
+  const onDecide = async (
+    sub: KycSubmission,
+    status: "VERIFIED" | "REJECTED",
+  ) => {
     let reason: string | undefined;
-    if (status === 'REJECTED') {
+    if (status === "REJECTED") {
       const answer = await askPrompt({
-        title: 'Reject this document?',
-        message: 'The reason is shared with the customer so they can re-submit correctly.',
-        label: 'Reason',
-        placeholder: 'e.g. blurry image, expired ID',
-        confirmLabel: 'Reject',
+        title: "Reject this document?",
+        message:
+          "The reason is shared with the customer so they can re-submit correctly.",
+        label: "Reason",
+        placeholder: "e.g. blurry image, expired ID",
+        confirmLabel: "Reject",
       });
       if (answer === null) return;
       reason = answer;
@@ -87,9 +101,11 @@ function CustomerKycBlock({ customer }: { customer: Customer }) {
         status,
         reason,
       });
-      toast.success(`${DOC_TYPE_LABELS[sub.documentType] ?? sub.documentType} ${status.toLowerCase()}`);
+      toast.success(
+        `${DOC_TYPE_LABELS[sub.documentType] ?? sub.documentType} ${status.toLowerCase()}`,
+      );
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -113,11 +129,16 @@ function CustomerKycBlock({ customer }: { customer: Customer }) {
       ) : (
         <ul className="divide-y divide-white/5">
           {(docs.data ?? []).map((d) => (
-            <li key={d.id} className="py-2 flex items-center justify-between gap-2 text-sm">
+            <li
+              key={d.id}
+              className="py-2 flex items-center justify-between gap-2 text-sm"
+            >
               <div className="min-w-0">
-                <div className="font-medium">{DOC_TYPE_LABELS[d.documentType] ?? d.documentType}</div>
+                <div className="font-medium">
+                  {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
+                </div>
                 <div className="text-xs text-white/45">
-                  {formatDateTime(d.submittedAt)} ·{' '}
+                  {formatDateTime(d.submittedAt)} ·{" "}
                   <a
                     href={d.documentUrl}
                     target="_blank"
@@ -128,15 +149,21 @@ function CustomerKycBlock({ customer }: { customer: Customer }) {
                   </a>
                 </div>
               </div>
-              {d.status === 'PENDING' ? (
+              {d.status === "PENDING" ? (
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={() => onDecide(d, 'VERIFIED')}>Approve</Button>
-                  <Button size="sm" variant="outline" onClick={() => onDecide(d, 'REJECTED')}>
+                  <Button size="sm" onClick={() => onDecide(d, "VERIFIED")}>
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onDecide(d, "REJECTED")}
+                  >
                     Reject
                   </Button>
                 </div>
               ) : (
-                <Badge variant={d.status === 'VERIFIED' ? 'success' : 'danger'}>
+                <Badge variant={d.status === "VERIFIED" ? "success" : "danger"}>
                   {d.status}
                 </Badge>
               )}

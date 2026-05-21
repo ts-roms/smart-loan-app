@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Smart Loan — pre-commit hook.
+# Runs lint-staged so prettier touches only the files you're committing.
+# Keep this fast — long hooks are the #1 reason teams disable them.
+pnpm exec lint-staged

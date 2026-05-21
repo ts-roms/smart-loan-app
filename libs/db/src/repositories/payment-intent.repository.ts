@@ -18,15 +18,19 @@ import type {
   CreateIntentInput,
   PaymentProvider,
   PaymentProviderName,
-} from '@loan/payments';
+} from "@loan/payments";
 import type {
   LoanPayment,
   PaymentIntent,
   PaymentIntentStatus,
   PrismaClient,
-} from '@prisma/client';
+} from "@prisma/client";
 
-import { LoanRepository } from './loan.repository.js';
+import { LoanRepository } from "./loan.repository.js";
+import {
+  idOrNumberWhere,
+  nextPaymentIntentNumber,
+} from "../lib/reference-numbers.js";
 
 export interface CreatePaymentIntentInput {
   loanId: string;
@@ -51,7 +55,7 @@ export class PaymentIntentRepository {
   list(loanId: string): Promise<PaymentIntent[]> {
     return this.prisma.paymentIntent.findMany({
       where: { loanId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -86,8 +90,10 @@ export class PaymentIntentRepository {
       returnUrl: input.returnUrl,
     };
     const created = await this.provider.createIntent(providerInput);
+    const number = await nextPaymentIntentNumber(this.prisma);
     return this.prisma.paymentIntent.create({
       data: {
+        number,
         loanId: input.loanId,
         provider: this.provider.name as never,
         externalId: created.externalId,
@@ -97,6 +103,16 @@ export class PaymentIntentRepository {
         status: created.status as never,
         createdById: input.createdById,
       },
+    });
+  }
+
+  /**
+   * Resolve a payment intent by either UUID or "PI-..." number.
+   * Mirrors the same id-or-number convention used by other repos.
+   */
+  findByIdOrNumber(idOrNumber: string): Promise<PaymentIntent | null> {
+    return this.prisma.paymentIntent.findFirst({
+      where: idOrNumberWhere(idOrNumber),
     });
   }
 
@@ -119,11 +135,15 @@ export class PaymentIntentRepository {
       throw new Error(`Unknown intent: ${args.provider}/${args.externalId}`);
     }
     // Already terminal? No-op.
-    if (intent.status === 'PAID' || intent.status === 'FAILED' || intent.status === 'EXPIRED') {
+    if (
+      intent.status === "PAID" ||
+      intent.status === "FAILED" ||
+      intent.status === "EXPIRED"
+    ) {
       return { intent, payment: null };
     }
 
-    if (args.status !== 'PAID') {
+    if (args.status !== "PAID") {
       const updated = await this.prisma.paymentIntent.update({
         where: { id: intent.id },
         data: { status: args.status as never, resolvedAt: new Date() },
@@ -141,7 +161,7 @@ export class PaymentIntentRepository {
     const updated = await this.prisma.paymentIntent.update({
       where: { id: intent.id },
       data: {
-        status: 'PAID' as never,
+        status: "PAID" as never,
         resolvedAt: new Date(),
         paymentId: payment.id,
       },

@@ -1,26 +1,19 @@
-import { fastifyAuth } from '@loan/auth';
-import { fastifyPrisma, resolveEffectivePermissions } from '@loan/db';
-import cors from '@fastify/cors';
-import helmet from '@fastify/helmet';
-import sensible from '@fastify/sensible';
-import multipart from '@fastify/multipart';
-import rateLimit from '@fastify/rate-limit';
-import staticPlugin from '@fastify/static';
-import swagger from '@fastify/swagger';
-import swaggerUi from '@fastify/swagger-ui';
-import Fastify from 'fastify';
-import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { fastifyAuth } from "@loan/auth";
+import { fastifyPrisma, resolveEffectivePermissions } from "@loan/db";
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import sensible from "@fastify/sensible";
+import multipart from "@fastify/multipart";
+import rateLimit from "@fastify/rate-limit";
+import staticPlugin from "@fastify/static";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
+import Fastify from "fastify";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
-import { registerRoutes } from './routes/index.js';
-
-const env = {
-  DATABASE_URL: process.env.DATABASE_URL ?? 'postgres://loan:loan@localhost:5432/smart_loan',
-  JWT_SECRET: process.env.JWT_SECRET ?? 'dev-only-secret-change-me',
-  WEB_ORIGIN: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
-  SENTRY_DSN: process.env.SENTRY_DSN ?? '',
-  NODE_ENV: process.env.NODE_ENV ?? 'development',
-};
+import { config } from "./config.js";
+import { registerRoutes } from "./routes/index.js";
 
 /**
  * Sentry is opt-in via SENTRY_DSN — keeping the dep skin-deep so local
@@ -29,12 +22,12 @@ const env = {
  * request's route, method, and the user id (if authenticated).
  */
 async function initSentry() {
-  if (!env.SENTRY_DSN) return null;
-  const Sentry = await import('@sentry/node');
+  if (!config.sentryDsn) return null;
+  const Sentry = await import("@sentry/node");
   Sentry.init({
-    dsn: env.SENTRY_DSN,
-    environment: env.NODE_ENV,
-    tracesSampleRate: env.NODE_ENV === 'production' ? 0.1 : 0,
+    dsn: config.sentryDsn,
+    environment: config.nodeEnv,
+    tracesSampleRate: config.isProd ? 0.1 : 0,
   });
   return Sentry;
 }
@@ -45,9 +38,34 @@ export async function buildApp() {
   const sentry = await initSentry();
 
   const app = Fastify({
-    logger: {
-      transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss' } },
-    },
+    // In production we want structured JSON logs (log aggregators parse them
+    // natively). Pretty output is dev-only — production runs cost cycles on
+    // pino-pretty's transform and can't be parsed by log shippers.
+    // Redact sensitive paths so JWTs / passwords / government IDs never
+    // surface in logs (production audit + GDPR concern).
+    logger: config.isProd
+      ? {
+          level: process.env.LOG_LEVEL ?? "info",
+          redact: {
+            paths: [
+              "req.headers.authorization",
+              "req.headers.cookie",
+              "req.body.password",
+              "req.body.refreshToken",
+              "req.body.governmentIdNumber",
+              "*.password",
+              "*.token",
+              "*.secret",
+            ],
+            censor: "[REDACTED]",
+          },
+        }
+      : {
+          transport: {
+            target: "pino-pretty",
+            options: { translateTime: "HH:MM:ss" },
+          },
+        },
   });
 
   if (sentry) {
@@ -56,8 +74,8 @@ export async function buildApp() {
       // genuine 5xx-class problems are useful signal.
       if (!err.statusCode || err.statusCode >= 500) {
         sentry.captureException(err, (scope) => {
-          scope.setTag('route', req.routerPath ?? req.url);
-          scope.setTag('method', req.method);
+          scope.setTag("route", req.routerPath ?? req.url);
+          scope.setTag("method", req.method);
           const sub = (req.user as { sub?: string } | undefined)?.sub;
           if (sub) scope.setUser({ id: sub });
           return scope;
@@ -68,7 +86,7 @@ export async function buildApp() {
   }
 
   await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(cors, { origin: env.WEB_ORIGIN, credentials: true });
+  await app.register(cors, { origin: config.webOrigin, credentials: true });
   await app.register(sensible);
   await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } });
 
@@ -78,40 +96,43 @@ export async function buildApp() {
   await app.register(rateLimit, {
     global: true,
     max: 600,
-    timeWindow: '1 minute',
+    timeWindow: "1 minute",
     // Skip rate limiting for the healthcheck — k8s probes shouldn't get 429s.
-    allowList: (req) => req.url === '/api/v1/health',
+    allowList: (req) => req.url === "/api/v1/health",
   });
-  await app.register(fastifyPrisma, { databaseUrl: env.DATABASE_URL });
+  await app.register(fastifyPrisma, { databaseUrl: config.databaseUrl });
   // Inject the permission resolver — bridges @loan/auth (no prisma dep)
   // to @loan/db (where the schema + RBAC tables live). The resolver also
   // includes active delegations so the delegate's effective permission set
   // is the union of (their own roles ∪ delegated permissions).
   await app.register(fastifyAuth, {
-    secret: env.JWT_SECRET,
+    secret: config.jwtSecret,
     resolvePermissions: async (userId: string) => {
-      const { permissions } = await resolveEffectivePermissions(app.prisma, userId);
+      const { permissions } = await resolveEffectivePermissions(
+        app.prisma,
+        userId,
+      );
       return permissions;
     },
   });
 
   // Static uploads: KYC documents, customer ID scans, etc.
-  const uploadsDir = process.env.UPLOADS_DIR ?? join(process.cwd(), 'uploads');
+  const uploadsDir = config.uploadsDir || join(process.cwd(), "uploads");
   await mkdir(uploadsDir, { recursive: true });
   await app.register(staticPlugin, {
     root: uploadsDir,
-    prefix: '/uploads/',
+    prefix: "/uploads/",
     decorateReply: false,
   });
 
   await app.register(swagger, {
     openapi: {
-      info: { title: 'Smart Loan API', version: '0.1.0' },
+      info: { title: "Smart Loan API", version: "0.1.0" },
     },
   });
-  await app.register(swaggerUi, { routePrefix: '/docs' });
+  await app.register(swaggerUi, { routePrefix: "/docs" });
 
-  await app.register(registerRoutes, { prefix: '/api/v1' });
+  await app.register(registerRoutes, { prefix: "/api/v1" });
 
   return app;
 }

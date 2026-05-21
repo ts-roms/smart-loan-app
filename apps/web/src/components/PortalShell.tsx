@@ -1,9 +1,24 @@
-import { logoutSession } from '@loan/api-client';
-import { Button, cn } from '@loan/ui';
-import { CreditCard, FileCheck2, Gauge, LogOut, Plus, Wallet } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
-import { useAuth } from '../providers/auth';
+import {
+  logoutSession,
+  useBranding,
+  useEffectiveIdlePolicy,
+} from "@loan/api-client";
+import { Button, IdleWarningDialog, cn, useIdleLogout } from "@loan/ui";
+import {
+  BookOpen,
+  CreditCard,
+  FileCheck2,
+  Gauge,
+  HandCoins,
+  LogOut,
+  PiggyBank,
+  Plus,
+  UserCircle,
+  Wallet,
+} from "lucide-react";
+import { useEffect, type ReactNode } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../providers/auth";
 
 /**
  * Borrower-facing chrome. Lighter than the officer DashboardShell — no
@@ -12,30 +27,107 @@ import { useAuth } from '../providers/auth';
  */
 export function PortalShell({ children }: { children: ReactNode }) {
   const { user, signOut, refreshToken } = useAuth();
+  const navigate = useNavigate();
   const handleSignOut = () => {
     if (refreshToken) void logoutSession(refreshToken).catch(() => {});
     signOut();
   };
 
+  // Same branding pull as the staff shell — the portal sidebar should
+  // reflect whatever the admin configured.
+  const branding = useBranding();
+  const brandName = branding.data?.companyName ?? "SmartLoan";
+  const brandTagline = branding.data?.companyTagline ?? "Borrower portal";
+  const brandLogo = branding.data?.companyLogoUrl ?? null;
+  useEffect(() => {
+    if (branding.data?.companyName) {
+      document.title = branding.data.companyName + " · Portal";
+    }
+  }, [branding.data?.companyName]);
+
+  // Same idle-then-logout wiring as the officer shell — borrowers
+  // sitting on a kiosk shouldn't leave the session open either.
+  const idlePolicy = useEffectiveIdlePolicy();
+  const idle = useIdleLogout({
+    idleSeconds: idlePolicy.idleTimeoutSeconds,
+    warningSeconds: idlePolicy.idleWarningSeconds,
+    enabled: !!user && !idlePolicy.isLoading,
+    onLogout: () => {
+      handleSignOut();
+      navigate("/login");
+    },
+  });
+
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-60 shrink-0 border-r border-white/10 bg-white/[0.02] backdrop-blur-md flex flex-col">
+    // Same sticky-sidebar pattern as the officer DashboardShell — viewport
+    // height locked, only the main column scrolls.
+    <div className="h-screen flex overflow-hidden">
+      <aside className="w-60 shrink-0 border-r border-white/10 bg-white/[0.02] backdrop-blur-md flex flex-col h-full">
         <div className="px-4 py-5 border-b border-white/10">
           <div className="flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-sky-300" />
-            <span className="text-lg font-semibold tracking-tight">SmartLoan</span>
+            {/* Configured logo (PNG/SVG) or default glyph. Sized to
+                match the dashboard shell so an admin who uploads a
+                logo gets a consistent appearance across both surfaces. */}
+            <div className="h-7 w-7 rounded-md bg-primary-soft border border-default flex items-center justify-center overflow-hidden shrink-0">
+              {brandLogo ? (
+                <img
+                  src={brandLogo}
+                  alt=""
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <Wallet className="h-4 w-4 text-sky-300" />
+              )}
+            </div>
+            <span className="text-lg font-semibold tracking-tight truncate">
+              {brandName}
+            </span>
           </div>
-          <div className="text-[11px] uppercase tracking-wider text-white/40 mt-1">
-            Borrower portal
+          <div className="text-[11px] uppercase tracking-wider text-white/40 mt-1 truncate">
+            {brandTagline}
           </div>
         </div>
 
-        <nav className="flex-1 px-2 py-3 space-y-1">
+        <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
           {[
-            { to: '/portal', label: 'Dashboard', icon: Gauge, end: true },
-            { to: '/portal/apply', label: 'New loan', icon: Plus, end: false },
-            { to: '/portal/loans', label: 'My loans', icon: CreditCard, end: false },
-            { to: '/portal/kyc', label: 'Documents', icon: FileCheck2, end: false },
+            { to: "/portal", label: "Dashboard", icon: Gauge, end: true },
+            { to: "/portal/apply", label: "New loan", icon: Plus, end: false },
+            {
+              to: "/portal/loans",
+              label: "My loans",
+              icon: CreditCard,
+              end: false,
+            },
+            {
+              to: "/portal/savings",
+              label: "My savings",
+              icon: PiggyBank,
+              end: false,
+            },
+            {
+              to: "/portal/contributions",
+              label: "Contributions",
+              icon: HandCoins,
+              end: false,
+            },
+            {
+              to: "/portal/ledger",
+              label: "My ledger",
+              icon: BookOpen,
+              end: false,
+            },
+            {
+              to: "/portal/kyc",
+              label: "Documents",
+              icon: FileCheck2,
+              end: false,
+            },
+            {
+              to: "/portal/profile",
+              label: "My profile",
+              icon: UserCircle,
+              end: false,
+            },
           ].map((n) => (
             <NavLink
               key={n.to}
@@ -43,10 +135,10 @@ export function PortalShell({ children }: { children: ReactNode }) {
               end={n.end}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
                   isActive
-                    ? 'bg-white/[0.08] text-white'
-                    : 'text-white/70 hover:bg-white/[0.04] hover:text-white',
+                    ? "bg-white/[0.08] text-white"
+                    : "text-white/70 hover:bg-white/[0.04] hover:text-white",
                 )
               }
             >
@@ -58,22 +150,28 @@ export function PortalShell({ children }: { children: ReactNode }) {
 
         <div className="border-t border-white/10 px-3 py-3 space-y-2">
           <div className="text-xs">
-            <div className="font-medium truncate">{user?.name ?? '—'}</div>
+            <div className="font-medium truncate">{user?.name ?? "—"}</div>
             <div className="text-white/45 truncate">{user?.email}</div>
             <div className="text-[10px] uppercase tracking-wider text-sky-300/80 mt-0.5">
               Borrower
             </div>
           </div>
-          <Button variant="outline" size="sm" className="w-full" onClick={handleSignOut}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={handleSignOut}
+          >
             <LogOut className="h-4 w-4" />
             Sign out
           </Button>
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 h-full overflow-y-auto">
         <div className="p-6 max-w-5xl mx-auto space-y-4">{children}</div>
       </main>
+      <IdleWarningDialog state={idle} />
     </div>
   );
 }

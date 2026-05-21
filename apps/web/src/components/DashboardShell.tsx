@@ -1,5 +1,9 @@
-import { logoutSession } from '@loan/api-client';
-import type { UserRole } from '@loan/shared-types';
+import {
+  logoutSession,
+  useBranding,
+  useEffectiveIdlePolicy,
+} from "@loan/api-client";
+import type { UserRole } from "@loan/shared-types";
 import {
   Avatar,
   DropdownMenu,
@@ -7,15 +11,43 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  IdleWarningDialog,
   cn,
-} from '@loan/ui';
-import { Banknote, BarChart3, BookOpenCheck, CalendarClock, ChevronDown, Clock, CreditCard, FileCheck2, FileSpreadsheet, Gauge, HandCoins, KeyRound, Layers, LogOut, Mail, Package, PhoneCall, Settings, ShieldAlert, ShieldCheck, UserCircle, UserCog, Users, Wallet } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../providers/auth';
-import { ActiveDelegationBanner } from '../features/delegations';
-import { AuditLogTrigger } from '../features/audit';
-import { NotificationBell } from '../features/notifications';
+  useIdleLogout,
+} from "@loan/ui";
+import {
+  Banknote,
+  BarChart3,
+  BookOpenCheck,
+  CalendarClock,
+  ChevronDown,
+  Clock,
+  CreditCard,
+  FileCheck2,
+  FileSpreadsheet,
+  Gauge,
+  HandCoins,
+  KeyRound,
+  Layers,
+  LogOut,
+  Mail,
+  Package,
+  PhoneCall,
+  Settings,
+  ShieldAlert,
+  ShieldCheck,
+  UserCircle,
+  UserCog,
+  Users,
+  Wallet,
+} from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../providers/auth";
+import { ActiveDelegationBanner } from "../features/delegations";
+import { AuditLogTrigger } from "../features/audit";
+import { HelpTrigger } from "../features/help";
+import { NotificationBell } from "../features/notifications";
 
 interface NavItem {
   to: string;
@@ -37,54 +69,160 @@ interface NavSection {
  */
 const NAV_SECTIONS: NavSection[] = [
   {
-    items: [{ to: '/', label: 'Dashboard', icon: Gauge }],
+    items: [{ to: "/", label: "Dashboard", icon: Gauge }],
   },
   {
-    label: 'Customers & loans',
+    label: "Customers & loans",
     items: [
-      { to: '/customers', label: 'Customers', icon: Users },
-      { to: '/kyc', label: 'KYC review', icon: FileCheck2, roles: ['ADMIN', 'LOAN_OFFICER'] },
-      { to: '/loans', label: 'Loans', icon: CreditCard },
-      { to: '/loan-products', label: 'Loan products', icon: Package, roles: ['ADMIN'] },
+      { to: "/customers", label: "Customers", icon: Users },
+      {
+        to: "/customers/bulk",
+        label: "Bulk import",
+        icon: FileSpreadsheet,
+        roles: ["ADMIN", "LOAN_OFFICER"],
+      },
+      {
+        to: "/kyc",
+        label: "KYC review",
+        icon: FileCheck2,
+        roles: ["ADMIN", "LOAN_OFFICER"],
+      },
+      { to: "/loans", label: "Loans", icon: CreditCard },
+      {
+        to: "/loan-products",
+        label: "Loan products",
+        icon: Package,
+        roles: ["ADMIN"],
+      },
     ],
   },
   {
-    label: 'Servicing',
+    label: "Servicing",
     items: [
-      { to: '/collections', label: 'Collections', icon: PhoneCall, roles: ['ADMIN', 'LOAN_OFFICER', 'ACCOUNTANT'] },
-      { to: '/payments/bulk', label: 'Bulk payments', icon: FileSpreadsheet, roles: ['ADMIN', 'ACCOUNTANT'] },
+      {
+        to: "/collections",
+        label: "Collections",
+        icon: PhoneCall,
+        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
+      },
+      {
+        to: "/collections/demand-letters",
+        label: "Demand letters",
+        icon: Mail,
+        roles: ["ADMIN", "LOAN_OFFICER"],
+      },
+      {
+        to: "/repossession",
+        label: "Repossession",
+        icon: ShieldAlert,
+        roles: ["ADMIN", "LOAN_OFFICER"],
+      },
+      {
+        to: "/payments/bulk",
+        label: "Bulk payments",
+        icon: FileSpreadsheet,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
     ],
   },
   {
-    label: 'Accounting',
+    label: "Accounting",
     items: [
-      { to: '/accounting', label: 'Accounting', icon: BookOpenCheck, roles: ['ADMIN', 'ACCOUNTANT'] },
-      { to: '/accounting/analytics', label: 'Analytics', icon: BarChart3, roles: ['ADMIN', 'ACCOUNTANT', 'LOAN_OFFICER'] },
-      { to: '/accounting/ecl', label: 'ECL provisioning', icon: Layers, roles: ['ADMIN', 'ACCOUNTANT'] },
-      { to: '/reconciliation', label: 'Bank reconciliation', icon: Banknote, roles: ['ADMIN', 'ACCOUNTANT'] },
+      {
+        to: "/accounting",
+        label: "Accounting",
+        icon: BookOpenCheck,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+      {
+        to: "/accounting/analytics",
+        label: "Analytics",
+        icon: BarChart3,
+        roles: ["ADMIN", "ACCOUNTANT", "LOAN_OFFICER"],
+      },
+      {
+        to: "/accounting/ecl",
+        label: "ECL provisioning",
+        icon: Layers,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+      {
+        to: "/reconciliation",
+        label: "Bank reconciliation",
+        icon: Banknote,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
     ],
   },
   {
-    label: 'Cooperative',
+    label: "Cooperative",
     items: [
-      { to: '/cooperative', label: 'Contributions & funds', icon: HandCoins, roles: ['ADMIN', 'ACCOUNTANT'] },
+      {
+        to: "/cooperative",
+        label: "Contributions & funds",
+        icon: HandCoins,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
     ],
   },
   {
-    label: 'Risk & compliance',
+    label: "Risk & compliance",
     items: [
-      { to: '/decision-rules', label: 'Decision rules', icon: ShieldCheck, roles: ['ADMIN'] },
-      { to: '/screening', label: 'AML watchlist', icon: ShieldAlert, roles: ['ADMIN', 'LOAN_OFFICER'] },
-      { to: '/notifications', label: 'Notifications', icon: Mail, roles: ['ADMIN', 'LOAN_OFFICER', 'ACCOUNTANT'] },
+      {
+        to: "/decision-rules",
+        label: "Decision rules",
+        icon: ShieldCheck,
+        roles: ["ADMIN"],
+      },
+      {
+        to: "/screening",
+        label: "AML watchlist",
+        icon: ShieldAlert,
+        roles: ["ADMIN", "LOAN_OFFICER"],
+      },
+      {
+        to: "/compliance/annual-docs",
+        label: "Renewable docs",
+        icon: FileCheck2,
+        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
+      },
+      {
+        to: "/compliance/dorsi",
+        label: "DORSI compliance",
+        icon: Layers,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+      {
+        to: "/reports",
+        label: "Reports",
+        icon: BookOpenCheck,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
+      {
+        to: "/notifications",
+        label: "Notifications",
+        icon: Mail,
+        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
+      },
     ],
   },
   {
-    label: 'Administration',
+    label: "Administration",
     items: [
-      { to: '/users', label: 'Users', icon: UserCog, roles: ['ADMIN'] },
-      { to: '/roles', label: 'Roles', icon: KeyRound, roles: ['ADMIN'] },
-      { to: '/delegations', label: 'Delegations', icon: CalendarClock, roles: ['ADMIN', 'LOAN_OFFICER', 'ACCOUNTANT'] },
-      { to: '/jobs', label: 'Jobs', icon: Clock, roles: ['ADMIN', 'ACCOUNTANT'] },
+      { to: "/users", label: "Users", icon: UserCog, roles: ["ADMIN"] },
+      { to: "/roles", label: "Roles", icon: KeyRound, roles: ["ADMIN"] },
+      {
+        to: "/delegations",
+        label: "Delegations",
+        icon: CalendarClock,
+        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
+      },
+      {
+        to: "/jobs",
+        label: "Jobs",
+        icon: Clock,
+        roles: ["ADMIN", "ACCOUNTANT"],
+      },
     ],
   },
   // "Account" lives in the top-right avatar dropdown (My profile, Settings,
@@ -99,18 +237,22 @@ function NavItemLink({ item }: { item: NavItem }) {
   return (
     <NavLink
       to={item.to}
-      end={item.to === '/'}
+      end={item.to === "/"}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+          // Subtle active state: a vertical accent rule on the left edge
+          // plus a tinted surface. Looks more intentional than just a
+          // darker background.
+          "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
+          "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity",
           isActive
-            ? 'bg-white/[0.08] text-white'
-            : 'text-white/70 hover:bg-white/[0.04] hover:text-white',
+            ? "bg-surface-2 text-fg before:opacity-100"
+            : "text-fg-muted hover:bg-surface-2/60 hover:text-fg",
         )
       }
     >
-      <item.icon className="h-4 w-4" />
-      {item.label}
+      <item.icon className="h-4 w-4 shrink-0" />
+      <span className="truncate">{item.label}</span>
     </NavLink>
   );
 }
@@ -121,6 +263,19 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Live branding — the shell falls back to defaults until the hook
+  // resolves so first paint never shows nothing. document.title syncs
+  // with the configured name so browser tabs reflect the org.
+  const branding = useBranding();
+  const brandName = branding.data?.companyName ?? "SmartLoan";
+  const brandTagline = branding.data?.companyTagline ?? "Credit · KYC · Loans";
+  const brandLogo = branding.data?.companyLogoUrl ?? null;
+  useEffect(() => {
+    if (branding.data?.companyName) {
+      document.title = branding.data.companyName;
+    }
+  }, [branding.data?.companyName]);
+
   // Find the section the current route lives in so the matching accordion
   // panel opens by default — the user lands with their context already
   // expanded instead of having to click around for it.
@@ -130,29 +285,70 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       (s) =>
         s.label &&
         s.items.some((i) =>
-          i.to === '/'
-            ? currentPath === '/'
+          i.to === "/"
+            ? currentPath === "/"
             : currentPath === i.to || currentPath.startsWith(`${i.to}/`),
         ),
     )?.label ?? null;
 
-  const [openSection, setOpenSection] = useState<string | null>(sectionWithRoute);
+  const [openSection, setOpenSection] = useState<string | null>(
+    sectionWithRoute,
+  );
 
   const toggle = (label: string) => {
     // Single-open behavior — clicking another section closes the current one.
     setOpenSection((curr) => (curr === label ? null : label));
   };
 
+  // ─── Idle-then-logout ─────────────────────────────────────────────
+  // Effective policy = min(org ceiling, per-user override). Wired up
+  // here so both staff and borrower portal share the same convention
+  // (PortalShell does the same dance with the same hook).
+  const idlePolicy = useEffectiveIdlePolicy();
+  const idle = useIdleLogout({
+    idleSeconds: idlePolicy.idleTimeoutSeconds,
+    warningSeconds: idlePolicy.idleWarningSeconds,
+    enabled: !!user && !idlePolicy.isLoading,
+    onLogout: () => {
+      const rt = refreshToken;
+      if (rt) void logoutSession(rt).catch(() => {});
+      signOut();
+      navigate("/login");
+    },
+  });
+
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-60 shrink-0 border-r border-white/10 bg-white/[0.02] backdrop-blur-md flex flex-col">
-        <div className="px-4 py-5 border-b border-white/10">
-          <div className="flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-sky-300" />
-            <span className="text-lg font-semibold tracking-tight">SmartLoan</span>
-          </div>
-          <div className="text-[11px] uppercase tracking-wider text-white/40 mt-1">
-            Credit · KYC · Loans
+    // h-screen + overflow-hidden pins the shell to the viewport so the
+    // sidebar and header don't scroll with the page. Each interior region
+    // (sidebar nav, main content) owns its own scroll instead.
+    <div className="h-screen flex overflow-hidden bg-background">
+      <aside
+        data-tour="nav-sidebar"
+        className="w-60 shrink-0 border-r border-default bg-surface-1/80 backdrop-blur-md flex flex-col h-full"
+      >
+        <div className="px-4 py-5 border-b border-default">
+          <div className="flex items-center gap-2.5">
+            {/* Brand glyph — uses the uploaded logo when one is set,
+                otherwise falls back to the built-in Wallet glyph. */}
+            <div className="h-8 w-8 rounded-md bg-primary-soft border border-default flex items-center justify-center overflow-hidden">
+              {brandLogo ? (
+                <img
+                  src={brandLogo}
+                  alt=""
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <Wallet className="h-4 w-4 text-primary" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[15px] font-semibold tracking-tight leading-tight truncate">
+                {brandName}
+              </div>
+              <div className="text-[10px] uppercase tracking-wider text-fg-subtle leading-tight truncate">
+                {brandTagline}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -175,8 +371,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
             const isOpen = openSection === section.label;
             const hasActiveItem = items.some((i) =>
-              i.to === '/'
-                ? currentPath === '/'
+              i.to === "/"
+                ? currentPath === "/"
                 : currentPath === i.to || currentPath.startsWith(`${i.to}/`),
             );
 
@@ -187,15 +383,17 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   onClick={() => toggle(section.label!)}
                   aria-expanded={isOpen}
                   className={cn(
-                    'group flex w-full items-center justify-between rounded-md px-3 py-2 text-[10px] font-semibold uppercase tracking-wider transition-colors',
-                    hasActiveItem ? 'text-white' : 'text-white/45 hover:text-white/70',
+                    "group flex w-full items-center justify-between rounded-md px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors",
+                    hasActiveItem
+                      ? "text-fg"
+                      : "text-fg-subtle hover:text-fg-muted",
                   )}
                 >
                   <span>{section.label}</span>
                   <ChevronDown
                     className={cn(
-                      'h-3.5 w-3.5 transition-transform duration-200',
-                      isOpen ? 'rotate-0' : '-rotate-90',
+                      "h-3.5 w-3.5 transition-transform duration-200",
+                      isOpen ? "rotate-0" : "-rotate-90",
                     )}
                   />
                 </button>
@@ -207,8 +405,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 */}
                 <div
                   className={cn(
-                    'grid transition-[grid-template-rows] duration-200 ease-out',
-                    isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+                    "grid transition-[grid-template-rows] duration-200 ease-out",
+                    isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
                   )}
                 >
                   <div className="min-h-0 overflow-hidden">
@@ -223,30 +421,46 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-
       </aside>
 
-      <main className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b border-white/10 bg-slate-950/60 backdrop-blur-md px-6">
-          <AuditLogTrigger />
-          <NotificationBell />
+      {/*
+        main is the scroll container — its sticky header pins to the top
+        of *this* region, not the viewport, so the sidebar stays put while
+        only this column scrolls.
+      */}
+      <main className="flex-1 min-w-0 h-full overflow-y-auto">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b border-default bg-background/85 backdrop-blur-xl px-6">
+          <span data-tour="navbar-help">
+            <HelpTrigger />
+          </span>
+          <span data-tour="navbar-audit">
+            <AuditLogTrigger />
+          </span>
+          <span data-tour="navbar-notifications">
+            <NotificationBell />
+          </span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label="Open profile menu"
+                data-tour="navbar-profile"
                 className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 transition"
               >
-                <Avatar name={user?.name ?? '—'} size="md" />
+                <Avatar name={user?.name ?? "—"} size="md" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[14rem]">
               {/* Profile header — avatar + name + email + role */}
               <div className="flex items-center gap-3 px-2 py-2">
-                <Avatar name={user?.name ?? '—'} size="lg" />
+                <Avatar name={user?.name ?? "—"} size="lg" />
                 <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{user?.name ?? '—'}</div>
-                  <div className="text-xs text-white/55 truncate">{user?.email}</div>
+                  <div className="text-sm font-medium truncate">
+                    {user?.name ?? "—"}
+                  </div>
+                  <div className="text-xs text-white/55 truncate">
+                    {user?.email}
+                  </div>
                   <div className="text-[10px] uppercase tracking-wider text-sky-300/80 mt-0.5">
                     {user?.role}
                   </div>
@@ -274,7 +488,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   const rt = refreshToken;
                   if (rt) void logoutSession(rt).catch(() => {});
                   signOut();
-                  navigate('/login');
+                  navigate("/login");
                 }}
                 className="text-rose-300 focus:text-rose-200"
               >
@@ -284,13 +498,21 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
-        <div className="flex-1 min-w-0">
-          <div className="p-6 max-w-6xl mx-auto space-y-4">
-            <ActiveDelegationBanner />
-            {children}
-          </div>
+        {/*
+          Full-width content area. We previously capped at max-w-6xl
+          which left a lot of whitespace on wider monitors — bad for
+          data-heavy pages like the dashboard, analytics, and tables.
+          The sidebar + header already give visual structure, so we
+          don't need an inner column cap.
+        */}
+        <div className="p-6 space-y-4">
+          <ActiveDelegationBanner />
+          {children}
         </div>
       </main>
+      {/* Idle-then-logout warning. The dialog stays mounted at all times
+          and only flips visible when the hook decides we've been idle. */}
+      <IdleWarningDialog state={idle} />
     </div>
   );
 }

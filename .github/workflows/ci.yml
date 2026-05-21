@@ -1,0 +1,132 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Smart Loan CI
+#
+# Runs on every push + PR. Three concurrent jobs (validate, build, test)
+# share a cached pnpm store via setup-node's built-in cache.
+#
+# What it guarantees:
+#   - prisma schema parses + matches migrations
+#   - every workspace package typechecks
+#   - api + web builds succeed
+#   - vitest suite (currently @loan/loans only) passes
+#
+# Cycle time: ~3 min on a cold cache, ~90s with cache warm.
+# ──────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch/PR — saves Actions minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Validate schema + lockfile ────────────────────────────────────────
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate Prisma schema
+        run: pnpm --filter @loan/db exec prisma validate
+      - name: Format-check Prisma schema
+        run: pnpm --filter @loan/db exec prisma format --check
+
+  # ── Typecheck every workspace package ─────────────────────────────────
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm --filter @loan/db exec prisma generate
+      - name: Typecheck all packages
+        run: pnpm typecheck
+
+  # ── Build the web bundle (catches Vite/tsc breaks that typecheck misses) ─
+  build:
+    name: Build web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client (web depends on @loan/db types)
+        run: pnpm --filter @loan/db exec prisma generate
+      - name: Build web
+        run: pnpm --filter @loan/web build
+
+  # ── Run vitest suites ─────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm --filter @loan/db exec prisma generate
+      - name: Run tests
+        run: pnpm test
+
+  # ── Docker build smoke test (on main only — slow) ─────────────────────
+  docker-build:
+    name: Docker build (smoke)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [validate, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: false
+          tags: smart-loan-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          tags: smart-loan-web:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

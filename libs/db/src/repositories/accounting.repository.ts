@@ -26,14 +26,14 @@ import {
   buildTrialBalance,
   keyOf,
   periodFor,
-} from '@loan/accounting';
+} from "@loan/accounting";
 import type {
   Account,
   AccountingPeriod,
   JournalEntry,
   Prisma,
   PrismaClient,
-} from '@prisma/client';
+} from "@prisma/client";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -61,7 +61,7 @@ export class AccountingRepository {
   // ─── Chart of accounts ────────────────────────────────────────────────
 
   listAccounts(): Promise<Account[]> {
-    return this.prisma.account.findMany({ orderBy: { code: 'asc' } });
+    return this.prisma.account.findMany({ orderBy: { code: "asc" } });
   }
 
   findAccountByCode(code: string): Promise<Account | null> {
@@ -99,7 +99,8 @@ export class AccountingRepository {
         },
         update: {},
       });
-      if (result.createdAt.getTime() === result.updatedAt.getTime()) created += 1;
+      if (result.createdAt.getTime() === result.updatedAt.getTime())
+        created += 1;
       else existing += 1;
     }
     return { created, existing };
@@ -122,8 +123,11 @@ export class AccountingRepository {
         source: filter?.source as never,
         sourceRefId: filter?.sourceRefId,
       },
-      include: { lines: { include: { account: true } }, postedBy: { select: { id: true, name: true } } },
-      orderBy: [{ entryDate: 'desc' }, { number: 'desc' }],
+      include: {
+        lines: { include: { account: true } },
+        postedBy: { select: { id: true, name: true } },
+      },
+      orderBy: [{ entryDate: "desc" }, { number: "desc" }],
       take: 500,
     });
   }
@@ -139,15 +143,42 @@ export class AccountingRepository {
   }
 
   /**
+   * Resolve a journal entry by either UUID or human "JE-..." number.
+   * The new operator UI navigates via the number; UUIDs still work for
+   * back-compat with old links + admin tooling.
+   */
+  findEntryByIdOrNumber(idOrNumber: string) {
+    // Sniff which kind of lookup to do. The UUID regex is in the shared
+    // helper module but we inline a tiny version here so this repo stays
+    // free of the cross-import (avoids a circular dep with the helper).
+    const uuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return this.prisma.journalEntry.findFirst({
+      where: uuid.test(idOrNumber)
+        ? { id: idOrNumber }
+        : { number: idOrNumber },
+      include: {
+        lines: { include: { account: true } },
+        postedBy: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  /**
    * Post a journal entry. Resolves account codes to ids, locates (or
    * creates) the accounting period that owns `entryDate`, refuses if
    * that period is CLOSED, allocates the next entry number, and inserts
    * entry + lines atomically.
    */
-  async postEntry(input: JournalEntryInput, opts: PostEntryOptions): Promise<JournalEntry> {
+  async postEntry(
+    input: JournalEntryInput,
+    opts: PostEntryOptions,
+  ): Promise<JournalEntry> {
     const tx = opts.tx ?? this.prisma;
     const codes = [...new Set(input.lines.map((l) => l.accountCode))];
-    const accounts = await tx.account.findMany({ where: { code: { in: codes } } });
+    const accounts = await tx.account.findMany({
+      where: { code: { in: codes } },
+    });
     const byCode = new Map(accounts.map((a) => [a.code, a]));
     for (const code of codes) {
       const acc = byCode.get(code);
@@ -156,11 +187,11 @@ export class AccountingRepository {
     }
 
     const period = await this.ensurePeriodForDate(tx, input.entryDate);
-    if (period.status === 'CLOSED') {
+    if (period.status === "CLOSED") {
       const err = new Error(
         `Cannot post: accounting period ${keyOf({ year: period.year, month: period.month })} is closed.`,
       );
-      (err as Error & { code?: string }).code = 'PERIOD_CLOSED';
+      (err as Error & { code?: string }).code = "PERIOD_CLOSED";
       throw err;
     }
 
@@ -191,7 +222,7 @@ export class AccountingRepository {
 
   listPeriods(): Promise<AccountingPeriod[]> {
     return this.prisma.accountingPeriod.findMany({
-      orderBy: [{ year: 'desc' }, { month: 'desc' }],
+      orderBy: [{ year: "desc" }, { month: "desc" }],
       take: 60,
     });
   }
@@ -203,35 +234,46 @@ export class AccountingRepository {
   }
 
   /** Idempotent — creates (year, month) as OPEN if it doesn't exist. */
-  async ensurePeriod(year: number, month: number, tx?: Tx): Promise<AccountingPeriod> {
+  async ensurePeriod(
+    year: number,
+    month: number,
+    tx?: Tx,
+  ): Promise<AccountingPeriod> {
     const client = tx ?? this.prisma;
     return client.accountingPeriod.upsert({
       where: { year_month: { year, month } },
-      create: { year, month, status: 'OPEN' },
+      create: { year, month, status: "OPEN" },
       update: {},
     });
   }
 
-  async closePeriod(year: number, month: number, userId: string): Promise<AccountingPeriod> {
+  async closePeriod(
+    year: number,
+    month: number,
+    userId: string,
+  ): Promise<AccountingPeriod> {
     const p = await this.ensurePeriod(year, month);
-    if (p.status === 'CLOSED') return p;
+    if (p.status === "CLOSED") return p;
     return this.prisma.accountingPeriod.update({
       where: { id: p.id },
-      data: { status: 'CLOSED', closedAt: new Date(), closedById: userId },
+      data: { status: "CLOSED", closedAt: new Date(), closedById: userId },
     });
   }
 
   async reopenPeriod(year: number, month: number): Promise<AccountingPeriod> {
     const p = await this.findPeriod(year, month);
     if (!p) throw new Error(`Period ${year}-${month} does not exist.`);
-    if (p.status === 'OPEN') return p;
+    if (p.status === "OPEN") return p;
     return this.prisma.accountingPeriod.update({
       where: { id: p.id },
-      data: { status: 'OPEN', closedAt: null, closedById: null },
+      data: { status: "OPEN", closedAt: null, closedById: null },
     });
   }
 
-  private async ensurePeriodForDate(tx: Tx, date: Date): Promise<AccountingPeriod> {
+  private async ensurePeriodForDate(
+    tx: Tx,
+    date: Date,
+  ): Promise<AccountingPeriod> {
     const k: PeriodKey = periodFor(date);
     return this.ensurePeriod(k.year, k.month, tx);
   }
@@ -252,7 +294,11 @@ export class AccountingRepository {
   async reverseEntry(
     entryId: string,
     opts: PostEntryOptions & { memo?: string },
-  ): Promise<{ original: JournalEntry; reversal: JournalEntry; created: boolean }> {
+  ): Promise<{
+    original: JournalEntry;
+    reversal: JournalEntry;
+    created: boolean;
+  }> {
     const tx = opts.tx ?? this.prisma;
     const original = await tx.journalEntry.findUnique({
       where: { id: entryId },
@@ -266,13 +312,13 @@ export class AccountingRepository {
       });
       if (existing) return { original, reversal: existing, created: false };
     }
-    if (original.source === 'REVERSAL') {
-      throw new Error('Cannot reverse a reversal — post a new entry instead.');
+    if (original.source === "REVERSAL") {
+      throw new Error("Cannot reverse a reversal — post a new entry instead.");
     }
 
     const today = new Date();
     const period = await this.ensurePeriodForDate(tx, today);
-    if (period.status === 'CLOSED') {
+    if (period.status === "CLOSED") {
       throw new Error(
         `Cannot post reversal: current period ${keyOf({ year: period.year, month: period.month })} is closed.`,
       );
@@ -284,16 +330,16 @@ export class AccountingRepository {
         number,
         entryDate: today,
         memo: opts.memo ?? `Reversal of ${original.number}`,
-        source: 'REVERSAL' as never,
-        sourceRefType: 'JournalEntry',
+        source: "REVERSAL" as never,
+        sourceRefType: "JournalEntry",
         sourceRefId: original.id,
         postedById: opts.postedById,
         periodId: period.id,
         lines: {
           create: original.lines.map((l) => ({
             accountId: l.accountId,
-            debit: Number(l.credit),  // swap
-            credit: Number(l.debit),  // swap
+            debit: Number(l.credit), // swap
+            credit: Number(l.debit), // swap
             memo: l.memo ? `Reversal: ${l.memo}` : undefined,
           })),
         },
@@ -359,7 +405,7 @@ export class AccountingRepository {
     const open = await this.prisma.loanSchedule.findMany({
       where: {
         paidInFullAt: null,
-        loan: { status: { in: ['ACTIVE', 'DISBURSED', 'DEFAULTED'] } },
+        loan: { status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] } },
       },
       include: { loan: { select: { id: true } } },
     });
@@ -403,8 +449,12 @@ export class AccountingRepository {
     });
     const ytdPrincipal = ytd.reduce((s, r) => s + Number(r.principal), 0);
 
-    const cashAcc = await this.prisma.account.findUnique({ where: { code: '1000' } });
-    const recAcc = await this.prisma.account.findUnique({ where: { code: '1100' } });
+    const cashAcc = await this.prisma.account.findUnique({
+      where: { code: "1000" },
+    });
+    const recAcc = await this.prisma.account.findUnique({
+      where: { code: "1100" },
+    });
     const cashBal = cashAcc ? await this.accountBalance(cashAcc.id, asOf) : 0;
     const recBal = recAcc ? await this.accountBalance(recAcc.id, asOf) : 0;
 
@@ -433,7 +483,7 @@ export class AccountingRepository {
     });
     const buckets = new Map<string, { count: number; principal: number }>();
     for (const a of apps) {
-      const key = `${a.submittedAt.getFullYear()}-${String(a.submittedAt.getMonth() + 1).padStart(2, '0')}`;
+      const key = `${a.submittedAt.getFullYear()}-${String(a.submittedAt.getMonth() + 1).padStart(2, "0")}`;
       const cur = buckets.get(key) ?? { count: 0, principal: 0 };
       cur.count += 1;
       cur.principal += Number(a.principal);
@@ -441,7 +491,11 @@ export class AccountingRepository {
     }
     return [...buckets.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([month, v]) => ({ month, count: v.count, principal: round2(v.principal) }));
+      .map(([month, v]) => ({
+        month,
+        count: v.count,
+        principal: round2(v.principal),
+      }));
   }
 
   /**
@@ -461,7 +515,7 @@ export class AccountingRepository {
     const oldest = new Date(today);
     oldest.setMonth(today.getMonth() - 24);
     const loans = await this.prisma.loanApplication.findMany({
-      where: { submittedAt: { gte: oldest }, status: { not: 'DRAFT' } },
+      where: { submittedAt: { gte: oldest }, status: { not: "DRAFT" } },
       include: {
         schedule: { where: { paidInFullAt: null } },
       },
@@ -469,7 +523,7 @@ export class AccountingRepository {
     const map = new Map<string, { originated: number; overdue: number }>();
     const dayMs = 86_400_000;
     for (const l of loans) {
-      const key = `${l.submittedAt.getFullYear()}-${String(l.submittedAt.getMonth() + 1).padStart(2, '0')}`;
+      const key = `${l.submittedAt.getFullYear()}-${String(l.submittedAt.getMonth() + 1).padStart(2, "0")}`;
       const cur = map.get(key) ?? { originated: 0, overdue: 0 };
       cur.originated += 1;
       const isOverdue90 = l.schedule.some(
@@ -493,10 +547,7 @@ export class AccountingRepository {
       where: { accountId, entry: { entryDate: { lte: asOf } } },
       select: { debit: true, credit: true },
     });
-    return lines.reduce(
-      (s, l) => s + (Number(l.debit) - Number(l.credit)),
-      0,
-    );
+    return lines.reduce((s, l) => s + (Number(l.debit) - Number(l.credit)), 0);
   }
 
   // ─── Accrual jobs ────────────────────────────────────────────────────
@@ -513,14 +564,15 @@ export class AccountingRepository {
     period: PeriodKey,
     postedById: string,
   ): Promise<{ posted: number; skipped: number }> {
-    const { interestAccrualEntry, periodBounds } = await import('@loan/accounting');
+    const { interestAccrualEntry, periodBounds } =
+      await import("@loan/accounting");
     const { start, endExclusive } = periodBounds(period);
 
     const installments = await this.prisma.loanSchedule.findMany({
       where: {
         dueDate: { gte: start, lt: endExclusive },
         paidInFullAt: null,
-        loan: { status: { in: ['ACTIVE', 'DISBURSED'] } },
+        loan: { status: { in: ["ACTIVE", "DISBURSED"] } },
       },
       include: { loan: { select: { number: true } } },
     });
@@ -598,9 +650,17 @@ export class AccountingRepository {
         entry: { entryDate: { gte: from, lte: to } },
       },
       include: {
-        entry: { select: { id: true, number: true, entryDate: true, memo: true, source: true } },
+        entry: {
+          select: {
+            id: true,
+            number: true,
+            entryDate: true,
+            memo: true,
+            source: true,
+          },
+        },
       },
-      orderBy: [{ entry: { entryDate: 'asc' } }, { entry: { number: 'asc' } }],
+      orderBy: [{ entry: { entryDate: "asc" } }, { entry: { number: "asc" } }],
     });
     let running = 0;
     return rows.map((r) => {
@@ -611,7 +671,7 @@ export class AccountingRepository {
         entryNumber: r.entry.number,
         entryDate: r.entry.entryDate,
         source: r.entry.source,
-        memo: r.memo ?? r.entry.memo ?? '',
+        memo: r.memo ?? r.entry.memo ?? "",
         debit: Number(r.debit),
         credit: Number(r.credit),
         runningBalance: Math.round(running * 100) / 100,
@@ -623,7 +683,7 @@ export class AccountingRepository {
     const rows = await this.prisma.loanSchedule.findMany({
       where: {
         paidInFullAt: null,
-        loan: { status: { in: ['ACTIVE', 'DISBURSED', 'DEFAULTED'] } },
+        loan: { status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] } },
       },
       include: {
         loan: {
@@ -651,7 +711,10 @@ export class AccountingRepository {
 
   // ─── Internals ───────────────────────────────────────────────────────
 
-  private async ledgerLines(filter: { from?: Date; to?: Date }): Promise<LedgerLineInput[]> {
+  private async ledgerLines(filter: {
+    from?: Date;
+    to?: Date;
+  }): Promise<LedgerLineInput[]> {
     const rows = await this.prisma.journalLine.findMany({
       where: { entry: { entryDate: { gte: filter.from, lte: filter.to } } },
       include: { account: true },
@@ -674,13 +737,13 @@ export class AccountingRepository {
     const yearEnd = new Date(year + 1, 0, 1);
     const last = await tx.journalEntry.findFirst({
       where: { entryDate: { gte: yearStart, lt: yearEnd } },
-      orderBy: { number: 'desc' },
+      orderBy: { number: "desc" },
     });
     let seq = 1;
     if (last) {
       const match = /JE-\d{4}-(\d+)/.exec(last.number);
       if (match) seq = Number(match[1]) + 1;
     }
-    return `JE-${year}-${String(seq).padStart(6, '0')}`;
+    return `JE-${year}-${String(seq).padStart(6, "0")}`;
   }
 }

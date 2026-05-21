@@ -4,7 +4,7 @@ import {
   useLoanProducts,
   useSeedLoanProducts,
   useUpdateLoanProduct,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import type {
   CollateralKind,
   CreditTier,
@@ -12,7 +12,7 @@ import type {
   KycDocumentType,
   LoanProduct,
   PaymentFrequency,
-} from '@loan/shared-types';
+} from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -34,17 +34,24 @@ import {
   SkeletonCard,
   useConfirm,
   useToast,
-} from '@loan/ui';
-import { formatMoney } from '@loan/shared-utils';
-import { Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+} from "@loan/ui";
+import { formatMoney } from "@loan/shared-utils";
+import { ListChecks, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 
-import { useAuth } from '../../../providers/auth';
+import { ApprovalChainDialog } from "../components/ApprovalChainDialog";
+import { useState, type FormEvent } from "react";
 
-const TIERS: CreditTier[] = ['A', 'B', 'C', 'D', 'F'];
+import { useAuth } from "../../../providers/auth";
+
+const TIERS: CreditTier[] = ["A", "B", "C", "D", "F"];
 
 const DOC_OPTIONS: KycDocumentType[] = [
-  'VEHICLE_OR', 'VEHICLE_CR', 'PROPERTY_TITLE', 'TAX_DECLARATION', 'SELFIE', 'ID_BACK',
+  "VEHICLE_OR",
+  "VEHICLE_CR",
+  "PROPERTY_TITLE",
+  "TAX_DECLARATION",
+  "SELFIE",
+  "ID_BACK",
 ];
 
 interface ProductDraft {
@@ -78,10 +85,10 @@ interface ProductDraft {
 }
 
 const emptyDraft = (): ProductDraft => ({
-  code: '',
-  name: '',
-  description: '',
-  collateralKind: 'NONE',
+  code: "",
+  name: "",
+  description: "",
+  collateralKind: "NONE",
   requiredKycDocs: [],
   minPrincipal: 5_000,
   maxPrincipal: 500_000,
@@ -90,7 +97,7 @@ const emptyDraft = (): ProductDraft => ({
   defaultRatePct: 24,
   minRatePct: 12,
   maxRatePct: 36,
-  maxLtvPct: '',
+  maxLtvPct: "",
   processingFeeRatePct: 2,
   processingFeeFlat: 0,
   documentaryStampRatePct: 0.75,
@@ -98,8 +105,8 @@ const emptyDraft = (): ProductDraft => ({
   lateFeeCapFractionPct: 10,
   lateFeeGraceDays: 3,
   preTerminationFeeRatePct: 2,
-  interestMethod: 'DECLINING',
-  paymentFrequency: 'MONTHLY',
+  interestMethod: "DECLINING",
+  paymentFrequency: "MONTHLY",
   rateByTier: {},
   ltvByTier: {},
   useRateByTier: false,
@@ -110,7 +117,7 @@ const emptyDraft = (): ProductDraft => ({
 const fromProduct = (p: LoanProduct): ProductDraft => ({
   code: p.code,
   name: p.name,
-  description: p.description ?? '',
+  description: p.description ?? "",
   collateralKind: p.collateralKind,
   requiredKycDocs: [...p.requiredKycDocs],
   minPrincipal: Number(p.minPrincipal),
@@ -120,7 +127,8 @@ const fromProduct = (p: LoanProduct): ProductDraft => ({
   defaultRatePct: Number(p.defaultRate) * 100,
   minRatePct: Number(p.minRate) * 100,
   maxRatePct: Number(p.maxRate) * 100,
-  maxLtvPct: p.maxLoanToValue == null ? '' : String(Number(p.maxLoanToValue) * 100),
+  maxLtvPct:
+    p.maxLoanToValue == null ? "" : String(Number(p.maxLoanToValue) * 100),
   processingFeeRatePct: Number(p.processingFeeRate) * 100,
   processingFeeFlat: Number(p.processingFeeFlat),
   documentaryStampRatePct: Number(p.documentaryStampRate) * 100,
@@ -131,10 +139,16 @@ const fromProduct = (p: LoanProduct): ProductDraft => ({
   interestMethod: p.interestMethod,
   paymentFrequency: p.paymentFrequency,
   rateByTier: Object.fromEntries(
-    Object.entries(p.rateByTier ?? {}).map(([k, v]) => [k, v == null ? '' : String(Number(v) * 100)]),
+    Object.entries(p.rateByTier ?? {}).map(([k, v]) => [
+      k,
+      v == null ? "" : String(Number(v) * 100),
+    ]),
   ) as Partial<Record<CreditTier, string>>,
   ltvByTier: Object.fromEntries(
-    Object.entries(p.ltvByTier ?? {}).map(([k, v]) => [k, v == null ? '' : String(Number(v) * 100)]),
+    Object.entries(p.ltvByTier ?? {}).map(([k, v]) => [
+      k,
+      v == null ? "" : String(Number(v) * 100),
+    ]),
   ) as Partial<Record<CreditTier, string>>,
   useRateByTier: !!p.rateByTier && Object.keys(p.rateByTier).length > 0,
   useLtvByTier: !!p.ltvByTier && Object.keys(p.ltvByTier).length > 0,
@@ -154,7 +168,7 @@ const draftToPayload = (d: ProductDraft, includeCode: boolean) => {
     defaultRate: d.defaultRatePct / 100,
     minRate: d.minRatePct / 100,
     maxRate: d.maxRatePct / 100,
-    maxLoanToValue: d.maxLtvPct === '' ? null : Number(d.maxLtvPct) / 100,
+    maxLoanToValue: d.maxLtvPct === "" ? null : Number(d.maxLtvPct) / 100,
     processingFeeRate: d.processingFeeRatePct / 100,
     processingFeeFlat: d.processingFeeFlat,
     documentaryStampRate: d.documentaryStampRatePct / 100,
@@ -168,7 +182,7 @@ const draftToPayload = (d: ProductDraft, includeCode: boolean) => {
       ? (Object.fromEntries(
           TIERS.map((t) => [
             t,
-            d.rateByTier[t] === '' ? null : Number(d.rateByTier[t]) / 100,
+            d.rateByTier[t] === "" ? null : Number(d.rateByTier[t]) / 100,
           ]),
         ) as Partial<Record<CreditTier, number | null>>)
       : null,
@@ -198,25 +212,26 @@ export function LoanProductsPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { user } = useAuth();
-  const canEdit = user?.role === 'ADMIN';
+  const canEdit = user?.role === "ADMIN";
 
   const [editing, setEditing] = useState<LoanProduct | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editingChain, setEditingChain] = useState<LoanProduct | null>(null);
 
   const onDelete = async (p: LoanProduct) => {
     const ok = await confirm({
       title: `Delete product ${p.code}?`,
       message:
-        'New applications can no longer use this product. The deletion will be blocked if any existing loans still reference it.',
-      confirmLabel: 'Delete product',
-      tone: 'destructive',
+        "New applications can no longer use this product. The deletion will be blocked if any existing loans still reference it.",
+      confirmLabel: "Delete product",
+      tone: "destructive",
     });
     if (!ok) return;
     try {
       await remove.mutateAsync(p.code);
       toast.success(`Deleted ${p.code}`);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Cannot delete');
+      toast.error((err as Error).message ?? "Cannot delete");
     }
   };
 
@@ -231,9 +246,11 @@ export function LoanProductsPage() {
               onClick={async () => {
                 try {
                   const r = await seed.mutateAsync();
-                  toast.success(`Seeded ${r.created} products (${r.existing} already present)`);
+                  toast.success(
+                    `Seeded ${r.created} products (${r.existing} already present)`,
+                  );
                 } catch (err) {
-                  toast.error((err as Error).message ?? 'Could not seed');
+                  toast.error((err as Error).message ?? "Could not seed");
                 }
               }}
               disabled={seed.isPending}
@@ -255,7 +272,8 @@ export function LoanProductsPage() {
           <SkeletonCard />
         ) : (products.data ?? []).length === 0 ? (
           <p className="text-sm text-white/55">
-            No products yet. Click "Seed defaults" or "New product" to get started.
+            No products yet. Click "Seed defaults" or "New product" to get
+            started.
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -280,18 +298,24 @@ export function LoanProductsPage() {
                   <td className="py-2 px-2">
                     <div>{p.name}</div>
                     {p.description && (
-                      <div className="text-xs text-white/45">{p.description}</div>
+                      <div className="text-xs text-white/45">
+                        {p.description}
+                      </div>
                     )}
                   </td>
-                  <td className="py-2 px-2 text-white/65">{p.collateralKind}</td>
+                  <td className="py-2 px-2 text-white/65">
+                    {p.collateralKind}
+                  </td>
                   <td className="py-2 px-2 text-right font-mono text-xs">
-                    {formatMoney(Number(p.minPrincipal))}–{formatMoney(Number(p.maxPrincipal))}
+                    {formatMoney(Number(p.minPrincipal))}–
+                    {formatMoney(Number(p.maxPrincipal))}
                   </td>
                   <td className="py-2 px-2 text-right font-mono">
                     {p.minTermMonths}–{p.maxTermMonths}m
                   </td>
                   <td className="py-2 px-2 text-right font-mono">
-                    {(Number(p.minRate) * 100).toFixed(1)}–{(Number(p.maxRate) * 100).toFixed(1)}%
+                    {(Number(p.minRate) * 100).toFixed(1)}–
+                    {(Number(p.maxRate) * 100).toFixed(1)}%
                   </td>
                   <td className="py-2 px-2 text-xs">
                     <Badge variant="muted">{p.interestMethod}</Badge>
@@ -300,13 +324,21 @@ export function LoanProductsPage() {
                     <Badge variant="muted">{p.paymentFrequency}</Badge>
                   </td>
                   <td className="py-2 px-2">
-                    <Badge variant={p.active ? 'success' : 'muted'}>
-                      {p.active ? 'Active' : 'Inactive'}
+                    <Badge variant={p.active ? "success" : "muted"}>
+                      {p.active ? "Active" : "Inactive"}
                     </Badge>
                   </td>
                   <td className="py-2 px-2 text-right">
                     {canEdit && (
                       <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingChain(p)}
+                          className="text-white/55 hover:text-sky-300"
+                          title="Approval chain"
+                        >
+                          <ListChecks className="h-4 w-4" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => setEditing(p)}
@@ -336,6 +368,13 @@ export function LoanProductsPage() {
       {editing && (
         <EditProductDialog product={editing} onClose={() => setEditing(null)} />
       )}
+      {editingChain && (
+        <ApprovalChainDialog
+          productCode={editingChain.code}
+          productName={editingChain.name}
+          onClose={() => setEditingChain(null)}
+        />
+      )}
     </Card>
   );
 }
@@ -352,7 +391,7 @@ function CreateProductDialog({ onClose }: { onClose: () => void }) {
       toast.success(`Product ${draft.code} created`);
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -362,11 +401,18 @@ function CreateProductDialog({ onClose }: { onClose: () => void }) {
         <DialogHeader>
           <DialogTitle>New loan product</DialogTitle>
         </DialogHeader>
-        <ProductForm draft={draft} setDraft={setDraft} onSubmit={onSubmit} includeCode />
+        <ProductForm
+          draft={draft}
+          setDraft={setDraft}
+          onSubmit={onSubmit}
+          includeCode
+        />
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
           <Button onClick={onSubmit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create product'}
+            {create.isPending ? "Creating…" : "Create product"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -374,7 +420,13 @@ function CreateProductDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function EditProductDialog({ product, onClose }: { product: LoanProduct; onClose: () => void }) {
+function EditProductDialog({
+  product,
+  onClose,
+}: {
+  product: LoanProduct;
+  onClose: () => void;
+}) {
   const update = useUpdateLoanProduct();
   const toast = useToast();
   const [draft, setDraft] = useState<ProductDraft>(() => fromProduct(product));
@@ -384,10 +436,10 @@ function EditProductDialog({ product, onClose }: { product: LoanProduct; onClose
     try {
       const payload = draftToPayload(draft, false) as Record<string, unknown>;
       await update.mutateAsync({ code: product.code, ...payload } as never);
-      toast.success('Product saved');
+      toast.success("Product saved");
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -397,11 +449,18 @@ function EditProductDialog({ product, onClose }: { product: LoanProduct; onClose
         <DialogHeader>
           <DialogTitle>Edit {product.name}</DialogTitle>
         </DialogHeader>
-        <ProductForm draft={draft} setDraft={setDraft} onSubmit={onSubmit} includeCode={false} />
+        <ProductForm
+          draft={draft}
+          setDraft={setDraft}
+          onSubmit={onSubmit}
+          includeCode={false}
+        />
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
           <Button onClick={onSubmit} disabled={update.isPending}>
-            {update.isPending ? 'Saving…' : 'Save'}
+            {update.isPending ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -432,24 +491,38 @@ function ProductForm({
             <Field label="Code (UPPER_SNAKE)">
               <Input
                 value={draft.code}
-                onChange={(e) => set('code', e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+                onChange={(e) =>
+                  set(
+                    "code",
+                    e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""),
+                  )
+                }
                 placeholder="EDUCATIONAL"
                 required
               />
             </Field>
           )}
           <Field label="Name">
-            <Input value={draft.name} onChange={(e) => set('name', e.target.value)} required />
+            <Input
+              value={draft.name}
+              onChange={(e) => set("name", e.target.value)}
+              required
+            />
           </Field>
           <Field label="Description">
-            <Input value={draft.description} onChange={(e) => set('description', e.target.value)} />
+            <Input
+              value={draft.description}
+              onChange={(e) => set("description", e.target.value)}
+            />
           </Field>
           <Field label="Collateral kind">
             <Select
               value={draft.collateralKind}
-              onValueChange={(v) => set('collateralKind', v as CollateralKind)}
+              onValueChange={(v) => set("collateralKind", v as CollateralKind)}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="NONE">None</SelectItem>
                 <SelectItem value="VEHICLE">Vehicle</SelectItem>
@@ -459,10 +532,12 @@ function ProductForm({
           </Field>
           <Field label="Status">
             <Select
-              value={draft.active ? 'active' : 'inactive'}
-              onValueChange={(v) => set('active', v === 'active')}
+              value={draft.active ? "active" : "inactive"}
+              onValueChange={(v) => set("active", v === "active")}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
@@ -477,62 +552,75 @@ function ProductForm({
         <div className="grid grid-cols-2 gap-3">
           <Field label="Min principal (₱)">
             <Input
-              type="number" min={0}
+              type="number"
+              min={0}
               value={draft.minPrincipal}
-              onChange={(e) => set('minPrincipal', Number(e.target.value))}
+              onChange={(e) => set("minPrincipal", Number(e.target.value))}
             />
           </Field>
           <Field label="Max principal (₱)">
             <Input
-              type="number" min={0}
+              type="number"
+              min={0}
               value={draft.maxPrincipal}
-              onChange={(e) => set('maxPrincipal', Number(e.target.value))}
+              onChange={(e) => set("maxPrincipal", Number(e.target.value))}
             />
           </Field>
           <Field label="Min term (months)">
             <Input
-              type="number" min={1}
+              type="number"
+              min={1}
               value={draft.minTermMonths}
-              onChange={(e) => set('minTermMonths', Number(e.target.value))}
+              onChange={(e) => set("minTermMonths", Number(e.target.value))}
             />
           </Field>
           <Field label="Max term (months)">
             <Input
-              type="number" min={1}
+              type="number"
+              min={1}
               value={draft.maxTermMonths}
-              onChange={(e) => set('maxTermMonths', Number(e.target.value))}
+              onChange={(e) => set("maxTermMonths", Number(e.target.value))}
             />
           </Field>
         </div>
         <div className="grid grid-cols-3 gap-3 mt-2">
           <Field label="Default rate (%)">
             <Input
-              type="number" min={0} step={0.25}
+              type="number"
+              min={0}
+              step={0.25}
               value={draft.defaultRatePct}
-              onChange={(e) => set('defaultRatePct', Number(e.target.value))}
+              onChange={(e) => set("defaultRatePct", Number(e.target.value))}
             />
           </Field>
           <Field label="Min rate (%)">
             <Input
-              type="number" min={0} step={0.25}
+              type="number"
+              min={0}
+              step={0.25}
               value={draft.minRatePct}
-              onChange={(e) => set('minRatePct', Number(e.target.value))}
+              onChange={(e) => set("minRatePct", Number(e.target.value))}
             />
           </Field>
           <Field label="Max rate (%)">
             <Input
-              type="number" min={0} step={0.25}
+              type="number"
+              min={0}
+              step={0.25}
               value={draft.maxRatePct}
-              onChange={(e) => set('maxRatePct', Number(e.target.value))}
+              onChange={(e) => set("maxRatePct", Number(e.target.value))}
             />
           </Field>
         </div>
-        {draft.collateralKind !== 'NONE' && (
+        {draft.collateralKind !== "NONE" && (
           <Field label="Max LTV (%, blank = no cap)">
             <Input
-              type="number" min={0} max={100} step={1}
+              type="number"
+              min={0}
+              max={100}
+              step={1}
               value={draft.maxLtvPct}
-              onChange={(e) => set('maxLtvPct', e.target.value)}
+              onChange={(e) => set("maxLtvPct", e.target.value)}
             />
           </Field>
         )}
@@ -543,30 +631,43 @@ function ProductForm({
         <div className="grid grid-cols-2 gap-3">
           <Field label="Processing fee (% of principal)">
             <Input
-              type="number" min={0} step={0.05}
+              type="number"
+              min={0}
+              step={0.05}
               value={draft.processingFeeRatePct}
-              onChange={(e) => set('processingFeeRatePct', Number(e.target.value))}
+              onChange={(e) =>
+                set("processingFeeRatePct", Number(e.target.value))
+              }
             />
           </Field>
           <Field label="Processing fee (flat ₱)">
             <Input
-              type="number" min={0}
+              type="number"
+              min={0}
               value={draft.processingFeeFlat}
-              onChange={(e) => set('processingFeeFlat', Number(e.target.value))}
+              onChange={(e) => set("processingFeeFlat", Number(e.target.value))}
             />
           </Field>
           <Field label="Documentary stamp (%)">
             <Input
-              type="number" min={0} step={0.01}
+              type="number"
+              min={0}
+              step={0.01}
               value={draft.documentaryStampRatePct}
-              onChange={(e) => set('documentaryStampRatePct', Number(e.target.value))}
+              onChange={(e) =>
+                set("documentaryStampRatePct", Number(e.target.value))
+              }
             />
           </Field>
           <Field label="Pre-termination fee (% of remaining)">
             <Input
-              type="number" min={0} step={0.25}
+              type="number"
+              min={0}
+              step={0.25}
               value={draft.preTerminationFeeRatePct}
-              onChange={(e) => set('preTerminationFeeRatePct', Number(e.target.value))}
+              onChange={(e) =>
+                set("preTerminationFeeRatePct", Number(e.target.value))
+              }
             />
           </Field>
         </div>
@@ -577,23 +678,33 @@ function ProductForm({
         <div className="grid grid-cols-3 gap-3">
           <Field label="Daily rate (% of installment)">
             <Input
-              type="number" min={0} step={0.05}
+              type="number"
+              min={0}
+              step={0.05}
               value={draft.lateFeeDailyRatePct}
-              onChange={(e) => set('lateFeeDailyRatePct', Number(e.target.value))}
+              onChange={(e) =>
+                set("lateFeeDailyRatePct", Number(e.target.value))
+              }
             />
           </Field>
           <Field label="Cap (% of installment)">
             <Input
-              type="number" min={0} max={100} step={0.5}
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
               value={draft.lateFeeCapFractionPct}
-              onChange={(e) => set('lateFeeCapFractionPct', Number(e.target.value))}
+              onChange={(e) =>
+                set("lateFeeCapFractionPct", Number(e.target.value))
+              }
             />
           </Field>
           <Field label="Grace days">
             <Input
-              type="number" min={0}
+              type="number"
+              min={0}
               value={draft.lateFeeGraceDays}
-              onChange={(e) => set('lateFeeGraceDays', Number(e.target.value))}
+              onChange={(e) => set("lateFeeGraceDays", Number(e.target.value))}
             />
           </Field>
         </div>
@@ -605,9 +716,11 @@ function ProductForm({
           <Field label="Interest method">
             <Select
               value={draft.interestMethod}
-              onValueChange={(v) => set('interestMethod', v as InterestMethod)}
+              onValueChange={(v) => set("interestMethod", v as InterestMethod)}
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="DECLINING">Declining balance</SelectItem>
                 <SelectItem value="FLAT">Flat (add-on)</SelectItem>
@@ -617,9 +730,13 @@ function ProductForm({
           <Field label="Payment frequency">
             <Select
               value={draft.paymentFrequency}
-              onValueChange={(v) => set('paymentFrequency', v as PaymentFrequency)}
+              onValueChange={(v) =>
+                set("paymentFrequency", v as PaymentFrequency)
+              }
             >
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="MONTHLY">Monthly</SelectItem>
                 <SelectItem value="BIWEEKLY">Bi-weekly</SelectItem>
@@ -636,7 +753,7 @@ function ProductForm({
           <input
             type="checkbox"
             checked={draft.useRateByTier}
-            onChange={(e) => set('useRateByTier', e.target.checked)}
+            onChange={(e) => set("useRateByTier", e.target.checked)}
           />
           Use tier-based rates (overrides applicant-entered rate)
         </label>
@@ -645,9 +762,16 @@ function ProductForm({
             {TIERS.map((t) => (
               <Field key={t} label={`Tier ${t} rate (%) — blank = reject`}>
                 <Input
-                  type="number" min={0} step={0.25}
-                  value={draft.rateByTier[t] ?? ''}
-                  onChange={(e) => set('rateByTier', { ...draft.rateByTier, [t]: e.target.value })}
+                  type="number"
+                  min={0}
+                  step={0.25}
+                  value={draft.rateByTier[t] ?? ""}
+                  onChange={(e) =>
+                    set("rateByTier", {
+                      ...draft.rateByTier,
+                      [t]: e.target.value,
+                    })
+                  }
                 />
               </Field>
             ))}
@@ -658,18 +782,26 @@ function ProductForm({
           <input
             type="checkbox"
             checked={draft.useLtvByTier}
-            onChange={(e) => set('useLtvByTier', e.target.checked)}
+            onChange={(e) => set("useLtvByTier", e.target.checked)}
           />
           Use tier-based LTV caps (overrides max LTV above)
         </label>
-        {draft.useLtvByTier && draft.collateralKind !== 'NONE' && (
+        {draft.useLtvByTier && draft.collateralKind !== "NONE" && (
           <div className="grid grid-cols-5 gap-2 mt-2">
             {TIERS.map((t) => (
               <Field key={t} label={`Tier ${t} max LTV (%)`}>
                 <Input
-                  type="number" min={0} max={100} step={1}
-                  value={draft.ltvByTier[t] ?? ''}
-                  onChange={(e) => set('ltvByTier', { ...draft.ltvByTier, [t]: e.target.value })}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={draft.ltvByTier[t] ?? ""}
+                  onChange={(e) =>
+                    set("ltvByTier", {
+                      ...draft.ltvByTier,
+                      [t]: e.target.value,
+                    })
+                  }
                 />
               </Field>
             ))}
@@ -687,7 +819,7 @@ function ProductForm({
                 checked={draft.requiredKycDocs.includes(d)}
                 onChange={(e) =>
                   set(
-                    'requiredKycDocs',
+                    "requiredKycDocs",
                     e.target.checked
                       ? [...draft.requiredKycDocs, d]
                       : draft.requiredKycDocs.filter((x) => x !== d),
@@ -699,23 +831,38 @@ function ProductForm({
           ))}
         </div>
         <p className="text-xs text-white/45">
-          Base docs (ID_FRONT, PROOF_OF_INCOME, PROOF_OF_ADDRESS) are always required.
+          Base docs (ID_FRONT, PROOF_OF_INCOME, PROOF_OF_ADDRESS) are always
+          required.
         </p>
       </Section>
     </form>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="rounded-md border border-white/10 p-3 space-y-3">
-      <div className="text-xs uppercase tracking-wider text-white/45">{title}</div>
+      <div className="text-xs uppercase tracking-wider text-white/45">
+        {title}
+      </div>
       {children}
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <label className="text-xs text-white/55">{label}</label>

@@ -21,7 +21,7 @@ import type {
   PrismaClient,
   Prisma,
   SavingsTransaction,
-} from '@prisma/client';
+} from "@prisma/client";
 
 import {
   bigBrotherEntry,
@@ -31,13 +31,15 @@ import {
   fundWithdrawalEntry,
   otherIncomeEntry,
   savingsEntry,
-} from '@loan/accounting';
+} from "@loan/accounting";
 
-import { AccountingRepository } from './accounting.repository.js';
+import { AccountingRepository } from "./accounting.repository.js";
 
 /** A coop member is just a Customer — see Phase 5 design choice. */
-function memberName(c: Pick<Customer, 'firstName' | 'middleName' | 'lastName'>): string {
-  return [c.firstName, c.middleName, c.lastName].filter(Boolean).join(' ');
+function memberName(
+  c: Pick<Customer, "firstName" | "middleName" | "lastName">,
+): string {
+  return [c.firstName, c.middleName, c.lastName].filter(Boolean).join(" ");
 }
 
 export interface ContributionCreateInput {
@@ -53,7 +55,7 @@ export interface ContributionCreateInput {
 export interface SavingsCreateInput {
   customerId: string;
   amount: number;
-  kind: 'DEPOSIT' | 'WITHDRAWAL';
+  kind: "DEPOSIT" | "WITHDRAWAL";
   notes?: string;
   txnDate?: Date;
   recordedById: string;
@@ -120,21 +122,24 @@ export class CooperativeRepository {
 
   listContributions(): Promise<Contribution[]> {
     return this.prisma.contribution.findMany({
-      orderBy: { contributedAt: 'desc' },
+      orderBy: { contributedAt: "desc" },
       take: 500,
     });
   }
 
-  async createContribution(input: ContributionCreateInput): Promise<Contribution> {
-    const total = input.capitalBuildUp + input.mortuaryFund + input.emergencyFund;
+  async createContribution(
+    input: ContributionCreateInput,
+  ): Promise<Contribution> {
+    const total =
+      input.capitalBuildUp + input.mortuaryFund + input.emergencyFund;
     if (total <= 0) {
-      throw new Error('At least one of CBU / Mortuary / Emergency must be > 0');
+      throw new Error("At least one of CBU / Mortuary / Emergency must be > 0");
     }
     const customer = await this.prisma.customer.findUnique({
       where: { id: input.customerId },
       select: { firstName: true, middleName: true, lastName: true },
     });
-    if (!customer) throw new Error('Customer not found');
+    if (!customer) throw new Error("Customer not found");
     const contributedAt = input.contributedAt ?? new Date();
 
     return this.prisma.$transaction(async (tx) => {
@@ -175,18 +180,18 @@ export class CooperativeRepository {
 
   listSavings(): Promise<SavingsTransaction[]> {
     return this.prisma.savingsTransaction.findMany({
-      orderBy: { txnDate: 'desc' },
+      orderBy: { txnDate: "desc" },
       take: 500,
     });
   }
 
   async createSavings(input: SavingsCreateInput): Promise<SavingsTransaction> {
-    if (input.amount <= 0) throw new Error('Amount must be > 0');
+    if (input.amount <= 0) throw new Error("Amount must be > 0");
     const customer = await this.prisma.customer.findUnique({
       where: { id: input.customerId },
       select: { firstName: true, middleName: true, lastName: true },
     });
-    if (!customer) throw new Error('Customer not found');
+    if (!customer) throw new Error("Customer not found");
     const txnDate = input.txnDate ?? new Date();
 
     return this.prisma.$transaction(async (tx) => {
@@ -225,13 +230,15 @@ export class CooperativeRepository {
 
   listFundTxns(): Promise<FundTransaction[]> {
     return this.prisma.fundTransaction.findMany({
-      orderBy: { txnDate: 'desc' },
+      orderBy: { txnDate: "desc" },
       take: 500,
     });
   }
 
-  async createFundTxn(input: FundTransactionCreateInput): Promise<FundTransaction> {
-    if (input.amount <= 0) throw new Error('Amount must be > 0');
+  async createFundTxn(
+    input: FundTransactionCreateInput,
+  ): Promise<FundTransaction> {
+    if (input.amount <= 0) throw new Error("Amount must be > 0");
     const txnDate = input.txnDate ?? new Date();
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.fundTransaction.create({
@@ -268,13 +275,15 @@ export class CooperativeRepository {
 
   listWithdrawals(): Promise<FundWithdrawal[]> {
     return this.prisma.fundWithdrawal.findMany({
-      orderBy: { txnDate: 'desc' },
+      orderBy: { txnDate: "desc" },
       take: 500,
     });
   }
 
-  async createWithdrawal(input: FundWithdrawalCreateInput): Promise<FundWithdrawal> {
-    if (input.amount <= 0) throw new Error('Amount must be > 0');
+  async createWithdrawal(
+    input: FundWithdrawalCreateInput,
+  ): Promise<FundWithdrawal> {
+    if (input.amount <= 0) throw new Error("Amount must be > 0");
     const txnDate = input.txnDate ?? new Date();
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.fundWithdrawal.create({
@@ -312,13 +321,13 @@ export class CooperativeRepository {
 
   listExpenses(): Promise<Expense[]> {
     return this.prisma.expense.findMany({
-      orderBy: { txnDate: 'desc' },
+      orderBy: { txnDate: "desc" },
       take: 500,
     });
   }
 
   async createExpense(input: ExpenseCreateInput): Promise<Expense> {
-    if (input.amount <= 0) throw new Error('Amount must be > 0');
+    if (input.amount <= 0) throw new Error("Amount must be > 0");
     const txnDate = input.txnDate ?? new Date();
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.expense.create({
@@ -358,13 +367,13 @@ export class CooperativeRepository {
 
   listOtherIncome(): Promise<OtherIncome[]> {
     return this.prisma.otherIncome.findMany({
-      orderBy: { txnDate: 'desc' },
+      orderBy: { txnDate: "desc" },
       take: 500,
     });
   }
 
   async createOtherIncome(input: OtherIncomeCreateInput): Promise<OtherIncome> {
-    if (input.amount <= 0) throw new Error('Amount must be > 0');
+    if (input.amount <= 0) throw new Error("Amount must be > 0");
     const txnDate = input.txnDate ?? new Date();
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.otherIncome.create({
@@ -413,6 +422,7 @@ export class CooperativeRepository {
         where: { id: customerId },
         select: {
           id: true,
+          number: true,
           firstName: true,
           middleName: true,
           lastName: true,
@@ -424,12 +434,12 @@ export class CooperativeRepository {
       }),
       this.prisma.contribution.findMany({
         where: { customerId },
-        orderBy: { contributedAt: 'desc' },
+        orderBy: { contributedAt: "desc" },
         take: 20,
       }),
       this.prisma.savingsTransaction.findMany({
         where: { customerId },
-        orderBy: { txnDate: 'desc' },
+        orderBy: { txnDate: "desc" },
         take: 20,
       }),
     ]);
@@ -448,19 +458,19 @@ export class CooperativeRepository {
 
     // Savings net: deposits − withdrawals across all rows.
     const allSavings = await this.prisma.savingsTransaction.groupBy({
-      by: ['kind'],
+      by: ["kind"],
       where: { customerId },
       _sum: { amount: true },
       _count: { _all: true },
     });
     const deposits =
-      allSavings.find((s) => s.kind === 'DEPOSIT')?._sum.amount ?? 0;
+      allSavings.find((s) => s.kind === "DEPOSIT")?._sum.amount ?? 0;
     const withdrawals =
-      allSavings.find((s) => s.kind === 'WITHDRAWAL')?._sum.amount ?? 0;
+      allSavings.find((s) => s.kind === "WITHDRAWAL")?._sum.amount ?? 0;
     const depositCount =
-      allSavings.find((s) => s.kind === 'DEPOSIT')?._count._all ?? 0;
+      allSavings.find((s) => s.kind === "DEPOSIT")?._count._all ?? 0;
     const withdrawalCount =
-      allSavings.find((s) => s.kind === 'WITHDRAWAL')?._count._all ?? 0;
+      allSavings.find((s) => s.kind === "WITHDRAWAL")?._count._all ?? 0;
 
     return {
       customer,
@@ -484,14 +494,16 @@ export class CooperativeRepository {
 
   listBigBrother(): Promise<BigBrotherAccount[]> {
     return this.prisma.bigBrotherAccount.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
-  async createBigBrother(input: BigBrotherCreateInput): Promise<BigBrotherAccount> {
-    if (input.capital <= 0) throw new Error('Capital must be > 0');
+  async createBigBrother(
+    input: BigBrotherCreateInput,
+  ): Promise<BigBrotherAccount> {
+    if (input.capital <= 0) throw new Error("Capital must be > 0");
     if (input.periodTo <= input.periodFrom) {
-      throw new Error('periodTo must be after periodFrom');
+      throw new Error("periodTo must be after periodFrom");
     }
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.bigBrotherAccount.create({

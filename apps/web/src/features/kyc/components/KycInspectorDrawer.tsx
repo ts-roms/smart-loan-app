@@ -2,8 +2,8 @@ import {
   useDecideKyc,
   useKycForCustomer,
   useLatestScreening,
-} from '@loan/api-client';
-import type { KycSubmission } from '@loan/shared-types';
+} from "@loan/api-client";
+import type { KycSubmission } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -18,13 +18,19 @@ import {
   SkeletonLine,
   usePrompt,
   useToast,
-} from '@loan/ui';
-import { formatDateTime } from '@loan/shared-utils';
-import { ExternalLink, FileCheck2, ShieldAlert, ShieldCheck } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+} from "@loan/ui";
+import { formatDateTime } from "@loan/shared-utils";
+import {
+  ExternalLink,
+  FileCheck2,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
-import { DOC_TYPE_LABELS } from '../../customers';
+// Direct import — see customers/constants.ts for why.
+import { DOC_TYPE_LABELS } from "../../customers/constants";
 
 /**
  * Click-to-inspect wrapper for a customer's KYC pack. Opens a focused
@@ -79,15 +85,19 @@ function KycInspector({
   const toast = useToast();
   const askPrompt = usePrompt();
 
-  const onDecide = async (sub: KycSubmission, status: 'VERIFIED' | 'REJECTED') => {
+  const onDecide = async (
+    sub: KycSubmission,
+    status: "VERIFIED" | "REJECTED",
+  ) => {
     let reason: string | undefined;
-    if (status === 'REJECTED') {
+    if (status === "REJECTED") {
       const answer = await askPrompt({
-        title: 'Reject this document?',
-        message: 'The reason is shared with the customer so they can re-submit correctly.',
-        label: 'Reason',
-        placeholder: 'e.g. blurry image, expired ID',
-        confirmLabel: 'Reject',
+        title: "Reject this document?",
+        message:
+          "The reason is shared with the customer so they can re-submit correctly.",
+        label: "Reason",
+        placeholder: "e.g. blurry image, expired ID",
+        confirmLabel: "Reject",
       });
       if (answer === null) return;
       reason = answer;
@@ -103,14 +113,14 @@ function KycInspector({
         `${DOC_TYPE_LABELS[sub.documentType] ?? sub.documentType} ${status.toLowerCase()}`,
       );
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   const items = docs.data ?? [];
-  const pendingCount = items.filter((d) => d.status === 'PENDING').length;
-  const verifiedCount = items.filter((d) => d.status === 'VERIFIED').length;
-  const rejectedCount = items.filter((d) => d.status === 'REJECTED').length;
+  const pendingCount = items.filter((d) => d.status === "PENDING").length;
+  const verifiedCount = items.filter((d) => d.status === "VERIFIED").length;
+  const rejectedCount = items.filter((d) => d.status === "REJECTED").length;
 
   return (
     <>
@@ -118,12 +128,12 @@ function KycInspector({
         <div className="flex items-start gap-2">
           <FileCheck2 className="h-5 w-5 mt-0.5 text-emerald-300" />
           <div className="flex-1 min-w-0">
-            <DrawerTitle>{customerName ?? 'KYC pack'}</DrawerTitle>
+            <DrawerTitle>{customerName ?? "KYC pack"}</DrawerTitle>
             <DrawerDescription>
-              {items.length} document{items.length === 1 ? '' : 's'} ·{' '}
-              <span className="text-amber-300">{pendingCount} pending</span> ·{' '}
-              <span className="text-emerald-300">{verifiedCount} verified</span> ·{' '}
-              <span className="text-rose-300">{rejectedCount} rejected</span>
+              {items.length} document{items.length === 1 ? "" : "s"} ·{" "}
+              <span className="text-amber-300">{pendingCount} pending</span> ·{" "}
+              <span className="text-emerald-300">{verifiedCount} verified</span>{" "}
+              · <span className="text-rose-300">{rejectedCount} rejected</span>
             </DrawerDescription>
           </div>
         </div>
@@ -133,7 +143,7 @@ function KycInspector({
         {/* AML screening */}
         <div className="rounded-md border border-white/10 bg-white/[0.03] p-2.5">
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-white/45 mb-1">
-            {aml.data?.status === 'CLEAR' ? (
+            {aml.data?.status === "CLEAR" ? (
               <ShieldCheck className="h-3 w-3 text-emerald-300" />
             ) : (
               <ShieldAlert className="h-3 w-3 text-amber-300" />
@@ -149,11 +159,12 @@ function KycInspector({
               <div className="flex items-center gap-2">
                 <Badge
                   variant={
-                    aml.data.status === 'CLEAR' || aml.data.status === 'OVERRIDDEN'
-                      ? 'success'
-                      : aml.data.status === 'MATCH'
-                        ? 'danger'
-                        : 'warning'
+                    aml.data.status === "CLEAR" ||
+                    aml.data.status === "OVERRIDDEN"
+                      ? "success"
+                      : aml.data.status === "MATCH"
+                        ? "danger"
+                        : "warning"
                   }
                 >
                   {aml.data.status}
@@ -166,9 +177,9 @@ function KycInspector({
                 <ul className="mt-1.5 space-y-1">
                   {aml.data.matches!.map((m, i) => (
                     <li key={i} className="text-[10px] text-white/65">
-                      <span className="font-mono">{m.list}</span> · {m.matchedName} ·
-                      score {m.score.toFixed(2)}
-                      {m.reason ? ` · ${m.reason}` : ''}
+                      <span className="font-mono">{m.list}</span> ·{" "}
+                      {m.matchedName} · score {m.score.toFixed(2)}
+                      {m.reason ? ` · ${m.reason}` : ""}
                     </li>
                   ))}
                 </ul>
@@ -195,7 +206,7 @@ function KycInspector({
                       {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
                     </div>
                     <div className="text-[10px] text-white/45 flex items-center gap-1 mt-0.5">
-                      {formatDateTime(d.submittedAt)} ·{' '}
+                      {formatDateTime(d.submittedAt)} ·{" "}
                       <a
                         href={d.documentUrl}
                         target="_blank"
@@ -208,11 +219,11 @@ function KycInspector({
                   </div>
                   <Badge
                     variant={
-                      d.status === 'VERIFIED'
-                        ? 'success'
-                        : d.status === 'REJECTED'
-                          ? 'danger'
-                          : 'warning'
+                      d.status === "VERIFIED"
+                        ? "success"
+                        : d.status === "REJECTED"
+                          ? "danger"
+                          : "warning"
                     }
                   >
                     {d.status}
@@ -223,15 +234,15 @@ function KycInspector({
                     Rejected: {d.reason}
                   </div>
                 )}
-                {d.status === 'PENDING' && (
+                {d.status === "PENDING" && (
                   <div className="mt-2 flex gap-2">
-                    <Button size="sm" onClick={() => onDecide(d, 'VERIFIED')}>
+                    <Button size="sm" onClick={() => onDecide(d, "VERIFIED")}>
                       Approve
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => onDecide(d, 'REJECTED')}
+                      onClick={() => onDecide(d, "REJECTED")}
                     >
                       Reject
                     </Button>

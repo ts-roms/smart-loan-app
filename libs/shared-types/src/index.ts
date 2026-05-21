@@ -4,38 +4,98 @@
  * components needing the set of roles should import `USER_ROLES` rather
  * than re-typing the literals. Used by RBAC gates, nav role filters, etc.
  */
-export const USER_ROLES = ['ADMIN', 'LOAN_OFFICER', 'ACCOUNTANT', 'CUSTOMER'] as const;
+export const USER_ROLES = [
+  "ADMIN",
+  "LOAN_OFFICER",
+  "ACCOUNTANT",
+  "CUSTOMER",
+] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 /** Staff (non-customer) — the four primary console personas combined. */
-export const STAFF_ROLES = ['ADMIN', 'LOAN_OFFICER', 'ACCOUNTANT'] as const satisfies ReadonlyArray<UserRole>;
+export const STAFF_ROLES = [
+  "ADMIN",
+  "LOAN_OFFICER",
+  "ACCOUNTANT",
+] as const satisfies ReadonlyArray<UserRole>;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
 // Customer
 export type GovernmentIdType =
-  | 'PASSPORT' | 'DRIVERS_LICENSE' | 'NATIONAL_ID' | 'SSS' | 'TIN' | 'OTHER';
+  | "PASSPORT"
+  | "DRIVERS_LICENSE"
+  | "NATIONAL_ID"
+  | "SSS"
+  | "TIN"
+  | "OTHER";
 export type EmploymentStatus =
-  | 'EMPLOYED' | 'SELF_EMPLOYED' | 'UNEMPLOYED' | 'RETIRED' | 'STUDENT';
-export type KycStatus = 'NONE' | 'PENDING' | 'VERIFIED' | 'REJECTED';
+  | "EMPLOYED"
+  | "SELF_EMPLOYED"
+  | "FREELANCE"
+  | "UNEMPLOYED"
+  | "RETIRED"
+  | "STUDENT";
+export type Gender = "MALE" | "FEMALE" | "NON_BINARY" | "PREFER_NOT_TO_SAY";
+export type Sex = "MALE" | "FEMALE" | "INTERSEX";
+export type CivilStatus =
+  | "SINGLE"
+  | "MARRIED"
+  | "WIDOWED"
+  | "SEPARATED"
+  | "ANNULLED"
+  | "DIVORCED";
+export type KycStatus = "NONE" | "PENDING" | "VERIFIED" | "REJECTED";
 
 export interface Customer {
   id: string;
+  /**
+   * Human-readable reference number ("CUST-2026-000123"). Used in URLs
+   * and operator-facing UI in place of the UUID — see the bigger
+   * "reference numbers" pass for the broader migration. The UUID stays
+   * authoritative for FK joins inside payloads.
+   */
+  number: string;
   firstName: string;
   middleName: string | null;
   lastName: string;
+  /** Generational suffix (Jr / Sr / III). Null when not applicable. */
+  suffix: string | null;
   dateOfBirth: string;
+  gender: Gender | null;
+  sex: Sex | null;
+  civilStatus: CivilStatus | null;
+
+  /** Primary mobile. DB column is still `phone` for back-compat. */
   phone: string;
+  secondaryPhone: string | null;
   email: string | null;
+
+  /** Free-form street + house/unit. DB column is `address`. */
   address: string;
+  addressLine2: string | null;
+  barangay: string | null;
   city: string;
   province: string | null;
+  region: string | null;
   postalCode: string | null;
+
+  // Spouse — populated only when civilStatus === 'MARRIED'.
+  spouseName: string | null;
+  spouseDateOfBirth: string | null;
+  spouseContact: string | null;
+  spouseOccupation: string | null;
+
   governmentIdType: GovernmentIdType;
   governmentIdNumber: string;
+
   employmentStatus: EmploymentStatus;
   employerName: string | null;
   jobTitle: string | null;
+  position: string | null;
+  hireDate: string | null;
+  regularizationDate: string | null;
   monthlyIncome: string | number;
   yearsAtCurrentJob: string | number | null;
+
   kycStatus: KycStatus;
   createdAt: string;
   updatedAt: string;
@@ -45,30 +105,59 @@ export interface CustomerCreateInput {
   firstName: string;
   lastName: string;
   middleName?: string;
+  suffix?: string;
   dateOfBirth: string;
+  gender?: Gender;
+  sex?: Sex;
+  civilStatus?: CivilStatus;
+
   phone: string;
+  secondaryPhone?: string;
   email?: string;
+
   address: string;
+  addressLine2?: string;
+  barangay?: string;
   city: string;
   province?: string;
+  region?: string;
   postalCode?: string;
+
+  spouseName?: string;
+  spouseDateOfBirth?: string;
+  spouseContact?: string;
+  spouseOccupation?: string;
+
   governmentIdType: GovernmentIdType;
   governmentIdNumber: string;
+
   employmentStatus: EmploymentStatus;
   employerName?: string;
   jobTitle?: string;
+  position?: string;
+  hireDate?: string;
+  regularizationDate?: string;
   monthlyIncome: number;
   yearsAtCurrentJob?: number;
 }
 
 // KYC
 export type KycDocumentType =
-  | 'ID_FRONT' | 'ID_BACK' | 'PROOF_OF_INCOME' | 'PROOF_OF_ADDRESS' | 'SELFIE'
-  | 'VEHICLE_OR' | 'VEHICLE_CR' | 'PROPERTY_TITLE' | 'TAX_DECLARATION';
-export type KycSubmissionStatus = 'PENDING' | 'VERIFIED' | 'REJECTED';
+  | "ID_FRONT"
+  | "ID_BACK"
+  | "PROOF_OF_INCOME"
+  | "PROOF_OF_ADDRESS"
+  | "SELFIE"
+  | "VEHICLE_OR"
+  | "VEHICLE_CR"
+  | "PROPERTY_TITLE"
+  | "TAX_DECLARATION";
+export type KycSubmissionStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
 export interface KycSubmission {
   id: string;
+  /** Human-readable reference number ("KYC-2026-000123"). */
+  number: string;
   customerId: string;
   documentType: KycDocumentType;
   documentUrl: string;
@@ -87,7 +176,7 @@ export interface KycValidationResult {
 }
 
 // Scoring
-export type CreditTier = 'A' | 'B' | 'C' | 'D' | 'F';
+export type CreditTier = "A" | "B" | "C" | "D" | "F";
 
 export interface FactorBreakdown {
   factorId: string;
@@ -120,7 +209,7 @@ export type SurveyAnswer = string | number | boolean;
 
 export type SurveyQuestion =
   | {
-      kind: 'choice';
+      kind: "choice";
       id: string;
       label: string;
       help?: string;
@@ -128,7 +217,7 @@ export type SurveyQuestion =
       factorId: string;
     }
   | {
-      kind: 'number';
+      kind: "number";
       id: string;
       label: string;
       help?: string;
@@ -139,7 +228,7 @@ export type SurveyQuestion =
       inverted?: boolean;
     }
   | {
-      kind: 'boolean';
+      kind: "boolean";
       id: string;
       label: string;
       help?: string;
@@ -149,18 +238,26 @@ export type SurveyQuestion =
 
 // Loans
 export type LoanStatus =
-  | 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED'
-  | 'DISBURSED' | 'ACTIVE' | 'CLOSED' | 'DEFAULTED' | 'CANCELLED';
+  | "DRAFT"
+  | "SUBMITTED"
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "DISBURSED"
+  | "ACTIVE"
+  | "CLOSED"
+  | "DEFAULTED"
+  | "CANCELLED";
 
 /**
  * Product types are a string code now — the catalog is dynamic and admins
  * can add new products at runtime. The classic four still ship as defaults.
  */
 export type LoanType = string;
-export type CollateralKind = 'NONE' | 'VEHICLE' | 'PROPERTY';
-export type CollateralStatus = 'PROPOSED' | 'VERIFIED' | 'RELEASED' | 'SEIZED';
-export type InterestMethod = 'DECLINING' | 'FLAT';
-export type PaymentFrequency = 'MONTHLY' | 'BIWEEKLY' | 'WEEKLY';
+export type CollateralKind = "NONE" | "VEHICLE" | "PROPERTY";
+export type CollateralStatus = "PROPOSED" | "VERIFIED" | "RELEASED" | "SEIZED";
+export type InterestMethod = "DECLINING" | "FLAT";
+export type PaymentFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY";
 
 export interface LoanProduct {
   id: string;
@@ -226,10 +323,12 @@ export interface LoanProductCreateInput {
   active?: boolean;
 }
 
-export type LoanProductUpdateInput = Partial<Omit<LoanProductCreateInput, 'code'>>;
+export type LoanProductUpdateInput = Partial<
+  Omit<LoanProductCreateInput, "code">
+>;
 
 export interface VehicleInput {
-  kind: 'CAR' | 'MOTORCYCLE';
+  kind: "CAR" | "MOTORCYCLE";
   make: string;
   model: string;
   year: number;
@@ -241,8 +340,10 @@ export interface VehicleInput {
   notes?: string;
 }
 
-export interface Vehicle extends Omit<VehicleInput, 'appraisedValue'> {
+export interface Vehicle extends Omit<VehicleInput, "appraisedValue"> {
   id: string;
+  /** Human-readable reference number ("VEH-000123"). */
+  number: string;
   appraisedValue: string | number;
   status: CollateralStatus;
   createdAt: string;
@@ -262,8 +363,13 @@ export interface PropertyInput {
   notes?: string;
 }
 
-export interface Property extends Omit<PropertyInput, 'appraisedValue' | 'areaSqm'> {
+export interface Property extends Omit<
+  PropertyInput,
+  "appraisedValue" | "areaSqm"
+> {
   id: string;
+  /** Human-readable reference number ("PROP-000123"). */
+  number: string;
   areaSqm: string | number | null;
   appraisedValue: string | number;
   status: CollateralStatus;
@@ -284,6 +390,11 @@ export interface LoanApplication {
   tierAtApply: CreditTier | null;
   status: LoanStatus;
   decisionReason: string | null;
+  /**
+   * 1-indexed pointer into the product's approval chain (if any). Null
+   * when the product has no chain configured, or once all steps are done.
+   */
+  currentApprovalStep?: number | null;
   submittedAt: string;
   decidedAt: string | null;
   disbursedAt: string | null;
@@ -294,6 +405,15 @@ export interface LoanApplication {
   property?: Property | null;
   product?: LoanProduct;
   applicationSelfieUrl: string | null;
+  /** FRD §3.1 — true when submitted by a customer with prior CLOSED loans. */
+  isRepeat?: boolean;
+  // Face-match (selfie ↔ ID) outputs. All four are null until an
+  // officer runs the match on the loan detail page.
+  selfieMatchScore?: number | null;
+  selfieMatchDistance?: number | null;
+  selfieMatchPassed?: boolean | null;
+  selfieMatchModel?: string | null;
+  selfieMatchedAt?: string | null;
   // E-signature audit
   borrowerSignatureUrl: string | null;
   borrowerSignedAt: string | null;
@@ -336,7 +456,7 @@ export interface UploadResult {
 }
 
 // Jobs
-export type JobStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+export type JobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
 
 export interface ScheduledJob {
   id: string;
@@ -362,18 +482,18 @@ export interface JobRun {
 }
 
 // Notifications
-export type NotificationChannel = 'EMAIL' | 'SMS' | 'IN_APP';
-export type NotificationStatus = 'QUEUED' | 'SENT' | 'FAILED';
+export type NotificationChannel = "EMAIL" | "SMS" | "IN_APP";
+export type NotificationStatus = "QUEUED" | "SENT" | "FAILED";
 export type NotificationEvent =
-  | 'LOAN_APPROVED'
-  | 'LOAN_REJECTED'
-  | 'LOAN_DISBURSED'
-  | 'PAYMENT_RECEIVED'
-  | 'PAYMENT_DUE_SOON'
-  | 'PAYMENT_OVERDUE'
-  | 'PROMISE_TO_PAY'
-  | 'WELCOME'
-  | 'TEST';
+  | "LOAN_APPROVED"
+  | "LOAN_REJECTED"
+  | "LOAN_DISBURSED"
+  | "PAYMENT_RECEIVED"
+  | "PAYMENT_DUE_SOON"
+  | "PAYMENT_OVERDUE"
+  | "PROMISE_TO_PAY"
+  | "WELCOME"
+  | "TEST";
 
 export interface Notification {
   id: string;
@@ -393,7 +513,7 @@ export interface Notification {
 }
 
 // AML screening
-export type AmlStatus = 'PENDING' | 'CLEAR' | 'MATCH' | 'REVIEW' | 'OVERRIDDEN';
+export type AmlStatus = "PENDING" | "CLEAR" | "MATCH" | "REVIEW" | "OVERRIDDEN";
 
 export interface AmlScreening {
   id: string;
@@ -401,7 +521,12 @@ export interface AmlScreening {
   status: AmlStatus;
   provider: string;
   providerRef: string | null;
-  matches: Array<{ list: string; matchedName: string; score: number; reason?: string }> | null;
+  matches: Array<{
+    list: string;
+    matchedName: string;
+    score: number;
+    reason?: string;
+  }> | null;
   notes: string | null;
   screenedAt: string;
   overriddenById: string | null;
@@ -445,7 +570,7 @@ export interface VintageCohort {
 }
 
 // Co-makers
-export type CoMakerRole = 'CO_BORROWER' | 'GUARANTOR' | 'CO_MAKER';
+export type CoMakerRole = "CO_BORROWER" | "GUARANTOR" | "CO_MAKER";
 
 export interface CoMaker {
   id: string;
@@ -480,8 +605,16 @@ export interface CoMakerInput {
 }
 
 // Decision rules
-export type RuleAction = 'AUTO_APPROVE' | 'AUTO_REJECT' | 'MANUAL_REVIEW';
-export type DecisioningOp = '=' | '!=' | '<' | '<=' | '>' | '>=' | 'in' | 'not_in';
+export type RuleAction = "AUTO_APPROVE" | "AUTO_REJECT" | "MANUAL_REVIEW";
+export type DecisioningOp =
+  | "="
+  | "!="
+  | "<"
+  | "<="
+  | ">"
+  | ">="
+  | "in"
+  | "not_in";
 
 export interface DecisioningCondition {
   field: string;
@@ -615,14 +748,19 @@ export interface LoanPayment {
 }
 
 // Accounting
-export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'INCOME' | 'EXPENSE';
-export type NormalBalance = 'DEBIT' | 'CREDIT';
+export type AccountType =
+  | "ASSET"
+  | "LIABILITY"
+  | "EQUITY"
+  | "INCOME"
+  | "EXPENSE";
+export type NormalBalance = "DEBIT" | "CREDIT";
 export type JournalSource =
-  | 'MANUAL'
-  | 'LOAN_DISBURSEMENT'
-  | 'LOAN_PAYMENT'
-  | 'REVERSAL'
-  | 'ADJUSTMENT';
+  | "MANUAL"
+  | "LOAN_DISBURSEMENT"
+  | "LOAN_PAYMENT"
+  | "REVERSAL"
+  | "ADJUSTMENT";
 
 export interface Account {
   id: string;
@@ -706,22 +844,42 @@ export interface TrialBalanceReport {
 export interface IncomeStatementReport {
   from: string;
   to: string;
-  income: { rows: Array<{ code: string; name: string; amount: number }>; total: number };
-  expense: { rows: Array<{ code: string; name: string; amount: number }>; total: number };
+  income: {
+    rows: Array<{ code: string; name: string; amount: number }>;
+    total: number;
+  };
+  expense: {
+    rows: Array<{ code: string; name: string; amount: number }>;
+    total: number;
+  };
   netIncome: number;
 }
 
 export interface BalanceSheetReport {
   asOf: string;
-  assets: { rows: Array<{ code: string; name: string; amount: number }>; total: number };
-  liabilities: { rows: Array<{ code: string; name: string; amount: number }>; total: number };
-  equity: { rows: Array<{ code: string; name: string; amount: number }>; total: number };
+  assets: {
+    rows: Array<{ code: string; name: string; amount: number }>;
+    total: number;
+  };
+  liabilities: {
+    rows: Array<{ code: string; name: string; amount: number }>;
+    total: number;
+  };
+  equity: {
+    rows: Array<{ code: string; name: string; amount: number }>;
+    total: number;
+  };
   retainedEarnings: number;
   totalLiabilitiesAndEquity: number;
   inBalance: boolean;
 }
 
-export type AgingBucket = 'CURRENT' | 'D_1_30' | 'D_31_60' | 'D_61_90' | 'D_90_PLUS';
+export type AgingBucket =
+  | "CURRENT"
+  | "D_1_30"
+  | "D_31_60"
+  | "D_61_90"
+  | "D_90_PLUS";
 
 export interface AgingRow {
   loanId: string;
@@ -740,7 +898,7 @@ export interface AgingReport {
   totalOutstanding: number;
 }
 
-export type PeriodStatus = 'OPEN' | 'CLOSED';
+export type PeriodStatus = "OPEN" | "CLOSED";
 
 export interface AccountingPeriod {
   id: string;
@@ -759,8 +917,8 @@ export interface AccrualJobResult {
 }
 
 // Collections
-export type CollectionNoteType = 'CALL' | 'SMS' | 'EMAIL' | 'VISIT' | 'OTHER';
-export type PromiseStatus = 'PROMISED' | 'HONORED' | 'BROKEN' | 'CANCELLED';
+export type CollectionNoteType = "CALL" | "SMS" | "EMAIL" | "VISIT" | "OTHER";
+export type PromiseStatus = "PROMISED" | "HONORED" | "BROKEN" | "CANCELLED";
 
 export interface CollectionNote {
   id: string;
@@ -784,12 +942,18 @@ export interface PromiseToPay {
 }
 
 // Payments
-export type PaymentProviderName = 'MOCK' | 'GCASH' | 'MAYA';
+export type PaymentProviderName = "MOCK" | "GCASH" | "MAYA";
 export type PaymentIntentStatus =
-  | 'CREATED' | 'PROCESSING' | 'PAID' | 'FAILED' | 'EXPIRED';
+  | "CREATED"
+  | "PROCESSING"
+  | "PAID"
+  | "FAILED"
+  | "EXPIRED";
 
 export interface PaymentIntent {
   id: string;
+  /** Human-readable reference number ("PI-2026-000123"). */
+  number: string;
   loanId: string;
   provider: PaymentProviderName;
   externalId: string;
@@ -802,6 +966,309 @@ export interface PaymentIntent {
   createdAt: string;
   updatedAt: string;
   createdById: string;
+}
+
+// ─── Lease-to-Own (FRD §3.5) ────────────────────────────────────────────────
+
+export type LeaseStatus =
+  | "ACTIVE"
+  | "PULLED_OUT"
+  | "BUYOUT_COMPLETED"
+  | "RETURNED"
+  | "EXTENDED";
+
+export type LeaseTitleHolder = "COMPANY" | "CUSTOMER";
+
+export interface LeaseAgreement {
+  id: string;
+  loanId: string;
+  status: LeaseStatus;
+  residualValue: string | number;
+  titleHolder: LeaseTitleHolder;
+  isEmployee: boolean;
+  missedPaymentStreak: number;
+  lastPullOutWarningAt: string | null;
+  endOfTermNoticeSentAt: string | null;
+  lastMaintenanceReminderAt: string | null;
+  buyoutPaidAmount: string | number | null;
+  buyoutAt: string | null;
+  buyoutById: string | null;
+  buyoutJournalEntryId: string | null;
+  pulledOutAt: string | null;
+  pulledOutById: string | null;
+  pullOutReason: string | null;
+  closedAt: string | null;
+  closedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeaseAgreementWithLoan extends LeaseAgreement {
+  loan: { number: string; customerId: string };
+}
+
+// ─── DORSI compliance (FRD §3.10) ───────────────────────────────────────────
+
+export type DorsiCategory =
+  | "DIRECTOR"
+  | "OFFICER"
+  | "STOCKHOLDER"
+  | "RELATED_INTEREST";
+
+export interface DorsiRecord {
+  id: string;
+  customerId: string;
+  category: DorsiCategory;
+  basis: string;
+  active: boolean;
+  lastReviewedAt: string | null;
+  lastReviewedById: string | null;
+  taggedAt: string;
+  taggedById: string;
+  deactivatedAt: string | null;
+  deactivatedById: string | null;
+  deactivationReason: string | null;
+}
+
+export interface DorsiRecordWithCustomer extends DorsiRecord {
+  customer: {
+    // `number` is the CUST-YYYY-NNNNNN reference. Used by UI callsites
+    // so they can link via the human number instead of the raw UUID.
+    number: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+  };
+}
+
+export interface DorsiUtilization {
+  companyTotalEquity: number;
+  aggregateCap: number;
+  aggregateOutstanding: number;
+  aggregateUtilizationPct: number;
+  individualCap: number;
+  perBorrower: Array<{
+    customerId: string;
+    /** CUST-YYYY-NNNNNN reference for the borrower. */
+    customerNumber: string;
+    customerName: string;
+    category: DorsiCategory;
+    outstanding: number;
+    utilizationPct: number;
+  }>;
+}
+
+export interface DorsiLoanCheck {
+  status: "OK" | "BOARD_REQUIRED" | "NOT_DORSI";
+  aggregateOutstanding: number;
+  aggregateCap: number;
+  individualOutstanding: number;
+  individualCap: number;
+  projectedAggregateUtilization: number;
+  projectedIndividualUtilization: number;
+  message: string;
+}
+
+export interface DorsiBoardApproval {
+  id: string;
+  loanId: string;
+  aggregateUtilizationPct: number;
+  individualUtilizationPct: number;
+  meetingDate: string;
+  minutesRef: string | null;
+  note: string | null;
+  approvedAt: string;
+  approvedById: string;
+}
+
+export interface SystemConfig {
+  companyTotalEquity: number;
+  updatedAt: string;
+  updatedById: string | null;
+}
+
+// ─── Repossession (FRD §3.7) ────────────────────────────────────────────────
+
+export type RepossessionStatus =
+  | "IDENTIFIED"
+  | "BM_APPROVED"
+  | "CREDIT_HEAD_APPROVED"
+  | "LEGAL_APPROVED"
+  | "AGENT_ASSIGNED"
+  | "RECOVERED"
+  | "AUCTIONED"
+  | "CLOSED"
+  | "CANCELLED";
+
+export interface RepossessionCase {
+  id: string;
+  loanId: string;
+  status: RepossessionStatus;
+  reason: string;
+  identifiedAt: string;
+  identifiedById: string;
+
+  bmApprovedAt: string | null;
+  bmApprovedById: string | null;
+  bmApprovalNote: string | null;
+  creditHeadApprovedAt: string | null;
+  creditHeadApprovedById: string | null;
+  creditHeadApprovalNote: string | null;
+  legalApprovedAt: string | null;
+  legalApprovedById: string | null;
+  legalApprovalNote: string | null;
+
+  agentName: string | null;
+  agentContact: string | null;
+  agentAssignedAt: string | null;
+  agentAssignedById: string | null;
+
+  recoveredAt: string | null;
+  recoveredById: string | null;
+  vehicleCondition: string | null;
+  vehicleMileage: number | null;
+  vehiclePhotos: string | null;
+  storageLocation: string | null;
+
+  auctionedAt: string | null;
+  auctionedById: string | null;
+  auctionMethod: string | null;
+  auctionProceeds: string | number | null;
+  outstandingAtRecovery: string | number | null;
+  deficiency: string | number | null;
+  journalEntryId: string | null;
+
+  cancelledAt: string | null;
+  cancelledById: string | null;
+  cancellationReason: string | null;
+}
+
+export interface RepossessionCaseWithLoan extends RepossessionCase {
+  loan: { number: string; customerId: string };
+}
+
+// ─── Demand letters (FRD §3.6) ──────────────────────────────────────────────
+
+export type DemandLetterStage =
+  | "FIRST"
+  | "FINAL"
+  | "ATTORNEY_FIRST"
+  | "ATTORNEY_FINAL";
+
+export type DemandLetterStatus =
+  | "DRAFTED"
+  | "APPROVED"
+  | "DISPATCHED"
+  | "RESPONDED"
+  | "WAIVED";
+
+export interface DemandLetter {
+  id: string;
+  loanId: string;
+  stage: DemandLetterStage;
+  status: DemandLetterStatus;
+  principalOwed: string | number;
+  interestOwed: string | number;
+  penaltiesOwed: string | number;
+  totalOwed: string | number;
+  daysOverdue: number;
+  paymentDeadline: string;
+  body: string;
+  draftedAt: string;
+  draftedById: string;
+  approvedAt: string | null;
+  approvedById: string | null;
+  approvalNote: string | null;
+  dispatchedAt: string | null;
+  dispatchedById: string | null;
+  dispatchChannel: string | null;
+  dispatchRef: string | null;
+  closedAt: string | null;
+  closedById: string | null;
+  closedReason: string | null;
+}
+
+export interface DemandLetterWithLoan extends DemandLetter {
+  loan: { number: string; customerId: string };
+}
+
+/** Identification result — a loan eligible for a demand letter at a stage. */
+export interface DemandCandidate {
+  loanId: string;
+  loanNumber: string;
+  customerId: string;
+  customerName: string;
+  email: string | null;
+  phone: string;
+  principalOwed: number;
+  interestOwed: number;
+  penaltiesOwed: number;
+  totalOwed: number;
+  daysOverdue: number;
+  lastLetterAtStageId: string | null;
+  lastLetterAtStageAt: string | null;
+}
+
+// ─── Annual / renewable documents (FRD §3.8) ────────────────────────────────
+
+export type AnnualDocumentType =
+  | "CAR_INSURANCE"
+  | "OR_CR"
+  | "RPT"
+  | "FIRE_INSURANCE"
+  | "OTHER";
+
+export type AnnualDocumentStatus = "VALID" | "EXPIRING_SOON" | "EXPIRED";
+
+export interface AnnualDocument {
+  id: string;
+  loanId: string;
+  type: AnnualDocumentType;
+  name: string;
+  documentUrl: string | null;
+  effectiveFrom: string;
+  expiresAt: string;
+  status: AnnualDocumentStatus;
+  notes: string | null;
+  submittedAt: string;
+  submittedById: string;
+  lastReminderAt: string | null;
+  reminderCount: number;
+}
+
+export interface AnnualDocumentCreateInput {
+  type: AnnualDocumentType;
+  name: string;
+  documentUrl?: string;
+  effectiveFrom: string;
+  expiresAt: string;
+  notes?: string;
+}
+
+/** Result row of GET /annual-docs/expiring — joins the loan for the dashboard. */
+export interface ExpiringAnnualDocument extends AnnualDocument {
+  loan: { number: string; customerId: string };
+}
+
+// ─── Penalty waive (FRD Phase A) ────────────────────────────────────────────
+
+export interface LoanPenaltyTotals {
+  originalPenalty: number;
+  waivedToDate: number;
+  outstanding: number;
+}
+
+export interface PenaltyWaiver {
+  id: string;
+  loanId: string;
+  originalPenalty: string | number;
+  waivedAmount: string | number;
+  negotiatedPenalty: string | number;
+  reason: string;
+  journalEntryId: string | null;
+  waivedById: string;
+  waivedAt: string;
+  waivedBy?: { id: string; name: string; email: string };
 }
 
 // ─── Customer rollup (drawer) ───────────────────────────────────────────────
@@ -820,6 +1287,140 @@ export interface CustomerSummary {
     status: LoanStatus;
     disbursedAt: string | null;
   }>;
+}
+
+/**
+ * Returned by GET /customers/:id/repeat-eligibility. Per FRD §3.1.1, a
+ * customer qualifies for the repeat-borrower fast path when at least one
+ * prior loan has closed cleanly (no defaults, no write-offs) and their
+ * KYC pack is verified.
+ */
+export interface RepeatEligibility {
+  customerId: string;
+  eligible: boolean;
+  closedLoansCount: number;
+  defaultedLoansCount: number;
+  writtenOffLoansCount: number;
+  lastClosedAt: string | null;
+  kycVerified: boolean;
+}
+
+/**
+ * Response shape of POST /loans/dry-run — pre-decisioning preview the
+ * "smart" new-loan dialog calls on every debounced edit so the officer
+ * can see how the rules engine would treat the application before
+ * pressing Submit.
+ */
+export interface LoanDryRunInput {
+  customerId: string;
+  productCode: string;
+  principal: number;
+  termMonths: number;
+  /** Annual rate as a decimal, e.g. 0.24 for 24% APR. */
+  annualInterestRate: number;
+}
+
+export interface LoanDryRunResult {
+  verdict: "APPROVE" | "REVIEW" | "REJECT";
+  /** Human-readable explanation — mirrors the rule's `reason` field. */
+  reason: string;
+  /** The first rule that matched, if any. Null when no rule fired. */
+  matchedRule: { id: string; name: string } | null;
+  /** Non-rule blocking conditions the UI should surface separately. */
+  gates: {
+    /** True iff the customer has an unresolved AML MATCH. */
+    amlMatch: boolean;
+    /** True iff every required KYC doc is VERIFIED. */
+    kycComplete: boolean;
+    missingKycDocs: KycDocumentType[];
+    rejectedKycDocs: KycDocumentType[];
+  };
+  /**
+   * Statistical anomaly flags vs. the historical baseline for this
+   * product, plus domain-specific sanity checks (applicant velocity,
+   * principal-to-income). Empty array when nothing's unusual.
+   */
+  anomalies: AnomalyFlag[];
+  /** Snapshot of the decisioning context — useful for diagnostics. */
+  context: {
+    principal: number;
+    termMonths: number;
+    annualInterestRate: number;
+    productCode: string;
+    creditScore: number | null;
+    tier: CreditTier | null;
+    monthlyIncome: number;
+    existingActiveLoans: number;
+  };
+}
+
+/**
+ * In-progress loan-wizard state. Persisted via /loans/drafts so an
+ * officer can pause + resume across sessions / devices. The `formState`
+ * field is opaque to the API — the wizard owns its shape — but the
+ * lifted fields (`customerId`, `productCode`, `lastStep`) power the
+ * drafts list rendering.
+ */
+export interface LoanDraft {
+  id: string;
+  authorId: string;
+  customerId: string | null;
+  productCode: string | null;
+  lastStep: number;
+  /** Wizard's serialized form state. Type is owned by the web app. */
+  formState: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoanDraftCreateInput {
+  customerId?: string | null;
+  productCode?: string | null;
+  lastStep?: number;
+  formState: unknown;
+}
+
+export type LoanDraftUpdateInput = Partial<LoanDraftCreateInput>;
+
+/**
+ * Body of POST /loans/:id/selfie-match. Client-side computed using
+ * face-api.js (browser-local — no image data leaves the user's machine).
+ * The API persists the score onto the LoanApplication + writes an audit
+ * log row if the match failed (`passed === false`).
+ */
+export interface SelfieMatchInput {
+  /** Normalized similarity 0..1, higher = better. score < 0.55 = flag. */
+  score: number;
+  /** Raw Euclidean distance from face-api.js (lower = better). */
+  distance: number;
+  /** True when score ≥ 0.55, i.e. likely same person. */
+  passed: boolean;
+  /** Model identifier for reproducibility (e.g. "face-api/1.7.13/ssd"). */
+  model: string;
+}
+
+/**
+ * Anomaly signal returned alongside the dry-run verdict (and persisted
+ * in the audit log when one fires on actual /apply). `code` is stable
+ * across releases — UI and analytics depend on it. `message` is free-form
+ * human copy.
+ */
+export interface AnomalyFlag {
+  code:
+    | "PRINCIPAL_OUTLIER"
+    | "TERM_OUTLIER"
+    | "RATE_OUTLIER"
+    | "APPLICANT_VELOCITY"
+    | "PRINCIPAL_TO_INCOME"
+    | "INSUFFICIENT_BASELINE";
+  severity: "low" | "medium" | "high";
+  message: string;
+  /** Z-score for outlier flags. Null for non-stats checks. */
+  zScore: number | null;
+  /** The observed value being flagged. */
+  observed: number | null;
+  /** The mean of the historical baseline (for outlier flags). */
+  baseline: number | null;
 }
 
 // ─── Audit log ──────────────────────────────────────────────────────────────
@@ -858,4 +1459,117 @@ export interface OverdueRow {
   daysOverdue: number;
   outstanding: number;
   overdueCount: number;
+}
+
+// ─── Approval chain (per-product workflow) ──────────────────────────────
+
+export type LoanApprovalStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "SKIPPED";
+
+export interface LoanApprovalStep {
+  id: string;
+  productCode: string;
+  order: number;
+  label: string;
+  requiredPermission: string;
+  optional: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoanApproval {
+  id: string;
+  loanId: string;
+  stepOrder: number;
+  stepLabel: string;
+  requiredPermission: string;
+  status: LoanApprovalStatus;
+  notes: string | null;
+  approverId: string | null;
+  approvedAt: string | null;
+  signedUnderDelegationId: string | null;
+  /** Joined for display — present when the row has been acted on. */
+  approver?: { id: string; name: string; email: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoanApprovalStepInput {
+  order: number;
+  label: string;
+  requiredPermission: string;
+  optional?: boolean;
+}
+
+export interface LoanApprovalActionResult {
+  approval: LoanApproval;
+  isFinal: boolean;
+  nextStep: number | null;
+}
+
+// ─── Customer ledger (unified statement of account) ─────────────────────
+
+export type CustomerLedgerEntryKind =
+  | "LOAN_DISBURSEMENT"
+  | "LOAN_PAYMENT"
+  | "PENALTY_WAIVER"
+  | "CONTRIBUTION"
+  | "SAVINGS_DEPOSIT"
+  | "SAVINGS_WITHDRAWAL";
+
+export type CustomerLedgerDirection = "INFLOW" | "OUTFLOW";
+
+export type CustomerLedgerScope = "ALL" | "LOANS" | "COOP";
+
+export interface CustomerLedgerEntry {
+  date: string;
+  kind: CustomerLedgerEntryKind;
+  description: string;
+  /** Always positive — `direction` tells you which side of the ledger. */
+  amount: number;
+  direction: CustomerLedgerDirection;
+  loanNumber: string | null;
+  ref?: string | null;
+  notes?: string | null;
+  /**
+   * Net customer position AFTER this entry. Positive → net depositor;
+   * negative → net borrower. Same scale as `summary.netCustomerPosition`,
+   * which equals the runningBalance of the newest entry.
+   */
+  runningBalance: number;
+}
+
+export interface CustomerLedgerSummary {
+  totalDisbursed: number;
+  totalRepaid: number;
+  totalPenaltyWaived: number;
+  outstandingPrincipal: number;
+  savingsBalance: number;
+  savingsDeposits: number;
+  savingsWithdrawals: number;
+  contributionsTotal: number;
+  capitalBuildUp: number;
+  mortuaryFund: number;
+  emergencyFund: number;
+  netCustomerPosition: number;
+}
+
+export interface CustomerLedger {
+  customer: {
+    id: string;
+    number: string;
+    firstName: string;
+    middleName: string | null;
+    lastName: string;
+    email: string | null;
+    phone: string;
+  };
+  asOf: string;
+  range: { from: string | null; to: string | null };
+  scope: CustomerLedgerScope;
+  summary: CustomerLedgerSummary;
+  entries: CustomerLedgerEntry[];
 }

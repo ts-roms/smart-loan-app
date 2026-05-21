@@ -18,10 +18,13 @@
     "@loan/shared-utils": "workspace:*",
     "@loan/ui": "workspace:*",
     "@tanstack/react-query": "^5.62.7",
+    "@vladmandic/face-api": "^1.7.13",
     "lucide-react": "^0.469.0",
+    "tesseract.js": "^5.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.1.1"
+    "react-router-dom": "^7.1.1",
+    "workbox-window": "^7.3.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",
@@ -31,6 +34,7 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.7.2",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vite-plugin-pwa": "^0.21.1"
   }
 }

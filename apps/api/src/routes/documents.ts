@@ -9,33 +9,36 @@
  * mirrors at `/portal/loans/...` enforce ownership.
  */
 
-import { allocatePayment } from '@loan/accounting';
-import { LoanRepository } from '@loan/db';
-import { computeFees } from '@loan/loans';
+import { allocatePayment } from "@loan/accounting";
+import { LoanRepository } from "@loan/db";
+import { computeFees } from "@loan/loans";
 import {
   renderLoanAgreement,
   renderPaymentReceipt,
   renderStatementOfAccount,
-} from '@loan/pdf';
-import type { FastifyInstance, FastifyReply } from 'fastify';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+} from "@loan/pdf";
+import type { FastifyInstance, FastifyReply } from "fastify";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
-const COMPANY_NAME = process.env.COMPANY_NAME ?? 'SmartLoan';
-const UPLOADS_DIR = process.env.UPLOADS_DIR ?? join(process.cwd(), 'uploads');
+import { getBranding } from "../lib/branding.js";
+
+const UPLOADS_DIR = process.env.UPLOADS_DIR ?? join(process.cwd(), "uploads");
 
 /**
  * Map a stored signature URL (e.g. "/uploads/signatures/xxx.png") to the
  * filesystem path the API serves it from, and read the bytes. Returns null
  * on any failure — the renderer falls back to a blank signature line.
  */
-async function loadSignature(url: string | null | undefined): Promise<Buffer | null> {
+async function loadSignature(
+  url: string | null | undefined,
+): Promise<Buffer | null> {
   if (!url) return null;
-  const prefix = '/uploads/';
+  const prefix = "/uploads/";
   if (!url.startsWith(prefix)) return null;
   // Sanitize: strip leading slash, reject .. traversal.
   const rel = url.slice(prefix.length);
-  if (rel.includes('..')) return null;
+  if (rel.includes("..")) return null;
   try {
     return await readFile(join(UPLOADS_DIR, rel));
   } catch {
@@ -43,11 +46,15 @@ async function loadSignature(url: string | null | undefined): Promise<Buffer | n
   }
 }
 
-function sendPdf(reply: FastifyReply, buf: Buffer, filename: string): FastifyReply {
+function sendPdf(
+  reply: FastifyReply,
+  buf: Buffer,
+  filename: string,
+): FastifyReply {
   return reply
-    .header('Content-Type', 'application/pdf')
-    .header('Content-Disposition', `inline; filename="${filename}"`)
-    .header('Content-Length', String(buf.byteLength))
+    .header("Content-Type", "application/pdf")
+    .header("Content-Disposition", `inline; filename="${filename}"`)
+    .header("Content-Length", String(buf.byteLength))
     .send(buf);
 }
 
@@ -61,8 +68,13 @@ async function resolvePersonnelSignature(
   app: FastifyInstance,
   userId: string,
   signQuery: string | undefined,
-): Promise<{ name: string; role?: string; signature: Buffer | null; signedAt: Date | null } | null> {
-  if (signQuery !== '1' && signQuery !== 'true') return null;
+): Promise<{
+  name: string;
+  role?: string;
+  signature: Buffer | null;
+  signedAt: Date | null;
+} | null> {
+  if (signQuery !== "1" && signQuery !== "true") return null;
   const user = await app.prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -85,15 +97,15 @@ async function resolvePersonnelSignature(
 export async function documentRoutes(app: FastifyInstance) {
   const loans = new LoanRepository(app.prisma);
 
-  app.addHook('preHandler', app.authenticate);
+  app.addHook("preHandler", app.authenticate);
 
   // ─── Loan agreement ────────────────────────────────────────────────
 
   app.get<{ Params: { id: string }; Querystring: { sign?: string } }>(
-    '/loans/:id/agreement.pdf',
+    "/loans/:id/agreement.pdf",
     async (req, reply) => {
-      const loan = await loans.findById(req.params.id);
-      if (!loan) return reply.code(404).send({ error: 'NotFound' });
+      const loan = await loans.findByIdOrNumber(req.params.id);
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
       const coMakers = await app.prisma.coMaker.findMany({
         where: { loanId: loan.id },
       });
@@ -102,12 +114,13 @@ export async function documentRoutes(app: FastifyInstance) {
         processingFeeFlat: Number(loan.product.processingFeeFlat),
         documentaryStampRate: Number(loan.product.documentaryStampRate),
       });
-      const [borrowerSig, officerSig, coMakerSigs, personnel] = await Promise.all([
-        loadSignature(loan.borrowerSignatureUrl),
-        loadSignature(loan.officerSignatureUrl),
-        Promise.all(coMakers.map((c) => loadSignature(c.signatureUrl))),
-        resolvePersonnelSignature(app, req.user.sub, req.query.sign),
-      ]);
+      const [borrowerSig, officerSig, coMakerSigs, personnel] =
+        await Promise.all([
+          loadSignature(loan.borrowerSignatureUrl),
+          loadSignature(loan.officerSignatureUrl),
+          Promise.all(coMakers.map((c) => loadSignature(c.signatureUrl))),
+          resolvePersonnelSignature(app, req.user.sub, req.query.sign),
+        ]);
       let officerName: string | null = null;
       if (loan.officerSignedById) {
         const u = await app.prisma.user.findUnique({
@@ -116,8 +129,9 @@ export async function documentRoutes(app: FastifyInstance) {
         });
         officerName = u?.name ?? null;
       }
+      const branding = await getBranding(app.prisma);
       const buf = await renderLoanAgreement({
-        companyName: COMPANY_NAME,
+        companyName: branding.companyName,
         loan: {
           number: loan.number,
           productCode: loan.productCode,
@@ -127,8 +141,11 @@ export async function documentRoutes(app: FastifyInstance) {
           annualInterestRate: Number(loan.annualInterestRate),
           purpose: loan.purpose,
           submittedAt: loan.submittedAt,
-          interestMethod: loan.product.interestMethod as 'DECLINING' | 'FLAT',
-          paymentFrequency: loan.product.paymentFrequency as 'MONTHLY' | 'BIWEEKLY' | 'WEEKLY',
+          interestMethod: loan.product.interestMethod as "DECLINING" | "FLAT",
+          paymentFrequency: loan.product.paymentFrequency as
+            | "MONTHLY"
+            | "BIWEEKLY"
+            | "WEEKLY",
         },
         customer: {
           firstName: loan.customer.firstName,
@@ -168,17 +185,18 @@ export async function documentRoutes(app: FastifyInstance) {
   // ─── Statement of Account ──────────────────────────────────────────
 
   app.get<{ Params: { id: string }; Querystring: { sign?: string } }>(
-    '/loans/:id/statement.pdf',
+    "/loans/:id/statement.pdf",
     async (req, reply) => {
-      const loan = await loans.findById(req.params.id);
-      if (!loan) return reply.code(404).send({ error: 'NotFound' });
+      const loan = await loans.findByIdOrNumber(req.params.id);
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
       const personnel = await resolvePersonnelSignature(
         app,
         req.user.sub,
         req.query.sign,
       );
+      const branding = await getBranding(app.prisma);
       const buf = await renderStatementOfAccount({
-        companyName: COMPANY_NAME,
+        companyName: branding.companyName,
         asOf: new Date(),
         loan: {
           number: loan.number,
@@ -222,63 +240,67 @@ export async function documentRoutes(app: FastifyInstance) {
 
   // ─── Payment receipt ──────────────────────────────────────────────
 
-  app.get<{ Params: { loanId: string; paymentId: string }; Querystring: { sign?: string } }>(
-    '/loans/:loanId/payments/:paymentId/receipt.pdf',
-    async (req, reply) => {
-      const loan = await loans.findById(req.params.loanId);
-      if (!loan) return reply.code(404).send({ error: 'NotFound' });
-      const payment = loan.payments.find((p) => p.id === req.params.paymentId);
-      if (!payment) return reply.code(404).send({ error: 'NotFound' });
+  app.get<{
+    Params: { loanId: string; paymentId: string };
+    Querystring: { sign?: string };
+  }>("/loans/:loanId/payments/:paymentId/receipt.pdf", async (req, reply) => {
+    const loan = await loans.findById(req.params.loanId);
+    if (!loan) return reply.code(404).send({ error: "NotFound" });
+    const payment = loan.payments.find((p) => p.id === req.params.paymentId);
+    if (!payment) return reply.code(404).send({ error: "NotFound" });
 
-      const personnel = await resolvePersonnelSignature(
-        app,
-        req.user.sub,
-        req.query.sign,
+    const personnel = await resolvePersonnelSignature(
+      app,
+      req.user.sub,
+      req.query.sign,
+    );
+
+    // Re-derive the allocation by replaying allocatePayment against the
+    // schedule snapshot we'd have had at payment time. For closed loans
+    // this is approximate (since principalPaid is now full); good enough
+    // for an OR.
+    const openAtTime = loan.schedule
+      .filter((s) => !s.paidInFullAt || s.paidInFullAt >= payment.paidOn)
+      .map((s) => ({
+        interestDue: Number(s.interestDue),
+        principalDue: Number(s.principalDue),
+      }));
+    const allocation = allocatePayment(Number(payment.amount), openAtTime);
+
+    const remainingOutstanding = loan.schedule
+      .filter((s) => !s.paidInFullAt)
+      .reduce(
+        (sum, s) => sum + (Number(s.totalDue) - Number(s.principalPaid)),
+        0,
       );
 
-      // Re-derive the allocation by replaying allocatePayment against the
-      // schedule snapshot we'd have had at payment time. For closed loans
-      // this is approximate (since principalPaid is now full); good enough
-      // for an OR.
-      const openAtTime = loan.schedule
-        .filter((s) => !s.paidInFullAt || s.paidInFullAt >= payment.paidOn)
-        .map((s) => ({
-          interestDue: Number(s.interestDue),
-          principalDue: Number(s.principalDue),
-        }));
-      const allocation = allocatePayment(Number(payment.amount), openAtTime);
-
-      const remainingOutstanding = loan.schedule
-        .filter((s) => !s.paidInFullAt)
-        .reduce((sum, s) => sum + (Number(s.totalDue) - Number(s.principalPaid)), 0);
-
-      const buf = await renderPaymentReceipt({
-        companyName: COMPANY_NAME,
-        payment: {
-          id: payment.id,
-          amount: Number(payment.amount),
-          paidOn: payment.paidOn,
-          reference: payment.reference,
-        },
-        loan: {
-          number: loan.number,
-          productCode: loan.productCode,
-        },
-        customer: {
-          firstName: loan.customer.firstName,
-          middleName: loan.customer.middleName,
-          lastName: loan.customer.lastName,
-        },
-        allocation: {
-          interest: allocation.interest,
-          principal: allocation.principal + allocation.overpayment,
-        },
-        remainingOutstanding,
-        personnelSignature: personnel,
-      });
-      return sendPdf(reply, buf, `receipt-${payment.id.slice(0, 8)}.pdf`);
-    },
-  );
+    const branding = await getBranding(app.prisma);
+    const buf = await renderPaymentReceipt({
+      companyName: branding.companyName,
+      payment: {
+        id: payment.id,
+        amount: Number(payment.amount),
+        paidOn: payment.paidOn,
+        reference: payment.reference,
+      },
+      loan: {
+        number: loan.number,
+        productCode: loan.productCode,
+      },
+      customer: {
+        firstName: loan.customer.firstName,
+        middleName: loan.customer.middleName,
+        lastName: loan.customer.lastName,
+      },
+      allocation: {
+        interest: allocation.interest,
+        principal: allocation.principal + allocation.overpayment,
+      },
+      remainingOutstanding,
+      personnelSignature: personnel,
+    });
+    return sendPdf(reply, buf, `receipt-${payment.id.slice(0, 8)}.pdf`);
+  });
 }
 
 // ─── Portal mirror — same docs, but scoped to the customer's own loans ──
@@ -286,7 +308,7 @@ export async function documentRoutes(app: FastifyInstance) {
 export async function portalDocumentRoutes(app: FastifyInstance) {
   const loans = new LoanRepository(app.prisma);
 
-  app.addHook('preHandler', app.authenticate);
+  app.addHook("preHandler", app.authenticate);
 
   /**
    * The portal mounts these under /api/v1/portal — auth is already
@@ -301,7 +323,8 @@ export async function portalDocumentRoutes(app: FastifyInstance) {
       where: { id: userId },
       select: { role: true, customerId: true },
     });
-    if (!user || user.role !== 'CUSTOMER' || !user.customerId) return { ok: false };
+    if (!user || user.role !== "CUSTOMER" || !user.customerId)
+      return { ok: false };
     const loan = await app.prisma.loanApplication.findUnique({
       where: { id: loanId },
       select: { customerId: true },
@@ -311,12 +334,12 @@ export async function portalDocumentRoutes(app: FastifyInstance) {
   }
 
   app.get<{ Params: { id: string } }>(
-    '/loans/:id/agreement.pdf',
+    "/loans/:id/agreement.pdf",
     async (req, reply) => {
       const owns = await ensureOwnership(req.user.sub, req.params.id);
-      if (!owns.ok) return reply.code(404).send({ error: 'NotFound' });
-      const loan = await loans.findById(req.params.id);
-      if (!loan) return reply.code(404).send({ error: 'NotFound' });
+      if (!owns.ok) return reply.code(404).send({ error: "NotFound" });
+      const loan = await loans.findByIdOrNumber(req.params.id);
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
       const fees = computeFees(Number(loan.principal), {
         processingFeeRate: Number(loan.product.processingFeeRate),
         processingFeeFlat: Number(loan.product.processingFeeFlat),
@@ -326,8 +349,9 @@ export async function portalDocumentRoutes(app: FastifyInstance) {
         loadSignature(loan.borrowerSignatureUrl),
         loadSignature(loan.officerSignatureUrl),
       ]);
+      const branding = await getBranding(app.prisma);
       const buf = await renderLoanAgreement({
-        companyName: COMPANY_NAME,
+        companyName: branding.companyName,
         loan: {
           number: loan.number,
           productCode: loan.productCode,
@@ -337,8 +361,11 @@ export async function portalDocumentRoutes(app: FastifyInstance) {
           annualInterestRate: Number(loan.annualInterestRate),
           purpose: loan.purpose,
           submittedAt: loan.submittedAt,
-          interestMethod: loan.product.interestMethod as 'DECLINING' | 'FLAT',
-          paymentFrequency: loan.product.paymentFrequency as 'MONTHLY' | 'BIWEEKLY' | 'WEEKLY',
+          interestMethod: loan.product.interestMethod as "DECLINING" | "FLAT",
+          paymentFrequency: loan.product.paymentFrequency as
+            | "MONTHLY"
+            | "BIWEEKLY"
+            | "WEEKLY",
         },
         customer: {
           firstName: loan.customer.firstName,
@@ -367,14 +394,15 @@ export async function portalDocumentRoutes(app: FastifyInstance) {
   );
 
   app.get<{ Params: { id: string } }>(
-    '/loans/:id/statement.pdf',
+    "/loans/:id/statement.pdf",
     async (req, reply) => {
       const owns = await ensureOwnership(req.user.sub, req.params.id);
-      if (!owns.ok) return reply.code(404).send({ error: 'NotFound' });
-      const loan = await loans.findById(req.params.id);
-      if (!loan) return reply.code(404).send({ error: 'NotFound' });
+      if (!owns.ok) return reply.code(404).send({ error: "NotFound" });
+      const loan = await loans.findByIdOrNumber(req.params.id);
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
+      const branding = await getBranding(app.prisma);
       const buf = await renderStatementOfAccount({
-        companyName: COMPANY_NAME,
+        companyName: branding.companyName,
         asOf: new Date(),
         loan: {
           number: loan.number,
@@ -416,14 +444,14 @@ export async function portalDocumentRoutes(app: FastifyInstance) {
   );
 
   app.get<{ Params: { loanId: string; paymentId: string } }>(
-    '/loans/:loanId/payments/:paymentId/receipt.pdf',
+    "/loans/:loanId/payments/:paymentId/receipt.pdf",
     async (req, reply) => {
       const owns = await ensureOwnership(req.user.sub, req.params.loanId);
-      if (!owns.ok) return reply.code(404).send({ error: 'NotFound' });
+      if (!owns.ok) return reply.code(404).send({ error: "NotFound" });
       const loan = await loans.findById(req.params.loanId);
-      if (!loan) return reply.code(404).send({ error: 'NotFound' });
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
       const payment = loan.payments.find((p) => p.id === req.params.paymentId);
-      if (!payment) return reply.code(404).send({ error: 'NotFound' });
+      if (!payment) return reply.code(404).send({ error: "NotFound" });
       const openAtTime = loan.schedule
         .filter((s) => !s.paidInFullAt || s.paidInFullAt >= payment.paidOn)
         .map((s) => ({
@@ -433,9 +461,13 @@ export async function portalDocumentRoutes(app: FastifyInstance) {
       const allocation = allocatePayment(Number(payment.amount), openAtTime);
       const remainingOutstanding = loan.schedule
         .filter((s) => !s.paidInFullAt)
-        .reduce((sum, s) => sum + (Number(s.totalDue) - Number(s.principalPaid)), 0);
+        .reduce(
+          (sum, s) => sum + (Number(s.totalDue) - Number(s.principalPaid)),
+          0,
+        );
+      const branding = await getBranding(app.prisma);
       const buf = await renderPaymentReceipt({
-        companyName: COMPANY_NAME,
+        companyName: branding.companyName,
         payment: {
           id: payment.id,
           amount: Number(payment.amount),

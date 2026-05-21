@@ -5,8 +5,8 @@ import {
   useLoanNotes,
   useLoanPromises,
   useResolvePromise,
-} from '@loan/api-client';
-import type { CollectionNoteType, PromiseStatus } from '@loan/shared-types';
+} from "@loan/api-client";
+import type { CollectionNoteType, PromiseStatus } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -28,8 +28,8 @@ import {
   SelectValue,
   SkeletonLine,
   useToast,
-} from '@loan/ui';
-import { formatDate, formatDateTime, formatMoney } from '@loan/shared-utils';
+} from "@loan/ui";
+import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
 import {
   ArrowUpRight,
   Calendar,
@@ -40,18 +40,22 @@ import {
   PiggyBank,
   StickyNote,
   Truck,
-} from 'lucide-react';
-import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
-import { LoanStatusBadge } from '../../loans';
+import { LoanStatusBadge } from "../../loans";
 
-const NOTE_TYPES: Array<{ value: CollectionNoteType; label: string; icon: typeof Phone }> = [
-  { value: 'CALL', label: 'Call', icon: Phone },
-  { value: 'SMS', label: 'SMS', icon: MessageSquare },
-  { value: 'EMAIL', label: 'Email', icon: Mail },
-  { value: 'VISIT', label: 'Visit', icon: Truck },
-  { value: 'OTHER', label: 'Other', icon: StickyNote },
+const NOTE_TYPES: Array<{
+  value: CollectionNoteType;
+  label: string;
+  icon: typeof Phone;
+}> = [
+  { value: "CALL", label: "Call", icon: Phone },
+  { value: "SMS", label: "SMS", icon: MessageSquare },
+  { value: "EMAIL", label: "Email", icon: Mail },
+  { value: "VISIT", label: "Visit", icon: Truck },
+  { value: "OTHER", label: "Other", icon: StickyNote },
 ];
 
 /**
@@ -97,12 +101,14 @@ function CollectionsCaseInspector({ id }: { id: string }) {
   const resolvePromise = useResolvePromise();
   const toast = useToast();
 
-  const [noteType, setNoteType] = useState<CollectionNoteType>('CALL');
-  const [noteBody, setNoteBody] = useState('');
+  const [noteType, setNoteType] = useState<CollectionNoteType>("CALL");
+  const [noteBody, setNoteBody] = useState("");
 
   const [ptpAmount, setPtpAmount] = useState(0);
-  const [ptpDate, setPtpDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [ptpNote, setPtpNote] = useState('');
+  const [ptpDate, setPtpDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [ptpNote, setPtpNote] = useState("");
 
   if (loan.isLoading) {
     return (
@@ -143,7 +149,8 @@ function CollectionsCaseInspector({ id }: { id: string }) {
     ? Math.max(
         0,
         Math.floor(
-          (now.getTime() - new Date(earliestOverdue.dueDate).getTime()) / 86_400_000,
+          (now.getTime() - new Date(earliestOverdue.dueDate).getTime()) /
+            86_400_000,
         ),
       )
     : 0;
@@ -152,25 +159,31 @@ function CollectionsCaseInspector({ id }: { id: string }) {
     .sort((a, b) => new Date(b.paidOn).getTime() - new Date(a.paidOn).getTime())
     .slice(0, 5);
 
-  const activePromises = (promises.data ?? []).filter((p) => p.status === 'PROMISED');
+  const activePromises = (promises.data ?? []).filter(
+    (p) => p.status === "PROMISED",
+  );
 
   const onAddNote = async () => {
     if (!noteBody.trim()) {
-      toast.error('Add a body');
+      toast.error("Add a body");
       return;
     }
     try {
-      await addNote.mutateAsync({ loanId: id, type: noteType, body: noteBody.trim() });
-      setNoteBody('');
-      toast.success('Note added');
+      await addNote.mutateAsync({
+        loanId: id,
+        type: noteType,
+        body: noteBody.trim(),
+      });
+      setNoteBody("");
+      toast.success("Note added");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   const onCreatePromise = async () => {
     if (ptpAmount <= 0) {
-      toast.error('Amount > 0 required');
+      toast.error("Amount > 0 required");
       return;
     }
     try {
@@ -181,10 +194,10 @@ function CollectionsCaseInspector({ id }: { id: string }) {
         note: ptpNote || undefined,
       });
       setPtpAmount(0);
-      setPtpNote('');
-      toast.success('Promise to pay recorded');
+      setPtpNote("");
+      toast.success("Promise to pay recorded");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -193,7 +206,7 @@ function CollectionsCaseInspector({ id }: { id: string }) {
       await resolvePromise.mutateAsync({ id, loanId: l.id, status });
       toast.success(`Promise marked ${status.toLowerCase()}`);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -207,7 +220,7 @@ function CollectionsCaseInspector({ id }: { id: string }) {
             <DrawerDescription>
               <LoanStatusBadge status={l.status} />
               <span className="ml-2 text-rose-300 font-mono">
-                {daysOverdue} day{daysOverdue === 1 ? '' : 's'} overdue
+                {daysOverdue} day{daysOverdue === 1 ? "" : "s"} overdue
               </span>
             </DrawerDescription>
           </div>
@@ -217,7 +230,11 @@ function CollectionsCaseInspector({ id }: { id: string }) {
       <DrawerBody>
         {/* Overdue stats */}
         <div className="grid grid-cols-3 gap-2">
-          <Stat label="Outstanding" value={formatMoney(outstanding)} accent="rose" />
+          <Stat
+            label="Outstanding"
+            value={formatMoney(outstanding)}
+            accent="rose"
+          />
           <Stat label="Overdue rows" value={String(overdueRows.length)} />
           <Stat label="Days overdue" value={String(daysOverdue)} />
         </div>
@@ -245,14 +262,14 @@ function CollectionsCaseInspector({ id }: { id: string }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => onResolve(p.id, 'HONORED')}
+                        onClick={() => onResolve(p.id, "HONORED")}
                       >
                         Honored
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => onResolve(p.id, 'BROKEN')}
+                        onClick={() => onResolve(p.id, "BROKEN")}
                       >
                         Broken
                       </Button>
@@ -278,7 +295,7 @@ function CollectionsCaseInspector({ id }: { id: string }) {
                 type="number"
                 step="0.01"
                 min={0}
-                value={ptpAmount || ''}
+                value={ptpAmount || ""}
                 onChange={(e) => setPtpAmount(Number(e.target.value))}
               />
             </div>
@@ -301,7 +318,7 @@ function CollectionsCaseInspector({ id }: { id: string }) {
               onClick={onCreatePromise}
               disabled={createPromise.isPending || ptpAmount <= 0}
             >
-              {createPromise.isPending ? 'Saving…' : 'Record promise'}
+              {createPromise.isPending ? "Saving…" : "Record promise"}
             </Button>
           </div>
         </div>
@@ -356,7 +373,9 @@ function CollectionsCaseInspector({ id }: { id: string }) {
                       {formatDateTime(n.createdAt)}
                     </span>
                   </div>
-                  <p className="mt-1 text-white/85 whitespace-pre-wrap">{n.body}</p>
+                  <p className="mt-1 text-white/85 whitespace-pre-wrap">
+                    {n.body}
+                  </p>
                 </div>
               ))}
             </div>
@@ -403,7 +422,7 @@ function CollectionsCaseInspector({ id }: { id: string }) {
               onClick={onAddNote}
               disabled={addNote.isPending || !noteBody.trim()}
             >
-              {addNote.isPending ? 'Saving…' : 'Add note'}
+              {addNote.isPending ? "Saving…" : "Add note"}
             </Button>
           </div>
         </div>
@@ -411,7 +430,10 @@ function CollectionsCaseInspector({ id }: { id: string }) {
 
       <DrawerFooter>
         <Button variant="outline" asChild>
-          <Link to={`/loans/${l.id}`} className="inline-flex items-center gap-1">
+          <Link
+            to={`/loans/${l.number}`}
+            className="inline-flex items-center gap-1"
+          >
             <ArrowUpRight className="h-3 w-3" />
             Open full loan detail
           </Link>
@@ -428,12 +450,14 @@ function Stat({
 }: {
   label: string;
   value: string;
-  accent?: 'rose';
+  accent?: "rose";
 }) {
-  const color = accent === 'rose' ? 'text-rose-300' : 'text-white';
+  const color = accent === "rose" ? "text-rose-300" : "text-white";
   return (
     <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">{label}</div>
+      <div className="text-[10px] uppercase tracking-wider text-white/45">
+        {label}
+      </div>
       <div className={`font-mono text-sm mt-0.5 ${color}`}>{value}</div>
     </div>
   );

@@ -1,13 +1,20 @@
-import { usePortalLoans } from '@loan/api-client';
-import { Badge, Card, CardContent, CardHeader, CardTitle, SkeletonCard } from '@loan/ui';
-import { formatDate, formatMoney } from '@loan/shared-utils';
-import { Link } from 'react-router-dom';
+import { usePortalLoans } from "@loan/api-client";
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  SkeletonCard,
+} from "@loan/ui";
+import { formatDate, formatMoney } from "@loan/shared-utils";
+import { Link } from "react-router-dom";
 
 const TYPE_LABEL: Record<string, string> = {
-  SALARY: 'Salary',
-  AUTOMOTIVE: 'Auto',
-  MOTORCYCLE: 'Motorcycle',
-  HOUSING: 'Housing',
+  SALARY: "Salary",
+  AUTOMOTIVE: "Auto",
+  MOTORCYCLE: "Motorcycle",
+  HOUSING: "Housing",
 };
 
 export function PortalLoans() {
@@ -23,7 +30,7 @@ export function PortalLoans() {
           <SkeletonCard />
         ) : (loans.data ?? []).length === 0 ? (
           <p className="text-sm text-white/55">
-            No loans yet.{' '}
+            No loans yet.{" "}
             <Link to="/portal/apply" className="text-sky-300 hover:underline">
               Apply now →
             </Link>
@@ -46,16 +53,20 @@ export function PortalLoans() {
                 <tr key={l.id} className="hover:bg-white/[0.03]">
                   <td className="py-2 px-2 font-mono">
                     <Link
-                      to={`/portal/loans/${l.id}`}
+                      to={`/portal/loans/${l.number}`}
                       className="text-sky-300 hover:underline"
                     >
                       {l.number}
                     </Link>
                   </td>
                   <td className="py-2 px-2">
-                    <Badge variant="muted">{TYPE_LABEL[l.productCode] ?? l.productCode}</Badge>
+                    <Badge variant="muted">
+                      {TYPE_LABEL[l.productCode] ?? l.productCode}
+                    </Badge>
                   </td>
-                  <td className="py-2 px-2">{formatMoney(Number(l.principal))}</td>
+                  <td className="py-2 px-2">
+                    {formatMoney(Number(l.principal))}
+                  </td>
                   <td className="py-2 px-2">{l.termMonths}m</td>
                   <td className="py-2 px-2">
                     {(Number(l.annualInterestRate) * 100).toFixed(2)}%
@@ -76,9 +87,11 @@ export function PortalLoans() {
   );
 }
 
-function badgeVariant(status: string): 'success' | 'danger' | 'muted' | 'warning' {
-  if (['APPROVED', 'DISBURSED', 'ACTIVE'].includes(status)) return 'success';
-  if (['REJECTED', 'DEFAULTED', 'CANCELLED'].includes(status)) return 'danger';
-  if (status === 'CLOSED') return 'muted';
-  return 'warning';
+function badgeVariant(
+  status: string,
+): "success" | "danger" | "muted" | "warning" {
+  if (["APPROVED", "DISBURSED", "ACTIVE"].includes(status)) return "success";
+  if (["REJECTED", "DEFAULTED", "CANCELLED"].includes(status)) return "danger";
+  if (status === "CLOSED") return "muted";
+  return "warning";
 }

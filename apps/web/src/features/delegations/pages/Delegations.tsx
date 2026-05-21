@@ -1,12 +1,18 @@
 import {
   useCreateDelegation,
   useDelegationUserDirectory,
+  useExtendDelegation,
   useMyDelegations,
   usePermissions,
   useRevokeDelegation,
+  useRoles,
   type DelegationUserEntry,
-} from '@loan/api-client';
-import type { Delegation, Permission } from '@loan/shared-types';
+} from "@loan/api-client";
+import type {
+  Delegation,
+  Permission,
+  RoleWithPermissions,
+} from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -28,34 +34,88 @@ import {
   SelectTrigger,
   SelectValue,
   SkeletonCard,
+  cn,
   usePrompt,
   useToast,
-} from '@loan/ui';
-import { formatDate, formatDateTime } from '@loan/shared-utils';
-import { CalendarClock, Plus, ShieldCheck, Undo2, Users } from 'lucide-react';
-import { useMemo, useState } from 'react';
+} from "@loan/ui";
+import { formatDate, formatDateTime } from "@loan/shared-utils";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CalendarPlus,
+  Plus,
+  Search,
+  ShieldCheck,
+  Undo2,
+  Users,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
+import { findArticle, TourButton } from "../../help";
+
+// ─── Status helpers ────────────────────────────────────────────────
+
+type Status = "active" | "scheduled" | "expiring-soon" | "expired" | "revoked";
 
 /**
- * Role delegation — granting a time-bounded subset of your permissions to
- * another user. The page is split into two lists:
- *   - "Granted by me" (outbound): I delegated my authority to others
- *   - "Granted to me" (inbound, held): others delegated to me
- *
- * Admins (admin.users) can additionally use this page to create a delegation
- * on behalf of someone else, but the default form pre-selects the caller as
- * delegator.
+ * "Expiring soon" = active AND ends within the next 48 hours. Tuned
+ * to the typical lead time officers need to either extend or hand
+ * back the work; 24h was too short, 7d caught too many false alarms.
+ */
+const EXPIRING_SOON_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+function computeStatus(d: Delegation, now = new Date()): Status {
+  if (d.revokedAt) return "revoked";
+  const starts = new Date(d.startsAt);
+  const ends = new Date(d.endsAt);
+  if (now < starts) return "scheduled";
+  if (now > ends) return "expired";
+  if (ends.getTime() - now.getTime() <= EXPIRING_SOON_WINDOW_MS)
+    return "expiring-soon";
+  return "active";
+}
+
+const STATUS_LABEL: Record<Status, string> = {
+  active: "Active",
+  scheduled: "Scheduled",
+  "expiring-soon": "Expiring soon",
+  expired: "Expired",
+  revoked: "Revoked",
+};
+
+const STATUS_VARIANT: Record<
+  Status,
+  "success" | "muted" | "warning" | "danger"
+> = {
+  active: "success",
+  scheduled: "muted",
+  "expiring-soon": "warning",
+  expired: "muted",
+  revoked: "danger",
+};
+
+/**
+ * Role delegation page. Two lists (granted vs held), inline filters,
+ * summary counts, expiring-soon banner, and per-row extend/revoke.
+ * The create dialog supports role templates ("delegate as ACCOUNTANT")
+ * and per-category bulk select for ad-hoc combinations.
  */
 export function DelegationsPage() {
   const mine = useMyDelegations();
   const users = useDelegationUserDirectory();
   const perms = usePermissions();
+  const rolesQuery = useRoles();
   const revoke = useRevokeDelegation();
+  const extend = useExtendDelegation();
   const toast = useToast();
   const prompt = usePrompt();
   const { user: me } = useAuth();
   const [creating, setCreating] = useState(false);
+
+  // ── Filter state ───────────────────────────────────────────────
+  const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
+  const [query, setQuery] = useState("");
 
   const userById = useMemo(() => {
     const map = new Map<string, DelegationUserEntry>();
@@ -63,80 +123,290 @@ export function DelegationsPage() {
     return map;
   }, [users.data]);
 
+  // ── Derived: status + name lookup applied to both lists. ───────
+  const granted = mine.data?.granted ?? [];
+  const held = mine.data?.held ?? [];
+  const all = useMemo(() => [...granted, ...held], [granted, held]);
+
+  const summary = useMemo(() => {
+    const counts: Record<Status, number> = {
+      active: 0,
+      scheduled: 0,
+      "expiring-soon": 0,
+      expired: 0,
+      revoked: 0,
+    };
+    for (const d of all) counts[computeStatus(d)]++;
+    return counts;
+  }, [all]);
+
+  // Filter predicate shared between both lists.
+  const matches = (d: Delegation, direction: "granted" | "held"): boolean => {
+    if (statusFilter !== "all" && computeStatus(d) !== statusFilter)
+      return false;
+    if (query.trim()) {
+      const otherId = direction === "granted" ? d.delegateId : d.delegatorId;
+      const other = userById.get(otherId);
+      const haystack =
+        `${other?.name ?? ""} ${other?.email ?? ""} ${d.note ?? ""}`.toLowerCase();
+      if (!haystack.includes(query.trim().toLowerCase())) return false;
+    }
+    return true;
+  };
+  const filteredGranted = granted.filter((d) => matches(d, "granted"));
+  const filteredHeld = held.filter((d) => matches(d, "held"));
+
+  // Expiring soon — only delegations I own. The delegate doesn't
+  // control these, so showing it to them as a banner adds noise.
+  const expiringSoon = granted.filter(
+    (d) => computeStatus(d) === "expiring-soon",
+  );
+
   const onRevoke = async (d: Delegation) => {
     const reason = await prompt({
-      title: 'Revoke delegation?',
+      title: "Revoke delegation?",
       message:
-        'The delegate loses these permissions immediately. Optional: add a reason for the audit log.',
-      label: 'Reason (optional)',
-      placeholder: 'e.g. role mistake, returned from leave early',
-      confirmLabel: 'Revoke',
+        "The delegate loses these permissions immediately. Optional: add a reason for the audit log.",
+      label: "Reason (optional)",
+      placeholder: "e.g. role mistake, returned from leave early",
+      confirmLabel: "Revoke",
     });
-    if (reason === null) return; // user cancelled
+    if (reason === null) return;
     try {
       await revoke.mutateAsync({ id: d.id, reason: reason || undefined });
-      toast.success('Delegation revoked');
+      toast.success("Delegation revoked");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed to revoke');
+      toast.error((err as Error).message ?? "Failed to revoke");
     }
   };
 
-  const granted = mine.data?.granted ?? [];
-  const held = mine.data?.held ?? [];
+  const onExtend = async (d: Delegation, days: number) => {
+    // Push end date by `days` from its current value (not from now).
+    // Cumulative extensions stack as expected: a "+ 7d" after the
+    // original end date gives you 7 more calendar days, not "7 days
+    // from when you clicked".
+    const newEnd = new Date(d.endsAt);
+    newEnd.setDate(newEnd.getDate() + days);
+    try {
+      await extend.mutateAsync({ id: d.id, endsAt: newEnd.toISOString() });
+      toast.success(`Extended by ${days} day${days === 1 ? "" : "s"}`);
+    } catch (err) {
+      toast.error((err as Error).message ?? "Failed to extend");
+    }
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-tour="delegations-root">
+      {/* Header with tour + new delegation button */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle className="flex items-center gap-2">
             <CalendarClock className="h-4 w-4 text-sky-300" />
             Delegations
           </CardTitle>
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" />
-            New delegation
-          </Button>
+          <div className="flex items-center gap-2">
+            <TourButton
+              tourId="delegations"
+              steps={findArticle("delegations")?.tour ?? []}
+            />
+            <Button
+              onClick={() => setCreating(true)}
+              data-tour="delegations-new"
+            >
+              <Plus className="h-4 w-4" />
+              New delegation
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-xs text-white/55 mb-3">
-            Time-bounded proxy authority. The delegate uses their own login,
-            but during the window they inherit the listed permissions from
-            you. Empty permission list = blanket — they inherit everything
-            you currently hold.
+            Time-bounded proxy authority. The delegate uses their own login, but
+            during the window they inherit the listed permissions from you.
+            Empty permission list = blanket — they inherit everything you
+            currently hold.
           </p>
+
+          {/* Status filter chips with counts */}
+          <div
+            className="flex items-center flex-wrap gap-2 mb-3"
+            data-tour="delegations-filters"
+          >
+            <StatusChip
+              label={`All · ${all.length}`}
+              active={statusFilter === "all"}
+              onClick={() => setStatusFilter("all")}
+            />
+            <StatusChip
+              label={`Active · ${summary.active}`}
+              tone="success"
+              active={statusFilter === "active"}
+              onClick={() => setStatusFilter("active")}
+            />
+            <StatusChip
+              label={`Scheduled · ${summary.scheduled}`}
+              tone="muted"
+              active={statusFilter === "scheduled"}
+              onClick={() => setStatusFilter("scheduled")}
+            />
+            <StatusChip
+              label={`Expiring soon · ${summary["expiring-soon"]}`}
+              tone="warning"
+              active={statusFilter === "expiring-soon"}
+              onClick={() => setStatusFilter("expiring-soon")}
+            />
+            <StatusChip
+              label={`Expired · ${summary.expired}`}
+              tone="muted"
+              active={statusFilter === "expired"}
+              onClick={() => setStatusFilter("expired")}
+            />
+            <StatusChip
+              label={`Revoked · ${summary.revoked}`}
+              tone="danger"
+              active={statusFilter === "revoked"}
+              onClick={() => setStatusFilter("revoked")}
+            />
+            {/* Search shares the toolbar — collapses to the right on wide screens */}
+            <div className="ml-auto relative">
+              <Search className="h-3 w-3 text-white/45 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name, email, or note"
+                className="pl-7 h-8 text-xs w-56"
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Expiring-soon banner — only when there's something to act on */}
+      {expiringSoon.length > 0 && (
+        <ExpiringSoonBanner
+          rows={expiringSoon}
+          userById={userById}
+          onExtend={onExtend}
+        />
+      )}
 
       <DelegationList
         title="Granted to me"
         subtitle="Delegations where I'm the proxy. While active, I gain the listed permissions from the delegator."
-        rows={held}
+        rows={filteredHeld}
         direction="held"
         userById={userById}
         loading={mine.isLoading}
         meId={me?.id}
         onRevoke={onRevoke}
+        onExtend={onExtend}
       />
 
       <DelegationList
         title="Granted by me"
-        subtitle="Delegations I've issued to other users. I can revoke any of them at any time."
-        rows={granted}
+        subtitle="Delegations I've issued to other users. I can revoke or extend any of them at any time."
+        rows={filteredGranted}
         direction="granted"
         userById={userById}
         loading={mine.isLoading}
         meId={me?.id}
         onRevoke={onRevoke}
+        onExtend={onExtend}
       />
 
       {creating && (
         <CreateDialog
           users={users.data ?? []}
           permissions={perms.data ?? []}
+          roles={rolesQuery.data ?? []}
           meId={me?.id}
           onClose={() => setCreating(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Reusable bits ─────────────────────────────────────────────────
+
+function StatusChip({
+  label,
+  tone,
+  active,
+  onClick,
+}: {
+  label: string;
+  tone?: "success" | "muted" | "warning" | "danger";
+  active: boolean;
+  onClick: () => void;
+}) {
+  const toneRing = {
+    success: "ring-emerald-400/30 hover:ring-emerald-400/60",
+    warning: "ring-amber-400/30 hover:ring-amber-400/60",
+    danger: "ring-rose-400/30 hover:ring-rose-400/60",
+    muted: "ring-white/15 hover:ring-white/30",
+  }[tone ?? "muted"];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full px-2.5 py-1 text-xs font-medium border transition-colors",
+        active
+          ? "border-sky-400/60 bg-sky-500/15 text-sky-100"
+          : `border-transparent ring-1 ${toneRing} text-white/70 hover:text-white`,
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ExpiringSoonBanner({
+  rows,
+  userById,
+  onExtend,
+}: {
+  rows: Delegation[];
+  userById: Map<string, DelegationUserEntry>;
+  onExtend: (d: Delegation, days: number) => void;
+}) {
+  return (
+    <div className="rounded-md border border-amber-400/30 bg-amber-500/10 p-3 space-y-2">
+      <div className="flex items-center gap-2 text-sm font-medium text-amber-100">
+        <AlertTriangle className="h-4 w-4 text-amber-300" />
+        {rows.length} delegation{rows.length === 1 ? "" : "s"} expiring in the
+        next 48 hours
+      </div>
+      <ul className="space-y-1.5">
+        {rows.map((d) => {
+          const other = userById.get(d.delegateId);
+          return (
+            <li
+              key={d.id}
+              className="flex items-center justify-between gap-2 text-xs"
+            >
+              <span className="truncate">
+                <span className="text-white/85">
+                  {other?.name ?? d.delegateId.slice(0, 8)}
+                </span>
+                <span className="text-white/55">
+                  {" "}
+                  · ends {formatDateTime(d.endsAt)}
+                </span>
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onExtend(d, 7)}
+                title="Extend the end date by 7 days"
+              >
+                <CalendarPlus className="h-3 w-3" />
+                Extend +7d
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -150,17 +420,18 @@ function DelegationList({
   loading,
   meId,
   onRevoke,
+  onExtend,
 }: {
   title: string;
   subtitle: string;
   rows: Delegation[];
-  direction: 'granted' | 'held';
+  direction: "granted" | "held";
   userById: Map<string, DelegationUserEntry>;
   loading: boolean;
   meId?: string;
   onRevoke: (d: Delegation) => void;
+  onExtend: (d: Delegation, days: number) => void;
 }) {
-  const now = new Date();
   return (
     <Card>
       <CardHeader>
@@ -174,13 +445,15 @@ function DelegationList({
         {loading ? (
           <SkeletonCard />
         ) : rows.length === 0 ? (
-          <p className="text-sm text-white/55">No delegations.</p>
+          <p className="text-sm text-white/55">
+            No delegations match the current filter.
+          </p>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-wider text-white/45">
               <tr>
                 <th className="py-2 px-2">
-                  {direction === 'granted' ? 'Delegate' : 'Delegator'}
+                  {direction === "granted" ? "Delegate" : "Delegator"}
                 </th>
                 <th className="py-2 px-2">Permissions</th>
                 <th className="py-2 px-2">Window</th>
@@ -190,24 +463,22 @@ function DelegationList({
             </thead>
             <tbody className="divide-y divide-white/5">
               {rows.map((d) => {
-                const otherId = direction === 'granted' ? d.delegateId : d.delegatorId;
+                const otherId =
+                  direction === "granted" ? d.delegateId : d.delegatorId;
                 const other = userById.get(otherId);
-                const starts = new Date(d.startsAt);
-                const ends = new Date(d.endsAt);
-                const status = d.revokedAt
-                  ? 'revoked'
-                  : now < starts
-                    ? 'scheduled'
-                    : now > ends
-                      ? 'expired'
-                      : 'active';
+                const status = computeStatus(d);
+                const isMine = d.delegatorId === meId;
                 const canRevoke =
-                  !d.revokedAt && status !== 'expired' && d.delegatorId === meId;
+                  !d.revokedAt && status !== "expired" && isMine;
+                const canExtend =
+                  isMine && (status === "active" || status === "expiring-soon");
                 return (
                   <tr key={d.id} className="hover:bg-white/[0.03] align-top">
                     <td className="py-2 px-2">
                       <div>{other?.name ?? otherId.slice(0, 8)}</div>
-                      <div className="text-xs text-white/45">{other?.email ?? '—'}</div>
+                      <div className="text-xs text-white/45">
+                        {other?.email ?? "—"}
+                      </div>
                     </td>
                     <td className="py-2 px-2">
                       {d.permissions.length === 0 ? (
@@ -230,44 +501,53 @@ function DelegationList({
                         </div>
                       )}
                       {d.note && (
-                        <div className="text-xs text-white/55 mt-1">{d.note}</div>
+                        <div className="text-xs text-white/55 mt-1">
+                          {d.note}
+                        </div>
                       )}
                     </td>
                     <td className="py-2 px-2 text-xs">
                       <div>{formatDate(d.startsAt)}</div>
-                      <div className="text-white/55">→ {formatDate(d.endsAt)}</div>
+                      <div className="text-white/55">
+                        → {formatDate(d.endsAt)}
+                      </div>
                     </td>
                     <td className="py-2 px-2">
-                      <Badge
-                        variant={
-                          status === 'active'
-                            ? 'success'
-                            : status === 'scheduled'
-                              ? 'muted'
-                              : 'muted'
-                        }
-                      >
-                        {status}
+                      <Badge variant={STATUS_VARIANT[status]}>
+                        {STATUS_LABEL[status]}
                       </Badge>
                       {d.revokedAt && (
                         <div className="text-[10px] text-white/45 mt-0.5">
                           {formatDateTime(d.revokedAt)}
-                          {d.revokedReason ? ` — ${d.revokedReason}` : ''}
+                          {d.revokedReason ? ` — ${d.revokedReason}` : ""}
                         </div>
                       )}
                     </td>
                     <td className="py-2 px-2 text-right">
-                      {canRevoke && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onRevoke(d)}
-                          title="Revoke this delegation"
-                        >
-                          <Undo2 className="h-3 w-3" />
-                          Revoke
-                        </Button>
-                      )}
+                      <div className="inline-flex items-center gap-1">
+                        {canExtend && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onExtend(d, 7)}
+                            title="Extend the end date by 7 days"
+                          >
+                            <CalendarPlus className="h-3 w-3" />
+                            +7d
+                          </Button>
+                        )}
+                        {canRevoke && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onRevoke(d)}
+                            title="Revoke this delegation"
+                          >
+                            <Undo2 className="h-3 w-3" />
+                            Revoke
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -280,27 +560,32 @@ function DelegationList({
   );
 }
 
+// ─── Create dialog ─────────────────────────────────────────────────
+
 function CreateDialog({
   users,
   permissions,
+  roles,
   meId,
   onClose,
 }: {
   users: DelegationUserEntry[];
   permissions: Permission[];
+  roles: RoleWithPermissions[];
   meId?: string;
   onClose: () => void;
 }) {
   const create = useCreateDelegation();
   const toast = useToast();
-  const [delegateId, setDelegateId] = useState('');
+  const [delegateId, setDelegateId] = useState("");
   const [startsAt, setStartsAt] = useState(() => isoDate(new Date()));
   const [endsAt, setEndsAt] = useState(() =>
     isoDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
   );
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
+  // Group permissions by category for the picker.
   const grouped = useMemo(() => {
     const m = new Map<string, Permission[]>();
     for (const p of permissions) {
@@ -311,6 +596,19 @@ function CreateDialog({
     return Array.from(m.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [permissions]);
 
+  // Role templates — surface only roles the catalog actually has;
+  // skips empty roles (no permissions assigned). Sort by user-impact
+  // first: ADMIN, then alphabetical for the rest.
+  const roleTemplates = useMemo(() => {
+    return roles
+      .filter((r) => r.permissions.length > 0)
+      .sort((a, b) => {
+        if (a.key === "ADMIN") return -1;
+        if (b.key === "ADMIN") return 1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [roles]);
+
   const toggle = (key: string) => {
     const next = new Set(picked);
     if (next.has(key)) next.delete(key);
@@ -318,17 +616,40 @@ function CreateDialog({
     setPicked(next);
   };
 
+  const applyTemplate = (role: RoleWithPermissions) => {
+    // Replace (not union) — clicking a different template wipes the
+    // previous one. Removes the surprise where two templates compound
+    // into a permission set the officer didn't intend.
+    setPicked(new Set(role.permissions.map((rp) => rp.permission.key)));
+    toast.success(
+      `${role.permissions.length} permissions pre-selected from ${role.name}`,
+    );
+  };
+
+  const toggleCategory = (
+    category: string,
+    items: Permission[],
+    action: "all" | "clear",
+  ) => {
+    const next = new Set(picked);
+    for (const p of items) {
+      if (action === "all") next.add(p.key);
+      else next.delete(p.key);
+    }
+    setPicked(next);
+  };
+
   const onSubmit = async () => {
     if (!delegateId) {
-      toast.error('Pick a delegate');
+      toast.error("Pick a delegate");
       return;
     }
     if (delegateId === meId) {
-      toast.error('Cannot delegate to yourself');
+      toast.error("Cannot delegate to yourself");
       return;
     }
     if (new Date(endsAt) <= new Date(startsAt)) {
-      toast.error('End date must be after start date');
+      toast.error("End date must be after start date");
       return;
     }
     try {
@@ -339,10 +660,10 @@ function CreateDialog({
         endsAt: new Date(endsAt).toISOString(),
         note: note || undefined,
       });
-      toast.success('Delegation created');
+      toast.success("Delegation created");
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed to create');
+      toast.error((err as Error).message ?? "Failed to create");
     }
   };
 
@@ -395,40 +716,108 @@ function CreateDialog({
             />
           </div>
 
+          {/* Role templates — one-click permission set for common scenarios */}
+          {roleTemplates.length > 0 && (
+            <div>
+              <Label className="flex items-center justify-between">
+                <span>Quick-pick by role</span>
+                {picked.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setPicked(new Set())}
+                    className="text-xs text-sky-300 hover:underline"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </Label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {roleTemplates.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => applyTemplate(r)}
+                    className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/10 hover:bg-sky-500/20 px-2.5 py-1 text-xs"
+                  >
+                    <ShieldCheck className="h-3 w-3 text-sky-300" />
+                    Delegate as {r.name}
+                    <span className="text-white/45 text-[10px]">
+                      ({r.permissions.length})
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-white/45 mt-1">
+                Pre-fills the permission list below with that role's
+                permissions. Edit afterward to fine-tune.
+              </p>
+            </div>
+          )}
+
           <div>
             <Label className="flex items-center justify-between">
               <span>Permissions to delegate</span>
               <span className="text-xs text-white/55">
                 {picked.size === 0
-                  ? 'Empty = blanket (all of my permissions)'
+                  ? "Empty = blanket (all of my permissions)"
                   : `${picked.size} selected`}
               </span>
             </Label>
             <div className="max-h-72 overflow-y-auto rounded-md border border-white/10 bg-white/[0.02] p-3 space-y-3">
-              {grouped.map(([cat, items]) => (
-                <div key={cat}>
-                  <div className="text-xs uppercase tracking-wider text-white/55 mb-1">
-                    {cat}
+              {grouped.map(([cat, items]) => {
+                const pickedInCat = items.filter((p) =>
+                  picked.has(p.key),
+                ).length;
+                const allPicked = pickedInCat === items.length;
+                return (
+                  <div key={cat}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs uppercase tracking-wider text-white/55">
+                        {cat}
+                        {pickedInCat > 0 && (
+                          <span className="ml-1 text-[10px] text-sky-300">
+                            ({pickedInCat}/{items.length})
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleCategory(
+                              cat,
+                              items,
+                              allPicked ? "clear" : "all",
+                            )
+                          }
+                          className="text-sky-300 hover:underline"
+                        >
+                          {allPicked ? "Clear" : "Select all"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {items.map((p) => (
+                        <label
+                          key={p.key}
+                          className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white/[0.03] rounded px-1.5 py-1"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={picked.has(p.key)}
+                            onChange={() => toggle(p.key)}
+                          />
+                          <span className="font-mono">{p.key}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-1">
-                    {items.map((p) => (
-                      <label
-                        key={p.key}
-                        className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white/[0.03] rounded px-1.5 py-1"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={picked.has(p.key)}
-                          onChange={() => toggle(p.key)}
-                        />
-                        <span className="font-mono">{p.key}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {grouped.length === 0 && (
-                <p className="text-sm text-white/55">No permissions available.</p>
+                <p className="text-sm text-white/55">
+                  No permissions available.
+                </p>
               )}
             </div>
           </div>
@@ -439,7 +828,7 @@ function CreateDialog({
             Cancel
           </Button>
           <Button onClick={onSubmit} disabled={create.isPending}>
-            {create.isPending ? 'Creating…' : 'Create delegation'}
+            {create.isPending ? "Creating…" : "Create delegation"}
           </Button>
         </DialogFooter>
       </DialogContent>

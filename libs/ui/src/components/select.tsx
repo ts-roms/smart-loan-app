@@ -17,10 +17,10 @@
  *   </Select>
  */
 
-import * as SelectPrimitive from '@radix-ui/react-select';
-import { Check, ChevronDown } from 'lucide-react';
-import { forwardRef } from 'react';
-import { cn } from '../lib/cn';
+import * as SelectPrimitive from "@radix-ui/react-select";
+import { Check, ChevronDown } from "lucide-react";
+import { forwardRef } from "react";
+import { cn } from "../lib/cn";
 
 export const Select = SelectPrimitive.Root;
 export const SelectGroup = SelectPrimitive.Group;
@@ -33,12 +33,12 @@ export const SelectTrigger = forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-left text-white',
-      'placeholder:text-white/45 hover:bg-white/[0.06]',
-      'focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60',
-      'disabled:cursor-not-allowed disabled:opacity-50',
+      "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-left text-white",
+      "placeholder:text-white/45 hover:bg-white/[0.06]",
+      "focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60",
+      "disabled:cursor-not-allowed disabled:opacity-50",
       // Truncate the selected value when it's longer than the trigger.
-      '[&>span]:line-clamp-1 [&>span]:text-left',
+      "[&>span]:line-clamp-1 [&>span]:text-left",
       className,
     )}
     {...props}
@@ -49,32 +49,34 @@ export const SelectTrigger = forwardRef<
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
-SelectTrigger.displayName = 'SelectTrigger';
+SelectTrigger.displayName = "SelectTrigger";
 
 export const SelectContent = forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = 'popper', ...props }, ref) => (
+>(({ className, children, position = "popper", ...props }, ref) => (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
       position={position}
-      sideOffset={position === 'popper' ? 4 : undefined}
+      sideOffset={position === "popper" ? 4 : undefined}
       className={cn(
-        'relative z-50 min-w-[8rem] max-h-[20rem] overflow-hidden rounded-md border border-white/10 bg-slate-950/95 backdrop-blur-xl text-white shadow-2xl',
-        // Match the dialog/toast animation feel — fade + tiny zoom.
-        'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
-        position === 'popper' &&
-          'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
+        "relative z-50 min-w-[8rem] max-h-[20rem] overflow-hidden rounded-md border border-white/10 bg-slate-950/95 backdrop-blur-xl text-white shadow-2xl",
+        // Popper-anchored animation: opacity + scale only, no translate
+        // (Radix owns the position transform — overriding it causes a
+        // first-frame flicker). The transform-origin variable Radix
+        // exposes makes the scale grow from the trigger edge.
+        "origin-[var(--radix-select-content-transform-origin)]",
+        "data-[state=open]:animate-popover-in data-[state=closed]:animate-popover-out",
         className,
       )}
       {...props}
     >
       <SelectPrimitive.Viewport
         className={cn(
-          'p-1',
-          position === 'popper' &&
-            'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]',
+          "p-1",
+          position === "popper" &&
+            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
         )}
       >
         {children}
@@ -82,7 +84,7 @@ export const SelectContent = forwardRef<
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
 ));
-SelectContent.displayName = 'SelectContent';
+SelectContent.displayName = "SelectContent";
 
 export const SelectLabel = forwardRef<
   React.ElementRef<typeof SelectPrimitive.Label>,
@@ -90,11 +92,14 @@ export const SelectLabel = forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
-    className={cn('py-1.5 pl-8 pr-2 text-[10px] uppercase tracking-wider text-white/45', className)}
+    className={cn(
+      "py-1.5 pl-8 pr-2 text-[10px] uppercase tracking-wider text-white/45",
+      className,
+    )}
     {...props}
   />
 ));
-SelectLabel.displayName = 'SelectLabel';
+SelectLabel.displayName = "SelectLabel";
 
 export const SelectItem = forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
@@ -103,9 +108,9 @@ export const SelectItem = forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none',
-      'focus:bg-white/[0.08] focus:text-white',
-      'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none",
+      "focus:bg-white/[0.08] focus:text-white",
+      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
     {...props}
@@ -118,12 +123,16 @@ export const SelectItem = forwardRef<
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
   </SelectPrimitive.Item>
 ));
-SelectItem.displayName = 'SelectItem';
+SelectItem.displayName = "SelectItem";
 
 export const SelectSeparator = forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <SelectPrimitive.Separator ref={ref} className={cn('-mx-1 my-1 h-px bg-white/10', className)} {...props} />
+  <SelectPrimitive.Separator
+    ref={ref}
+    className={cn("-mx-1 my-1 h-px bg-white/10", className)}
+    {...props}
+  />
 ));
-SelectSeparator.displayName = 'SelectSeparator';
+SelectSeparator.displayName = "SelectSeparator";

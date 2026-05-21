@@ -1,7 +1,4 @@
-import {
-  useAccrueLateFees,
-  useOverdueQueue,
-} from '@loan/api-client';
+import { useAccrueLateFees, useOverdueQueue } from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -11,19 +8,24 @@ import {
   CardTitle,
   SkeletonCard,
   useToast,
-} from '@loan/ui';
-import { formatMoney } from '@loan/shared-utils';
-import { PhoneCall, RotateCw } from 'lucide-react';
+} from "@loan/ui";
+import { formatMoney } from "@loan/shared-utils";
+import { PhoneCall, RotateCw } from "lucide-react";
 
-import { useAuth } from '../../../providers/auth';
-import { CustomerSummaryLink } from '../../customers';
-import { CollectionsCaseLink } from '../components/CollectionsCaseDrawer';
+import { useAuth } from "../../../providers/auth";
+// Direct import (not via ../../customers barrel) to avoid Rollup's
+// cross-chunk circular-dep warning: each feature lazy-loads into its
+// own chunk, and the customers barrel re-exporting a component that
+// collections/kyc/etc. import would create a circular chunk graph.
+import { CustomerSummaryLink } from "../../customers/components/CustomerSummaryDrawer";
+import { CollectionsCaseLink } from "../components/CollectionsCaseDrawer";
+import { findArticle, TourButton } from "../../help";
 
 const TYPE_LABELS: Record<string, string> = {
-  SALARY: 'Salary',
-  AUTOMOTIVE: 'Auto',
-  MOTORCYCLE: 'Motorcycle',
-  HOUSING: 'Housing',
+  SALARY: "Salary",
+  AUTOMOTIVE: "Auto",
+  MOTORCYCLE: "Motorcycle",
+  HOUSING: "Housing",
 };
 
 /**
@@ -39,14 +41,14 @@ export function CollectionsPage() {
   const accrue = useAccrueLateFees();
   const toast = useToast();
   const { user } = useAuth();
-  const canAccrue = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
+  const canAccrue = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
 
   const onAccrue = async () => {
     try {
       const r = await accrue.mutateAsync();
       toast.success(`Late fees: ${r.posted} posted, ${r.skipped} skipped`);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Accrual failed');
+      toast.error((err as Error).message ?? "Accrual failed");
     }
   };
 
@@ -57,12 +59,22 @@ export function CollectionsPage() {
           <PhoneCall className="h-4 w-4 text-amber-300" />
           Collections queue
         </CardTitle>
-        {canAccrue && (
-          <Button variant="outline" onClick={onAccrue} disabled={accrue.isPending}>
-            <RotateCw className="h-4 w-4" />
-            {accrue.isPending ? 'Accruing…' : 'Accrue late fees'}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <TourButton
+            tourId="collections"
+            steps={findArticle("collections")?.tour ?? []}
+          />
+          {canAccrue && (
+            <Button
+              variant="outline"
+              onClick={onAccrue}
+              disabled={accrue.isPending}
+            >
+              <RotateCw className="h-4 w-4" />
+              {accrue.isPending ? "Accruing…" : "Accrue late fees"}
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {queue.isLoading ? (
@@ -70,7 +82,7 @@ export function CollectionsPage() {
         ) : (queue.data ?? []).length === 0 ? (
           <p className="text-sm text-emerald-300">No overdue loans. </p>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" data-tour="collections-table">
             <thead className="text-left text-xs uppercase tracking-wider text-white/45">
               <tr>
                 <th className="py-2 px-2">Loan</th>
@@ -86,10 +98,14 @@ export function CollectionsPage() {
               {(queue.data ?? []).map((l) => (
                 <tr key={l.id} className="hover:bg-white/[0.03]">
                   <td className="py-2 px-2 font-mono">
-                    <CollectionsCaseLink id={l.id}>{l.number}</CollectionsCaseLink>
+                    <CollectionsCaseLink id={l.id}>
+                      {l.number}
+                    </CollectionsCaseLink>
                   </td>
                   <td className="py-2 px-2">
-                    <Badge variant="muted">{TYPE_LABELS[l.productCode] ?? l.productCode}</Badge>
+                    <Badge variant="muted">
+                      {TYPE_LABELS[l.productCode] ?? l.productCode}
+                    </Badge>
                   </td>
                   <td className="py-2 px-2">
                     <CustomerSummaryLink customerId={l.customerId}>
@@ -119,15 +135,17 @@ export function CollectionsPage() {
 }
 
 function severityLabel(days: number): string {
-  if (days <= 7) return 'New';
-  if (days <= 30) return '1–30 days';
-  if (days <= 60) return '31–60 days';
-  if (days <= 90) return '61–90 days';
-  return '90+ days';
+  if (days <= 7) return "New";
+  if (days <= 30) return "1–30 days";
+  if (days <= 60) return "31–60 days";
+  if (days <= 90) return "61–90 days";
+  return "90+ days";
 }
 
-function severityVariant(days: number): 'success' | 'danger' | 'muted' | 'warning' {
-  if (days <= 7) return 'warning';
-  if (days <= 60) return 'warning';
-  return 'danger';
+function severityVariant(
+  days: number,
+): "success" | "danger" | "muted" | "warning" {
+  if (days <= 7) return "warning";
+  if (days <= 60) return "warning";
+  return "danger";
 }

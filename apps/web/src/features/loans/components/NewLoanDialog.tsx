@@ -3,7 +3,7 @@ import type {
   LoanProduct,
   PropertyInput,
   VehicleInput,
-} from '@loan/shared-types';
+} from "@loan/shared-types";
 import {
   Button,
   Dialog,
@@ -18,21 +18,21 @@ import {
   SelectTrigger,
   SelectValue,
   useToast,
-} from '@loan/ui';
-import { formatMoney } from '@loan/shared-utils';
-import { Camera } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+} from "@loan/ui";
+import { formatMoney } from "@loan/shared-utils";
+import { Camera } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { FileUpload } from '../../../components/FileUpload';
+import { FileUpload } from "../../../components/FileUpload";
 // `useCustomers` belongs to the customers feature's data surface. Until
 // that feature is migrated we read it from @loan/api-client directly;
 // flip to '@/features/customers' once it lands.
-import { useCustomers } from '@loan/api-client';
-import {
-  useApplyLoan,
-  useLoanProducts,
-  useQuote,
-} from '../hooks';
+import { useCustomers } from "@loan/api-client";
+import { useApplyLoan, useLoanProducts, useQuote } from "../hooks";
+import { AffordabilityGuardrails } from "./AffordabilityGuardrails";
+import { BorrowerContextBar } from "./BorrowerContextBar";
+import { KycGapWarning } from "./KycGapWarning";
+import { PreDecisionPreview } from "./PreDecisionPreview";
 
 /**
  * Product-aware "new loan application" dialog. Selecting a product type
@@ -51,12 +51,12 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
   const toast = useToast();
 
   const [form, setForm] = useState<FormState>({
-    customerId: '',
-    productCode: 'SALARY',
+    customerId: "",
+    productCode: "SALARY",
     principal: 50_000,
     termMonths: 12,
     ratePercent: 24,
-    purpose: '',
+    purpose: "",
     vehicle: defaultVehicle(),
     property: defaultProperty(),
     applicationSelfieUrl: null,
@@ -72,16 +72,28 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
     if (!product) return;
     setForm((f) => ({
       ...f,
-      principal: clamp(f.principal, Number(product.minPrincipal), Number(product.maxPrincipal)),
-      termMonths: clamp(f.termMonths, product.minTermMonths, product.maxTermMonths),
+      principal: clamp(
+        f.principal,
+        Number(product.minPrincipal),
+        Number(product.maxPrincipal),
+      ),
+      termMonths: clamp(
+        f.termMonths,
+        product.minTermMonths,
+        product.maxTermMonths,
+      ),
       ratePercent: clamp(
         f.ratePercent,
         Number(product.minRate) * 100,
         Number(product.maxRate) * 100,
       ),
-      vehicle: product.collateralKind === 'VEHICLE'
-        ? { ...f.vehicle, kind: form.productCode === 'MOTORCYCLE' ? 'MOTORCYCLE' : 'CAR' }
-        : f.vehicle,
+      vehicle:
+        product.collateralKind === "VEHICLE"
+          ? {
+              ...f.vehicle,
+              kind: form.productCode === "MOTORCYCLE" ? "MOTORCYCLE" : "CAR",
+            }
+          : f.vehicle,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id]);
@@ -99,23 +111,28 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.principal, form.termMonths, form.ratePercent, form.productCode]);
 
-  const collateralKind = product?.collateralKind ?? 'NONE';
+  const collateralKind = product?.collateralKind ?? "NONE";
   const collateralValue =
-    collateralKind === 'VEHICLE'
+    collateralKind === "VEHICLE"
       ? form.vehicle.appraisedValue
-      : collateralKind === 'PROPERTY'
+      : collateralKind === "PROPERTY"
         ? form.property.appraisedValue
         : 0;
   const ltv =
-    collateralKind !== 'NONE' && collateralValue > 0
+    collateralKind !== "NONE" && collateralValue > 0
       ? form.principal / collateralValue
       : null;
+
+  // KYC readiness — KycGapWarning computes (base + product) docs and
+  // bubbles up whether every required doc is VERIFIED.
+  const [kycReady, setKycReady] = useState(false);
 
   const ready =
     Boolean(form.customerId) &&
     form.principal > 0 &&
     form.termMonths > 0 &&
-    (collateralKind === 'NONE' || collateralValue > 0);
+    (collateralKind === "NONE" || collateralValue > 0) &&
+    kycReady;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -127,16 +144,16 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
       termMonths: form.termMonths,
       annualInterestRate: form.ratePercent / 100,
       purpose: form.purpose || undefined,
-      vehicle: collateralKind === 'VEHICLE' ? form.vehicle : undefined,
-      property: collateralKind === 'PROPERTY' ? form.property : undefined,
+      vehicle: collateralKind === "VEHICLE" ? form.vehicle : undefined,
+      property: collateralKind === "PROPERTY" ? form.property : undefined,
       applicationSelfieUrl: form.applicationSelfieUrl ?? undefined,
     };
     try {
       await apply.mutateAsync(payload);
-      toast.success('Application submitted');
+      toast.success("Application submitted");
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Could not apply');
+      toast.error((err as Error).message ?? "Could not apply");
     }
   };
 
@@ -153,7 +170,9 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
                 value={form.customerId}
                 onValueChange={(v) => setForm({ ...form, customerId: v })}
               >
-                <SelectTrigger><SelectValue placeholder="— select a customer —" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue placeholder="— select a customer —" />
+                </SelectTrigger>
                 <SelectContent>
                   {(customers.data ?? []).map((c) => (
                     <SelectItem key={c.id} value={c.id}>
@@ -171,19 +190,27 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
                   setForm({
                     ...form,
                     productCode: next,
-                    ratePercent: p ? Number(p.defaultRate) * 100 : form.ratePercent,
+                    ratePercent: p
+                      ? Number(p.defaultRate) * 100
+                      : form.ratePercent,
                   });
                 }}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {(productsQuery.data ?? []).filter((p) => p.active).map((p) => (
-                    <SelectItem key={p.id} value={p.code}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
+                  {(productsQuery.data ?? [])
+                    .filter((p) => p.active)
+                    .map((p) => (
+                      <SelectItem key={p.id} value={p.code}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
                   {productsQuery.data?.length === 0 && (
-                    <SelectItem value="SALARY">Salary (no products configured)</SelectItem>
+                    <SelectItem value="SALARY">
+                      Salary (no products configured)
+                    </SelectItem>
                   )}
                 </SelectContent>
               </Select>
@@ -193,14 +220,39 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
           {product && (
             <div className="text-xs text-white/55 -mt-1">
               Range: {formatMoney(Number(product.minPrincipal))}–
-              {formatMoney(Number(product.maxPrincipal))} ·{' '}
-              {product.minTermMonths}–{product.maxTermMonths} months ·{' '}
+              {formatMoney(Number(product.maxPrincipal))} ·{" "}
+              {product.minTermMonths}–{product.maxTermMonths} months ·{" "}
               {(Number(product.minRate) * 100).toFixed(1)}–
               {(Number(product.maxRate) * 100).toFixed(1)}% APR
               {product.maxLoanToValue != null && (
-                <> · LTV ≤ {(Number(product.maxLoanToValue) * 100).toFixed(0)}%</>
+                <>
+                  {" "}
+                  · LTV ≤ {(Number(product.maxLoanToValue) * 100).toFixed(0)}%
+                </>
               )}
             </div>
+          )}
+
+          {/*
+            Smart context bar — surfaces income, KYC status, credit score,
+            DORSI flag, and prior-loan history the moment the officer
+            picks a customer. Removes the "open another tab" tax.
+          */}
+          {form.customerId && (
+            <BorrowerContextBar customerId={form.customerId} />
+          )}
+
+          {/*
+            KYC gap warning — checklist of required docs for THIS product.
+            Bubbles readiness up via setKycReady; submit stays disabled
+            until every required doc is VERIFIED.
+          */}
+          {form.customerId && (
+            <KycGapWarning
+              customerId={form.customerId}
+              productRequiredDocs={product?.requiredKycDocs ?? []}
+              onReadinessChange={setKycReady}
+            />
           )}
 
           <div className="grid grid-cols-3 gap-3">
@@ -210,7 +262,9 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
                 min={product ? Number(product.minPrincipal) : 1}
                 max={product ? Number(product.maxPrincipal) : undefined}
                 value={form.principal}
-                onChange={(e) => setForm({ ...form, principal: Number(e.target.value) })}
+                onChange={(e) =>
+                  setForm({ ...form, principal: Number(e.target.value) })
+                }
                 required
               />
             </Field>
@@ -220,7 +274,9 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
                 min={product?.minTermMonths ?? 1}
                 max={product?.maxTermMonths ?? 360}
                 value={form.termMonths}
-                onChange={(e) => setForm({ ...form, termMonths: Number(e.target.value) })}
+                onChange={(e) =>
+                  setForm({ ...form, termMonths: Number(e.target.value) })
+                }
                 required
               />
             </Field>
@@ -231,11 +287,27 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
                 max={product ? Number(product.maxRate) * 100 : 60}
                 step={0.25}
                 value={form.ratePercent}
-                onChange={(e) => setForm({ ...form, ratePercent: Number(e.target.value) })}
+                onChange={(e) =>
+                  setForm({ ...form, ratePercent: Number(e.target.value) })
+                }
                 required
               />
             </Field>
           </div>
+
+          {/*
+            Affordability + DORSI guardrails. Lives just below the
+            principal/term/rate row so the EMI / DTI / safe-principal
+            feedback is visible as the officer dials in the numbers.
+          */}
+          {form.customerId && (
+            <AffordabilityGuardrails
+              customerId={form.customerId}
+              principal={form.principal}
+              termMonths={form.termMonths}
+              ratePercent={form.ratePercent}
+            />
+          )}
 
           <Field label="Purpose">
             <Input
@@ -245,14 +317,14 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
             />
           </Field>
 
-          {collateralKind === 'VEHICLE' && (
+          {collateralKind === "VEHICLE" && (
             <VehicleFieldset
               value={form.vehicle}
               onChange={(v) => setForm({ ...form, vehicle: v })}
               productCode={form.productCode}
             />
           )}
-          {collateralKind === 'PROPERTY' && (
+          {collateralKind === "PROPERTY" && (
             <PropertyFieldset
               value={form.property}
               onChange={(p) => setForm({ ...form, property: p })}
@@ -265,13 +337,15 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
               Application selfie
             </div>
             <p className="text-xs text-white/55">
-              Live capture of the borrower for face-match against the ID on file.
-              Optional but strongly recommended for fraud signal.
+              Live capture of the borrower for face-match against the ID on
+              file. Optional but strongly recommended for fraud signal.
             </p>
             <FileUpload
               subdir="selfies"
               value={form.applicationSelfieUrl}
-              onUploaded={(url) => setForm({ ...form, applicationSelfieUrl: url })}
+              onUploaded={(url) =>
+                setForm({ ...form, applicationSelfieUrl: url })
+              }
               onClear={() => setForm({ ...form, applicationSelfieUrl: null })}
               accept="image/*"
               capture="user"
@@ -284,41 +358,83 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
               <div className="flex items-center justify-between text-xs uppercase tracking-wider text-white/45">
                 <span>Quote</span>
                 <span>
-                  {quote.data.method === 'FLAT' ? 'Flat interest' : 'Declining balance'} ·{' '}
-                  {quote.data.frequency.toLowerCase()} · {quote.data.installments} installments
+                  {quote.data.method === "FLAT"
+                    ? "Flat interest"
+                    : "Declining balance"}{" "}
+                  · {quote.data.frequency.toLowerCase()} ·{" "}
+                  {quote.data.installments} installments
                 </span>
               </div>
               <div className="grid grid-cols-4 gap-2">
-                <Stat label="Per period" value={formatMoney(quote.data.monthlyPayment)} />
-                <Stat label="Total paid" value={formatMoney(quote.data.totalPaid)} />
-                <Stat label="Interest" value={formatMoney(quote.data.totalInterest)} />
+                <Stat
+                  label="Per period"
+                  value={formatMoney(quote.data.monthlyPayment)}
+                />
+                <Stat
+                  label="Total paid"
+                  value={formatMoney(quote.data.totalPaid)}
+                />
+                <Stat
+                  label="Interest"
+                  value={formatMoney(quote.data.totalInterest)}
+                />
                 {ltv != null && (
                   <Stat label="LTV" value={`${(ltv * 100).toFixed(1)}%`} />
                 )}
               </div>
               {quote.data.fees.total > 0 && (
                 <div className="border-t border-white/10 pt-2 grid grid-cols-4 gap-2">
-                  <Stat label="Processing fee" value={formatMoney(quote.data.fees.processing)} />
-                  <Stat label="Doc stamp" value={formatMoney(quote.data.fees.documentary)} />
-                  <Stat label="Total fees" value={formatMoney(quote.data.fees.total)} />
-                  <Stat label="Net to customer" value={formatMoney(quote.data.fees.netDisbursement)} />
+                  <Stat
+                    label="Processing fee"
+                    value={formatMoney(quote.data.fees.processing)}
+                  />
+                  <Stat
+                    label="Doc stamp"
+                    value={formatMoney(quote.data.fees.documentary)}
+                  />
+                  <Stat
+                    label="Total fees"
+                    value={formatMoney(quote.data.fees.total)}
+                  />
+                  <Stat
+                    label="Net to customer"
+                    value={formatMoney(quote.data.fees.netDisbursement)}
+                  />
                 </div>
               )}
               {ltv != null &&
                 product?.maxLoanToValue != null &&
                 ltv > Number(product.maxLoanToValue) && (
                   <div className="text-xs text-rose-300">
-                    LTV exceeds product ceiling of{' '}
+                    LTV exceeds product ceiling of{" "}
                     {(Number(product.maxLoanToValue) * 100).toFixed(0)}%.
                   </div>
                 )}
             </div>
           )}
 
+          {/*
+            Pre-decisioning preview — runs the rules engine on the form
+            values via /loans/dry-run (500ms debounce). The officer sees
+            the verdict + reason + matched rule before Submit, so
+            "submit and wait for rejection" stops being a workflow.
+          */}
+          {form.customerId && (
+            <PreDecisionPreview
+              customerId={form.customerId}
+              productCode={form.productCode}
+              principal={form.principal}
+              termMonths={form.termMonths}
+              ratePercent={form.ratePercent}
+            />
+          )}
+
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={!ready || apply.isPending}>
-              {apply.isPending ? 'Submitting…' : 'Submit application'}
+              {apply.isPending ? "Submitting…" : "Submit application"}
             </Button>
           </DialogFooter>
         </form>
@@ -345,9 +461,9 @@ interface FormState {
 
 function defaultVehicle(): VehicleInput {
   return {
-    kind: 'CAR',
-    make: '',
-    model: '',
+    kind: "CAR",
+    make: "",
+    model: "",
     year: new Date().getFullYear(),
     appraisedValue: 0,
   };
@@ -355,9 +471,9 @@ function defaultVehicle(): VehicleInput {
 
 function defaultProperty(): PropertyInput {
   return {
-    propertyType: 'HOUSE_AND_LOT',
-    address: '',
-    city: '',
+    propertyType: "HOUSE_AND_LOT",
+    address: "",
+    city: "",
     appraisedValue: 0,
   };
 }
@@ -379,7 +495,7 @@ function VehicleFieldset({
   return (
     <fieldset className="rounded-md border border-white/10 p-3 space-y-3">
       <legend className="px-1 text-xs uppercase tracking-wider text-white/45">
-        {productCode === 'MOTORCYCLE' ? 'Motorcycle' : 'Vehicle'} collateral
+        {productCode === "MOTORCYCLE" ? "Motorcycle" : "Vehicle"} collateral
       </legend>
       <div className="grid grid-cols-3 gap-3">
         <Field label="Make">
@@ -402,7 +518,9 @@ function VehicleFieldset({
             min={1900}
             max={2100}
             value={value.year}
-            onChange={(e) => onChange({ ...value, year: Number(e.target.value) })}
+            onChange={(e) =>
+              onChange({ ...value, year: Number(e.target.value) })
+            }
             required
           />
         </Field>
@@ -410,22 +528,28 @@ function VehicleFieldset({
       <div className="grid grid-cols-3 gap-3">
         <Field label="Plate #">
           <Input
-            value={value.plateNumber ?? ''}
-            onChange={(e) => onChange({ ...value, plateNumber: e.target.value })}
+            value={value.plateNumber ?? ""}
+            onChange={(e) =>
+              onChange({ ...value, plateNumber: e.target.value })
+            }
           />
         </Field>
         <Field label="Chassis #">
           <Input
-            value={value.chassisNumber ?? ''}
-            onChange={(e) => onChange({ ...value, chassisNumber: e.target.value })}
+            value={value.chassisNumber ?? ""}
+            onChange={(e) =>
+              onChange({ ...value, chassisNumber: e.target.value })
+            }
           />
         </Field>
         <Field label="Appraised value (₱)">
           <Input
             type="number"
             min={1}
-            value={value.appraisedValue || ''}
-            onChange={(e) => onChange({ ...value, appraisedValue: Number(e.target.value) })}
+            value={value.appraisedValue || ""}
+            onChange={(e) =>
+              onChange({ ...value, appraisedValue: Number(e.target.value) })
+            }
             required
           />
         </Field>
@@ -452,7 +576,9 @@ function PropertyFieldset({
             value={value.propertyType}
             onValueChange={(v) => onChange({ ...value, propertyType: v })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="HOUSE_AND_LOT">House &amp; Lot</SelectItem>
               <SelectItem value="CONDO">Condominium</SelectItem>
@@ -463,14 +589,18 @@ function PropertyFieldset({
         </Field>
         <Field label="Title #">
           <Input
-            value={value.titleNumber ?? ''}
-            onChange={(e) => onChange({ ...value, titleNumber: e.target.value })}
+            value={value.titleNumber ?? ""}
+            onChange={(e) =>
+              onChange({ ...value, titleNumber: e.target.value })
+            }
           />
         </Field>
         <Field label="Tax dec #">
           <Input
-            value={value.taxDecNumber ?? ''}
-            onChange={(e) => onChange({ ...value, taxDecNumber: e.target.value })}
+            value={value.taxDecNumber ?? ""}
+            onChange={(e) =>
+              onChange({ ...value, taxDecNumber: e.target.value })
+            }
           />
         </Field>
       </div>
@@ -494,9 +624,12 @@ function PropertyFieldset({
             type="number"
             min={0}
             step={0.01}
-            value={value.areaSqm ?? ''}
+            value={value.areaSqm ?? ""}
             onChange={(e) =>
-              onChange({ ...value, areaSqm: e.target.value ? Number(e.target.value) : undefined })
+              onChange({
+                ...value,
+                areaSqm: e.target.value ? Number(e.target.value) : undefined,
+              })
             }
           />
         </Field>
@@ -504,8 +637,10 @@ function PropertyFieldset({
           <Input
             type="number"
             min={1}
-            value={value.appraisedValue || ''}
-            onChange={(e) => onChange({ ...value, appraisedValue: Number(e.target.value) })}
+            value={value.appraisedValue || ""}
+            onChange={(e) =>
+              onChange({ ...value, appraisedValue: Number(e.target.value) })
+            }
             required
           />
         </Field>
@@ -514,7 +649,13 @@ function PropertyFieldset({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <label className="text-xs text-white/55">{label}</label>
@@ -526,9 +667,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">{label}</div>
+      <div className="text-[10px] uppercase tracking-wider text-white/45">
+        {label}
+      </div>
       <div className="font-mono">{value}</div>
     </div>
   );
 }
-

@@ -1,9 +1,15 @@
-import type { UploadResult } from '@loan/shared-types';
-import { useMutation } from '@tanstack/react-query';
+import type { UploadResult } from "@loan/shared-types";
+import { useMutation } from "@tanstack/react-query";
 
-import { getApiClient } from '../client.js';
+import { getApiClient } from "../client.js";
 
-export type UploadSubdir = 'kyc' | 'selfies' | 'collateral' | 'misc' | 'signatures';
+export type UploadSubdir =
+  | "kyc"
+  | "selfies"
+  | "collateral"
+  | "misc"
+  | "signatures"
+  | "branding";
 
 /**
  * Multipart file upload. The server returns a stable `url` (under
@@ -15,9 +21,9 @@ export function useUpload() {
     mutationFn: async (input: { file: File; subdir: UploadSubdir }) => {
       const client = getApiClient();
       const fd = new FormData();
-      fd.append('file', input.file);
+      fd.append("file", input.file);
       return client.request<UploadResult>(`/uploads-api/${input.subdir}`, {
-        method: 'POST',
+        method: "POST",
         body: fd,
       });
     },

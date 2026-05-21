@@ -1,0 +1,22 @@
+<!--
+  THEME SYNC: hex values must mirror apps/web/src/theme.ts
+    fill="#14171c"   ← themeColors.background
+    stroke="#7dd3fc" ← lighter tint of themeColors.primary (#54b6e8)
+    fill="#0c1b3a"   ← darker card surface (kept fixed for icon contrast)
+    text fill="#e0f2fe" ← lighter tint of themeColors.foreground (#dbe1e8)
+  Referenced by the PWA manifest; can't read CSS or TS, so the colours
+  are baked in. Grep the public/ folder for the old hex when changing palette.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- SmartLoan PWA icon. Designed to read at every scale from 16px favicon
+       up to 512px maskable. The 64px safe-zone padding around the icon makes
+       it look right with Android's 80% mask radius. -->
+  <rect width="512" height="512" rx="96" fill="#14171c" />
+  <g transform="translate(96 144)" stroke="#7dd3fc" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <rect x="0" y="0" width="320" height="224" rx="32" fill="#0c1b3a" />
+    <path d="M320 80H272a32 32 0 0 0 0 64h48" />
+    <path d="M0 64V32a32 32 0 0 1 32-32h192" />
+    <circle cx="288" cy="112" r="6" fill="#7dd3fc" stroke="none" />
+  </g>
+  <text x="256" y="448" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system" font-size="56" font-weight="700" fill="#e0f2fe">SmartLoan</text>
+</svg>

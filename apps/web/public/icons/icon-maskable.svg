@@ -1,0 +1,20 @@
+<!--
+  THEME SYNC: hex values must mirror apps/web/src/theme.ts
+    fill="#14171c"   ← themeColors.background
+    stroke="#7dd3fc" ← lighter tint of themeColors.primary (#54b6e8)
+    fill="#0c1b3a"   ← darker card surface (kept fixed for icon contrast)
+  Referenced by the PWA manifest as the maskable icon; can't read CSS
+  or TS. Grep the public/ folder for the old hex when changing palette.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable variant: the icon content is pushed into the inner safe zone
+       (~80% of the canvas) so it survives when Android applies a circular
+       or rounded-square mask. Full bleed background, smaller logo. -->
+  <rect width="512" height="512" fill="#14171c" />
+  <g transform="translate(160 192)" stroke="#7dd3fc" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <rect x="0" y="0" width="192" height="128" rx="24" fill="#0c1b3a" />
+    <path d="M192 48H160a20 20 0 0 0 0 40h32" />
+    <path d="M0 40V20a20 20 0 0 1 20-20h120" />
+    <circle cx="172" cy="68" r="4" fill="#7dd3fc" stroke="none" />
+  </g>
+</svg>

@@ -7,7 +7,7 @@
  * `buildEntry` enforces it.
  */
 
-import { ACCOUNT_CODES, bucketToAccount } from './chart.js';
+import { ACCOUNT_CODES, bucketToAccount } from "./chart.js";
 
 export interface JournalLineInput {
   /** Account code from the chart (resolved to id by the repository). */
@@ -18,21 +18,21 @@ export interface JournalLineInput {
 }
 
 export type JournalSourceKind =
-  | 'MANUAL'
-  | 'LOAN_DISBURSEMENT'
-  | 'LOAN_PAYMENT'
-  | 'REVERSAL'
-  | 'ADJUSTMENT'
-  | 'INTEREST_ACCRUAL'
-  | 'LATE_FEE_ACCRUAL'
-  | 'ECL_PROVISION'
-  | 'COOP_CONTRIBUTION'
-  | 'COOP_SAVINGS'
-  | 'COOP_FUND_IN'
-  | 'COOP_FUND_OUT'
-  | 'COOP_EXPENSE'
-  | 'COOP_OTHER_INCOME'
-  | 'COOP_BIG_BROTHER';
+  | "MANUAL"
+  | "LOAN_DISBURSEMENT"
+  | "LOAN_PAYMENT"
+  | "REVERSAL"
+  | "ADJUSTMENT"
+  | "INTEREST_ACCRUAL"
+  | "LATE_FEE_ACCRUAL"
+  | "ECL_PROVISION"
+  | "COOP_CONTRIBUTION"
+  | "COOP_SAVINGS"
+  | "COOP_FUND_IN"
+  | "COOP_FUND_OUT"
+  | "COOP_EXPENSE"
+  | "COOP_OTHER_INCOME"
+  | "COOP_BIG_BROTHER";
 
 export interface JournalEntryInput {
   entryDate: Date;
@@ -55,11 +55,13 @@ export function buildEntry(input: JournalEntryInput): JournalEntryInput {
     .map((l) => ({ ...l, debit: round2(l.debit), credit: round2(l.credit) }))
     .filter((l) => l.debit > 0 || l.credit > 0);
   if (lines.length < 2) {
-    throw new Error('A journal entry needs at least two lines.');
+    throw new Error("A journal entry needs at least two lines.");
   }
   for (const line of lines) {
     if (line.debit > 0 && line.credit > 0) {
-      throw new Error(`Line for ${line.accountCode} has both debit and credit.`);
+      throw new Error(
+        `Line for ${line.accountCode} has both debit and credit.`,
+      );
     }
     if (line.debit < 0 || line.credit < 0) {
       throw new Error(`Line for ${line.accountCode} has a negative amount.`);
@@ -117,8 +119,8 @@ export function loanDisbursementEntry(args: {
   }
   return buildEntry({
     entryDate: args.disbursedAt,
-    source: 'LOAN_DISBURSEMENT',
-    sourceRefType: 'LoanApplication',
+    source: "LOAN_DISBURSEMENT",
+    sourceRefType: "LoanApplication",
     sourceRefId: args.loanId,
     memo: `Disbursement of ${args.loanNumber}`,
     lines,
@@ -140,8 +142,8 @@ export function preTerminationFeeEntry(args: {
 }): JournalEntryInput {
   return buildEntry({
     entryDate: args.closedAt,
-    source: 'MANUAL',
-    sourceRefType: 'LoanPreTermination',
+    source: "MANUAL",
+    sourceRefType: "LoanPreTermination",
     sourceRefId: args.loanId,
     memo: `Pre-termination fee ${args.loanNumber}`,
     lines: [
@@ -201,8 +203,8 @@ export function loanPaymentEntry(args: {
   }
   return buildEntry({
     entryDate: args.paidOn,
-    source: 'LOAN_PAYMENT',
-    sourceRefType: 'LoanPayment',
+    source: "LOAN_PAYMENT",
+    sourceRefType: "LoanPayment",
     sourceRefId: args.paymentId,
     memo: `Payment on ${args.loanNumber}`,
     lines,
@@ -225,8 +227,8 @@ export function interestAccrualEntry(args: {
 }): JournalEntryInput {
   return buildEntry({
     entryDate: args.accruedOn,
-    source: 'INTEREST_ACCRUAL',
-    sourceRefType: 'LoanScheduleAccrual',
+    source: "INTEREST_ACCRUAL",
+    sourceRefType: "LoanScheduleAccrual",
     sourceRefId: args.scheduleId,
     memo: `Interest accrual ${args.loanNumber} #${args.installmentNo}`,
     lines: [
@@ -262,8 +264,8 @@ export function lateFeeAccrualEntry(args: {
 }): JournalEntryInput {
   return buildEntry({
     entryDate: args.accruedOn,
-    source: 'LATE_FEE_ACCRUAL',
-    sourceRefType: 'LoanScheduleLateFee',
+    source: "LATE_FEE_ACCRUAL",
+    sourceRefType: "LoanScheduleLateFee",
     sourceRefId: `${args.scheduleId}:${args.periodKey}`,
     memo: `Late fee ${args.loanNumber} #${args.installmentNo} (${args.periodKey})`,
     lines: [
@@ -276,6 +278,177 @@ export function lateFeeAccrualEntry(args: {
         accountCode: ACCOUNT_CODES.FEE_INCOME,
         debit: 0,
         credit: args.feeAmount,
+      },
+    ],
+  });
+}
+
+/**
+ * Reversing entry for a penalty waive. Backs out the late-fee accrual
+ * that was previously booked as Dr Loans Receivable / Cr Fee Income —
+ * we now Dr Fee Income (reducing previously-recognized income) and
+ * Cr Loans Receivable (reducing the customer's outstanding penalty
+ * balance) for the amount being waived.
+ *
+ *   Dr Fee Income            waivedAmount
+ *     Cr Loans Receivable    waivedAmount
+ */
+export function penaltyWaiveEntry(args: {
+  waiverId: string;
+  loanId: string;
+  loanNumber: string;
+  waivedAmount: number;
+  waivedOn: Date;
+  reason: string;
+}): JournalEntryInput {
+  return buildEntry({
+    entryDate: args.waivedOn,
+    source: "PENALTY_WAIVE",
+    sourceRefType: "PenaltyWaiver",
+    sourceRefId: args.waiverId,
+    memo: `Waive penalty ${args.loanNumber} — ${args.reason.slice(0, 200)}`,
+    lines: [
+      {
+        accountCode: ACCOUNT_CODES.FEE_INCOME,
+        debit: args.waivedAmount,
+        credit: 0,
+      },
+      {
+        accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
+        debit: 0,
+        credit: args.waivedAmount,
+      },
+    ],
+  });
+}
+
+/**
+ * Auction settlement for a repossessed vehicle.
+ *
+ * Splits the proceeds against outstanding principal:
+ *
+ *   Dr Cash                       proceeds
+ *     Cr Loans Receivable         min(proceeds, outstanding)
+ *     Cr Refund Payable (other)   max(0, proceeds - outstanding)   // surplus
+ *
+ * If there's a shortfall (deficiency > 0) we additionally write off the
+ * unrecoverable portion:
+ *
+ *   Dr Bad Debt Expense           deficiency
+ *     Cr Loans Receivable         deficiency
+ *
+ * We emit both in one balanced entry so the auction settlement appears
+ * as a single line on the GL.
+ */
+export function repossessionAuctionEntry(args: {
+  caseId: string;
+  loanId: string;
+  loanNumber: string;
+  outstandingAtRecovery: number;
+  auctionProceeds: number;
+  auctionedOn: Date;
+}): JournalEntryInput {
+  const proceeds = round2(args.auctionProceeds);
+  const outstanding = round2(args.outstandingAtRecovery);
+  const appliedToLoan = round2(Math.min(proceeds, outstanding));
+  const deficiency = round2(Math.max(0, outstanding - proceeds));
+  const surplus = round2(Math.max(0, proceeds - outstanding));
+
+  const lines: Array<{
+    accountCode: string;
+    debit: number;
+    credit: number;
+    memo?: string;
+  }> = [
+    {
+      accountCode: ACCOUNT_CODES.CASH,
+      debit: proceeds,
+      credit: 0,
+      memo: `Auction proceeds ${args.loanNumber}`,
+    },
+    {
+      accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
+      debit: 0,
+      credit: appliedToLoan,
+      memo: `Settle ${args.loanNumber} via auction`,
+    },
+  ];
+
+  if (deficiency > 0) {
+    lines.push(
+      {
+        accountCode: ACCOUNT_CODES.BAD_DEBT_EXPENSE,
+        debit: deficiency,
+        credit: 0,
+        memo: `Auction shortfall on ${args.loanNumber}`,
+      },
+      {
+        accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
+        debit: 0,
+        credit: deficiency,
+        memo: `Write-off shortfall on ${args.loanNumber}`,
+      },
+    );
+  }
+
+  if (surplus > 0) {
+    // Surplus goes to other income (refund to borrower handled separately
+    // by manual journal entry / payment; we don't have a Refund Payable
+    // account in the seed chart of accounts yet).
+    lines.push({
+      accountCode: ACCOUNT_CODES.OTHER_INCOME,
+      debit: 0,
+      credit: surplus,
+      memo: `Auction surplus on ${args.loanNumber}`,
+    });
+  }
+
+  return buildEntry({
+    entryDate: args.auctionedOn,
+    source: "REPOSSESSION_AUCTION",
+    sourceRefType: "RepossessionCase",
+    sourceRefId: args.caseId,
+    memo: `Auction settlement ${args.loanNumber} — proceeds ${proceeds.toFixed(2)}, outstanding ${outstanding.toFixed(2)}, deficiency ${deficiency.toFixed(2)}`,
+    lines,
+  });
+}
+
+/**
+ * Lease-to-Own residual buyout. Borrower pays the residual fee at the
+ * end of the lease term to take title. The standard payment flow has
+ * already covered the principal + interest; this entry books just the
+ * residual amount.
+ *
+ *   Dr Cash               residualPaid
+ *     Cr Lease Income     residualPaid
+ *
+ * (We use OTHER_INCOME for the credit because the lease economics
+ * differ from amortizing loan interest; a fuller chart of accounts
+ * would split this into a dedicated Lease Income account.)
+ */
+export function leaseBuyoutEntry(args: {
+  agreementId: string;
+  loanId: string;
+  loanNumber: string;
+  residualAmount: number;
+  buyoutOn: Date;
+}): JournalEntryInput {
+  return buildEntry({
+    entryDate: args.buyoutOn,
+    source: "LEASE_BUYOUT",
+    sourceRefType: "LeaseAgreement",
+    sourceRefId: args.agreementId,
+    memo: `Lease buyout ${args.loanNumber} — residual ${args.residualAmount.toFixed(2)}`,
+    lines: [
+      {
+        accountCode: ACCOUNT_CODES.CASH,
+        debit: args.residualAmount,
+        credit: 0,
+      },
+      {
+        accountCode: ACCOUNT_CODES.OTHER_INCOME,
+        debit: 0,
+        credit: args.residualAmount,
       },
     ],
   });
@@ -312,11 +485,13 @@ export function eclProvisionEntry(args: {
   if (Math.abs(delta) < 0.01) return null;
   const isIncrease = delta > 0;
   const amount = Math.abs(delta);
-  const memo = args.memo ?? `ECL provision movement (${isIncrease ? 'increase' : 'release'})`;
+  const memo =
+    args.memo ??
+    `ECL provision movement (${isIncrease ? "increase" : "release"})`;
   return buildEntry({
     entryDate: args.postedAt,
-    source: 'ECL_PROVISION',
-    sourceRefType: 'EclRun',
+    source: "ECL_PROVISION",
+    sourceRefType: "EclRun",
     sourceRefId: args.eclRunId,
     memo,
     lines: isIncrease
@@ -325,13 +500,13 @@ export function eclProvisionEntry(args: {
             accountCode: ACCOUNT_CODES.IMPAIRMENT_LOSS,
             debit: amount,
             credit: 0,
-            memo: 'ECL increase',
+            memo: "ECL increase",
           },
           {
             accountCode: ACCOUNT_CODES.ALLOWANCE_FOR_DOUBTFUL,
             debit: 0,
             credit: amount,
-            memo: 'ECL allowance build',
+            memo: "ECL allowance build",
           },
         ]
       : [
@@ -339,13 +514,13 @@ export function eclProvisionEntry(args: {
             accountCode: ACCOUNT_CODES.ALLOWANCE_FOR_DOUBTFUL,
             debit: amount,
             credit: 0,
-            memo: 'ECL allowance release',
+            memo: "ECL allowance release",
           },
           {
             accountCode: ACCOUNT_CODES.IMPAIRMENT_LOSS,
             debit: 0,
             credit: amount,
-            memo: 'ECL write-back',
+            memo: "ECL write-back",
           },
         ],
   });
@@ -400,7 +575,9 @@ export function contributionEntry(args: {
   emergencyFund: number;
   contributedAt: Date;
 }): JournalEntryInput | null {
-  const total = round2(args.capitalBuildUp + args.mortuaryFund + args.emergencyFund);
+  const total = round2(
+    args.capitalBuildUp + args.mortuaryFund + args.emergencyFund,
+  );
   if (total <= 0) return null;
   const lines: JournalLineInput[] = [
     {
@@ -415,7 +592,7 @@ export function contributionEntry(args: {
       accountCode: ACCOUNT_CODES.CAPITAL_BUILD_UP,
       debit: 0,
       credit: round2(args.capitalBuildUp),
-      memo: 'CBU',
+      memo: "CBU",
     });
   }
   if (args.mortuaryFund > 0) {
@@ -423,7 +600,7 @@ export function contributionEntry(args: {
       accountCode: ACCOUNT_CODES.MORTUARY_FUND,
       debit: 0,
       credit: round2(args.mortuaryFund),
-      memo: 'Mortuary fund',
+      memo: "Mortuary fund",
     });
   }
   if (args.emergencyFund > 0) {
@@ -431,13 +608,13 @@ export function contributionEntry(args: {
       accountCode: ACCOUNT_CODES.EMERGENCY_FUND,
       debit: 0,
       credit: round2(args.emergencyFund),
-      memo: 'Emergency fund',
+      memo: "Emergency fund",
     });
   }
   return buildEntry({
     entryDate: args.contributedAt,
-    source: 'COOP_CONTRIBUTION',
-    sourceRefType: 'Contribution',
+    source: "COOP_CONTRIBUTION",
+    sourceRefType: "Contribution",
     sourceRefId: args.contributionId,
     memo: `Contribution — ${args.customerName}`,
     lines,
@@ -454,26 +631,34 @@ export function savingsEntry(args: {
   txnId: string;
   customerName: string;
   amount: number;
-  kind: 'DEPOSIT' | 'WITHDRAWAL';
+  kind: "DEPOSIT" | "WITHDRAWAL";
   txnDate: Date;
 }): JournalEntryInput | null {
   const amount = round2(args.amount);
   if (amount <= 0) return null;
-  const isDeposit = args.kind === 'DEPOSIT';
+  const isDeposit = args.kind === "DEPOSIT";
   return buildEntry({
     entryDate: args.txnDate,
-    source: 'COOP_SAVINGS',
-    sourceRefType: 'SavingsTransaction',
+    source: "COOP_SAVINGS",
+    sourceRefType: "SavingsTransaction",
     sourceRefId: args.txnId,
     memo: `Savings ${args.kind.toLowerCase()} — ${args.customerName}`,
     lines: isDeposit
       ? [
-          { accountCode: ACCOUNT_CODES.CASH,            debit: amount, credit: 0 },
-          { accountCode: ACCOUNT_CODES.MEMBERS_SAVINGS, debit: 0,      credit: amount },
+          { accountCode: ACCOUNT_CODES.CASH, debit: amount, credit: 0 },
+          {
+            accountCode: ACCOUNT_CODES.MEMBERS_SAVINGS,
+            debit: 0,
+            credit: amount,
+          },
         ]
       : [
-          { accountCode: ACCOUNT_CODES.MEMBERS_SAVINGS, debit: amount, credit: 0 },
-          { accountCode: ACCOUNT_CODES.CASH,            debit: 0,      credit: amount },
+          {
+            accountCode: ACCOUNT_CODES.MEMBERS_SAVINGS,
+            debit: amount,
+            credit: 0,
+          },
+          { accountCode: ACCOUNT_CODES.CASH, debit: 0, credit: amount },
         ],
   });
 }
@@ -495,13 +680,17 @@ export function fundTransactionEntry(args: {
   if (amount <= 0) return null;
   return buildEntry({
     entryDate: args.txnDate,
-    source: 'COOP_FUND_IN',
-    sourceRefType: 'FundTransaction',
+    source: "COOP_FUND_IN",
+    sourceRefType: "FundTransaction",
     sourceRefId: args.txnId,
     memo: args.memo ?? `Fund inflow — ${args.sourceOfFunds}`,
     lines: [
-      { accountCode: ACCOUNT_CODES.CASH,                       debit: amount, credit: 0 },
-      { accountCode: bucketToAccount(args.sourceOfFunds),       debit: 0,      credit: amount },
+      { accountCode: ACCOUNT_CODES.CASH, debit: amount, credit: 0 },
+      {
+        accountCode: bucketToAccount(args.sourceOfFunds),
+        debit: 0,
+        credit: amount,
+      },
     ],
   });
 }
@@ -523,13 +712,17 @@ export function fundWithdrawalEntry(args: {
   if (amount <= 0) return null;
   return buildEntry({
     entryDate: args.txnDate,
-    source: 'COOP_FUND_OUT',
-    sourceRefType: 'FundWithdrawal',
+    source: "COOP_FUND_OUT",
+    sourceRefType: "FundWithdrawal",
     sourceRefId: args.withdrawalId,
     memo: args.memo ?? `Fund withdrawal — ${args.sourceOfFunds}`,
     lines: [
-      { accountCode: bucketToAccount(args.sourceOfFunds),       debit: amount, credit: 0 },
-      { accountCode: ACCOUNT_CODES.CASH,                       debit: 0,      credit: amount },
+      {
+        accountCode: bucketToAccount(args.sourceOfFunds),
+        debit: amount,
+        credit: 0,
+      },
+      { accountCode: ACCOUNT_CODES.CASH, debit: 0, credit: amount },
     ],
   });
 }
@@ -553,13 +746,21 @@ export function expenseEntry(args: {
   if (amount <= 0) return null;
   return buildEntry({
     entryDate: args.txnDate,
-    source: 'COOP_EXPENSE',
-    sourceRefType: 'Expense',
+    source: "COOP_EXPENSE",
+    sourceRefType: "Expense",
     sourceRefId: args.expenseId,
     memo: `${args.type} (${args.sourceOfFunds})`,
     lines: [
-      { accountCode: ACCOUNT_CODES.OPERATING_EXPENSE,           debit: amount, credit: 0 },
-      { accountCode: bucketToAccount(args.sourceOfFunds),       debit: 0,      credit: amount },
+      {
+        accountCode: ACCOUNT_CODES.OPERATING_EXPENSE,
+        debit: amount,
+        credit: 0,
+      },
+      {
+        accountCode: bucketToAccount(args.sourceOfFunds),
+        debit: 0,
+        credit: amount,
+      },
     ],
   });
 }
@@ -583,18 +784,18 @@ export function otherIncomeEntry(args: {
   // Treat sourceTo == "OTHER_INCOME" specially to avoid a self-loop;
   // route to cash in that case.
   const destination =
-    args.sourceTo.toUpperCase() === 'OTHER_INCOME'
+    args.sourceTo.toUpperCase() === "OTHER_INCOME"
       ? ACCOUNT_CODES.CASH
       : bucketToAccount(args.sourceTo);
   return buildEntry({
     entryDate: args.txnDate,
-    source: 'COOP_OTHER_INCOME',
-    sourceRefType: 'OtherIncome',
+    source: "COOP_OTHER_INCOME",
+    sourceRefType: "OtherIncome",
     sourceRefId: args.incomeId,
     memo: `${args.type} → ${args.sourceTo}`,
     lines: [
-      { accountCode: destination,                  debit: amount, credit: 0 },
-      { accountCode: ACCOUNT_CODES.OTHER_INCOME,   debit: 0,      credit: amount },
+      { accountCode: destination, debit: amount, credit: 0 },
+      { accountCode: ACCOUNT_CODES.OTHER_INCOME, debit: 0, credit: amount },
     ],
   });
 }
@@ -617,13 +818,17 @@ export function bigBrotherEntry(args: {
   if (amount <= 0) return null;
   return buildEntry({
     entryDate: args.receivedAt,
-    source: 'COOP_BIG_BROTHER',
-    sourceRefType: 'BigBrotherAccount',
+    source: "COOP_BIG_BROTHER",
+    sourceRefType: "BigBrotherAccount",
     sourceRefId: args.accountId,
     memo: `Big Brother capital — ${args.name}`,
     lines: [
-      { accountCode: ACCOUNT_CODES.CASH,                debit: amount, credit: 0 },
-      { accountCode: ACCOUNT_CODES.BIG_BROTHER_CAPITAL, debit: 0,      credit: amount },
+      { accountCode: ACCOUNT_CODES.CASH, debit: amount, credit: 0 },
+      {
+        accountCode: ACCOUNT_CODES.BIG_BROTHER_CAPITAL,
+        debit: 0,
+        credit: amount,
+      },
     ],
   });
 }

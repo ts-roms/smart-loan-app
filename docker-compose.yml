@@ -35,7 +35,11 @@ services:
     volumes:
       - loan-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-loan} -d ${POSTGRES_DB:-smart_loan}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-loan} -d ${POSTGRES_DB:-smart_loan}",
+        ]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -61,12 +65,22 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-prod-please-32-chars-minimum}
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
       UPLOADS_DIR: /app/uploads
+      # Optional — only set when the `ai` profile is up. Without this
+      # the assistant routes return mock responses (no hard dependency).
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-phi3:mini}
     ports:
       - "${API_PORT:-3001}:3001"
     volumes:
       - loan-uploads:/app/uploads
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/v1/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3001/api/v1/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -87,6 +101,39 @@ services:
         condition: service_healthy
     ports:
       - "${WEB_PORT:-5173}:80"
+    networks: [loan-net]
+
+  # ── Local LLM (Ollama, optional — only with `ai` profile) ─────────────
+  # Spin this up alongside the api when you want the assistant features:
+  #
+  #   docker compose --profile full --profile ai up -d --build
+  #
+  # On first start, pull the model (one-time, ~2.3 GB for phi3:mini):
+  #
+  #   docker compose --profile ai exec ollama ollama pull phi3:mini
+  #
+  # The api container reaches it at http://ollama:11434 via the shared
+  # loan-net network. With no OLLAMA_URL env var set, assistant endpoints
+  # return a "configure Ollama" mock — the rest of the app works fine.
+  #
+  # If your host has a GPU you can pass `--gpus all` to the container at
+  # runtime for much faster inference; the default CPU mode works on
+  # any machine but is slow (~5-15s/response for phi3:mini).
+  ollama:
+    profiles: ["ai"]
+    image: ollama/ollama:latest
+    container_name: smart-loan-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - loan-ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks: [loan-net]
 
   # ── pgAdmin (optional — only with full profile) ───────────────────────
@@ -112,6 +159,7 @@ volumes:
   loan-pgdata:
   loan-uploads:
   loan-pgadmin:
+  loan-ollama:
 
 networks:
   loan-net:

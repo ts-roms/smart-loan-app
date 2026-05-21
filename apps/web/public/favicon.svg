@@ -1,0 +1,12 @@
+<!--
+  THEME SYNC: hex values must mirror apps/web/src/theme.ts
+    fill="#14171c"  ← themeColors.background
+    stroke="#7dd3fc" ← lighter tint of themeColors.primary (#54b6e8)
+  Static <link rel="icon"> can't read CSS or import TS, so the colours
+  are baked in. Grep this folder for the old hex when changing palette.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#7dd3fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="2" y="6" width="20" height="14" rx="2" fill="#14171c" />
+  <path d="M22 11h-3a2 2 0 0 0 0 4h3" stroke="#7dd3fc" />
+  <path d="M2 10V8a2 2 0 0 1 2-2h12" stroke="#7dd3fc" />
+</svg>

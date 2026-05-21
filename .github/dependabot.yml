@@ -1,0 +1,47 @@
+# Dependabot — keeps deps current with weekly PRs.
+# Adjust schedule + reviewers to suit your team's PR-fatigue tolerance.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Bundle small patch updates so the inbox doesn't drown.
+      patches:
+        applies-to: version-updates
+        update-types: [patch]
+      # Frontend deps move fast — group them so React/Vite/Tailwind don't
+      # land as 3 separate PRs the same week.
+      frontend:
+        patterns:
+          - "react*"
+          - "@tanstack/*"
+          - "vite*"
+          - "tailwind*"
+          - "@radix-ui/*"
+          - "lucide-react"
+          - "@vitejs/*"
+      # Same for the API stack.
+      api:
+        patterns:
+          - "fastify*"
+          - "@fastify/*"
+          - "@prisma/*"
+          - "prisma"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: docker
+    directory: /apps/api
+    schedule:
+      interval: monthly
+  - package-ecosystem: docker
+    directory: /apps/web
+    schedule:
+      interval: monthly

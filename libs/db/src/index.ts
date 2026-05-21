@@ -3,6 +3,7 @@ export {
   type CreditScore,
   type SurveyResponse,
   type LoanApplication,
+  type LoanDraft,
   type LoanSchedule,
   type LoanPayment,
   type KycSubmission,
@@ -11,7 +12,14 @@ export {
   type AccountingPeriod,
   type AmlScreening,
   type AmlWatchlistEntry,
+  type AnnualDocument,
   type AuditEvent,
+  type DemandLetter,
+  type RepossessionCase,
+  type DorsiRecord,
+  type DorsiBoardApproval,
+  type SystemConfig,
+  type LeaseAgreement,
   type CoMaker,
   type CollectionNote,
   type DecisionRule,
@@ -43,6 +51,14 @@ export {
   type RefreshToken,
   type SavingsTransaction,
   AccountType,
+  AnnualDocumentStatus,
+  AnnualDocumentType,
+  DemandLetterStage,
+  DemandLetterStatus,
+  RepossessionStatus,
+  DorsiCategory,
+  LeaseStatus,
+  LeaseTitleHolder,
   BankStatementStatus,
   CollateralKind,
   EclStage,
@@ -72,27 +88,44 @@ export {
   PeriodStatus,
   PromiseStatus,
   UserRole,
-} from '@prisma/client';
+} from "@prisma/client";
 
-export { createPrismaClient } from './client.js';
-export { fastifyPrisma } from './plugin.js';
-export * from './repositories/customer.repository.js';
-export * from './repositories/kyc.repository.js';
-export * from './repositories/credit-score.repository.js';
-export * from './repositories/survey.repository.js';
-export * from './repositories/loan.repository.js';
-export * from './repositories/loan-product.repository.js';
-export * from './repositories/accounting.repository.js';
-export * from './repositories/collections.repository.js';
-export * from './repositories/payment-intent.repository.js';
-export * from './repositories/audit-log.repository.js';
-export * from './repositories/job.repository.js';
-export * from './repositories/notification.repository.js';
-export * from './repositories/screening.repository.js';
-export * from './repositories/co-maker.repository.js';
-export * from './repositories/decision-rule.repository.js';
-export * from './repositories/rbac.repository.js';
-export * from './repositories/delegation.repository.js';
-export * from './repositories/bank-reconciliation.repository.js';
-export * from './repositories/ecl.repository.js';
-export * from './repositories/cooperative.repository.js';
+export { createPrismaClient } from "./client.js";
+export { fastifyPrisma } from "./plugin.js";
+export {
+  isUuid,
+  idOrNumberWhere,
+  nextCustomerNumber,
+  nextKycNumber,
+  nextPaymentIntentNumber,
+  nextVehicleNumber,
+  nextPropertyNumber,
+} from "./lib/reference-numbers.js";
+export * from "./repositories/customer.repository.js";
+export * from "./repositories/kyc.repository.js";
+export * from "./repositories/credit-score.repository.js";
+export * from "./repositories/survey.repository.js";
+export * from "./repositories/loan.repository.js";
+export * from "./repositories/loan-draft.repository.js";
+export * from "./repositories/loan-product.repository.js";
+export * from "./repositories/accounting.repository.js";
+export * from "./repositories/collections.repository.js";
+export * from "./repositories/payment-intent.repository.js";
+export * from "./repositories/audit-log.repository.js";
+export * from "./repositories/job.repository.js";
+export * from "./repositories/notification.repository.js";
+export * from "./repositories/screening.repository.js";
+export * from "./repositories/co-maker.repository.js";
+export * from "./repositories/decision-rule.repository.js";
+export * from "./repositories/rbac.repository.js";
+export * from "./repositories/delegation.repository.js";
+export * from "./repositories/bank-reconciliation.repository.js";
+export * from "./repositories/ecl.repository.js";
+export * from "./repositories/cooperative.repository.js";
+export * from "./repositories/annual-document.repository.js";
+export * from "./repositories/demand-letter.repository.js";
+export * from "./repositories/repossession.repository.js";
+export * from "./repositories/dorsi.repository.js";
+export * from "./repositories/lease.repository.js";
+export * from "./repositories/loan-approval.repository.js";
+export * from "./repositories/customer-ledger.repository.js";

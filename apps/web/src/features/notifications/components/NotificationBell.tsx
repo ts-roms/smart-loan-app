@@ -2,7 +2,7 @@ import {
   useMarkNotificationsSeen,
   useMyNotificationState,
   useNotifications,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,9 +10,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   cn,
-} from '@loan/ui';
-import { Bell } from 'lucide-react';
-import { Link } from 'react-router-dom';
+} from "@loan/ui";
+import { Bell } from "lucide-react";
+import { Link } from "react-router-dom";
 
 /**
  * Top-bar notification bell. Click to open a dropdown with the last 10
@@ -25,24 +25,26 @@ import { Link } from 'react-router-dom';
  */
 
 const EVENT_LABELS: Record<string, string> = {
-  LOAN_APPROVED: 'Loan approved',
-  LOAN_REJECTED: 'Loan rejected',
-  LOAN_DISBURSED: 'Loan disbursed',
-  PAYMENT_RECEIVED: 'Payment received',
-  PAYMENT_DUE_SOON: 'Payment due soon',
-  PAYMENT_OVERDUE: 'Payment overdue',
-  PROMISE_TO_PAY: 'Promise to pay',
-  WELCOME: 'Welcome',
-  TEST: 'Test notification',
+  LOAN_APPROVED: "Loan approved",
+  LOAN_REJECTED: "Loan rejected",
+  LOAN_DISBURSED: "Loan disbursed",
+  LOAN_APPROVAL_PENDING: "Loan needs approval",
+  STATEMENT_READY: "Statement ready",
+  PAYMENT_RECEIVED: "Payment received",
+  PAYMENT_DUE_SOON: "Payment due soon",
+  PAYMENT_OVERDUE: "Payment overdue",
+  PROMISE_TO_PAY: "Promise to pay",
+  WELCOME: "Welcome",
+  TEST: "Test notification",
 };
 
 /** Compact relative time formatter — "2m", "3h", "5d". Falls back to date. */
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '';
+  if (Number.isNaN(then)) return "";
   const diff = Date.now() - then;
   const s = Math.floor(diff / 1000);
-  if (s < 60) return 'just now';
+  if (s < 60) return "just now";
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
@@ -58,7 +60,9 @@ export function NotificationBell() {
   const markSeen = useMarkNotificationsSeen();
   const rows = (notifs.data ?? []).slice(0, 10);
   const unseen = state.data?.unseen ?? 0;
-  const lastSeenAt = state.data?.lastSeenAt ? new Date(state.data.lastSeenAt) : null;
+  const lastSeenAt = state.data?.lastSeenAt
+    ? new Date(state.data.lastSeenAt)
+    : null;
 
   // When the user opens the dropdown, advance their lastSeenNotificationAt
   // cursor so the badge resets. We fire this on the Radix onOpenChange
@@ -84,16 +88,19 @@ export function NotificationBell() {
               className="absolute top-1.5 right-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white ring-2 ring-slate-950"
               aria-label={`${unseen} unseen`}
             >
-              {unseen > 9 ? '9+' : unseen}
+              {unseen > 9 ? "9+" : unseen}
             </span>
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[20rem] max-w-[22rem] p-0">
+      <DropdownMenuContent
+        align="end"
+        className="min-w-[20rem] max-w-[22rem] p-0"
+      >
         <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
           <div className="text-sm font-medium">Notifications</div>
           <div className="text-[10px] uppercase tracking-wider text-white/45">
-            {unseen > 0 ? `${unseen} unseen` : 'all caught up'}
+            {unseen > 0 ? `${unseen} unseen` : "all caught up"}
           </div>
         </div>
         <div className="max-h-80 overflow-y-auto">
@@ -114,8 +121,8 @@ export function NotificationBell() {
                 <div
                   key={n.id}
                   className={cn(
-                    'px-3 py-2 text-xs border-b border-white/[0.04] last:border-b-0',
-                    fresh && 'bg-sky-500/[0.04]',
+                    "px-3 py-2 text-xs border-b border-white/[0.04] last:border-b-0",
+                    fresh && "bg-sky-500/[0.04]",
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -127,12 +134,16 @@ export function NotificationBell() {
                     </div>
                   </div>
                   <div className="text-white/55 truncate mt-0.5">
-                    <span className="font-mono text-[10px] uppercase">{n.channel}</span>
-                    {' · '}
+                    <span className="font-mono text-[10px] uppercase">
+                      {n.channel}
+                    </span>
+                    {" · "}
                     {n.recipient}
                   </div>
                   {n.subject && (
-                    <div className="text-white/65 truncate mt-0.5">{n.subject}</div>
+                    <div className="text-white/65 truncate mt-0.5">
+                      {n.subject}
+                    </div>
                   )}
                 </div>
               );
@@ -141,7 +152,10 @@ export function NotificationBell() {
         </div>
         <DropdownMenuSeparator className="my-0" />
         <DropdownMenuItem asChild>
-          <Link to="/notifications" className="cursor-pointer justify-center text-sky-300 hover:text-sky-200">
+          <Link
+            to="/notifications"
+            className="cursor-pointer justify-center text-sky-300 hover:text-sky-200"
+          >
             View all notifications
           </Link>
         </DropdownMenuItem>

@@ -1,9 +1,15 @@
-import 'dotenv/config';
-import { buildApp } from './app.js';
-
-const port = Number(process.env.PORT ?? 3001);
-const host = process.env.HOST ?? '0.0.0.0';
+import "dotenv/config";
+import { buildApp } from "./app.js";
+import { config, validateConfig } from "./config.js";
 
 const app = await buildApp();
-await app.listen({ port, host });
-app.log.info(`smart-loan API listening on http://${host}:${port}`);
+
+// Validate AFTER app is built so we have a logger to report into.
+// In production this hard-fails on critical issues (default JWT secret,
+// missing provider credentials, etc.). In dev it just warns.
+validateConfig(app.log);
+
+await app.listen({ port: config.port, host: config.host });
+app.log.info(
+  `smart-loan API (${config.nodeEnv}) listening on http://${config.host}:${config.port}`,
+);

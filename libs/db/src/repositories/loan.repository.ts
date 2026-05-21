@@ -3,7 +3,7 @@ import {
   loanDisbursementEntry,
   loanPaymentEntry,
   preTerminationFeeEntry,
-} from '@loan/accounting';
+} from "@loan/accounting";
 import {
   type CreditTier as TierString,
   type InterestMethod as MethodString,
@@ -16,7 +16,7 @@ import {
   installmentCount,
   rateForTier,
   validateLoanApplication,
-} from '@loan/loans';
+} from "@loan/loans";
 import type {
   CollateralStatus,
   CreditTier,
@@ -26,14 +26,19 @@ import type {
   LoanStatus,
   Prisma,
   PrismaClient,
-} from '@prisma/client';
+} from "@prisma/client";
 
-import { AccountingRepository } from './accounting.repository.js';
+import { AccountingRepository } from "./accounting.repository.js";
+import {
+  idOrNumberWhere,
+  nextPropertyNumber,
+  nextVehicleNumber,
+} from "../lib/reference-numbers.js";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
 export interface VehicleInput {
-  kind: 'CAR' | 'MOTORCYCLE';
+  kind: "CAR" | "MOTORCYCLE";
   make: string;
   model: string;
   year: number;
@@ -78,7 +83,7 @@ export interface LoanApplyInput {
   /** Optional live-capture selfie taken at apply, used for face-match + fraud. */
   applicationSelfieUrl?: string;
   /** Override initial status (used by decisioning engine). */
-  initialStatus?: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  initialStatus?: "SUBMITTED" | "APPROVED" | "REJECTED";
   /** Reason recorded with the decision when not SUBMITTED. */
   initialDecisionReason?: string;
   /** If this loan replaces an older one, the original's id. */
@@ -86,7 +91,7 @@ export interface LoanApplyInput {
 }
 
 export interface LoanDecideInput {
-  status: 'APPROVED' | 'REJECTED';
+  status: "APPROVED" | "REJECTED";
   reason?: string;
   decidedById: string;
 }
@@ -158,7 +163,7 @@ export class LoanRepository {
 
   list(): Promise<LoanApplication[]> {
     return this.prisma.loanApplication.findMany({
-      orderBy: { submittedAt: 'desc' },
+      orderBy: { submittedAt: "desc" },
       take: 200,
     });
   }
@@ -167,8 +172,27 @@ export class LoanRepository {
     return this.prisma.loanApplication.findUnique({
       where: { id },
       include: {
-        schedule: { orderBy: { installmentNo: 'asc' } },
-        payments: { orderBy: { paidOn: 'desc' } },
+        schedule: { orderBy: { installmentNo: "asc" } },
+        payments: { orderBy: { paidOn: "desc" } },
+        customer: true,
+        vehicle: true,
+        property: true,
+        product: true,
+      },
+    });
+  }
+
+  /**
+   * Resolve a loan by either its UUID or its "LN-2026-..." number — the
+   * canonical API now uses the number on URL paths, but legacy callers
+   * passing UUIDs are still served from this same lookup.
+   */
+  findByIdOrNumber(idOrNumber: string) {
+    return this.prisma.loanApplication.findFirst({
+      where: idOrNumberWhere(idOrNumber),
+      include: {
+        schedule: { orderBy: { installmentNo: "asc" } },
+        payments: { orderBy: { paidOn: "desc" } },
         customer: true,
         vehicle: true,
         property: true,
@@ -179,7 +203,9 @@ export class LoanRepository {
 
   async apply(input: LoanApplyInput): Promise<LoanApplication> {
     return this.prisma.$transaction(async (tx) => {
-      const product = await tx.loanProduct.findUnique({ where: { code: input.productCode } });
+      const product = await tx.loanProduct.findUnique({
+        where: { code: input.productCode },
+      });
       if (!product || !product.active) {
         throw new Error(`Loan product ${input.productCode} is not available.`);
       }
@@ -189,9 +215,17 @@ export class LoanRepository {
       let rate = input.annualInterestRate;
       const cfg = toConfig(product);
       if (cfg.rateByTier && input.tierAtApply) {
-        const tierRate = rateForTier({ ...cfg, defaultRate: Number(product.defaultRate) }, input.tierAtApply);
-        if (tierRate == null && cfg.rateByTier[input.tierAtApply as TierString] === null) {
-          throw new Error(`Product ${product.code} is not available for tier ${input.tierAtApply}.`);
+        const tierRate = rateForTier(
+          { ...cfg, defaultRate: Number(product.defaultRate) },
+          input.tierAtApply,
+        );
+        if (
+          tierRate == null &&
+          cfg.rateByTier[input.tierAtApply as TierString] === null
+        ) {
+          throw new Error(
+            `Product ${product.code} is not available for tier ${input.tierAtApply}.`,
+          );
         }
         if (tierRate != null) rate = tierRate;
       }
@@ -206,23 +240,29 @@ export class LoanRepository {
         tierAtApply: (input.tierAtApply as TierString | null) ?? null,
       });
       if (issues.length > 0) {
-        const err = new Error(issues.map((i) => i.message).join(' '));
+        const err = new Error(issues.map((i) => i.message).join(" "));
         (err as Error & { issues?: unknown }).issues = issues;
         throw err;
       }
 
-      if (product.collateralKind === 'VEHICLE' && !input.vehicle) {
+      if (product.collateralKind === "VEHICLE" && !input.vehicle) {
         throw new Error(`${product.code} requires a vehicle.`);
       }
-      if (product.collateralKind === 'PROPERTY' && !input.property) {
+      if (product.collateralKind === "PROPERTY" && !input.property) {
         throw new Error(`${product.code} requires a property.`);
       }
 
       let vehicleId: string | undefined;
       let propertyId: string | undefined;
-      if (product.collateralKind === 'VEHICLE' && input.vehicle) {
+      if (product.collateralKind === "VEHICLE" && input.vehicle) {
+        // Allocate the human-readable reference number inside the same tx
+        // so concurrent loan applications can't both grab seq=N+1.
+        const vehicleNumber = await nextVehicleNumber(
+          tx as unknown as PrismaClient,
+        );
         const v = await tx.vehicle.create({
           data: {
+            number: vehicleNumber,
             kind: input.vehicle.kind,
             make: input.vehicle.make,
             model: input.vehicle.model,
@@ -233,13 +273,17 @@ export class LoanRepository {
             color: input.vehicle.color,
             appraisedValue: input.vehicle.appraisedValue,
             notes: input.vehicle.notes,
-            status: 'PROPOSED' satisfies CollateralStatus,
+            status: "PROPOSED" satisfies CollateralStatus,
           },
         });
         vehicleId = v.id;
-      } else if (product.collateralKind === 'PROPERTY' && input.property) {
+      } else if (product.collateralKind === "PROPERTY" && input.property) {
+        const propertyNumber = await nextPropertyNumber(
+          tx as unknown as PrismaClient,
+        );
         const p = await tx.property.create({
           data: {
+            number: propertyNumber,
             propertyType: input.property.propertyType,
             address: input.property.address,
             city: input.property.city,
@@ -250,15 +294,45 @@ export class LoanRepository {
             areaSqm: input.property.areaSqm,
             appraisedValue: input.property.appraisedValue,
             notes: input.property.notes,
-            status: 'PROPOSED' satisfies CollateralStatus,
+            status: "PROPOSED" satisfies CollateralStatus,
           },
         });
         propertyId = p.id;
       }
 
       const number = await this.nextApplicationNumber(tx);
-      const initialStatus = (input.initialStatus ?? 'SUBMITTED') as LoanStatus;
-      return tx.loanApplication.create({
+      const initialStatus = (input.initialStatus ?? "SUBMITTED") as LoanStatus;
+
+      // FRD §3.1 — repeat-loan flag. True when this customer already has at
+      // least one CLOSED loan and no DEFAULTED / WRITTEN_OFF in history.
+      // Restructures keep their `restructuredFromId` link and don't count
+      // here — they're a continuation of an existing line, not a new one.
+      const priorLoans = await tx.loanApplication.count({
+        where: { customerId: input.customerId, status: "CLOSED" },
+      });
+      const badPriorLoans = await tx.loanApplication.count({
+        where: {
+          customerId: input.customerId,
+          status: { in: ["DEFAULTED", "WRITTEN_OFF"] },
+        },
+      });
+      const isRepeat =
+        !input.restructuredFromId && priorLoans > 0 && badPriorLoans === 0;
+
+      // Snapshot the product's approval chain (if any) onto this loan.
+      // We resolve the chain in the same tx as the create so a concurrent
+      // admin edit can't mid-flight produce a half-stamped chain.
+      const approvalSteps = await tx.loanApprovalStep.findMany({
+        where: { productCode: input.productCode },
+        orderBy: { order: "asc" },
+      });
+      // Only loans that need underwriter judgement enter the chain;
+      // auto-approved / auto-rejected loans skip it (they already have
+      // their final status set by the decision engine above).
+      const willUseChain =
+        initialStatus === "SUBMITTED" && approvalSteps.length > 0;
+
+      const created = await tx.loanApplication.create({
         data: {
           number,
           customerId: input.customerId,
@@ -271,15 +345,34 @@ export class LoanRepository {
           tierAtApply: input.tierAtApply,
           status: initialStatus,
           decisionReason: input.initialDecisionReason,
-          decidedAt: initialStatus === 'SUBMITTED' ? null : new Date(),
-          decidedById: initialStatus === 'SUBMITTED' ? null : input.submittedById,
+          decidedAt: initialStatus === "SUBMITTED" ? null : new Date(),
+          decidedById:
+            initialStatus === "SUBMITTED" ? null : input.submittedById,
           submittedById: input.submittedById,
           vehicleId,
           propertyId,
           applicationSelfieUrl: input.applicationSelfieUrl,
           restructuredFromId: input.restructuredFromId,
+          isRepeat,
+          currentApprovalStep: willUseChain ? 1 : null,
         },
       });
+
+      if (willUseChain) {
+        for (const step of approvalSteps) {
+          await tx.loanApproval.create({
+            data: {
+              loanId: created.id,
+              stepOrder: step.order,
+              stepLabel: step.label,
+              requiredPermission: step.requiredPermission,
+              status: "PENDING",
+            },
+          });
+        }
+      }
+
+      return created;
     });
   }
 
@@ -291,6 +384,33 @@ export class LoanRepository {
         decisionReason: input.reason,
         decidedAt: new Date(),
         decidedById: input.decidedById,
+      },
+    });
+  }
+
+  /**
+   * Persist a face-match score computed client-side. Five columns get
+   * written atomically; the caller is responsible for any audit log
+   * row when `passed === false`. The shape is intentionally narrow so
+   * the API can validate inputs in one place.
+   */
+  async setSelfieMatch(
+    id: string,
+    input: {
+      score: number;
+      distance: number;
+      passed: boolean;
+      model: string;
+    },
+  ): Promise<LoanApplication> {
+    return this.prisma.loanApplication.update({
+      where: { id },
+      data: {
+        selfieMatchScore: input.score,
+        selfieMatchDistance: input.distance,
+        selfieMatchPassed: input.passed,
+        selfieMatchModel: input.model,
+        selfieMatchedAt: new Date(),
       },
     });
   }
@@ -309,8 +429,8 @@ export class LoanRepository {
         where: { id },
         include: { product: true },
       });
-      if (!loan) throw new Error('Loan not found');
-      if (loan.status !== 'APPROVED') {
+      if (!loan) throw new Error("Loan not found");
+      if (loan.status !== "APPROVED") {
         throw new Error(`Cannot disburse from status ${loan.status}`);
       }
       const product = loan.product;
@@ -318,10 +438,15 @@ export class LoanRepository {
       const annual = Number(loan.annualInterestRate);
       const method = product.interestMethod as MethodString;
       const frequency = product.paymentFrequency as FreqString;
-      const schedule = computeAmortizationFor(principal, annual, loan.termMonths, {
-        method,
-        frequency,
-      });
+      const schedule = computeAmortizationFor(
+        principal,
+        annual,
+        loan.termMonths,
+        {
+          method,
+          frequency,
+        },
+      );
 
       const today = new Date();
       const periodInc = daysBetweenInstallments(frequency);
@@ -353,14 +478,40 @@ export class LoanRepository {
         { postedById: input.disbursedById, tx },
       );
 
-      return tx.loanApplication.update({
+      const updated = await tx.loanApplication.update({
         where: { id },
         data: {
-          status: 'ACTIVE',
+          status: "ACTIVE",
           disbursedAt: today,
           disbursedById: input.disbursedById,
         },
       });
+
+      // FRD §3.5 — Lease-to-Own: when the product is a lease, snapshot a
+      // LeaseAgreement so the residual buyout + pull-out flows have somewhere
+      // to attach. Employee scoping is inferred from the customer's
+      // employmentStatus until we have a stronger "company employee" signal.
+      if (product.isLease) {
+        const residualFraction = Number(product.residualValueFraction ?? 0);
+        const residual = round2(principal * residualFraction);
+        const customer = await tx.customer.findUnique({
+          where: { id: loan.customerId },
+        });
+        // Treat any EMPLOYED customer as employee for now. A future phase
+        // can promote this to an explicit "isCompanyEmployee" flag.
+        const isEmployee = customer?.employmentStatus === "EMPLOYED";
+        await tx.leaseAgreement.upsert({
+          where: { loanId: loan.id },
+          create: {
+            loanId: loan.id,
+            residualValue: residual,
+            isEmployee,
+          },
+          update: {},
+        });
+      }
+
+      return updated;
     });
   }
 
@@ -368,10 +519,15 @@ export class LoanRepository {
    * Record a payment + auto-post journal entry. Allocation: interest portion
    * of upcoming installments first, then principal.
    */
-  async recordPayment(loanId: string, input: RecordPaymentInput): Promise<LoanPayment> {
+  async recordPayment(
+    loanId: string,
+    input: RecordPaymentInput,
+  ): Promise<LoanPayment> {
     return this.prisma.$transaction(async (tx) => {
-      const loan = await tx.loanApplication.findUnique({ where: { id: loanId } });
-      if (!loan) throw new Error('Loan not found');
+      const loan = await tx.loanApplication.findUnique({
+        where: { id: loanId },
+      });
+      if (!loan) throw new Error("Loan not found");
 
       const payment = await tx.loanPayment.create({
         data: {
@@ -385,7 +541,7 @@ export class LoanRepository {
 
       const open = await tx.loanSchedule.findMany({
         where: { loanId, paidInFullAt: null },
-        orderBy: { installmentNo: 'asc' },
+        orderBy: { installmentNo: "asc" },
       });
 
       const allocation = allocatePayment(
@@ -402,7 +558,10 @@ export class LoanRepository {
         remaining -= Number(inst.totalDue);
         await tx.loanSchedule.update({
           where: { id: inst.id },
-          data: { paidInFullAt: input.paidOn, principalPaid: inst.principalDue },
+          data: {
+            paidInFullAt: input.paidOn,
+            principalPaid: inst.principalDue,
+          },
         });
       }
 
@@ -425,7 +584,7 @@ export class LoanRepository {
       if (stillOpen === 0) {
         await tx.loanApplication.update({
           where: { id: loanId },
-          data: { status: 'CLOSED', closedAt: new Date() },
+          data: { status: "CLOSED", closedAt: new Date() },
         });
       }
       return payment;
@@ -452,18 +611,20 @@ export class LoanRepository {
       if (!row) continue;
       try {
         let loanId = row.loanId ?? null;
-        let number = row.loanNumber ?? '';
+        let number = row.loanNumber ?? "";
         if (!loanId && row.loanNumber) {
           const loan = await this.prisma.loanApplication.findUnique({
             where: { number: row.loanNumber },
             select: { id: true, number: true },
           });
-          if (!loan) throw new Error(`Loan number not found: ${row.loanNumber}`);
+          if (!loan)
+            throw new Error(`Loan number not found: ${row.loanNumber}`);
           loanId = loan.id;
           number = loan.number;
         }
-        if (!loanId) throw new Error('Each row needs loanId or loanNumber.');
-        if (!row.amount || row.amount <= 0) throw new Error('Amount must be > 0.');
+        if (!loanId) throw new Error("Each row needs loanId or loanNumber.");
+        if (!row.amount || row.amount <= 0)
+          throw new Error("Amount must be > 0.");
 
         const payment = await this.recordPayment(loanId, {
           amount: row.amount,
@@ -481,7 +642,7 @@ export class LoanRepository {
       } catch (err) {
         out.push({
           index: i,
-          loanNumber: row.loanNumber ?? row.loanId ?? '?',
+          loanNumber: row.loanNumber ?? row.loanId ?? "?",
           loanId: row.loanId ?? null,
           ok: false,
           error: (err as Error).message,
@@ -506,8 +667,8 @@ export class LoanRepository {
           schedule: { where: { paidInFullAt: null } },
         },
       });
-      if (!loan) throw new Error('Loan not found');
-      if (loan.status !== 'ACTIVE' && loan.status !== 'DISBURSED') {
+      if (!loan) throw new Error("Loan not found");
+      if (loan.status !== "ACTIVE" && loan.status !== "DISBURSED") {
         throw new Error(`Cannot close early from status ${loan.status}`);
       }
 
@@ -530,7 +691,7 @@ export class LoanRepository {
           loanId,
           amount: input.settlementAmount,
           paidOn: new Date(),
-          reference: input.reference ?? 'EARLY_SETTLEMENT',
+          reference: input.reference ?? "EARLY_SETTLEMENT",
           recordedById: input.closedById,
         },
       });
@@ -572,9 +733,15 @@ export class LoanRepository {
 
       const updated = await tx.loanApplication.update({
         where: { id: loanId },
-        data: { status: 'CLOSED', closedAt: new Date() },
+        data: { status: "CLOSED", closedAt: new Date() },
       });
-      return { loan: updated, payment, remainingPrincipal, fee, totalSettled: due };
+      return {
+        loan: updated,
+        payment,
+        remainingPrincipal,
+        fee,
+        totalSettled: due,
+      };
     });
   }
 
@@ -605,12 +772,14 @@ export class LoanRepository {
           customer: true,
         },
       });
-      if (!original) throw new Error('Loan not found');
-      if (!['ACTIVE', 'DISBURSED', 'DEFAULTED'].includes(original.status)) {
+      if (!original) throw new Error("Loan not found");
+      if (!["ACTIVE", "DISBURSED", "DEFAULTED"].includes(original.status)) {
         throw new Error(`Cannot restructure from status ${original.status}`);
       }
       if (original.restructuredFromId) {
-        throw new Error('Cannot chain restructures off the same row; restructure the most recent loan in the chain.');
+        throw new Error(
+          "Cannot chain restructures off the same row; restructure the most recent loan in the chain.",
+        );
       }
 
       const remainingPrincipal = original.schedule.reduce(
@@ -631,7 +800,7 @@ export class LoanRepository {
       const updatedOriginal = await tx.loanApplication.update({
         where: { id: originalId },
         data: {
-          status: 'RESTRUCTURED' as LoanStatus,
+          status: "RESTRUCTURED" as LoanStatus,
           closedAt: new Date(),
         },
       });
@@ -648,7 +817,7 @@ export class LoanRepository {
         creditScoreAtApply: original.creditScoreAtApply,
         tierAtApply: original.tierAtApply,
         submittedById: input.restructuredById,
-        initialStatus: 'APPROVED',
+        initialStatus: "APPROVED",
         initialDecisionReason: `Restructure of ${original.number} (remaining ${remainingPrincipal.toFixed(2)})`,
         restructuredFromId: original.id,
       });
@@ -656,8 +825,13 @@ export class LoanRepository {
       // Post the settlement journal entry.
       const topUp = round2(input.principal - remainingPrincipal);
       const writeDown = round2(remainingPrincipal - input.principal);
-      const { ACCOUNT_CODES, buildEntry } = await import('@loan/accounting');
-      const lines: Array<{ accountCode: string; debit: number; credit: number; memo?: string }> = [
+      const { ACCOUNT_CODES, buildEntry } = await import("@loan/accounting");
+      const lines: Array<{
+        accountCode: string;
+        debit: number;
+        credit: number;
+        memo?: string;
+      }> = [
         {
           accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
           debit: input.principal,
@@ -677,7 +851,7 @@ export class LoanRepository {
           accountCode: ACCOUNT_CODES.CASH,
           debit: 0,
           credit: topUp,
-          memo: 'Top-up disbursement',
+          memo: "Top-up disbursement",
         });
       } else if (writeDown > 0) {
         // We forgave some principal — Dr Bad Debt to balance.
@@ -685,14 +859,14 @@ export class LoanRepository {
           accountCode: ACCOUNT_CODES.BAD_DEBT_EXPENSE,
           debit: writeDown,
           credit: 0,
-          memo: 'Partial write-down at restructure',
+          memo: "Partial write-down at restructure",
         });
       }
       await this.accounting.postIfAbsent(
         buildEntry({
           entryDate: new Date(),
-          source: 'MANUAL',
-          sourceRefType: 'LoanRestructure',
+          source: "MANUAL",
+          sourceRefType: "LoanRestructure",
           sourceRefId: replacement.id,
           memo: `Restructure ${original.number} → ${replacement.number}`,
           lines,
@@ -721,8 +895,8 @@ export class LoanRepository {
         where: { id },
         include: { schedule: { where: { paidInFullAt: null } } },
       });
-      if (!loan) throw new Error('Loan not found');
-      if (loan.status === 'WRITTEN_OFF' || loan.status === 'CLOSED') {
+      if (!loan) throw new Error("Loan not found");
+      if (loan.status === "WRITTEN_OFF" || loan.status === "CLOSED") {
         throw new Error(`Cannot write off from status ${loan.status}`);
       }
 
@@ -743,12 +917,12 @@ export class LoanRepository {
       }
 
       if (amount > 0) {
-        const { ACCOUNT_CODES, buildEntry } = await import('@loan/accounting');
+        const { ACCOUNT_CODES, buildEntry } = await import("@loan/accounting");
         await this.accounting.postIfAbsent(
           buildEntry({
             entryDate: new Date(),
-            source: 'MANUAL',
-            sourceRefType: 'LoanWriteOff',
+            source: "MANUAL",
+            sourceRefType: "LoanWriteOff",
             sourceRefId: loan.id,
             memo: `Write-off ${loan.number}: ${input.reason}`,
             lines: [
@@ -773,7 +947,7 @@ export class LoanRepository {
       const updated = await tx.loanApplication.update({
         where: { id },
         data: {
-          status: 'WRITTEN_OFF' as LoanStatus,
+          status: "WRITTEN_OFF" as LoanStatus,
           writeOffAmount: amount,
           writeOffReason: input.reason,
           writtenOffAt: new Date(),
@@ -785,6 +959,188 @@ export class LoanRepository {
     });
   }
 
+  // ─── Penalty waive (FRD §3.3) ─────────────────────────────────────────
+  //
+  // Daily LATE_FEE_ACCRUAL postings are Dr Loans Receivable / Cr Fee Income.
+  // The sum of Fee Income credits across all LATE_FEE_ACCRUAL entries for
+  // this loan, minus the sum of prior waivedAmount, is the "current accrued
+  // penalty" the UI shows. Waiving posts a reversing entry for the waived
+  // portion (Dr Fee Income / Cr Loans Receivable).
+
+  /**
+   * Current outstanding penalty for a loan = total late-fee accruals
+   * minus prior waivers. Cheap enough to compute on demand from JE rows;
+   * we keep no running counter to avoid drift.
+   */
+  async accruedPenaltiesFor(loanId: string): Promise<{
+    originalPenalty: number;
+    waivedToDate: number;
+    outstanding: number;
+  }> {
+    const loan = await this.prisma.loanApplication.findUnique({
+      where: { id: loanId },
+      include: { schedule: { select: { id: true } } },
+    });
+    if (!loan) throw new Error("Loan not found");
+    const scheduleIds = loan.schedule.map((s) => s.id);
+    if (scheduleIds.length === 0) {
+      return { originalPenalty: 0, waivedToDate: 0, outstanding: 0 };
+    }
+    // Look up all LATE_FEE_ACCRUAL entries whose sourceRefId starts with any
+    // of this loan's schedule ids (the daily key is appended after a colon).
+    const accruals = await this.prisma.journalEntry.findMany({
+      where: {
+        source: "LATE_FEE_ACCRUAL",
+        sourceRefType: "LoanScheduleLateFee",
+        OR: scheduleIds.map((sid) => ({
+          sourceRefId: { startsWith: `${sid}:` },
+        })),
+      },
+      include: { lines: { include: { account: true } } },
+    });
+    const originalPenalty = accruals.reduce((sum, e) => {
+      const feeLine = e.lines.find((l) => l.account.code === "4100");
+      return sum + (feeLine ? Number(feeLine.credit) : 0);
+    }, 0);
+
+    const waivers = await this.prisma.penaltyWaiver.findMany({
+      where: { loanId },
+      select: { waivedAmount: true },
+    });
+    const waivedToDate = waivers.reduce(
+      (sum, w) => sum + Number(w.waivedAmount),
+      0,
+    );
+
+    return {
+      originalPenalty: round2(originalPenalty),
+      waivedToDate: round2(waivedToDate),
+      outstanding: round2(originalPenalty - waivedToDate),
+    };
+  }
+
+  /**
+   * Waive part (or all) of the outstanding penalty. Posts a reversing
+   * journal entry and creates a PenaltyWaiver record snapshot. Gated by
+   * `loans.waive_penalty` permission at the route layer.
+   */
+  async waivePenalty(
+    loanId: string,
+    input: {
+      waivedAmount: number;
+      reason: string;
+      waivedById: string;
+    },
+  ): Promise<{
+    waiver: { id: string; originalPenalty: number; negotiatedPenalty: number };
+    journalEntryId: string;
+  }> {
+    return this.prisma.$transaction(async (tx) => {
+      const loan = await tx.loanApplication.findUnique({
+        where: { id: loanId },
+      });
+      if (!loan) throw new Error("Loan not found");
+
+      // Reuse the public method's logic but read inside the txn so the
+      // snapshot stays consistent if accruals are running concurrently.
+      const scheduleRows = await tx.loanSchedule.findMany({
+        where: { loanId },
+        select: { id: true },
+      });
+      const scheduleIds = scheduleRows.map((s) => s.id);
+      const accruals =
+        scheduleIds.length === 0
+          ? []
+          : await tx.journalEntry.findMany({
+              where: {
+                source: "LATE_FEE_ACCRUAL",
+                sourceRefType: "LoanScheduleLateFee",
+                OR: scheduleIds.map((sid) => ({
+                  sourceRefId: { startsWith: `${sid}:` },
+                })),
+              },
+              include: { lines: { include: { account: true } } },
+            });
+      const originalAccrued = accruals.reduce((sum, e) => {
+        const feeLine = e.lines.find((l) => l.account.code === "4100");
+        return sum + (feeLine ? Number(feeLine.credit) : 0);
+      }, 0);
+      const priorWaivers = await tx.penaltyWaiver.findMany({
+        where: { loanId },
+        select: { waivedAmount: true },
+      });
+      const waivedSoFar = priorWaivers.reduce(
+        (s, w) => s + Number(w.waivedAmount),
+        0,
+      );
+      const originalPenalty = round2(originalAccrued - waivedSoFar);
+
+      const waivedAmount = round2(input.waivedAmount);
+      if (waivedAmount <= 0) throw new Error("Waive amount must be > 0");
+      if (waivedAmount > originalPenalty + 0.005) {
+        throw new Error(
+          `Waive amount ${waivedAmount} exceeds outstanding penalty ${originalPenalty}`,
+        );
+      }
+      const negotiatedPenalty = round2(originalPenalty - waivedAmount);
+
+      // Create the waiver row first (so the journal entry's sourceRefId
+      // can reference it for idempotency).
+      const waiver = await tx.penaltyWaiver.create({
+        data: {
+          loanId,
+          originalPenalty,
+          waivedAmount,
+          negotiatedPenalty,
+          reason: input.reason.slice(0, 500),
+          waivedById: input.waivedById,
+        },
+      });
+
+      // Lazy-import to keep the accounting lib out of the cold path of
+      // every db package consumer.
+      const { penaltyWaiveEntry } = await import("@loan/accounting");
+      const entry = penaltyWaiveEntry({
+        waiverId: waiver.id,
+        loanId: loan.id,
+        loanNumber: loan.number,
+        waivedAmount,
+        waivedOn: new Date(),
+        reason: input.reason,
+      });
+      const result = await this.accounting.postIfAbsent(entry, {
+        postedById: input.waivedById,
+        tx,
+      });
+
+      // Link the waiver to the journal entry now that we have its id.
+      await tx.penaltyWaiver.update({
+        where: { id: waiver.id },
+        data: { journalEntryId: result.entry.id },
+      });
+
+      return {
+        waiver: {
+          id: waiver.id,
+          originalPenalty,
+          negotiatedPenalty,
+        },
+        journalEntryId: result.entry.id,
+      };
+    });
+  }
+
+  /** List historical waivers on a loan (drawer / audit-trail surface). */
+  async listPenaltyWaivers(loanId: string) {
+    return this.prisma.penaltyWaiver.findMany({
+      where: { loanId },
+      orderBy: { waivedAt: "desc" },
+      include: {
+        waivedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+  }
+
   /**
    * Internal helper — same logic as `apply()` but runs inside an existing
    * transaction. Extracted so `restructure()` can chain.
@@ -793,12 +1149,14 @@ export class LoanRepository {
     tx: Prisma.TransactionClient,
     input: LoanApplyInput,
   ): Promise<LoanApplication> {
-    const product = await tx.loanProduct.findUnique({ where: { code: input.productCode } });
+    const product = await tx.loanProduct.findUnique({
+      where: { code: input.productCode },
+    });
     if (!product || !product.active) {
       throw new Error(`Loan product ${input.productCode} is not available.`);
     }
     const number = await this.nextApplicationNumber(tx);
-    const initialStatus = (input.initialStatus ?? 'SUBMITTED') as LoanStatus;
+    const initialStatus = (input.initialStatus ?? "SUBMITTED") as LoanStatus;
     return tx.loanApplication.create({
       data: {
         number,
@@ -812,8 +1170,8 @@ export class LoanRepository {
         tierAtApply: input.tierAtApply,
         status: initialStatus,
         decisionReason: input.initialDecisionReason,
-        decidedAt: initialStatus === 'SUBMITTED' ? null : new Date(),
-        decidedById: initialStatus === 'SUBMITTED' ? null : input.submittedById,
+        decidedAt: initialStatus === "SUBMITTED" ? null : new Date(),
+        decidedById: initialStatus === "SUBMITTED" ? null : input.submittedById,
         submittedById: input.submittedById,
         restructuredFromId: input.restructuredFromId,
       },
@@ -821,21 +1179,24 @@ export class LoanRepository {
   }
 
   private async nextApplicationNumber(
-    client: PrismaClient | Parameters<Parameters<PrismaClient['$transaction']>[0]>[0] = this.prisma,
+    client:
+      | PrismaClient
+      | Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0] = this
+      .prisma,
   ): Promise<string> {
     const year = new Date().getFullYear();
     const yearStart = new Date(year, 0, 1);
     const yearEnd = new Date(year + 1, 0, 1);
     const last = await client.loanApplication.findFirst({
       where: { submittedAt: { gte: yearStart, lt: yearEnd } },
-      orderBy: { submittedAt: 'desc' },
+      orderBy: { submittedAt: "desc" },
     });
     let seq = 1;
     if (last) {
       const match = /LN-\d{4}-(\d+)/.exec(last.number);
       if (match) seq = Number(match[1]) + 1;
     }
-    return `LN-${year}-${String(seq).padStart(6, '0')}`;
+    return `LN-${year}-${String(seq).padStart(6, "0")}`;
   }
 }
 
@@ -844,7 +1205,7 @@ export class LoanRepository {
 function toConfig(p: LoanProduct): LoanProductConfig & { defaultRate: number } {
   return {
     code: p.code,
-    collateralKind: p.collateralKind as LoanProductConfig['collateralKind'],
+    collateralKind: p.collateralKind as LoanProductConfig["collateralKind"],
     minPrincipal: Number(p.minPrincipal),
     maxPrincipal: Number(p.maxPrincipal),
     minTermMonths: p.minTermMonths,
@@ -852,15 +1213,19 @@ function toConfig(p: LoanProduct): LoanProductConfig & { defaultRate: number } {
     minRate: Number(p.minRate),
     maxRate: Number(p.maxRate),
     maxLoanToValue: p.maxLoanToValue == null ? null : Number(p.maxLoanToValue),
-    rateByTier: (p.rateByTier as LoanProductConfig['rateByTier']) ?? null,
-    ltvByTier: (p.ltvByTier as LoanProductConfig['ltvByTier']) ?? null,
+    rateByTier: (p.rateByTier as LoanProductConfig["rateByTier"]) ?? null,
+    ltvByTier: (p.ltvByTier as LoanProductConfig["ltvByTier"]) ?? null,
     defaultRate: Number(p.defaultRate),
   };
 }
 
-function nextDueDate(start: Date, installmentNo: number, inc: number | 'MONTH'): Date {
+function nextDueDate(
+  start: Date,
+  installmentNo: number,
+  inc: number | "MONTH",
+): Date {
   const due = new Date(start);
-  if (inc === 'MONTH') {
+  if (inc === "MONTH") {
     due.setMonth(due.getMonth() + installmentNo);
   } else {
     due.setDate(due.getDate() + inc * installmentNo);

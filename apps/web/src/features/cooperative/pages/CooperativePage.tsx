@@ -14,7 +14,7 @@ import {
   useFundWithdrawals,
   useOtherIncome,
   useSavingsTxns,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -38,8 +38,8 @@ import {
   SkeletonCard,
   cn,
   useToast,
-} from '@loan/ui';
-import { formatDate, formatMoney } from '@loan/shared-utils';
+} from "@loan/ui";
+import { formatDate, formatMoney } from "@loan/shared-utils";
 import {
   Banknote,
   Building2,
@@ -51,12 +51,13 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
-} from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+} from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 
-import { CustomerPicker } from '../components/CustomerPicker';
-import { MemberLedgerLink } from '../components/MemberLedgerDrawer';
-import { JournalEntryLink } from '../../accounting';
+import { CustomerPicker } from "../components/CustomerPicker";
+import { MemberLedgerLink } from "../components/MemberLedgerDrawer";
+import { JournalEntryLink } from "../../accounting";
+import { findArticle, TourButton } from "../../help";
 
 /**
  * Single-page cooperative module. Horizontal tabs for each entity;
@@ -69,61 +70,68 @@ import { JournalEntryLink } from '../../accounting';
  */
 
 const FUND_BUCKETS = [
-  'CAPITAL_BUILD_UP',
-  'MORTUARY_FUND',
-  'EMERGENCY_FUND',
-  'SAVINGS',
-  'BIG_BROTHER',
-  'GENERAL',
-  'OTHER',
+  "CAPITAL_BUILD_UP",
+  "MORTUARY_FUND",
+  "EMERGENCY_FUND",
+  "SAVINGS",
+  "BIG_BROTHER",
+  "GENERAL",
+  "OTHER",
 ] as const;
 
 type Tab =
-  | 'contributions'
-  | 'savings'
-  | 'funds'
-  | 'withdrawals'
-  | 'expenses'
-  | 'income'
-  | 'big-brother';
+  | "contributions"
+  | "savings"
+  | "funds"
+  | "withdrawals"
+  | "expenses"
+  | "income"
+  | "big-brother";
 
 const TABS: Array<{ key: Tab; label: string; icon: typeof PiggyBank }> = [
-  { key: 'contributions', label: 'Contributions', icon: HandCoins },
-  { key: 'savings', label: 'Savings', icon: PiggyBank },
-  { key: 'funds', label: 'Funds', icon: TrendingUp },
-  { key: 'withdrawals', label: 'Withdrawals', icon: TrendingDown },
-  { key: 'expenses', label: 'Expenses', icon: Receipt },
-  { key: 'income', label: 'Other income', icon: Sparkles },
-  { key: 'big-brother', label: 'Big Brother', icon: Building2 },
+  { key: "contributions", label: "Contributions", icon: HandCoins },
+  { key: "savings", label: "Savings", icon: PiggyBank },
+  { key: "funds", label: "Funds", icon: TrendingUp },
+  { key: "withdrawals", label: "Withdrawals", icon: TrendingDown },
+  { key: "expenses", label: "Expenses", icon: Receipt },
+  { key: "income", label: "Other income", icon: Sparkles },
+  { key: "big-brother", label: "Big Brother", icon: Building2 },
 ];
 
 export function CooperativePage() {
-  const [tab, setTab] = useState<Tab>('contributions');
+  const [tab, setTab] = useState<Tab>("contributions");
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Users className="h-4 w-4 text-sky-300" />
             Cooperative modules
           </CardTitle>
+          <TourButton
+            tourId="cooperative"
+            steps={findArticle("cooperative")?.tour ?? []}
+          />
         </CardHeader>
         <CardContent>
           <p className="text-xs text-white/55 mb-3">
-            Member dues, savings, fund movements, expenses, and external
-            capital — every entry auto-posts to the general ledger.
+            Member dues, savings, fund movements, expenses, and external capital
+            — every entry auto-posts to the general ledger.
           </p>
-          <div className="flex flex-wrap gap-1 border-b border-white/10 pb-2">
+          <div
+            className="flex flex-wrap gap-1 border-b border-white/10 pb-2"
+            data-tour="coop-tabs"
+          >
             {TABS.map((t) => (
               <button
                 key={t.key}
                 type="button"
                 onClick={() => setTab(t.key)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors',
+                  "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors",
                   tab === t.key
-                    ? 'bg-sky-500/15 text-white border border-sky-400/30'
-                    : 'text-white/65 hover:bg-white/[0.04] hover:text-white border border-transparent',
+                    ? "bg-sky-500/15 text-white border border-sky-400/30"
+                    : "text-white/65 hover:bg-white/[0.04] hover:text-white border border-transparent",
                 )}
               >
                 <t.icon className="h-3 w-3" />
@@ -134,13 +142,13 @@ export function CooperativePage() {
         </CardContent>
       </Card>
 
-      {tab === 'contributions' && <ContributionsTab />}
-      {tab === 'savings' && <SavingsTab />}
-      {tab === 'funds' && <FundsTab />}
-      {tab === 'withdrawals' && <WithdrawalsTab />}
-      {tab === 'expenses' && <ExpensesTab />}
-      {tab === 'income' && <OtherIncomeTab />}
-      {tab === 'big-brother' && <BigBrotherTab />}
+      {tab === "contributions" && <ContributionsTab />}
+      {tab === "savings" && <SavingsTab />}
+      {tab === "funds" && <FundsTab />}
+      {tab === "withdrawals" && <WithdrawalsTab />}
+      {tab === "expenses" && <ExpensesTab />}
+      {tab === "income" && <OtherIncomeTab />}
+      {tab === "big-brother" && <BigBrotherTab />}
     </div>
   );
 }
@@ -153,7 +161,7 @@ function useCustomerName() {
     for (const c of data ?? []) {
       map.set(c.id, `${c.firstName} ${c.lastName}`);
     }
-    return (id: string | null | undefined) => (id ? map.get(id) ?? '—' : '—');
+    return (id: string | null | undefined) => (id ? (map.get(id) ?? "—") : "—");
   }, [data]);
 }
 
@@ -165,18 +173,18 @@ function ContributionsTab() {
   const nameOf = useCustomerName();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [customerId, setCustomerId] = useState('');
+  const [customerId, setCustomerId] = useState("");
   const [cbu, setCbu] = useState(0);
   const [mortuary, setMortuary] = useState(0);
   const [emergency, setEmergency] = useState(0);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setCustomerId('');
+    setCustomerId("");
     setCbu(0);
     setMortuary(0);
     setEmergency(0);
-    setNotes('');
+    setNotes("");
     setOpen(false);
   };
 
@@ -184,11 +192,11 @@ function ContributionsTab() {
 
   const onSubmit = async () => {
     if (!customerId) {
-      toast.error('Pick a member');
+      toast.error("Pick a member");
       return;
     }
     if (total <= 0) {
-      toast.error('At least one bucket must be > 0');
+      toast.error("At least one bucket must be > 0");
       return;
     }
     try {
@@ -199,10 +207,10 @@ function ContributionsTab() {
         emergencyFund: emergency,
         notes: notes || undefined,
       });
-      toast.success('Contribution recorded');
+      toast.success("Contribution recorded");
       reset();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -228,20 +236,43 @@ function ContributionsTab() {
         </thead>
         <tbody className="divide-y divide-white/5">
           {(list.data ?? []).map((c) => {
-            const t = Number(c.capitalBuildUp) + Number(c.mortuaryFund) + Number(c.emergencyFund);
+            const t =
+              Number(c.capitalBuildUp) +
+              Number(c.mortuaryFund) +
+              Number(c.emergencyFund);
             return (
               <tr key={c.id} className="hover:bg-white/[0.03]">
-                <td className="py-2 px-2 text-xs">{formatDate(c.contributedAt)}</td>
-                <td className="py-2 px-2">
-                  <MemberLedgerLink customerId={c.customerId}>{nameOf(c.customerId)}</MemberLedgerLink>
+                <td className="py-2 px-2 text-xs">
+                  {formatDate(c.contributedAt)}
                 </td>
-                <td className="py-2 px-2 text-right font-mono text-xs">{formatMoney(Number(c.capitalBuildUp))}</td>
-                <td className="py-2 px-2 text-right font-mono text-xs">{formatMoney(Number(c.mortuaryFund))}</td>
-                <td className="py-2 px-2 text-right font-mono text-xs">{formatMoney(Number(c.emergencyFund))}</td>
-                <td className="py-2 px-2 text-right font-mono font-semibold">{formatMoney(t)}</td>
-                <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">{c.notes ?? '—'}</td>
                 <td className="py-2 px-2">
-                  {c.journalEntryId ? (<JournalEntryLink id={c.journalEntryId}><Badge variant="success">Posted</Badge></JournalEntryLink>) : (<Badge variant="muted">—</Badge>)}
+                  <MemberLedgerLink customerId={c.customerId}>
+                    {nameOf(c.customerId)}
+                  </MemberLedgerLink>
+                </td>
+                <td className="py-2 px-2 text-right font-mono text-xs">
+                  {formatMoney(Number(c.capitalBuildUp))}
+                </td>
+                <td className="py-2 px-2 text-right font-mono text-xs">
+                  {formatMoney(Number(c.mortuaryFund))}
+                </td>
+                <td className="py-2 px-2 text-right font-mono text-xs">
+                  {formatMoney(Number(c.emergencyFund))}
+                </td>
+                <td className="py-2 px-2 text-right font-mono font-semibold">
+                  {formatMoney(t)}
+                </td>
+                <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+                  {c.notes ?? "—"}
+                </td>
+                <td className="py-2 px-2">
+                  {c.journalEntryId ? (
+                    <JournalEntryLink id={c.journalEntryId}>
+                      <Badge variant="success">Posted</Badge>
+                    </JournalEntryLink>
+                  ) : (
+                    <Badge variant="muted">—</Badge>
+                  )}
                 </td>
               </tr>
             );
@@ -252,29 +283,59 @@ function ContributionsTab() {
       {open && (
         <Dialog open onOpenChange={(o) => !o && reset()}>
           <DialogContent>
-            <DialogHeader><DialogTitle>New contribution</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>New contribution</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <div>
                 <Label>Member</Label>
-                <CustomerPicker value={customerId} onChange={setCustomerId} required />
+                <CustomerPicker
+                  value={customerId}
+                  onChange={setCustomerId}
+                  required
+                />
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <NumberField label="Capital Build-Up" value={cbu} onChange={setCbu} />
-                <NumberField label="Mortuary Fund" value={mortuary} onChange={setMortuary} />
-                <NumberField label="Emergency Fund" value={emergency} onChange={setEmergency} />
+                <NumberField
+                  label="Capital Build-Up"
+                  value={cbu}
+                  onChange={setCbu}
+                />
+                <NumberField
+                  label="Mortuary Fund"
+                  value={mortuary}
+                  onChange={setMortuary}
+                />
+                <NumberField
+                  label="Emergency Fund"
+                  value={emergency}
+                  onChange={setEmergency}
+                />
               </div>
               <div className="text-xs text-white/55">
-                Total: <span className="font-mono text-white">{formatMoney(total)}</span> — books DR Cash, CR each bucket.
+                Total:{" "}
+                <span className="font-mono text-white">
+                  {formatMoney(total)}
+                </span>{" "}
+                — books DR Cash, CR each bucket.
               </div>
               <div>
                 <Label>Notes (optional)</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancel</Button>
-              <Button onClick={onSubmit} disabled={create.isPending || total <= 0}>
-                {create.isPending ? 'Posting…' : 'Save'}
+              <Button variant="outline" onClick={reset}>
+                Cancel
+              </Button>
+              <Button
+                onClick={onSubmit}
+                disabled={create.isPending || total <= 0}
+              >
+                {create.isPending ? "Posting…" : "Save"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -292,35 +353,45 @@ function SavingsTab() {
   const nameOf = useCustomerName();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [customerId, setCustomerId] = useState('');
+  const [customerId, setCustomerId] = useState("");
   const [amount, setAmount] = useState(0);
-  const [kind, setKind] = useState<'DEPOSIT' | 'WITHDRAWAL'>('DEPOSIT');
-  const [notes, setNotes] = useState('');
+  const [kind, setKind] = useState<"DEPOSIT" | "WITHDRAWAL">("DEPOSIT");
+  const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setCustomerId('');
+    setCustomerId("");
     setAmount(0);
-    setKind('DEPOSIT');
-    setNotes('');
+    setKind("DEPOSIT");
+    setNotes("");
     setOpen(false);
   };
 
   const onSubmit = async () => {
     if (!customerId || amount <= 0) {
-      toast.error('Member + amount required');
+      toast.error("Member + amount required");
       return;
     }
     try {
-      await create.mutateAsync({ customerId, amount, kind, notes: notes || undefined });
+      await create.mutateAsync({
+        customerId,
+        amount,
+        kind,
+        notes: notes || undefined,
+      });
       toast.success(`Savings ${kind.toLowerCase()} recorded`);
       reset();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   return (
-    <ListCard title="Savings" onNew={() => setOpen(true)} isLoading={list.isLoading} empty={(list.data ?? []).length === 0}>
+    <ListCard
+      title="Savings"
+      onNew={() => setOpen(true)}
+      isLoading={list.isLoading}
+      empty={(list.data ?? []).length === 0}
+    >
       <table className="w-full text-sm">
         <thead className="text-left text-xs uppercase tracking-wider text-white/45">
           <tr>
@@ -337,17 +408,31 @@ function SavingsTab() {
             <tr key={s.id} className="hover:bg-white/[0.03]">
               <td className="py-2 px-2 text-xs">{formatDate(s.txnDate)}</td>
               <td className="py-2 px-2">
-                <MemberLedgerLink customerId={s.customerId}>{nameOf(s.customerId)}</MemberLedgerLink>
+                <MemberLedgerLink customerId={s.customerId}>
+                  {nameOf(s.customerId)}
+                </MemberLedgerLink>
               </td>
               <td className="py-2 px-2">
-                <Badge variant={s.kind === 'DEPOSIT' ? 'success' : 'muted'}>{s.kind}</Badge>
+                <Badge variant={s.kind === "DEPOSIT" ? "success" : "muted"}>
+                  {s.kind}
+                </Badge>
               </td>
-              <td className={`py-2 px-2 text-right font-mono ${s.kind === 'DEPOSIT' ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <td
+                className={`py-2 px-2 text-right font-mono ${s.kind === "DEPOSIT" ? "text-emerald-300" : "text-rose-300"}`}
+              >
                 {formatMoney(Number(s.amount))}
               </td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">{s.notes ?? '—'}</td>
+              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+                {s.notes ?? "—"}
+              </td>
               <td className="py-2 px-2">
-                {s.journalEntryId ? (<JournalEntryLink id={s.journalEntryId}><Badge variant="success">Posted</Badge></JournalEntryLink>) : (<Badge variant="muted">—</Badge>)}
+                {s.journalEntryId ? (
+                  <JournalEntryLink id={s.journalEntryId}>
+                    <Badge variant="success">Posted</Badge>
+                  </JournalEntryLink>
+                ) : (
+                  <Badge variant="muted">—</Badge>
+                )}
               </td>
             </tr>
           ))}
@@ -357,16 +442,25 @@ function SavingsTab() {
       {open && (
         <Dialog open onOpenChange={(o) => !o && reset()}>
           <DialogContent>
-            <DialogHeader><DialogTitle>New savings transaction</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>New savings transaction</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <div>
                 <Label>Member</Label>
-                <CustomerPicker value={customerId} onChange={setCustomerId} required />
+                <CustomerPicker
+                  value={customerId}
+                  onChange={setCustomerId}
+                  required
+                />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label>Kind</Label>
-                  <Select value={kind} onValueChange={(v) => setKind(v as never)}>
+                  <Select
+                    value={kind}
+                    onValueChange={(v) => setKind(v as never)}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -376,17 +470,29 @@ function SavingsTab() {
                     </SelectContent>
                   </Select>
                 </div>
-                <NumberField label="Amount" value={amount} onChange={setAmount} />
+                <NumberField
+                  label="Amount"
+                  value={amount}
+                  onChange={setAmount}
+                />
               </div>
               <div>
                 <Label>Notes (optional)</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancel</Button>
-              <Button onClick={onSubmit} disabled={create.isPending || amount <= 0 || !customerId}>
-                {create.isPending ? 'Posting…' : 'Save'}
+              <Button variant="outline" onClick={reset}>
+                Cancel
+              </Button>
+              <Button
+                onClick={onSubmit}
+                disabled={create.isPending || amount <= 0 || !customerId}
+              >
+                {create.isPending ? "Posting…" : "Save"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -404,19 +510,26 @@ function FundsTab() {
   const nameOf = useCustomerName();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [customerId, setCustomerId] = useState('');
-  const [transactionRef, setTransactionRef] = useState('');
+  const [customerId, setCustomerId] = useState("");
+  const [transactionRef, setTransactionRef] = useState("");
   const [sourceOfFunds, setSourceOfFunds] = useState<string>(FUND_BUCKETS[0]);
   const [amount, setAmount] = useState(0);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setCustomerId(''); setTransactionRef(''); setSourceOfFunds(FUND_BUCKETS[0]);
-    setAmount(0); setNotes(''); setOpen(false);
+    setCustomerId("");
+    setTransactionRef("");
+    setSourceOfFunds(FUND_BUCKETS[0]);
+    setAmount(0);
+    setNotes("");
+    setOpen(false);
   };
 
   const onSubmit = async () => {
-    if (amount <= 0) { toast.error('Amount required'); return; }
+    if (amount <= 0) {
+      toast.error("Amount required");
+      return;
+    }
     try {
       await create.mutateAsync({
         customerId: customerId || undefined,
@@ -425,15 +538,20 @@ function FundsTab() {
         amount,
         notes: notes || undefined,
       });
-      toast.success('Fund transaction posted');
+      toast.success("Fund transaction posted");
       reset();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   return (
-    <ListCard title="Fund transactions (inflows)" onNew={() => setOpen(true)} isLoading={list.isLoading} empty={(list.data ?? []).length === 0}>
+    <ListCard
+      title="Fund transactions (inflows)"
+      onNew={() => setOpen(true)}
+      isLoading={list.isLoading}
+      empty={(list.data ?? []).length === 0}
+    >
       <table className="w-full text-sm">
         <thead className="text-left text-xs uppercase tracking-wider text-white/45">
           <tr>
@@ -452,17 +570,31 @@ function FundsTab() {
               <td className="py-2 px-2 text-xs">{formatDate(f.txnDate)}</td>
               <td className="py-2 px-2">
                 {f.customerId ? (
-                  <MemberLedgerLink customerId={f.customerId}>{nameOf(f.customerId)}</MemberLedgerLink>
+                  <MemberLedgerLink customerId={f.customerId}>
+                    {nameOf(f.customerId)}
+                  </MemberLedgerLink>
                 ) : (
                   <span className="text-white/45">—</span>
                 )}
               </td>
               <td className="py-2 px-2 font-mono text-xs">{f.sourceOfFunds}</td>
-              <td className="py-2 px-2 font-mono text-[10px] text-white/65">{f.transactionRef ?? '—'}</td>
-              <td className="py-2 px-2 text-right font-mono text-emerald-300">{formatMoney(Number(f.amount))}</td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">{f.notes ?? '—'}</td>
+              <td className="py-2 px-2 font-mono text-[10px] text-white/65">
+                {f.transactionRef ?? "—"}
+              </td>
+              <td className="py-2 px-2 text-right font-mono text-emerald-300">
+                {formatMoney(Number(f.amount))}
+              </td>
+              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+                {f.notes ?? "—"}
+              </td>
               <td className="py-2 px-2">
-                {f.journalEntryId ? (<JournalEntryLink id={f.journalEntryId}><Badge variant="success">Posted</Badge></JournalEntryLink>) : (<Badge variant="muted">—</Badge>)}
+                {f.journalEntryId ? (
+                  <JournalEntryLink id={f.journalEntryId}>
+                    <Badge variant="success">Posted</Badge>
+                  </JournalEntryLink>
+                ) : (
+                  <Badge variant="muted">—</Badge>
+                )}
               </td>
             </tr>
           ))}
@@ -472,29 +604,50 @@ function FundsTab() {
       {open && (
         <Dialog open onOpenChange={(o) => !o && reset()}>
           <DialogContent>
-            <DialogHeader><DialogTitle>New fund transaction (inflow)</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>New fund transaction (inflow)</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <div>
                 <Label>Member (optional)</Label>
                 <CustomerPicker value={customerId} onChange={setCustomerId} />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <BucketSelect label="Source of funds" value={sourceOfFunds} onChange={setSourceOfFunds} />
-                <NumberField label="Amount" value={amount} onChange={setAmount} />
+                <BucketSelect
+                  label="Source of funds"
+                  value={sourceOfFunds}
+                  onChange={setSourceOfFunds}
+                />
+                <NumberField
+                  label="Amount"
+                  value={amount}
+                  onChange={setAmount}
+                />
               </div>
               <div>
                 <Label>Transaction reference (optional)</Label>
-                <Input value={transactionRef} onChange={(e) => setTransactionRef(e.target.value)} />
+                <Input
+                  value={transactionRef}
+                  onChange={(e) => setTransactionRef(e.target.value)}
+                />
               </div>
               <div>
                 <Label>Notes (optional)</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancel</Button>
-              <Button onClick={onSubmit} disabled={create.isPending || amount <= 0}>
-                {create.isPending ? 'Posting…' : 'Save'}
+              <Button variant="outline" onClick={reset}>
+                Cancel
+              </Button>
+              <Button
+                onClick={onSubmit}
+                disabled={create.isPending || amount <= 0}
+              >
+                {create.isPending ? "Posting…" : "Save"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -510,18 +663,24 @@ function WithdrawalsTab() {
   const nameOf = useCustomerName();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [customerId, setCustomerId] = useState('');
+  const [customerId, setCustomerId] = useState("");
   const [sourceOfFunds, setSourceOfFunds] = useState<string>(FUND_BUCKETS[0]);
   const [amount, setAmount] = useState(0);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setCustomerId(''); setSourceOfFunds(FUND_BUCKETS[0]);
-    setAmount(0); setNotes(''); setOpen(false);
+    setCustomerId("");
+    setSourceOfFunds(FUND_BUCKETS[0]);
+    setAmount(0);
+    setNotes("");
+    setOpen(false);
   };
 
   const onSubmit = async () => {
-    if (amount <= 0) { toast.error('Amount required'); return; }
+    if (amount <= 0) {
+      toast.error("Amount required");
+      return;
+    }
     try {
       await create.mutateAsync({
         customerId: customerId || undefined,
@@ -529,15 +688,20 @@ function WithdrawalsTab() {
         amount,
         notes: notes || undefined,
       });
-      toast.success('Withdrawal posted');
+      toast.success("Withdrawal posted");
       reset();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   return (
-    <ListCard title="Withdrawals (outflows)" onNew={() => setOpen(true)} isLoading={list.isLoading} empty={(list.data ?? []).length === 0}>
+    <ListCard
+      title="Withdrawals (outflows)"
+      onNew={() => setOpen(true)}
+      isLoading={list.isLoading}
+      empty={(list.data ?? []).length === 0}
+    >
       <table className="w-full text-sm">
         <thead className="text-left text-xs uppercase tracking-wider text-white/45">
           <tr>
@@ -555,16 +719,28 @@ function WithdrawalsTab() {
               <td className="py-2 px-2 text-xs">{formatDate(w.txnDate)}</td>
               <td className="py-2 px-2">
                 {w.customerId ? (
-                  <MemberLedgerLink customerId={w.customerId}>{nameOf(w.customerId)}</MemberLedgerLink>
+                  <MemberLedgerLink customerId={w.customerId}>
+                    {nameOf(w.customerId)}
+                  </MemberLedgerLink>
                 ) : (
                   <span className="text-white/45">—</span>
                 )}
               </td>
               <td className="py-2 px-2 font-mono text-xs">{w.sourceOfFunds}</td>
-              <td className="py-2 px-2 text-right font-mono text-rose-300">{formatMoney(Number(w.amount))}</td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">{w.notes ?? '—'}</td>
+              <td className="py-2 px-2 text-right font-mono text-rose-300">
+                {formatMoney(Number(w.amount))}
+              </td>
+              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+                {w.notes ?? "—"}
+              </td>
               <td className="py-2 px-2">
-                {w.journalEntryId ? (<JournalEntryLink id={w.journalEntryId}><Badge variant="success">Posted</Badge></JournalEntryLink>) : (<Badge variant="muted">—</Badge>)}
+                {w.journalEntryId ? (
+                  <JournalEntryLink id={w.journalEntryId}>
+                    <Badge variant="success">Posted</Badge>
+                  </JournalEntryLink>
+                ) : (
+                  <Badge variant="muted">—</Badge>
+                )}
               </td>
             </tr>
           ))}
@@ -574,25 +750,43 @@ function WithdrawalsTab() {
       {open && (
         <Dialog open onOpenChange={(o) => !o && reset()}>
           <DialogContent>
-            <DialogHeader><DialogTitle>New withdrawal</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>New withdrawal</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <div>
                 <Label>Member (optional)</Label>
                 <CustomerPicker value={customerId} onChange={setCustomerId} />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <BucketSelect label="Source of funds" value={sourceOfFunds} onChange={setSourceOfFunds} />
-                <NumberField label="Amount" value={amount} onChange={setAmount} />
+                <BucketSelect
+                  label="Source of funds"
+                  value={sourceOfFunds}
+                  onChange={setSourceOfFunds}
+                />
+                <NumberField
+                  label="Amount"
+                  value={amount}
+                  onChange={setAmount}
+                />
               </div>
               <div>
                 <Label>Notes (optional)</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancel</Button>
-              <Button onClick={onSubmit} disabled={create.isPending || amount <= 0}>
-                {create.isPending ? 'Posting…' : 'Save'}
+              <Button variant="outline" onClick={reset}>
+                Cancel
+              </Button>
+              <Button
+                onClick={onSubmit}
+                disabled={create.isPending || amount <= 0}
+              >
+                {create.isPending ? "Posting…" : "Save"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -609,32 +803,48 @@ function ExpensesTab() {
   const create = useCreateExpense();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState('');
+  const [type, setType] = useState("");
   const [amount, setAmount] = useState(0);
   const [sourceOfFunds, setSourceOfFunds] = useState<string>(FUND_BUCKETS[5]); // GENERAL
   const [isRecurring, setIsRecurring] = useState(false);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setType(''); setAmount(0); setSourceOfFunds(FUND_BUCKETS[5]);
-    setIsRecurring(false); setNotes(''); setOpen(false);
+    setType("");
+    setAmount(0);
+    setSourceOfFunds(FUND_BUCKETS[5]);
+    setIsRecurring(false);
+    setNotes("");
+    setOpen(false);
   };
 
   const onSubmit = async () => {
-    if (!type || amount <= 0) { toast.error('Type + amount required'); return; }
+    if (!type || amount <= 0) {
+      toast.error("Type + amount required");
+      return;
+    }
     try {
       await create.mutateAsync({
-        type, amount, sourceOfFunds, isRecurring, notes: notes || undefined,
+        type,
+        amount,
+        sourceOfFunds,
+        isRecurring,
+        notes: notes || undefined,
       });
-      toast.success('Expense posted');
+      toast.success("Expense posted");
       reset();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   return (
-    <ListCard title="Expenses" onNew={() => setOpen(true)} isLoading={list.isLoading} empty={(list.data ?? []).length === 0}>
+    <ListCard
+      title="Expenses"
+      onNew={() => setOpen(true)}
+      isLoading={list.isLoading}
+      empty={(list.data ?? []).length === 0}
+    >
       <table className="w-full text-sm">
         <thead className="text-left text-xs uppercase tracking-wider text-white/45">
           <tr>
@@ -652,14 +862,28 @@ function ExpensesTab() {
             <tr key={e.id} className="hover:bg-white/[0.03]">
               <td className="py-2 px-2 text-xs">{formatDate(e.txnDate)}</td>
               <td className="py-2 px-2">{e.type}</td>
-              <td className="py-2 px-2 text-right font-mono text-rose-300">{formatMoney(Number(e.amount))}</td>
+              <td className="py-2 px-2 text-right font-mono text-rose-300">
+                {formatMoney(Number(e.amount))}
+              </td>
               <td className="py-2 px-2 font-mono text-xs">{e.sourceOfFunds}</td>
               <td className="py-2 px-2">
-                {e.isRecurring ? <Badge variant="muted">Recurring</Badge> : <span className="text-xs text-white/45">—</span>}
+                {e.isRecurring ? (
+                  <Badge variant="muted">Recurring</Badge>
+                ) : (
+                  <span className="text-xs text-white/45">—</span>
+                )}
               </td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">{e.notes ?? '—'}</td>
+              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+                {e.notes ?? "—"}
+              </td>
               <td className="py-2 px-2">
-                {e.journalEntryId ? (<JournalEntryLink id={e.journalEntryId}><Badge variant="success">Posted</Badge></JournalEntryLink>) : (<Badge variant="muted">—</Badge>)}
+                {e.journalEntryId ? (
+                  <JournalEntryLink id={e.journalEntryId}>
+                    <Badge variant="success">Posted</Badge>
+                  </JournalEntryLink>
+                ) : (
+                  <Badge variant="muted">—</Badge>
+                )}
               </td>
             </tr>
           ))}
@@ -669,37 +893,64 @@ function ExpensesTab() {
       {open && (
         <Dialog open onOpenChange={(o) => !o && reset()}>
           <DialogContent>
-            <DialogHeader><DialogTitle>New expense</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>New expense</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label>Type</Label>
-                  <Input value={type} onChange={(e) => setType(e.target.value)} placeholder="Rent, Utilities, …" />
+                  <Input
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                    placeholder="Rent, Utilities, …"
+                  />
                 </div>
-                <NumberField label="Amount" value={amount} onChange={setAmount} />
+                <NumberField
+                  label="Amount"
+                  value={amount}
+                  onChange={setAmount}
+                />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <BucketSelect label="Source of funds" value={sourceOfFunds} onChange={setSourceOfFunds} />
+                <BucketSelect
+                  label="Source of funds"
+                  value={sourceOfFunds}
+                  onChange={setSourceOfFunds}
+                />
                 <div>
                   <Label>Recurring?</Label>
                   <label className="flex items-center gap-2 mt-2 text-sm">
-                    <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={isRecurring}
+                      onChange={(e) => setIsRecurring(e.target.checked)}
+                    />
                     Yes, repeats periodically
                   </label>
                 </div>
               </div>
               <div>
                 <Label>Notes (optional)</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
               <p className="text-[10px] text-white/45">
-                Attachment uploads can be added once the document feature is wired in — for now, paste receipt URLs into Notes.
+                Attachment uploads can be added once the document feature is
+                wired in — for now, paste receipt URLs into Notes.
               </p>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancel</Button>
-              <Button onClick={onSubmit} disabled={create.isPending || !type || amount <= 0}>
-                {create.isPending ? 'Posting…' : 'Save'}
+              <Button variant="outline" onClick={reset}>
+                Cancel
+              </Button>
+              <Button
+                onClick={onSubmit}
+                disabled={create.isPending || !type || amount <= 0}
+              >
+                {create.isPending ? "Posting…" : "Save"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -716,28 +967,45 @@ function OtherIncomeTab() {
   const create = useCreateOtherIncome();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState('');
+  const [type, setType] = useState("");
   const [amount, setAmount] = useState(0);
   const [sourceTo, setSourceTo] = useState<string>(FUND_BUCKETS[5]);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setType(''); setAmount(0); setSourceTo(FUND_BUCKETS[5]); setNotes(''); setOpen(false);
+    setType("");
+    setAmount(0);
+    setSourceTo(FUND_BUCKETS[5]);
+    setNotes("");
+    setOpen(false);
   };
 
   const onSubmit = async () => {
-    if (!type || amount <= 0) { toast.error('Type + amount required'); return; }
+    if (!type || amount <= 0) {
+      toast.error("Type + amount required");
+      return;
+    }
     try {
-      await create.mutateAsync({ type, amount, sourceTo, notes: notes || undefined });
-      toast.success('Income posted');
+      await create.mutateAsync({
+        type,
+        amount,
+        sourceTo,
+        notes: notes || undefined,
+      });
+      toast.success("Income posted");
       reset();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   return (
-    <ListCard title="Other income" onNew={() => setOpen(true)} isLoading={list.isLoading} empty={(list.data ?? []).length === 0}>
+    <ListCard
+      title="Other income"
+      onNew={() => setOpen(true)}
+      isLoading={list.isLoading}
+      empty={(list.data ?? []).length === 0}
+    >
       <table className="w-full text-sm">
         <thead className="text-left text-xs uppercase tracking-wider text-white/45">
           <tr>
@@ -754,11 +1022,21 @@ function OtherIncomeTab() {
             <tr key={o.id} className="hover:bg-white/[0.03]">
               <td className="py-2 px-2 text-xs">{formatDate(o.txnDate)}</td>
               <td className="py-2 px-2">{o.type}</td>
-              <td className="py-2 px-2 text-right font-mono text-emerald-300">{formatMoney(Number(o.amount))}</td>
+              <td className="py-2 px-2 text-right font-mono text-emerald-300">
+                {formatMoney(Number(o.amount))}
+              </td>
               <td className="py-2 px-2 font-mono text-xs">{o.sourceTo}</td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">{o.notes ?? '—'}</td>
+              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+                {o.notes ?? "—"}
+              </td>
               <td className="py-2 px-2">
-                {o.journalEntryId ? (<JournalEntryLink id={o.journalEntryId}><Badge variant="success">Posted</Badge></JournalEntryLink>) : (<Badge variant="muted">—</Badge>)}
+                {o.journalEntryId ? (
+                  <JournalEntryLink id={o.journalEntryId}>
+                    <Badge variant="success">Posted</Badge>
+                  </JournalEntryLink>
+                ) : (
+                  <Badge variant="muted">—</Badge>
+                )}
               </td>
             </tr>
           ))}
@@ -768,25 +1046,47 @@ function OtherIncomeTab() {
       {open && (
         <Dialog open onOpenChange={(o) => !o && reset()}>
           <DialogContent>
-            <DialogHeader><DialogTitle>New other income</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>New other income</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label>Type</Label>
-                  <Input value={type} onChange={(e) => setType(e.target.value)} placeholder="Donation, Dividend, …" />
+                  <Input
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                    placeholder="Donation, Dividend, …"
+                  />
                 </div>
-                <NumberField label="Amount" value={amount} onChange={setAmount} />
+                <NumberField
+                  label="Amount"
+                  value={amount}
+                  onChange={setAmount}
+                />
               </div>
-              <BucketSelect label="Credits to (source)" value={sourceTo} onChange={setSourceTo} />
+              <BucketSelect
+                label="Credits to (source)"
+                value={sourceTo}
+                onChange={setSourceTo}
+              />
               <div>
                 <Label>Notes (optional)</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancel</Button>
-              <Button onClick={onSubmit} disabled={create.isPending || !type || amount <= 0}>
-                {create.isPending ? 'Posting…' : 'Save'}
+              <Button variant="outline" onClick={reset}>
+                Cancel
+              </Button>
+              <Button
+                onClick={onSubmit}
+                disabled={create.isPending || !type || amount <= 0}
+              >
+                {create.isPending ? "Posting…" : "Save"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -803,39 +1103,55 @@ function BigBrotherTab() {
   const create = useCreateBigBrother();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [account, setAccount] = useState('');
+  const [name, setName] = useState("");
+  const [account, setAccount] = useState("");
   const [capital, setCapital] = useState(0);
-  const [periodFrom, setPeriodFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [periodFrom, setPeriodFrom] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const [periodTo, setPeriodTo] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 12);
     return d.toISOString().slice(0, 10);
   });
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
 
   const reset = () => {
-    setName(''); setAccount(''); setCapital(0); setNotes(''); setOpen(false);
+    setName("");
+    setAccount("");
+    setCapital(0);
+    setNotes("");
+    setOpen(false);
   };
 
   const onSubmit = async () => {
-    if (!name || !account || capital <= 0) { toast.error('Name + account + capital required'); return; }
+    if (!name || !account || capital <= 0) {
+      toast.error("Name + account + capital required");
+      return;
+    }
     try {
       await create.mutateAsync({
-        name, account, capital,
+        name,
+        account,
+        capital,
         periodFrom: new Date(periodFrom).toISOString(),
         periodTo: new Date(periodTo).toISOString(),
         notes: notes || undefined,
       });
-      toast.success('Big Brother capital recorded');
+      toast.success("Big Brother capital recorded");
       reset();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   return (
-    <ListCard title="Big Brother (external capital)" onNew={() => setOpen(true)} isLoading={list.isLoading} empty={(list.data ?? []).length === 0}>
+    <ListCard
+      title="Big Brother (external capital)"
+      onNew={() => setOpen(true)}
+      isLoading={list.isLoading}
+      empty={(list.data ?? []).length === 0}
+    >
       <table className="w-full text-sm">
         <thead className="text-left text-xs uppercase tracking-wider text-white/45">
           <tr>
@@ -852,13 +1168,25 @@ function BigBrotherTab() {
             <tr key={b.id} className="hover:bg-white/[0.03]">
               <td className="py-2 px-2">{b.name}</td>
               <td className="py-2 px-2 font-mono text-xs">{b.account}</td>
-              <td className="py-2 px-2 text-right font-mono">{formatMoney(Number(b.capital))}</td>
-              <td className="py-2 px-2 text-xs">{formatDate(b.periodFrom)} → {formatDate(b.periodTo)}</td>
-              <td className="py-2 px-2">
-                <Badge variant={b.active ? 'success' : 'muted'}>{b.active ? 'Active' : 'Closed'}</Badge>
+              <td className="py-2 px-2 text-right font-mono">
+                {formatMoney(Number(b.capital))}
+              </td>
+              <td className="py-2 px-2 text-xs">
+                {formatDate(b.periodFrom)} → {formatDate(b.periodTo)}
               </td>
               <td className="py-2 px-2">
-                {b.journalEntryId ? (<JournalEntryLink id={b.journalEntryId}><Badge variant="success">Posted</Badge></JournalEntryLink>) : (<Badge variant="muted">—</Badge>)}
+                <Badge variant={b.active ? "success" : "muted"}>
+                  {b.active ? "Active" : "Closed"}
+                </Badge>
+              </td>
+              <td className="py-2 px-2">
+                {b.journalEntryId ? (
+                  <JournalEntryLink id={b.journalEntryId}>
+                    <Badge variant="success">Posted</Badge>
+                  </JournalEntryLink>
+                ) : (
+                  <Badge variant="muted">—</Badge>
+                )}
               </td>
             </tr>
           ))}
@@ -868,19 +1196,33 @@ function BigBrotherTab() {
       {open && (
         <Dialog open onOpenChange={(o) => !o && reset()}>
           <DialogContent>
-            <DialogHeader><DialogTitle>New Big Brother capital</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>New Big Brother capital</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label>Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="NGO / parent coop" />
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="NGO / parent coop"
+                  />
                 </div>
                 <div>
                   <Label>Account / ref</Label>
-                  <Input value={account} onChange={(e) => setAccount(e.target.value)} placeholder="acct # / ref" />
+                  <Input
+                    value={account}
+                    onChange={(e) => setAccount(e.target.value)}
+                    placeholder="acct # / ref"
+                  />
                 </div>
               </div>
-              <NumberField label="Capital" value={capital} onChange={setCapital} />
+              <NumberField
+                label="Capital"
+                value={capital}
+                onChange={setCapital}
+              />
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label>Period from</Label>
@@ -888,21 +1230,35 @@ function BigBrotherTab() {
                 </div>
                 <div>
                   <Label>Period to</Label>
-                  <DatePicker value={periodTo} onChange={setPeriodTo} min={periodFrom} />
+                  <DatePicker
+                    value={periodTo}
+                    onChange={setPeriodTo}
+                    min={periodFrom}
+                  />
                 </div>
               </div>
               <div>
                 <Label>Notes (optional)</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
               <p className="text-[10px] text-white/45">
-                Books DR Cash, CR Big Brother Capital (liability). Convert to equity at period-end via a manual journal entry if the deal is a grant.
+                Books DR Cash, CR Big Brother Capital (liability). Convert to
+                equity at period-end via a manual journal entry if the deal is a
+                grant.
               </p>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={reset}>Cancel</Button>
-              <Button onClick={onSubmit} disabled={create.isPending || !name || !account || capital <= 0}>
-                {create.isPending ? 'Posting…' : 'Save'}
+              <Button variant="outline" onClick={reset}>
+                Cancel
+              </Button>
+              <Button
+                onClick={onSubmit}
+                disabled={create.isPending || !name || !account || capital <= 0}
+              >
+                {create.isPending ? "Posting…" : "Save"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -927,6 +1283,12 @@ function ListCard({
   isLoading: boolean;
   empty: boolean;
 }) {
+  // IMPORTANT: `children` must render in every non-loading state, even
+  // when `empty === true`. Each tab puts its `<Dialog>` inside the
+  // children slot, and the Dialog needs to be mounted before the
+  // officer clicks "New" — otherwise the open-state toggle has nothing
+  // to render against. Earlier versions only rendered children when
+  // not empty, which broke the "New" button on every empty tab.
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -942,10 +1304,16 @@ function ListCard({
       <CardContent>
         {isLoading ? (
           <SkeletonCard />
-        ) : empty ? (
-          <p className="text-sm text-white/55">Nothing yet — click <strong>New</strong> to record the first row.</p>
         ) : (
-          children
+          <>
+            {empty && (
+              <p className="text-sm text-white/55 mb-3">
+                Nothing yet — click <strong>New</strong> to record the first
+                row.
+              </p>
+            )}
+            {children}
+          </>
         )}
       </CardContent>
     </Card>
@@ -968,7 +1336,7 @@ function NumberField({
         type="number"
         step="0.01"
         min={0}
-        value={value || ''}
+        value={value || ""}
         onChange={(e) => onChange(Number(e.target.value))}
       />
     </div>
@@ -994,7 +1362,7 @@ function BucketSelect({
         <SelectContent>
           {FUND_BUCKETS.map((b) => (
             <SelectItem key={b} value={b}>
-              {b.replace('_', ' ')}
+              {b.replace("_", " ")}
             </SelectItem>
           ))}
         </SelectContent>

@@ -1,4 +1,4 @@
-import { useLoan } from '@loan/api-client';
+import { useLoan } from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -11,14 +11,14 @@ import {
   DrawerTitle,
   DrawerTrigger,
   SkeletonLine,
-} from '@loan/ui';
-import { formatDate, formatMoney } from '@loan/shared-utils';
-import { ArrowUpRight, CalendarClock, Coins, CreditCard } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+} from "@loan/ui";
+import { formatDate, formatMoney } from "@loan/shared-utils";
+import { ArrowUpRight, CalendarClock, Coins, CreditCard } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
-import { LoanStatusBadge } from './StatusBadge';
-import { TYPE_LABELS } from '../constants';
+import { LoanStatusBadge } from "./StatusBadge";
+import { TYPE_LABELS } from "../constants";
 
 /**
  * Quick-peek wrapper for a loan id. Wraps a child trigger (typically the
@@ -93,7 +93,9 @@ function QuickLoanInspector({ id }: { id: string }) {
   // Next installment = earliest schedule row with paidInFullAt null.
   const nextDue = (l.schedule ?? [])
     .filter((s) => !s.paidInFullAt)
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+    .sort(
+      (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+    )[0];
   const lastPayments = (l.payments ?? [])
     .slice()
     .sort((a, b) => new Date(b.paidOn).getTime() - new Date(a.paidOn).getTime())
@@ -107,7 +109,9 @@ function QuickLoanInspector({ id }: { id: string }) {
           <div className="flex-1 min-w-0">
             <DrawerTitle className="font-mono">{l.number}</DrawerTitle>
             <DrawerDescription>
-              <Badge variant="muted">{TYPE_LABELS[l.productCode] ?? l.productCode}</Badge>
+              <Badge variant="muted">
+                {TYPE_LABELS[l.productCode] ?? l.productCode}
+              </Badge>
               <span className="ml-2">
                 <LoanStatusBadge status={l.status} />
               </span>
@@ -128,15 +132,15 @@ function QuickLoanInspector({ id }: { id: string }) {
           <Stat label="Submitted" value={formatDate(l.submittedAt)} />
           <Stat
             label="Decided"
-            value={l.decidedAt ? formatDate(l.decidedAt) : '—'}
+            value={l.decidedAt ? formatDate(l.decidedAt) : "—"}
           />
           <Stat
             label="Disbursed"
-            value={l.disbursedAt ? formatDate(l.disbursedAt) : '—'}
+            value={l.disbursedAt ? formatDate(l.disbursedAt) : "—"}
           />
           <Stat
             label="Closed"
-            value={l.closedAt ? formatDate(l.closedAt) : '—'}
+            value={l.closedAt ? formatDate(l.closedAt) : "—"}
           />
         </div>
 
@@ -204,7 +208,10 @@ function QuickLoanInspector({ id }: { id: string }) {
 
       <DrawerFooter>
         <Button variant="outline" asChild>
-          <Link to={`/loans/${l.id}`} className="inline-flex items-center gap-1">
+          <Link
+            to={`/loans/${l.number}`}
+            className="inline-flex items-center gap-1"
+          >
             <ArrowUpRight className="h-3 w-3" />
             Open full detail
           </Link>
@@ -217,7 +224,9 @@ function QuickLoanInspector({ id }: { id: string }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">{label}</div>
+      <div className="text-[10px] uppercase tracking-wider text-white/45">
+        {label}
+      </div>
       <div className="font-mono text-sm mt-0.5">{value}</div>
     </div>
   );

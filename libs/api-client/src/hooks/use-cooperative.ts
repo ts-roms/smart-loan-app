@@ -5,9 +5,9 @@
  * a successful create invalidates the list.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from '../client.js';
+import { getApiClient } from "../client.js";
 
 // ─── Shared types (kept light — the UI mostly displays raw rows) ──
 
@@ -26,7 +26,7 @@ export interface Contribution {
 export interface SavingsTransaction {
   id: string;
   customerId: string;
-  kind: 'DEPOSIT' | 'WITHDRAWAL';
+  kind: "DEPOSIT" | "WITHDRAWAL";
   amount: string | number;
   notes: string | null;
   txnDate: string;
@@ -97,13 +97,13 @@ export interface BigBrotherAccount {
 }
 
 export const coopKeys = {
-  contributions: ['coop', 'contributions'] as const,
-  savings: ['coop', 'savings'] as const,
-  funds: ['coop', 'funds'] as const,
-  withdrawals: ['coop', 'withdrawals'] as const,
-  expenses: ['coop', 'expenses'] as const,
-  otherIncome: ['coop', 'other-income'] as const,
-  bigBrother: ['coop', 'big-brother'] as const,
+  contributions: ["coop", "contributions"] as const,
+  savings: ["coop", "savings"] as const,
+  funds: ["coop", "funds"] as const,
+  withdrawals: ["coop", "withdrawals"] as const,
+  expenses: ["coop", "expenses"] as const,
+  otherIncome: ["coop", "other-income"] as const,
+  bigBrother: ["coop", "big-brother"] as const,
 };
 
 // ─── Contributions ───────────────────────────────────────────────
@@ -111,7 +111,8 @@ export const coopKeys = {
 export function useContributions() {
   return useQuery({
     queryKey: coopKeys.contributions,
-    queryFn: () => getApiClient().get<Contribution[]>('/cooperative/contributions'),
+    queryFn: () =>
+      getApiClient().get<Contribution[]>("/cooperative/contributions"),
   });
 }
 
@@ -125,7 +126,8 @@ export function useCreateContribution() {
       emergencyFund: number;
       notes?: string;
       contributedAt?: string;
-    }) => getApiClient().post<Contribution>('/cooperative/contributions', input),
+    }) =>
+      getApiClient().post<Contribution>("/cooperative/contributions", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: coopKeys.contributions }),
   });
 }
@@ -135,7 +137,8 @@ export function useCreateContribution() {
 export function useSavingsTxns() {
   return useQuery({
     queryKey: coopKeys.savings,
-    queryFn: () => getApiClient().get<SavingsTransaction[]>('/cooperative/savings'),
+    queryFn: () =>
+      getApiClient().get<SavingsTransaction[]>("/cooperative/savings"),
   });
 }
 
@@ -145,10 +148,11 @@ export function useCreateSavings() {
     mutationFn: (input: {
       customerId: string;
       amount: number;
-      kind: 'DEPOSIT' | 'WITHDRAWAL';
+      kind: "DEPOSIT" | "WITHDRAWAL";
       notes?: string;
       txnDate?: string;
-    }) => getApiClient().post<SavingsTransaction>('/cooperative/savings', input),
+    }) =>
+      getApiClient().post<SavingsTransaction>("/cooperative/savings", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: coopKeys.savings }),
   });
 }
@@ -158,7 +162,7 @@ export function useCreateSavings() {
 export function useFundTxns() {
   return useQuery({
     queryKey: coopKeys.funds,
-    queryFn: () => getApiClient().get<FundTransaction[]>('/cooperative/funds'),
+    queryFn: () => getApiClient().get<FundTransaction[]>("/cooperative/funds"),
   });
 }
 
@@ -172,7 +176,7 @@ export function useCreateFundTxn() {
       amount: number;
       txnDate?: string;
       notes?: string;
-    }) => getApiClient().post<FundTransaction>('/cooperative/funds', input),
+    }) => getApiClient().post<FundTransaction>("/cooperative/funds", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: coopKeys.funds }),
   });
 }
@@ -180,7 +184,8 @@ export function useCreateFundTxn() {
 export function useFundWithdrawals() {
   return useQuery({
     queryKey: coopKeys.withdrawals,
-    queryFn: () => getApiClient().get<FundWithdrawal[]>('/cooperative/withdrawals'),
+    queryFn: () =>
+      getApiClient().get<FundWithdrawal[]>("/cooperative/withdrawals"),
   });
 }
 
@@ -193,7 +198,8 @@ export function useCreateFundWithdrawal() {
       amount: number;
       notes?: string;
       txnDate?: string;
-    }) => getApiClient().post<FundWithdrawal>('/cooperative/withdrawals', input),
+    }) =>
+      getApiClient().post<FundWithdrawal>("/cooperative/withdrawals", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: coopKeys.withdrawals }),
   });
 }
@@ -203,7 +209,7 @@ export function useCreateFundWithdrawal() {
 export function useExpenses() {
   return useQuery({
     queryKey: coopKeys.expenses,
-    queryFn: () => getApiClient().get<Expense[]>('/cooperative/expenses'),
+    queryFn: () => getApiClient().get<Expense[]>("/cooperative/expenses"),
   });
 }
 
@@ -218,7 +224,7 @@ export function useCreateExpense() {
       isRecurring?: boolean;
       attachments?: string[];
       notes?: string;
-    }) => getApiClient().post<Expense>('/cooperative/expenses', input),
+    }) => getApiClient().post<Expense>("/cooperative/expenses", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: coopKeys.expenses }),
   });
 }
@@ -228,7 +234,8 @@ export function useCreateExpense() {
 export function useOtherIncome() {
   return useQuery({
     queryKey: coopKeys.otherIncome,
-    queryFn: () => getApiClient().get<OtherIncome[]>('/cooperative/other-income'),
+    queryFn: () =>
+      getApiClient().get<OtherIncome[]>("/cooperative/other-income"),
   });
 }
 
@@ -242,7 +249,7 @@ export function useCreateOtherIncome() {
       txnDate?: string;
       attachments?: string[];
       notes?: string;
-    }) => getApiClient().post<OtherIncome>('/cooperative/other-income', input),
+    }) => getApiClient().post<OtherIncome>("/cooperative/other-income", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: coopKeys.otherIncome }),
   });
 }
@@ -252,13 +259,16 @@ export function useCreateOtherIncome() {
 export function useBigBrother() {
   return useQuery({
     queryKey: coopKeys.bigBrother,
-    queryFn: () => getApiClient().get<BigBrotherAccount[]>('/cooperative/big-brother'),
+    queryFn: () =>
+      getApiClient().get<BigBrotherAccount[]>("/cooperative/big-brother"),
   });
 }
 
 export interface MemberLedger {
   customer: {
     id: string;
+    /** Human-readable customer number ("CUST-..."). */
+    number: string;
     firstName: string;
     middleName: string | null;
     lastName: string;
@@ -284,9 +294,11 @@ export interface MemberLedger {
 
 export function useMemberLedger(customerId: string | null) {
   return useQuery({
-    queryKey: ['coop', 'member-ledger', customerId ?? ''],
+    queryKey: ["coop", "member-ledger", customerId ?? ""],
     queryFn: () =>
-      getApiClient().get<MemberLedger>(`/cooperative/members/${customerId}/ledger`),
+      getApiClient().get<MemberLedger>(
+        `/cooperative/members/${customerId}/ledger`,
+      ),
     enabled: Boolean(customerId),
   });
 }
@@ -301,7 +313,8 @@ export function useCreateBigBrother() {
       periodFrom: string;
       periodTo: string;
       notes?: string;
-    }) => getApiClient().post<BigBrotherAccount>('/cooperative/big-brother', input),
+    }) =>
+      getApiClient().post<BigBrotherAccount>("/cooperative/big-brother", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: coopKeys.bigBrother }),
   });
 }

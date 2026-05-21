@@ -45,6 +45,10 @@ RUN pnpm --filter @loan/web build
 # ── Stage 2: nginx ───────────────────────────────────────────────────────
 FROM nginx:alpine AS runtime
 
+LABEL org.opencontainers.image.title="smart-loan-web"
+LABEL org.opencontainers.image.description="Smart Loan management system - React PWA served by nginx"
+LABEL org.opencontainers.image.licenses="Proprietary"
+
 # Drop the default site, install our SPA-aware one
 RUN rm /etc/nginx/conf.d/default.conf
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
@@ -53,5 +57,10 @@ COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /repo/apps/web/dist /usr/share/nginx/html
 
 EXPOSE 80
+
+# Container-native health check — fetches the SPA shell to verify nginx
+# is serving and the bundle is intact.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q --spider http://localhost/ || exit 1
 
 # nginx:alpine ships with a proper signal-aware entrypoint already

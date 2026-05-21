@@ -1,9 +1,11 @@
 import {
   useAssignRole,
+  useCreateUser,
   useRoles,
   useUnassignRole,
   useUsers,
-} from '@loan/api-client';
+  type CreateUserInput,
+} from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -13,17 +15,25 @@ import {
   CardTitle,
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   SkeletonCard,
   useConfirm,
   useToast,
-} from '@loan/ui';
-import { formatDate } from '@loan/shared-utils';
-import { Plus, UserCog, X } from 'lucide-react';
-import { useState } from 'react';
+} from "@loan/ui";
+import { formatDate } from "@loan/shared-utils";
+import { Plus, UserCog, UserPlus, X } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 /**
  * Users + role assignments. Each row shows the user's primary role
@@ -38,44 +48,57 @@ export function UsersPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { user: me } = useAuth();
-  const canManage = me?.role === 'ADMIN';
+  const canManage = me?.role === "ADMIN";
   const [assigning, setAssigning] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const onAssign = async (userId: string, roleKey: string) => {
     try {
       await assign.mutateAsync({ userId, roleKey });
-      toast.success('Role assigned');
+      toast.success("Role assigned");
       setAssigning(null);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
-  const onUnassign = async (userId: string, roleKey: string, system: boolean) => {
+  const onUnassign = async (
+    userId: string,
+    roleKey: string,
+    system: boolean,
+  ) => {
     const ok = await confirm({
-      title: system ? `Remove system role ${roleKey}?` : `Remove role ${roleKey}?`,
+      title: system
+        ? `Remove system role ${roleKey}?`
+        : `Remove role ${roleKey}?`,
       message: system
         ? `They'll lose all permissions granted by ${roleKey}. This is reversible — you can re-assign the role at any time.`
         : `They'll lose all permissions granted by ${roleKey}.`,
-      confirmLabel: 'Remove role',
-      tone: 'destructive',
+      confirmLabel: "Remove role",
+      tone: "destructive",
     });
     if (!ok) return;
     try {
       await unassign.mutateAsync({ userId, roleKey });
-      toast.success('Role removed');
+      toast.success("Role removed");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
         <CardTitle className="flex items-center gap-2">
           <UserCog className="h-4 w-4" />
           Users
         </CardTitle>
+        {canManage && (
+          <Button onClick={() => setCreating(true)}>
+            <UserPlus className="h-4 w-4" />
+            New user
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {users.isLoading ? (
@@ -114,17 +137,25 @@ export function UsersPage() {
                           // role — the API rejects it anyway, this just makes
                           // the UI honest about it.
                           const isSelfAdmin =
-                            r.key === 'ADMIN' && u.id === me?.id;
+                            r.key === "ADMIN" && u.id === me?.id;
                           return (
                             <span
                               key={r.key}
                               className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-xs"
                             >
-                              <span className={r.system ? 'text-sky-300' : 'text-emerald-300'}>{r.name}</span>
+                              <span
+                                className={
+                                  r.system ? "text-sky-300" : "text-emerald-300"
+                                }
+                              >
+                                {r.name}
+                              </span>
                               {canManage && !isSelfAdmin && (
                                 <button
                                   type="button"
-                                  onClick={() => onUnassign(u.id, r.key, r.system)}
+                                  onClick={() =>
+                                    onUnassign(u.id, r.key, r.system)
+                                  }
                                   className="text-white/45 hover:text-rose-300"
                                   title={
                                     r.system
@@ -142,14 +173,20 @@ export function UsersPage() {
                     </div>
                   </td>
                   <td className="py-2 px-2">
-                    <Badge variant={u.active ? 'success' : 'muted'}>
-                      {u.active ? 'Active' : 'Inactive'}
+                    <Badge variant={u.active ? "success" : "muted"}>
+                      {u.active ? "Active" : "Inactive"}
                     </Badge>
                   </td>
-                  <td className="py-2 px-2 text-xs text-white/55">{formatDate(u.createdAt)}</td>
+                  <td className="py-2 px-2 text-xs text-white/55">
+                    {formatDate(u.createdAt)}
+                  </td>
                   <td className="py-2 px-2 text-right">
                     {canManage && (
-                      <Button size="sm" variant="outline" onClick={() => setAssigning(u.id)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAssigning(u.id)}
+                      >
                         <Plus className="h-3 w-3" />
                         Assign
                       </Button>
@@ -161,6 +198,7 @@ export function UsersPage() {
           </table>
         )}
       </CardContent>
+      {creating && <NewUserDialog onClose={() => setCreating(false)} />}
       {assigning && (
         <Dialog open onOpenChange={(o) => !o && setAssigning(null)}>
           <DialogContent>
@@ -177,15 +215,18 @@ export function UsersPage() {
                 >
                   <div className="flex items-center justify-between">
                     <span>{r.name}</span>
-                    <Badge variant={r.system ? 'muted' : 'success'}>
-                      {r.system ? 'System' : 'Custom'}
+                    <Badge variant={r.system ? "muted" : "success"}>
+                      {r.system ? "System" : "Custom"}
                     </Badge>
                   </div>
                   {r.description && (
-                    <div className="text-xs text-white/45 mt-0.5">{r.description}</div>
+                    <div className="text-xs text-white/45 mt-0.5">
+                      {r.description}
+                    </div>
                   )}
                   <div className="text-xs text-white/35 mt-0.5">
-                    {r.permissions.length} permission{r.permissions.length === 1 ? '' : 's'}
+                    {r.permissions.length} permission
+                    {r.permissions.length === 1 ? "" : "s"}
                   </div>
                 </button>
               ))}
@@ -194,5 +235,144 @@ export function UsersPage() {
         </Dialog>
       )}
     </Card>
+  );
+}
+
+/**
+ * Admin "new user" dialog. Collects the minimum a user needs to log in
+ * (email, name, password) plus the primary role. CUSTOMER role gets an
+ * extra "link to existing customer" field — leaving it blank creates a
+ * standalone account that can be linked later.
+ *
+ * Password is set here (not emailed). Operators should communicate it
+ * to the new user out-of-band and ask them to change it on first login
+ * (no "force password change" flag yet — track in a follow-up).
+ */
+function NewUserDialog({ onClose }: { onClose: () => void }) {
+  const create = useCreateUser();
+  const toast = useToast();
+  const [form, setForm] = useState<CreateUserInput>({
+    email: "",
+    name: "",
+    password: "",
+    role: "LOAN_OFFICER",
+    customerId: undefined,
+  });
+
+  const set = <K extends keyof CreateUserInput>(
+    key: K,
+    val: CreateUserInput[K],
+  ) => setForm((f) => ({ ...f, [key]: val }));
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload: CreateUserInput = {
+        email: form.email.trim(),
+        name: form.name.trim(),
+        password: form.password,
+        role: form.role,
+      };
+      // Only send customerId when role is CUSTOMER + the field has a value.
+      // Server rejects the combo otherwise but the round-trip is wasted.
+      if (form.role === "CUSTOMER" && form.customerId?.trim()) {
+        payload.customerId = form.customerId.trim();
+      }
+      await create.mutateAsync(payload);
+      toast.success("User created");
+      onClose();
+    } catch (err) {
+      toast.error((err as Error).message ?? "Could not create user");
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-4 w-4" />
+            New user
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={form.email}
+                onChange={(e) => set("email", e.target.value)}
+                required
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Display name</Label>
+              <Input
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label>Initial password</Label>
+              <Input
+                type="password"
+                value={form.password}
+                onChange={(e) => set("password", e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                placeholder="8+ characters"
+              />
+              <p className="text-[10px] text-white/45">
+                Communicate this to the user out-of-band. Recommend they change
+                it on first login.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label>Primary role</Label>
+              <Select
+                value={form.role}
+                onValueChange={(v) => set("role", v as CreateUserInput["role"])}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ADMIN">ADMIN</SelectItem>
+                  <SelectItem value="LOAN_OFFICER">LOAN_OFFICER</SelectItem>
+                  <SelectItem value="ACCOUNTANT">ACCOUNTANT</SelectItem>
+                  <SelectItem value="CUSTOMER">CUSTOMER</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.role === "CUSTOMER" && (
+              <div className="space-y-1">
+                <Label>Linked customer ID (optional)</Label>
+                <Input
+                  value={form.customerId ?? ""}
+                  onChange={(e) => set("customerId", e.target.value)}
+                  placeholder="UUID — leave blank to link later"
+                />
+                <p className="text-[10px] text-white/45">
+                  Required for portal access. Find the id on the customer detail
+                  page.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={create.isPending}>
+              {create.isPending ? "Creating…" : "Create user"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -57,6 +57,12 @@ RUN pnpm --filter @loan/db exec prisma generate
 # ── Stage 2: runtime ─────────────────────────────────────────────────────
 FROM node:20-alpine AS runtime
 
+# OCI image metadata — surfaces in `docker inspect`, registry listings, etc.
+LABEL org.opencontainers.image.title="smart-loan-api"
+LABEL org.opencontainers.image.description="Smart Loan management system - Fastify API"
+LABEL org.opencontainers.image.source="https://github.com/yourorg/smart-loan-app"
+LABEL org.opencontainers.image.licenses="Proprietary"
+
 RUN apk add --no-cache openssl tini
 
 ENV NODE_ENV=production
@@ -78,6 +84,13 @@ RUN mkdir -p /app/uploads && chown -R node:node /app/uploads /app
 USER node
 
 EXPOSE 3001
+
+# Container-native health check — used by Docker daemon and Compose's
+# `condition: service_healthy`. Orchestrators (k8s, ECS) typically prefer
+# their own probes against /health/ready instead, but this gives a
+# consistent dev experience.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://localhost:3001/api/v1/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # On boot, sync the schema before starting the server:
 #  · if migrations exist  → `prisma migrate deploy`  (production-safe)

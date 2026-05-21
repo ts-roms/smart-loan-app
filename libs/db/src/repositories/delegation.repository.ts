@@ -13,7 +13,7 @@
  * active for the caller and pin the loan record to it.
  */
 
-import type { Delegation, PrismaClient } from '@prisma/client';
+import type { Delegation, PrismaClient } from "@prisma/client";
 
 export interface DelegationCreateInput {
   delegatorId: string;
@@ -33,15 +33,17 @@ export class DelegationRepository {
   }
 
   /** Both directions for a user: delegations they granted + ones they hold. */
-  async listForUser(userId: string): Promise<{ granted: Delegation[]; held: Delegation[] }> {
+  async listForUser(
+    userId: string,
+  ): Promise<{ granted: Delegation[]; held: Delegation[] }> {
     const [granted, held] = await Promise.all([
       this.prisma.delegation.findMany({
         where: { delegatorId: userId },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.delegation.findMany({
         where: { delegateId: userId },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
     ]);
     return { granted, held };
@@ -49,7 +51,7 @@ export class DelegationRepository {
 
   list(): Promise<Delegation[]> {
     return this.prisma.delegation.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 200,
     });
   }
@@ -58,7 +60,10 @@ export class DelegationRepository {
    * Active = the date window covers `now`, not revoked. Used by the
    * resolver — typically called once per request from `resolveUserPermissions`.
    */
-  listActiveFor(delegateId: string, now: Date = new Date()): Promise<Delegation[]> {
+  listActiveFor(
+    delegateId: string,
+    now: Date = new Date(),
+  ): Promise<Delegation[]> {
     return this.prisma.delegation.findMany({
       where: {
         delegateId,
@@ -71,18 +76,36 @@ export class DelegationRepository {
 
   async create(input: DelegationCreateInput): Promise<Delegation> {
     if (input.delegatorId === input.delegateId) {
-      throw new Error('Cannot delegate to yourself.');
+      throw new Error("Cannot delegate to yourself.");
     }
     if (input.endsAt <= input.startsAt) {
-      throw new Error('endsAt must be after startsAt.');
+      throw new Error("endsAt must be after startsAt.");
     }
     return this.prisma.delegation.create({ data: input });
   }
 
-  async revoke(id: string, revokedById: string, reason?: string): Promise<Delegation> {
+  async revoke(
+    id: string,
+    revokedById: string,
+    reason?: string,
+  ): Promise<Delegation> {
     return this.prisma.delegation.update({
       where: { id },
       data: { revokedAt: new Date(), revokedById, revokedReason: reason },
+    });
+  }
+
+  /**
+   * Push the end date later. Doesn't touch startsAt, permissions, or
+   * any audit field — the caller is expected to be the delegator (or
+   * an admin) and to record a separate audit entry. We refuse to
+   * shorten — that's effectively a partial revoke and would obscure
+   * the intent; revoke + create-new is clearer.
+   */
+  async extend(id: string, newEndsAt: Date): Promise<Delegation> {
+    return this.prisma.delegation.update({
+      where: { id },
+      data: { endsAt: newEndsAt },
     });
   }
 }
@@ -95,7 +118,7 @@ export class DelegationRepository {
  * the delegator (e.g. removing a role) instantly tightens what the
  * delegate inherits.
  */
-import { resolveUserPermissions } from './rbac.repository.js';
+import { resolveUserPermissions } from "./rbac.repository.js";
 
 export async function resolveEffectivePermissions(
   prisma: PrismaClient,

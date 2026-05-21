@@ -1,5 +1,5 @@
-import { usePortalKyc, usePortalSubmitKyc } from '@loan/api-client';
-import type { KycDocumentType } from '@loan/shared-types';
+import { usePortalKyc, usePortalSubmitKyc } from "@loan/api-client";
+import type { KycDocumentType } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -15,23 +15,24 @@ import {
   SelectValue,
   SkeletonCard,
   useToast,
-} from '@loan/ui';
-import { formatDate } from '@loan/shared-utils';
-import { FileUp } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+} from "@loan/ui";
+import { formatDate } from "@loan/shared-utils";
+import { FileUp } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
-import { DOC_TYPE_LABELS } from '../../customers';
+// Direct import — see customers/constants.ts for why.
+import { DOC_TYPE_LABELS } from "../../customers/constants";
 
 const DOC_OPTIONS: KycDocumentType[] = [
-  'ID_FRONT',
-  'ID_BACK',
-  'PROOF_OF_INCOME',
-  'PROOF_OF_ADDRESS',
-  'SELFIE',
-  'VEHICLE_OR',
-  'VEHICLE_CR',
-  'PROPERTY_TITLE',
-  'TAX_DECLARATION',
+  "ID_FRONT",
+  "ID_BACK",
+  "PROOF_OF_INCOME",
+  "PROOF_OF_ADDRESS",
+  "SELFIE",
+  "VEHICLE_OR",
+  "VEHICLE_CR",
+  "PROPERTY_TITLE",
+  "TAX_DECLARATION",
 ];
 
 /**
@@ -44,9 +45,9 @@ export function PortalKyc() {
   const kyc = usePortalKyc();
   const submit = usePortalSubmitKyc();
   const toast = useToast();
-  const [documentType, setDocumentType] = useState<KycDocumentType>('ID_FRONT');
-  const [documentUrl, setDocumentUrl] = useState('');
-  const [notes, setNotes] = useState('');
+  const [documentType, setDocumentType] = useState<KycDocumentType>("ID_FRONT");
+  const [documentUrl, setDocumentUrl] = useState("");
+  const [notes, setNotes] = useState("");
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -56,11 +57,11 @@ export function PortalKyc() {
         documentUrl,
         notes: notes || undefined,
       });
-      toast.success('Document submitted for review');
-      setDocumentUrl('');
-      setNotes('');
+      toast.success("Document submitted for review");
+      setDocumentUrl("");
+      setNotes("");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Could not submit');
+      toast.error((err as Error).message ?? "Could not submit");
     }
   };
 
@@ -77,11 +78,15 @@ export function PortalKyc() {
         <CardContent className="space-y-3">
           {status && (
             <div className="text-sm">
-              <Badge variant={status.complete ? 'success' : 'warning'}>{status.status}</Badge>
+              <Badge variant={status.complete ? "success" : "warning"}>
+                {status.status}
+              </Badge>
               {status.missing.length > 0 && (
                 <div className="mt-2 text-xs text-amber-300">
-                  Still missing:{' '}
-                  {status.missing.map((m) => DOC_TYPE_LABELS[m] ?? m).join(', ')}
+                  Still missing:{" "}
+                  {status.missing
+                    .map((m) => DOC_TYPE_LABELS[m] ?? m)
+                    .join(", ")}
                 </div>
               )}
             </div>
@@ -91,18 +96,25 @@ export function PortalKyc() {
           ) : (
             <ul className="divide-y divide-white/5 text-sm">
               {(kyc.data?.docs ?? []).map((d) => (
-                <li key={d.id} className="py-2 flex items-center justify-between">
+                <li
+                  key={d.id}
+                  className="py-2 flex items-center justify-between"
+                >
                   <div>
-                    <div>{DOC_TYPE_LABELS[d.documentType] ?? d.documentType}</div>
-                    <div className="text-xs text-white/45">{formatDate(d.submittedAt)}</div>
+                    <div>
+                      {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
+                    </div>
+                    <div className="text-xs text-white/45">
+                      {formatDate(d.submittedAt)}
+                    </div>
                   </div>
                   <Badge
                     variant={
-                      d.status === 'VERIFIED'
-                        ? 'success'
-                        : d.status === 'REJECTED'
-                          ? 'danger'
-                          : 'warning'
+                      d.status === "VERIFIED"
+                        ? "success"
+                        : d.status === "REJECTED"
+                          ? "danger"
+                          : "warning"
                     }
                   >
                     {d.status}
@@ -125,8 +137,13 @@ export function PortalKyc() {
           <form onSubmit={onSubmit} className="space-y-3">
             <div className="space-y-1">
               <label className="text-xs text-white/55">Document type</label>
-              <Select value={documentType} onValueChange={(v) => setDocumentType(v as KycDocumentType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={documentType}
+                onValueChange={(v) => setDocumentType(v as KycDocumentType)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {DOC_OPTIONS.map((d) => (
                     <SelectItem key={d} value={d}>
@@ -154,7 +171,7 @@ export function PortalKyc() {
               />
             </div>
             <Button type="submit" disabled={submit.isPending || !documentUrl}>
-              {submit.isPending ? 'Submitting…' : 'Submit for review'}
+              {submit.isPending ? "Submitting…" : "Submit for review"}
             </Button>
           </form>
         </CardContent>

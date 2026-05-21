@@ -1,4 +1,4 @@
-import { useBankStatements } from '@loan/api-client';
+import { useBankStatements } from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -7,14 +7,15 @@ import {
   CardHeader,
   CardTitle,
   SkeletonCard,
-} from '@loan/ui';
-import { formatDate, formatDateTime, formatMoney } from '@loan/shared-utils';
-import { Banknote, FileSpreadsheet, Plus } from 'lucide-react';
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+} from "@loan/ui";
+import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
+import { Banknote, FileSpreadsheet, Plus } from "lucide-react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 
-import { useAuth } from '../../../providers/auth';
-import { ImportStatementDialog } from '../components/ImportStatementDialog';
+import { useAuth } from "../../../providers/auth";
+import { ImportStatementDialog } from "../components/ImportStatementDialog";
+import { findArticle, TourButton } from "../../help";
 
 /**
  * Bank reconciliation landing — list of imported statements and an
@@ -24,7 +25,7 @@ import { ImportStatementDialog } from '../components/ImportStatementDialog';
 export function BankStatementsPage() {
   const list = useBankStatements();
   const { user } = useAuth();
-  const canImport = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
+  const canImport = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
   const [importing, setImporting] = useState(false);
 
   return (
@@ -34,30 +35,37 @@ export function BankStatementsPage() {
           <Banknote className="h-4 w-4 text-sky-300" />
           Bank reconciliation
         </CardTitle>
-        {canImport && (
-          <Button onClick={() => setImporting(true)}>
-            <Plus className="h-4 w-4" />
-            Import statement
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <TourButton
+            tourId="reconciliation"
+            steps={findArticle("reconciliation")?.tour ?? []}
+          />
+          {canImport && (
+            <span data-tour="recon-import">
+              <Button onClick={() => setImporting(true)}>
+                <Plus className="h-4 w-4" />
+                Import statement
+              </Button>
+            </span>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <p className="text-xs text-white/55 mb-3">
-          Imported bank statements. Each statement holds raw transaction
-          lines; auto-match pairs incoming credits with recorded payments
-          and outgoing debits with loan disbursements. Anything that
-          doesn't match automatically stays unreconciled until a human
-          attaches it manually.
+          Imported bank statements. Each statement holds raw transaction lines;
+          auto-match pairs incoming credits with recorded payments and outgoing
+          debits with loan disbursements. Anything that doesn't match
+          automatically stays unreconciled until a human attaches it manually.
         </p>
         {list.isLoading ? (
           <SkeletonCard />
         ) : (list.data ?? []).length === 0 ? (
           <p className="text-sm text-white/55">
-            No statements imported yet. Click <strong>Import statement</strong> to
-            start the first reconciliation.
+            No statements imported yet. Click <strong>Import statement</strong>{" "}
+            to start the first reconciliation.
           </p>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" data-tour="recon-list">
             <thead className="text-left text-xs uppercase tracking-wider text-white/45">
               <tr>
                 <th className="py-2 px-2">Label</th>
@@ -80,7 +88,9 @@ export function BankStatementsPage() {
                       {s.label}
                     </Link>
                   </td>
-                  <td className="py-2 px-2 font-mono text-xs">{s.bankAccount}</td>
+                  <td className="py-2 px-2 font-mono text-xs">
+                    {s.bankAccount}
+                  </td>
                   <td className="py-2 px-2 text-xs">
                     {formatDate(s.periodStart)} → {formatDate(s.periodEnd)}
                   </td>
@@ -93,11 +103,11 @@ export function BankStatementsPage() {
                   <td className="py-2 px-2">
                     <Badge
                       variant={
-                        s.status === 'RECONCILED'
-                          ? 'success'
-                          : s.status === 'ARCHIVED'
-                            ? 'muted'
-                            : 'muted'
+                        s.status === "RECONCILED"
+                          ? "success"
+                          : s.status === "ARCHIVED"
+                            ? "muted"
+                            : "muted"
                       }
                     >
                       {s.status}
@@ -113,7 +123,9 @@ export function BankStatementsPage() {
           </table>
         )}
       </CardContent>
-      {importing && <ImportStatementDialog onClose={() => setImporting(false)} />}
+      {importing && (
+        <ImportStatementDialog onClose={() => setImporting(false)} />
+      )}
     </Card>
   );
 }

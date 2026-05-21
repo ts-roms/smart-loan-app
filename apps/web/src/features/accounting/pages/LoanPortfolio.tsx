@@ -1,18 +1,32 @@
-import { useLoanPortfolio } from '@loan/api-client';
-import type { AgingBucket } from '@loan/shared-types';
-import { Badge, Card, CardContent, CardHeader, CardTitle, DatePicker, SkeletonCard } from '@loan/ui';
-import { formatMoney } from '@loan/shared-utils';
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useLoanPortfolio } from "@loan/api-client";
+import type { AgingBucket } from "@loan/shared-types";
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  DatePicker,
+  SkeletonCard,
+} from "@loan/ui";
+import { formatMoney } from "@loan/shared-utils";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 
-const BUCKETS: AgingBucket[] = ['CURRENT', 'D_1_30', 'D_31_60', 'D_61_90', 'D_90_PLUS'];
+const BUCKETS: AgingBucket[] = [
+  "CURRENT",
+  "D_1_30",
+  "D_31_60",
+  "D_61_90",
+  "D_90_PLUS",
+];
 
 const BUCKET_LABELS: Record<AgingBucket, string> = {
-  CURRENT: 'Current',
-  D_1_30: '1–30 days',
-  D_31_60: '31–60 days',
-  D_61_90: '61–90 days',
-  D_90_PLUS: '90+ days',
+  CURRENT: "Current",
+  D_1_30: "1–30 days",
+  D_31_60: "31–60 days",
+  D_61_90: "61–90 days",
+  D_90_PLUS: "90+ days",
 };
 
 export function LoanPortfolioPage() {
@@ -77,7 +91,10 @@ export function LoanPortfolioPage() {
                 {(report.data?.rows ?? []).map((r) => (
                   <tr key={r.loanId} className="hover:bg-white/[0.03]">
                     <td className="py-2 px-2 font-mono">
-                      <Link to={`/loans/${r.loanId}`} className="text-sky-300 hover:underline">
+                      <Link
+                        to={`/loans/${r.loanNumber}`}
+                        className="text-sky-300 hover:underline"
+                      >
                         {r.loanNumber}
                       </Link>
                     </td>
@@ -85,17 +102,23 @@ export function LoanPortfolioPage() {
                     <td className="py-2 px-2 text-right font-mono">
                       {formatMoney(r.outstandingBalance)}
                     </td>
-                    <td className="py-2 px-2 text-right">{r.installmentsOverdue}</td>
+                    <td className="py-2 px-2 text-right">
+                      {r.installmentsOverdue}
+                    </td>
                     <td className="py-2 px-2 text-right">{r.daysOverdue}</td>
                     <td className="py-2 px-2">
-                      <Badge variant={bucketVariant(r.bucket)}>{BUCKET_LABELS[r.bucket]}</Badge>
+                      <Badge variant={bucketVariant(r.bucket)}>
+                        {BUCKET_LABELS[r.bucket]}
+                      </Badge>
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t border-white/10 bg-white/[0.02] font-semibold">
-                  <td className="py-2 px-2" colSpan={2}>Total</td>
+                  <td className="py-2 px-2" colSpan={2}>
+                    Total
+                  </td>
                   <td className="py-2 px-2 text-right font-mono">
                     {formatMoney(report.data?.totalOutstanding ?? 0)}
                   </td>
@@ -110,13 +133,20 @@ export function LoanPortfolioPage() {
   );
 }
 
-function bucketVariant(b: AgingBucket): 'success' | 'danger' | 'muted' | 'warning' {
+function bucketVariant(
+  b: AgingBucket,
+): "success" | "danger" | "muted" | "warning" {
   switch (b) {
-    case 'CURRENT': return 'success';
-    case 'D_1_30': return 'warning';
-    case 'D_31_60':
-    case 'D_61_90': return 'warning';
-    case 'D_90_PLUS': return 'danger';
-    default: return 'muted';
+    case "CURRENT":
+      return "success";
+    case "D_1_30":
+      return "warning";
+    case "D_31_60":
+    case "D_61_90":
+      return "warning";
+    case "D_90_PLUS":
+      return "danger";
+    default:
+      return "muted";
   }
 }

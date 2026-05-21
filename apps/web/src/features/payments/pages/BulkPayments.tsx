@@ -1,5 +1,5 @@
-import { useRecordPaymentsBulk } from '@loan/api-client';
-import type { BulkPaymentRow, BulkPaymentRowResult } from '@loan/api-client';
+import { useRecordPaymentsBulk } from "@loan/api-client";
+import type { BulkPaymentRow, BulkPaymentRowResult } from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -7,14 +7,14 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Input,
+  FileDropzone,
   useToast,
-} from '@loan/ui';
-import { formatMoney } from '@loan/shared-utils';
-import { FileSpreadsheet, Trash2, Upload } from 'lucide-react';
-import { useMemo, useRef, useState, type ChangeEvent } from 'react';
+} from "@loan/ui";
+import { formatMoney } from "@loan/shared-utils";
+import { FileSpreadsheet, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 /**
  * Bulk payment recording. The CSV format is the same shape the API expects:
@@ -34,27 +34,36 @@ export function BulkPaymentsPage() {
   const { user } = useAuth();
   const toast = useToast();
   const bulk = useRecordPaymentsBulk();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [raw, setRaw] = useState('loanNumber,amount,paidOn,reference\n');
+  const [raw, setRaw] = useState("loanNumber,amount,paidOn,reference\n");
   const [stopOnError, setStopOnError] = useState(false);
   const [results, setResults] = useState<BulkPaymentRowResult[] | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
 
-  const canSubmit = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
+  const canSubmit = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
 
   const parsed = useMemo(() => parseCsv(raw), [raw]);
 
-  const onPickFile = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
+  // 5 MB ceiling — way more than a sane payments CSV would ever need, and
+  // a guard against accidentally dropping a 200MB Excel export.
+  const MAX_CSV_BYTES = 5 * 1024 * 1024;
+
+  const onFiles = (files: File[]) => {
+    const f = files[0];
     if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => setRaw(String(reader.result ?? ''));
+    reader.onerror = () => toast.error("Failed to read file");
+    reader.onload = () => {
+      const text = String(reader.result ?? "");
+      setRaw(text);
+      setFileName(f.name);
+      setResults(null);
+    };
     reader.readAsText(f);
-    if (fileRef.current) fileRef.current.value = '';
   };
 
   const onSubmit = async () => {
     if (parsed.rows.length === 0) {
-      toast.error('No rows to post');
+      toast.error("No rows to post");
       return;
     }
     if (parsed.errors.length > 0) {
@@ -66,13 +75,14 @@ export function BulkPaymentsPage() {
       setResults(r.results);
       toast.success(`${r.succeeded} posted, ${r.failed} failed`);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   const reset = () => {
-    setRaw('loanNumber,amount,paidOn,reference\n');
+    setRaw("loanNumber,amount,paidOn,reference\n");
     setResults(null);
+    setFileName(null);
   };
 
   return (
@@ -83,17 +93,6 @@ export function BulkPaymentsPage() {
           Bulk payments
         </CardTitle>
         <div className="flex items-center gap-2">
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,text/csv"
-            onChange={onPickFile}
-            className="hidden"
-          />
-          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-            <Upload className="h-3 w-3" />
-            Upload CSV
-          </Button>
           <Button variant="outline" size="sm" onClick={reset}>
             <Trash2 className="h-3 w-3" />
             Clear
@@ -102,28 +101,77 @@ export function BulkPaymentsPage() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-xs text-white/55">
-          Format: <code>loanNumber,amount,paidOn,reference</code>. Header row optional.
-          Use <code>loanId</code> in the header instead of <code>loanNumber</code> if you have UUIDs.
+          Format: <code>loanNumber,amount,paidOn,reference</code>. Header row
+          optional. Use <code>loanId</code> in the header instead of{" "}
+          <code>loanNumber</code> if you have UUIDs.
         </div>
-        <textarea
-          value={raw}
-          onChange={(e) => setRaw(e.target.value)}
-          rows={12}
-          className="w-full font-mono text-xs rounded-md border border-white/15 bg-white/[0.04] p-2"
-          spellCheck={false}
+
+        <FileDropzone
+          accept=".csv,text/csv,text/plain"
+          maxSize={MAX_CSV_BYTES}
+          onFiles={onFiles}
+          onReject={(reason) => toast.error(reason)}
+          label={
+            fileName ? (
+              <>
+                <span className="font-medium text-sky-300">{fileName}</span>
+                <span className="text-white/55">
+                  {" "}
+                  loaded — drop another to replace
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="font-medium text-sky-300">
+                  Drop your CSV here
+                </span>
+                <span className="text-white/55"> or click to browse</span>
+              </>
+            )
+          }
+          hint={<>.csv up to 5&nbsp;MB · paste below works too</>}
         />
+
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] uppercase tracking-wider text-white/45">
+              CSV contents
+            </span>
+            <span className="text-[10px] text-white/45">
+              {raw.split(/\r?\n/).filter((l) => l.trim().length > 0).length}{" "}
+              non-empty line(s)
+            </span>
+          </div>
+          <textarea
+            value={raw}
+            onChange={(e) => {
+              setRaw(e.target.value);
+              // Drop the filename label as soon as the user edits — the
+              // textarea now reflects their own input, not the file.
+              if (fileName) setFileName(null);
+            }}
+            rows={12}
+            className="w-full font-mono text-xs rounded-md border border-white/15 bg-white/[0.04] p-2"
+            spellCheck={false}
+          />
+        </div>
 
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-3">
-            <Badge variant={parsed.errors.length > 0 ? 'danger' : 'muted'}>
+            <Badge variant={parsed.errors.length > 0 ? "danger" : "muted"}>
               {parsed.rows.length} row(s) parsed
             </Badge>
             {parsed.errors.length > 0 && (
-              <Badge variant="danger">{parsed.errors.length} parse error(s)</Badge>
+              <Badge variant="danger">
+                {parsed.errors.length} parse error(s)
+              </Badge>
             )}
             {parsed.totalAmount > 0 && (
               <span className="text-white/55">
-                Total: <span className="font-mono">{formatMoney(parsed.totalAmount)}</span>
+                Total:{" "}
+                <span className="font-mono">
+                  {formatMoney(parsed.totalAmount)}
+                </span>
               </span>
             )}
           </div>
@@ -140,7 +188,9 @@ export function BulkPaymentsPage() {
         {parsed.errors.length > 0 && (
           <ul className="text-xs space-y-1 text-rose-300">
             {parsed.errors.map((e, i) => (
-              <li key={i}>Line {e.line}: {e.message}</li>
+              <li key={i}>
+                Line {e.line}: {e.message}
+              </li>
             ))}
           </ul>
         )}
@@ -164,12 +214,18 @@ export function BulkPaymentsPage() {
                 {parsed.rows.map((r, i) => (
                   <tr key={i} className="text-xs">
                     <td className="py-1 px-2 text-white/45">{i + 1}</td>
-                    <td className="py-1 px-2 font-mono">{r.loanNumber ?? r.loanId}</td>
+                    <td className="py-1 px-2 font-mono">
+                      {r.loanNumber ?? r.loanId}
+                    </td>
                     <td className="py-1 px-2 text-right font-mono">
                       {formatMoney(r.amount)}
                     </td>
-                    <td className="py-1 px-2 text-white/65">{r.paidOn ?? 'today'}</td>
-                    <td className="py-1 px-2 text-white/65">{r.reference ?? '—'}</td>
+                    <td className="py-1 px-2 text-white/65">
+                      {r.paidOn ?? "today"}
+                    </td>
+                    <td className="py-1 px-2 text-white/65">
+                      {r.reference ?? "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -180,17 +236,24 @@ export function BulkPaymentsPage() {
         <div>
           <Button
             onClick={onSubmit}
-            disabled={!canSubmit || bulk.isPending || parsed.rows.length === 0 || parsed.errors.length > 0}
+            disabled={
+              !canSubmit ||
+              bulk.isPending ||
+              parsed.rows.length === 0 ||
+              parsed.errors.length > 0
+            }
           >
             {bulk.isPending
-              ? 'Posting…'
-              : `Post ${parsed.rows.length} payment${parsed.rows.length === 1 ? '' : 's'}`}
+              ? "Posting…"
+              : `Post ${parsed.rows.length} payment${parsed.rows.length === 1 ? "" : "s"}`}
           </Button>
         </div>
 
         {results && (
           <div className="rounded-md border border-white/10 p-3">
-            <div className="text-xs uppercase tracking-wider text-white/45 mb-2">Results</div>
+            <div className="text-xs uppercase tracking-wider text-white/45 mb-2">
+              Results
+            </div>
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wider text-white/45">
                 <tr>
@@ -206,8 +269,8 @@ export function BulkPaymentsPage() {
                     <td className="py-1 px-2 text-white/45">{r.index + 1}</td>
                     <td className="py-1 px-2 font-mono">{r.loanNumber}</td>
                     <td className="py-1 px-2">
-                      <Badge variant={r.ok ? 'success' : 'danger'}>
-                        {r.ok ? 'Posted' : 'Failed'}
+                      <Badge variant={r.ok ? "success" : "danger"}>
+                        {r.ok ? "Posted" : "Failed"}
                       </Badge>
                     </td>
                     <td className="py-1 px-2 text-white/65">
@@ -238,14 +301,14 @@ function parseCsv(raw: string): ParseResult {
   let headerCols: string[] | null = null;
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li]!.trim();
-    if (!line || line.startsWith('#')) continue;
-    const cols = line.split(',').map((c) => c.trim());
+    if (!line || line.startsWith("#")) continue;
+    const cols = line.split(",").map((c) => c.trim());
     // First non-empty line containing alpha looks like a header.
     if (!headerCols && cols.some((c) => /[a-z]/i.test(c) && !/^\d/.test(c))) {
       headerCols = cols.map((c) => c.toLowerCase());
       continue;
     }
-    const cols2 = cols.map((c) => (c === '' ? undefined : c));
+    const cols2 = cols.map((c) => (c === "" ? undefined : c));
     const map: Record<string, string | undefined> = {};
     if (headerCols) {
       for (let i = 0; i < headerCols.length; i++) {
@@ -258,11 +321,11 @@ function parseCsv(raw: string): ParseResult {
       map.paidon = cols2[2];
       map.reference = cols2[3];
     }
-    const loanNumber = map.loannumber ?? map['loan_number'];
-    const loanId = map.loanid ?? map['loan_id'];
+    const loanNumber = map.loannumber ?? map["loan_number"];
+    const loanId = map.loanid ?? map["loan_id"];
     const amount = Number(map.amount);
     if (!loanNumber && !loanId) {
-      errors.push({ line: li + 1, message: 'Missing loanNumber or loanId' });
+      errors.push({ line: li + 1, message: "Missing loanNumber or loanId" });
       continue;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -273,7 +336,7 @@ function parseCsv(raw: string): ParseResult {
       loanNumber,
       loanId,
       amount,
-      paidOn: map.paidon ?? map['paid_on'] ?? undefined,
+      paidOn: map.paidon ?? map["paid_on"] ?? undefined,
       reference: map.reference,
     });
     total += amount;

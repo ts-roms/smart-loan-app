@@ -4,8 +4,13 @@ import {
   SURVEY_QUESTIONS,
   type SurveyAnswer,
   type SurveyQuestion,
-} from './factors.js';
-import { toTier, type Tier } from './tier.js';
+} from "./factors.js";
+import {
+  toBureauBucket,
+  toTier,
+  type BureauBucket,
+  type Tier,
+} from "./tier.js";
 
 export interface BehaviorInput {
   priorLoans: number;
@@ -28,7 +33,10 @@ export interface FactorBreakdown {
 export interface CreditScoreResult {
   /** Final score in the 300–850 range. */
   score: number;
+  /** Internal 5-letter tier used by per-tier pricing and LTV configs. */
   tier: Tier;
+  /** Bureau-style 4-bucket label (FRD §3.9: Excellent/Good/Fair/Poor). */
+  bucket: BureauBucket;
   /** Sum of every factor's points before scaling. */
   rawScore: number;
   /** Max possible raw score. */
@@ -72,7 +80,7 @@ export function computeCreditScore(input: {
     // No history yet — give partial credit so first-time borrowers aren't
     // dinged into oblivion. 50% of behavioral-factor max keeps them in the
     // running while still leaving room to grow.
-    for (const id of ['on_time', 'defaults']) {
+    for (const id of ["on_time", "defaults"]) {
       const f = FACTORS.find((x) => x.id === id);
       if (!f) continue;
       breakdown.push({
@@ -81,7 +89,7 @@ export function computeCreditScore(input: {
         maxPoints: f.maxPoints,
         weight: 0.5,
         points: Math.round(f.maxPoints * 0.5),
-        source: 'No loan history yet — neutral score',
+        source: "No loan history yet — neutral score",
       });
     }
   }
@@ -90,28 +98,29 @@ export function computeCreditScore(input: {
   // Linear scale to FICO-flavoured 300..850.
   const score = Math.round(300 + (rawScore / MAX_RAW_SCORE) * (850 - 300));
   const tier = toTier(score);
+  const bucket = toBureauBucket(score);
 
-  return { score, tier, rawScore, maxRaw: MAX_RAW_SCORE, breakdown };
+  return { score, tier, bucket, rawScore, maxRaw: MAX_RAW_SCORE, breakdown };
 }
 
 function evaluateQuestion(
   q: SurveyQuestion,
   answer: SurveyAnswer | undefined,
 ): { weight: number; source: string } {
-  if (answer === undefined || answer === null || answer === '') {
-    return { weight: 0, source: 'No answer' };
+  if (answer === undefined || answer === null || answer === "") {
+    return { weight: 0, source: "No answer" };
   }
   switch (q.kind) {
-    case 'choice': {
+    case "choice": {
       const opt = q.options.find((o) => o.value === String(answer));
       return {
         weight: opt?.weight ?? 0,
         source: opt ? opt.label : `Unrecognised value: ${String(answer)}`,
       };
     }
-    case 'number': {
-      const n = typeof answer === 'number' ? answer : Number(answer);
-      if (!Number.isFinite(n)) return { weight: 0, source: 'Invalid number' };
+    case "number": {
+      const n = typeof answer === "number" ? answer : Number(answer);
+      if (!Number.isFinite(n)) return { weight: 0, source: "Invalid number" };
       const clamped = Math.max(q.min, Math.min(q.max, n));
       const rawWeight = (clamped - q.min) / (q.max - q.min || 1);
       const weight = q.inverted ? 1 - rawWeight : rawWeight;
@@ -122,19 +131,19 @@ function evaluateQuestion(
           : `${n} (higher is better; min=${q.min} max=${q.max})`,
       };
     }
-    case 'boolean': {
-      const t = answer === true || answer === 'true' || answer === 1;
+    case "boolean": {
+      const t = answer === true || answer === "true" || answer === 1;
       return {
         weight: t ? q.weightWhenTrue : 0,
-        source: t ? 'Yes' : 'No',
+        source: t ? "Yes" : "No",
       };
     }
   }
 }
 
 function behaviorFactors(b: BehaviorInput): FactorBreakdown[] {
-  const onTime = FACTORS.find((f) => f.id === 'on_time')!;
-  const defaults = FACTORS.find((f) => f.id === 'defaults')!;
+  const onTime = FACTORS.find((f) => f.id === "on_time")!;
+  const defaults = FACTORS.find((f) => f.id === "defaults")!;
 
   const onTimeWeight = b.onTimeRate ?? 0.5; // unknown → neutral
   const defaultPenalty = Math.min(1, b.defaults / Math.max(1, b.priorLoans));
@@ -149,7 +158,7 @@ function behaviorFactors(b: BehaviorInput): FactorBreakdown[] {
       points: Math.round(onTime.maxPoints * onTimeWeight),
       source:
         b.onTimeRate === null
-          ? 'No payments yet — neutral score'
+          ? "No payments yet — neutral score"
           : `${Math.round(onTimeWeight * 100)}% on-time across ${b.priorLoans} prior loan(s)`,
     },
     {
@@ -160,7 +169,7 @@ function behaviorFactors(b: BehaviorInput): FactorBreakdown[] {
       points: Math.round(defaults.maxPoints * defaultsWeight),
       source:
         b.defaults === 0
-          ? 'No defaults'
+          ? "No defaults"
           : `${b.defaults} default(s) out of ${b.priorLoans}`,
     },
   ];

@@ -10,18 +10,26 @@
  * and persists each send as a `Notification` row.
  */
 
-export type Channel = 'EMAIL' | 'SMS' | 'IN_APP';
+export type Channel = "EMAIL" | "SMS" | "IN_APP";
 
 export type NotificationEvent =
-  | 'LOAN_APPROVED'
-  | 'LOAN_REJECTED'
-  | 'LOAN_DISBURSED'
-  | 'PAYMENT_RECEIVED'
-  | 'PAYMENT_DUE_SOON'
-  | 'PAYMENT_OVERDUE'
-  | 'PROMISE_TO_PAY'
-  | 'WELCOME'
-  | 'TEST';
+  | "LOAN_APPROVED"
+  | "LOAN_REJECTED"
+  | "LOAN_DISBURSED"
+  | "PAYMENT_RECEIVED"
+  | "PAYMENT_DUE_SOON"
+  | "PAYMENT_OVERDUE"
+  | "PROMISE_TO_PAY"
+  | "WELCOME"
+  | "TEST"
+  | "ANNUAL_DOC_EXPIRING"
+  | "ANNUAL_DOC_EXPIRED"
+  | "DEMAND_LETTER_DISPATCHED"
+  | "LEASE_END_OF_TERM"
+  | "LEASE_MAINTENANCE_REMINDER"
+  | "LEASE_PULL_OUT_WARNING"
+  | "LOAN_APPROVAL_PENDING"
+  | "STATEMENT_READY";
 
 export interface SendInput {
   channel: Channel;
@@ -46,13 +54,13 @@ export interface NotificationProvider {
  * still records the `Notification` row, so the UI sees the send happen.
  */
 export class MockNotificationProvider implements NotificationProvider {
-  readonly name = 'MOCK';
-  readonly channels: ReadonlySet<Channel> = new Set(['EMAIL', 'SMS', 'IN_APP']);
+  readonly name = "MOCK";
+  readonly channels: ReadonlySet<Channel> = new Set(["EMAIL", "SMS", "IN_APP"]);
 
   async send(input: SendInput): Promise<SendResult> {
     // eslint-disable-next-line no-console
     console.log(
-      `[notify:${input.channel}] → ${input.recipient}: ${input.subject ?? ''}\n${input.body}`,
+      `[notify:${input.channel}] → ${input.recipient}: ${input.subject ?? ""}\n${input.body}`,
     );
     return { providerRef: `mock-${Date.now()}` };
   }
@@ -93,60 +101,92 @@ export interface RenderedMessage {
  */
 export function renderTemplate(input: RenderInput): RenderedMessage {
   const sub = (s: string) =>
-    s.replace(/%\{(\w+)\}%/g, (_, k) => String(input.data[k] ?? ''));
+    s.replace(/%\{(\w+)\}%/g, (_, k) => String(input.data[k] ?? ""));
   const t = TEMPLATES[input.event];
   if (!t) return { body: `${input.event} (no template)` };
   return {
-    subject: input.channel === 'EMAIL' && t.subject ? sub(t.subject) : undefined,
+    subject:
+      input.channel === "EMAIL" && t.subject ? sub(t.subject) : undefined,
     body: sub(t.body),
   };
 }
 
-const TEMPLATES: Record<
-  NotificationEvent,
-  { subject?: string; body: string }
-> = {
-  LOAN_APPROVED: {
-    subject: 'Your loan %{loanNumber}% has been approved',
-    body:
-      'Hi %{customerName}%, good news — your loan %{loanNumber}% for %{amount}% has been approved. We will reach out to coordinate disbursement.',
-  },
-  LOAN_REJECTED: {
-    subject: 'Update on your loan application',
-    body:
-      'Hi %{customerName}%, your loan %{loanNumber}% was not approved. Reason: %{note}%. You can reapply after 30 days.',
-  },
-  LOAN_DISBURSED: {
-    subject: 'Funds disbursed: %{loanNumber}%',
-    body:
-      'Hi %{customerName}%, %{amount}% has been disbursed for loan %{loanNumber}%. Your first payment is due %{dueDate}%.',
-  },
-  PAYMENT_RECEIVED: {
-    subject: 'Payment received: %{loanNumber}%',
-    body:
-      'Hi %{customerName}%, we received your payment of %{amount}% on loan %{loanNumber}%. Thank you.',
-  },
-  PAYMENT_DUE_SOON: {
-    subject: 'Payment due %{dueDate}%',
-    body:
-      'Hi %{customerName}%, your next payment of %{amount}% on loan %{loanNumber}% is due %{dueDate}%.',
-  },
-  PAYMENT_OVERDUE: {
-    subject: 'Payment overdue: %{loanNumber}%',
-    body:
-      'Hi %{customerName}%, your payment of %{amount}% on loan %{loanNumber}% is %{daysOverdue}% day(s) overdue. Please settle to avoid additional fees.',
-  },
-  PROMISE_TO_PAY: {
-    subject: 'Promise to pay recorded',
-    body:
-      'Hi %{customerName}%, we have recorded your promise to pay %{amount}% on %{dueDate}% for loan %{loanNumber}%.',
-  },
-  WELCOME: {
-    subject: 'Welcome to SmartLoan',
-    body: 'Hi %{customerName}%, welcome to SmartLoan. Your account is ready.',
-  },
-  TEST: {
-    subject: 'Test notification',
-    body: 'This is a test from SmartLoan. %{note}%',
-  },
-};
+const TEMPLATES: Record<NotificationEvent, { subject?: string; body: string }> =
+  {
+    LOAN_APPROVED: {
+      subject: "Your loan %{loanNumber}% has been approved",
+      body: "Hi %{customerName}%, good news — your loan %{loanNumber}% for %{amount}% has been approved. We will reach out to coordinate disbursement.",
+    },
+    LOAN_REJECTED: {
+      subject: "Update on your loan application",
+      body: "Hi %{customerName}%, your loan %{loanNumber}% was not approved. Reason: %{note}%. You can reapply after 30 days.",
+    },
+    LOAN_DISBURSED: {
+      subject: "Funds disbursed: %{loanNumber}%",
+      body: "Hi %{customerName}%, %{amount}% has been disbursed for loan %{loanNumber}%. Your first payment is due %{dueDate}%.",
+    },
+    PAYMENT_RECEIVED: {
+      subject: "Payment received: %{loanNumber}%",
+      body: "Hi %{customerName}%, we received your payment of %{amount}% on loan %{loanNumber}%. Thank you.",
+    },
+    PAYMENT_DUE_SOON: {
+      subject: "Payment due %{dueDate}%",
+      body: "Hi %{customerName}%, your next payment of %{amount}% on loan %{loanNumber}% is due %{dueDate}%.",
+    },
+    PAYMENT_OVERDUE: {
+      subject: "Payment overdue: %{loanNumber}%",
+      body: "Hi %{customerName}%, your payment of %{amount}% on loan %{loanNumber}% is %{daysOverdue}% day(s) overdue. Please settle to avoid additional fees.",
+    },
+    PROMISE_TO_PAY: {
+      subject: "Promise to pay recorded",
+      body: "Hi %{customerName}%, we have recorded your promise to pay %{amount}% on %{dueDate}% for loan %{loanNumber}%.",
+    },
+    WELCOME: {
+      subject: "Welcome to SmartLoan",
+      body: "Hi %{customerName}%, welcome to SmartLoan. Your account is ready.",
+    },
+    TEST: {
+      subject: "Test notification",
+      body: "This is a test from SmartLoan. %{note}%",
+    },
+    ANNUAL_DOC_EXPIRING: {
+      subject: "%{docType}% expires in %{daysOut}% days",
+      body: "Hi %{customerName}%, your %{docName}% (%{docType}%) for loan %{loanNumber}% expires on %{expiresAt}% — %{daysOut}% day(s) away. Please submit a renewal to keep your account in good standing.",
+    },
+    ANNUAL_DOC_EXPIRED: {
+      subject: "ACTION REQUIRED — %{docType}% expired",
+      body: "Hi %{customerName}%, your %{docName}% (%{docType}%) for loan %{loanNumber}% expired on %{expiresAt}% (%{daysOut}% day(s) ago). Please submit a renewal immediately — continued non-compliance may trigger penalties or repossession.",
+    },
+    DEMAND_LETTER_DISPATCHED: {
+      subject: "%{stageLabel}% — Loan %{loanNumber}%",
+      body: "Hi %{customerName}%, a %{stageLabel}% has been issued on loan %{loanNumber}%. Total amount due: %{totalOwed}%. Please settle by %{paymentDeadline}% to avoid further escalation.",
+    },
+    LEASE_END_OF_TERM: {
+      subject: "Lease end-of-term — Loan %{loanNumber}%",
+      body: "Hi %{customerName}%, your lease on loan %{loanNumber}% ends in 60 days. Your options: (1) pay the residual buyout (%{residualValue}%) to take title, (2) return the vehicle, or (3) extend the lease. Please contact us to confirm your choice.",
+    },
+    LEASE_MAINTENANCE_REMINDER: {
+      subject: "6-month maintenance reminder",
+      body: "Hi %{customerName}%, this is a friendly reminder that your leased vehicle on loan %{loanNumber}% is due for periodic maintenance. Please coordinate with your preferred service center within the next two weeks.",
+    },
+    LEASE_PULL_OUT_WARNING: {
+      subject: "URGENT — possible vehicle pull-out",
+      body: "Hi %{customerName}%, your lease on loan %{loanNumber}% is %{missedCount}% missed payment(s) past due. Per the lease agreement, %{threshold}% consecutive misses trigger vehicle recovery. Please settle the outstanding amount immediately or contact us to discuss arrangements.",
+    },
+    // Sent to each authorized approver when a loan enters their step. The
+    // body is written approver-facing (vs all the other borrower-facing
+    // templates above) — staff get the loan number + borrower context so
+    // they can act without context-switching from the notification.
+    LOAN_APPROVAL_PENDING: {
+      subject: "Approval needed: %{loanNumber}% (%{stepLabel}%)",
+      body: "Hi %{recipientName}%, loan %{loanNumber}% for %{borrowerName}% (%{amount}%) is waiting on your approval at the “%{stepLabel}%” step. Open the loan to review and approve or reject.",
+    },
+    // Sent to the customer when their operator generates a statement of
+    // account and asks the system to notify them. Body intentionally omits
+    // amounts — the PDF carries the figures; this is just a "log in to
+    // download" nudge so we don't email PII directly.
+    STATEMENT_READY: {
+      subject: "Your statement of account is ready",
+      body: "Hi %{customerName}%, your statement of account dated %{asOf}% is ready to view. Log in to your portal to view and download it. If you have any questions about the figures, reply to this email or contact your loan officer.",
+    },
+  };

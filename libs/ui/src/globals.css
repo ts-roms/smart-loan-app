@@ -3,34 +3,134 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Theme — "warm dark, refined" tuned for long-session readability AND
+   * a more professional, modern visual hierarchy.
+   *
+   * Tier surfaces (Linear / Vercel-style):
+   *   --surface-1   the page background plate beneath cards
+   *   --surface-2   the default card body — lifted ~3% above background
+   *   --surface-3   elevated card (hero KPI, modal, popover) — lifted ~6%
+   * Borders use the same hue family at slightly higher lightness so they
+   * never look like harsh white lines on dark.
+   *
+   * Semantic status colors:
+   *   --success / --warning / --danger / --info
+   * with matching -soft variants for backgrounds (10-12% alpha tint).
+   * Components should reach for these instead of hard-coding `amber-300`
+   * etc., so a future palette tweak is a one-file change.
+   *
+   * Foreground hierarchy:
+   *   --foreground            body text, 88% L  (WCAG AAA against bg)
+   *   --foreground-muted      secondary text, 65% L
+   *   --foreground-subtle     tertiary text / metadata, 50% L
+   * Use these instead of `text-white/45`, `text-white/55` etc. so opacity
+   * is no longer doing two jobs (hierarchy + accessibility).
+   */
   :root {
     color-scheme: dark;
-    --background: 222 28% 6%;
-    --foreground: 210 30% 96%;
-    --muted: 217 17% 18%;
-    --muted-foreground: 215 16% 65%;
-    --border: 217 25% 22%;
-    --input: 217 25% 22%;
-    --ring: 198 90% 60%;
-    --primary: 198 90% 60%;
-    --primary-foreground: 222 47% 11%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 30% 96%;
+
+    /* Surfaces */
+    --background: 222 16% 7%;          /* deeper plate so cards stand out */
+    --surface-1: 220 14% 10%;          /* page surface */
+    --surface-2: 220 13% 13%;          /* default card */
+    --surface-3: 220 12% 16%;          /* elevated card */
+
+    /* Foreground tiers */
+    --foreground: 213 18% 92%;
+    --foreground-muted: 215 14% 65%;
+    --foreground-subtle: 215 12% 48%;
+    --muted: 220 12% 18%;
+    --muted-foreground: 215 14% 65%;
+
+    /* Borders + inputs */
+    --border: 217 14% 20%;
+    --border-strong: 217 14% 28%;
+    --input: 217 14% 20%;
+    --ring: 199 78% 60%;
+
+    /* Brand accent — sky family, lightly desaturated */
+    --primary: 199 78% 60%;
+    --primary-soft: 199 78% 60% / 0.12;
+    --primary-foreground: 220 30% 10%;
+
+    /* Semantic statuses */
+    --success: 152 60% 52%;
+    --success-soft: 152 60% 52% / 0.12;
+    --warning: 38 92% 62%;
+    --warning-soft: 38 92% 62% / 0.12;
+    --danger: 0 70% 60%;
+    --danger-soft: 0 70% 60% / 0.12;
+    --info: 217 80% 65%;
+    --info-soft: 217 80% 65% / 0.12;
+
+    /* Legacy alias — keep so existing `bg-destructive` calls still work */
+    --destructive: 0 70% 60%;
+    --destructive-foreground: 213 18% 92%;
   }
 
   html, body, #root {
     height: 100%;
   }
+
   body {
-    background: radial-gradient(1200px 600px at 10% 0%, rgba(56, 189, 248, 0.06), transparent 60%),
-                radial-gradient(900px 500px at 100% 100%, rgba(168, 85, 247, 0.05), transparent 55%),
-                hsl(var(--background));
+    /*
+     * Two whisper-thin radial accents in opposing corners give the page a
+     * subtle focal centre without ever competing with content. Opacity is
+     * intentionally below the perception threshold for most viewers —
+     * you should feel it more than see it.
+     */
+    background:
+      radial-gradient(900px 480px at 8% -10%, hsl(var(--primary) / 0.06), transparent 60%),
+      radial-gradient(700px 420px at 100% 110%, hsl(265 80% 60% / 0.04), transparent 55%),
+      hsl(var(--background));
     color: hsl(var(--foreground));
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    /* Stylistic alternates Inter exposes — tighter alt for `cv02`, single-
+     * storey `g` for `cv03`, sharper `i/j` for `cv04`, modernised `1` for
+     * `cv11`. Keeps the type feeling tuned, not default. */
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Numbers (KPIs, money, percentages) should always be tabular so columns
+   * line up. We tag every number container with `font-variant-numeric` via
+   * the .tabular utility below; this rule covers <code>/<kbd>/<samp> by
+   * default which also tend to be numeric in this app. */
+  code, kbd, samp {
+    font-variant-numeric: tabular-nums;
   }
 }
 
 @layer utilities {
+  /* Surface helpers — paired with the CSS vars above. Cards use surface-2
+   * by default; elevated cards (hero KPIs, popovers) use surface-3. */
+  .bg-surface-1 { background-color: hsl(var(--surface-1)); }
+  .bg-surface-2 { background-color: hsl(var(--surface-2)); }
+  .bg-surface-3 { background-color: hsl(var(--surface-3)); }
+  .border-default { border-color: hsl(var(--border)); }
+  .border-strong  { border-color: hsl(var(--border-strong)); }
+
+  /* Semantic text + background utilities. Keep these short — the goal is
+   * to write `text-success` instead of `text-emerald-300`. */
+  .text-success  { color: hsl(var(--success)); }
+  .text-warning  { color: hsl(var(--warning)); }
+  .text-danger   { color: hsl(var(--danger)); }
+  .text-info     { color: hsl(var(--info)); }
+  .bg-success-soft { background-color: hsl(var(--success-soft)); }
+  .bg-warning-soft { background-color: hsl(var(--warning-soft)); }
+  .bg-danger-soft  { background-color: hsl(var(--danger-soft)); }
+  .bg-info-soft    { background-color: hsl(var(--info-soft)); }
+  .bg-primary-soft { background-color: hsl(var(--primary-soft)); }
+
+  /* Foreground tiers — replaces the `text-white/45` / `/55` mosaic. */
+  .text-fg          { color: hsl(var(--foreground)); }
+  .text-fg-muted    { color: hsl(var(--foreground-muted)); }
+  .text-fg-subtle   { color: hsl(var(--foreground-subtle)); }
+
+  /* Tabular figures — flip on for any container holding numbers. */
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* Glass surfaces — kept for compat with existing call sites. */
   .glass {
     @apply bg-white/[0.04] border border-white/10 backdrop-blur-md;
   }
@@ -38,17 +138,89 @@
     @apply bg-white/[0.06] border border-white/15 backdrop-blur-md;
   }
 
+  /* Elevated card — adds a 1px inner highlight along the top edge so the
+   * card looks lit from above. Stripe / Linear / Vercel all use this
+   * trick to suggest depth without a heavy shadow. */
+  .card-elevated {
+    background-color: hsl(var(--surface-3));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.04),
+      0 1px 0 0 hsl(0 0% 0% / 0.4),
+      0 20px 40px -20px hsl(0 0% 0% / 0.5);
+  }
+
+  /* Section header divider used between dashboard groups. The label sits
+   * on top of a hairline that fades to nothing at both ends. */
+  .section-rule {
+    background: linear-gradient(
+      to right,
+      transparent,
+      hsl(var(--border)) 8%,
+      hsl(var(--border)) 92%,
+      transparent
+    );
+  }
+
   /* Themed scrollbar */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.08);
+    background: hsl(var(--border-strong) / 0.6);
     border-radius: 8px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.16);
+    background: hsl(var(--border-strong));
     background-clip: padding-box;
   }
+}
+
+/* ── Tour guide (driver.js) — dark-theme overrides ──────────────────
+ *
+ * Background tracks the elevated surface variable, so the popover
+ * always blends with whichever theme is active. Text colors use the
+ * semantic foreground tiers introduced above.
+ */
+.loan-tour-popover.driver-popover {
+  background: hsl(var(--surface-3));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
+    0 24px 40px -12px rgba(0, 0, 0, 0.6);
+  max-width: 360px;
+}
+.loan-tour-popover .driver-popover-title {
+  color: hsl(var(--primary));
+  font-size: 14px;
+  font-weight: 600;
+}
+.loan-tour-popover .driver-popover-description {
+  color: hsl(var(--foreground) / 0.85);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.loan-tour-popover .driver-popover-progress-text {
+  color: hsl(var(--foreground-subtle));
+  font-size: 11px;
+}
+.loan-tour-popover .driver-popover-footer button {
+  background: hsl(var(--surface-2));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  text-shadow: none;
+}
+.loan-tour-popover .driver-popover-footer .driver-popover-next-btn {
+  background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.loan-tour-popover .driver-popover-close-btn {
+  color: hsl(var(--foreground-subtle));
 }

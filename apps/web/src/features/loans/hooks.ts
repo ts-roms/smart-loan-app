@@ -12,6 +12,13 @@ export {
   useLoan,
   useQuote,
   useApplyLoan,
+  useDryRunLoan,
+  useRecordSelfieMatch,
+  useLoanDrafts,
+  useLoanDraft,
+  useCreateLoanDraft,
+  useUpdateLoanDraft,
+  useDeleteLoanDraft,
   useDecideLoan,
   useDisburseLoan,
   useRecordPayment,
@@ -32,4 +39,4 @@ export {
   useSignAsBorrower,
   useActiveDelegations,
   useUpload,
-} from '@loan/api-client';
+} from "@loan/api-client";

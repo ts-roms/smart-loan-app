@@ -3,8 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b1220" />
-    <title>Smart Loan</title>
+    <!-- The %THEME_COLOR_BG% token is replaced at build time by the
+         `injectThemeTokens` Vite plugin, which sources its value from
+         `src/theme.ts`. That same file feeds the PWA manifest, so the
+         status-bar / install-banner / app-shell colours stay in lock-step.
+         Runtime UI gets its colours from CSS variables in
+         libs/ui/src/globals.css (also kept in sync with theme.ts). -->
+    <meta name="theme-color" content="%THEME_COLOR_BG%" />
+    <!-- Favicon (browser tab) + apple-touch-icon (iOS Add-to-Home-Screen). -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/icon.svg" />
+    <!-- PWA hints — when installed via Safari, these control the standalone
+         status bar style. The manifest covers Chrome / Edge / Brave. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SmartLoan" />
+    <title>SmartLoan</title>
   </head>
   <body>
     <div id="root"></div>
