@@ -23,6 +23,8 @@ export async function reconciliationRoutes(app: FastifyInstance) {
   const audit = new AuditLogRepository(app.prisma);
 
   app.addHook("preHandler", app.authenticate);
+  // Bank reconciliation is a PROFESSIONAL-tier feature.
+  app.addHook("preHandler", app.requireFeature("accounting.reconciliation"));
 
   app.get(
     "/statements",

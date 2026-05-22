@@ -13,7 +13,12 @@ export function registerBulkImportHttp(
 ): void {
   app.post(
     "/bulk",
-    { preHandler: app.requirePermission("customers.write") },
+    {
+      preHandler: [
+        app.requireFeature("bulk.customers"),
+        app.requirePermission("customers.write"),
+      ],
+    },
     controller.run,
   );
 }

@@ -33,6 +33,17 @@ export async function cooperativeRoutes(app: FastifyInstance) {
   const service = new CooperativeService(new CooperativeRepository(app.prisma));
   const ctrl = new CooperativeController(service);
   app.addHook("preHandler", app.authenticate);
+  // Cooperative module is ENTERPRISE-tier. Any of the three cooperative
+  // flags unlocks the whole prefix; the platform CLI ships all three
+  // together when a tenant gets ENTERPRISE.
+  app.addHook(
+    "preHandler",
+    app.requireFeature(
+      "cooperative.contributions",
+      "cooperative.savings",
+      "cooperative.funds",
+    ),
+  );
 
   // ── contributions ──
   app.get(

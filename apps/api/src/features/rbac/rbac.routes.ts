@@ -129,10 +129,16 @@ export async function rbacRoutes(app: FastifyInstance) {
   );
 
   // Bulk onboarding (CSV → many users). 207 Multi-Status partial
-  // success is the default expectation.
+  // success is the default expectation. Feature-gated since this is
+  // an ENTERPRISE-tier capability (mass provisioning of staff).
   app.post(
     "/users/bulk-import",
-    { preHandler: app.requirePermission("admin.users") },
+    {
+      preHandler: [
+        app.requireFeature("bulk.users"),
+        app.requirePermission("admin.users"),
+      ],
+    },
     ctrl.bulkImportUsers,
   );
 

@@ -38,6 +38,8 @@ export async function demandLetterRoutes(app: FastifyInstance) {
   const ctrl = new DemandLetterController(service, resolveCallerPerms);
 
   app.addHook("preHandler", app.authenticate);
+  // Demand letters are a PROFESSIONAL-tier feature.
+  app.addHook("preHandler", app.requireFeature("servicing.demand_letters"));
 
   app.get(
     "/candidates",

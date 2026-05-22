@@ -20,6 +20,8 @@ import { createSchema, listExpiringQuerySchema } from "./schemas";
 export async function annualDocsLoanRoutes(app: FastifyInstance) {
   const repo = new AnnualDocumentRepository(app.prisma);
   app.addHook("preHandler", app.authenticate);
+  // Annual / renewable docs are a PROFESSIONAL-tier feature.
+  app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
 
   app.get<{ Params: { loanId: string } }>(
     "/:loanId/annual-docs",
@@ -63,6 +65,7 @@ export async function annualDocsLoanRoutes(app: FastifyInstance) {
 export async function annualDocsRoutes(app: FastifyInstance) {
   const repo = new AnnualDocumentRepository(app.prisma);
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
 
   app.get(
     "/expiring",

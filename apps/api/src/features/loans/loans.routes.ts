@@ -339,7 +339,12 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.post(
     "/payments/bulk",
-    { preHandler: app.requirePermission("payments.bulk") },
+    {
+      preHandler: [
+        app.requireFeature("bulk.payments"),
+        app.requirePermission("payments.bulk"),
+      ],
+    },
     async (req, reply) => {
       const parsed = bulkPaymentSchema.safeParse(req.body);
       if (!parsed.success) {

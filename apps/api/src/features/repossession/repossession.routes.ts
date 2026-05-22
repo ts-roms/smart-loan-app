@@ -41,6 +41,8 @@ export async function repossessionRoutes(app: FastifyInstance) {
   const ctrl = new RepossessionController(service);
 
   app.addHook("preHandler", app.authenticate);
+  // Repossession workflow is a PROFESSIONAL-tier feature.
+  app.addHook("preHandler", app.requireFeature("servicing.repossession"));
 
   app.get("/", { preHandler: app.requirePermission("loans.read") }, ctrl.list);
 

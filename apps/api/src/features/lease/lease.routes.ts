@@ -30,6 +30,8 @@ export async function leaseRoutes(app: FastifyInstance) {
   const ctrl = new LeaseController(service);
 
   app.addHook("preHandler", app.authenticate);
+  // Lease-to-Own is a PROFESSIONAL-tier feature.
+  app.addHook("preHandler", app.requireFeature("servicing.lease"));
 
   app.get("/", { preHandler: app.requirePermission("lease.read") }, ctrl.list);
 
