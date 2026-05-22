@@ -18,15 +18,13 @@ import {
  * HTTP adapter for demand letters. Owns body parsing and the mapping
  * from service result kinds to HTTP codes; service stays
  * framework-free.
+ *
+ * Phase 2: stateless. Each method reads
+ * `req.demandLetterServices!.demandLetters` per call. The caller-
+ * perms resolver is also passed through req (set by the routes
+ * preHandler) so the controller stays free of FastifyInstance.
  */
 export class DemandLetterController {
-  constructor(
-    private readonly service: DemandLetterService,
-    private readonly resolveCallerPerms: (
-      req: FastifyRequest,
-    ) => Promise<Set<string>>,
-  ) {}
-
   candidates = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = candidatesQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -34,7 +32,9 @@ export class DemandLetterController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.identifyCandidates(parsed.data.stage);
+    return req.demandLetterServices!.demandLetters.identifyCandidates(
+      parsed.data.stage,
+    );
   };
 
   list = async (req: FastifyRequest, reply: FastifyReply) => {
@@ -44,14 +44,16 @@ export class DemandLetterController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.list(parsed.data);
+    return req.demandLetterServices!.demandLetters.list(parsed.data);
   };
 
   findById = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) => {
-    const letter = await this.service.findById(req.params.id);
+    const letter = await req.demandLetterServices!.demandLetters.findById(
+      req.params.id,
+    );
     if (!letter) return reply.code(404).send({ error: "NotFound" });
     return letter;
   };
@@ -63,7 +65,7 @@ export class DemandLetterController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.draftBatch({
+    const result = await req.demandLetterServices!.demandLetters.draftBatch({
       input: parsed.data,
       actorId: req.user.sub,
     });
@@ -87,8 +89,10 @@ export class DemandLetterController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const callerPerms = await this.resolveCallerPerms(req);
-    const result = await this.service.approve({
+    const callerPerms =
+      req.permissions ??
+      (await req.demandLetterServices!.resolveCallerPerms(req.user.sub));
+    const result = await req.demandLetterServices!.demandLetters.approve({
       id: req.params.id,
       input: parsed.data,
       actorId: req.user.sub,
@@ -108,7 +112,7 @@ export class DemandLetterController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.dispatch({
+    const result = await req.demandLetterServices!.demandLetters.dispatch({
       id: req.params.id,
       input: parsed.data,
       actorId: req.user.sub,
@@ -127,7 +131,7 @@ export class DemandLetterController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.close({
+    const result = await req.demandLetterServices!.demandLetters.close({
       id: req.params.id,
       input: parsed.data,
       actorId: req.user.sub,

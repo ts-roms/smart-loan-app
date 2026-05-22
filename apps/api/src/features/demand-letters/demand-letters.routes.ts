@@ -12,6 +12,8 @@
  * Layered: routes → controller → service → repo + audit + notifications.
  * Approval has a stage-gated permission check + segregation-of-duties
  * rule in the service (FRD §3.6.5).
+ *
+ * Phase 2: per-request service wiring via `req.demandLetterServices`.
  */
 
 import {
@@ -24,22 +26,36 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { DemandLetterController } from "./demand-letters.controller";
 import { DemandLetterService } from "./demand-letters.service";
 
-export async function demandLetterRoutes(app: FastifyInstance) {
-  const service = new DemandLetterService(
-    app.prisma,
-    new DemandLetterRepository(app.prisma),
-    new LoanRepository(app.prisma),
-    app.notifications,
-    new AuditLogRepository(app.prisma),
-    app.log,
-  );
-  const resolveCallerPerms = async (req: FastifyRequest) =>
-    req.permissions ?? (await app.resolvePermissions(req.user.sub));
-  const ctrl = new DemandLetterController(service, resolveCallerPerms);
+declare module "fastify" {
+  interface FastifyRequest {
+    demandLetterServices?: {
+      demandLetters: DemandLetterService;
+      resolveCallerPerms: (userId: string) => Promise<Set<string>>;
+    };
+  }
+}
 
+export async function demandLetterRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
   // Demand letters are a PROFESSIONAL-tier feature.
   app.addHook("preHandler", app.requireFeature("servicing.demand_letters"));
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.demandLetterServices = {
+      demandLetters: new DemandLetterService(
+        prisma,
+        new DemandLetterRepository(prisma),
+        new LoanRepository(prisma),
+        app.notifications,
+        new AuditLogRepository(prisma),
+        app.log,
+      ),
+      resolveCallerPerms: (userId: string) => app.resolvePermissions(userId),
+    };
+  });
+
+  const ctrl = new DemandLetterController();
 
   app.get(
     "/candidates",
