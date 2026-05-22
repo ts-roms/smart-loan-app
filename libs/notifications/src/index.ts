@@ -29,7 +29,9 @@ export type NotificationEvent =
   | "LEASE_MAINTENANCE_REMINDER"
   | "LEASE_PULL_OUT_WARNING"
   | "LOAN_APPROVAL_PENDING"
-  | "STATEMENT_READY";
+  | "STATEMENT_READY"
+  | "DELEGATION_REVOKED"
+  | "USER_ROLE_CHANGED";
 
 export interface SendInput {
   channel: Channel;
@@ -188,5 +190,22 @@ const TEMPLATES: Record<NotificationEvent, { subject?: string; body: string }> =
     STATEMENT_READY: {
       subject: "Your statement of account is ready",
       body: "Hi %{customerName}%, your statement of account dated %{asOf}% is ready to view. Log in to your portal to view and download it. If you have any questions about the figures, reply to this email or contact your loan officer.",
+    },
+    // Sent to the delegate when a delegation they hold is revoked
+    // early (before its scheduled endsAt). The delegator's name + the
+    // optional reason help the delegate understand why; a short
+    // message is best because the same payload goes to SMS too.
+    DELEGATION_REVOKED: {
+      subject: "Delegation revoked",
+      body: "Hi %{delegateName}%, the delegation from %{delegatorName}% was revoked%{reasonSuffix}%. Any work you were doing under that authority needs to be re-routed.",
+    },
+    // Sent to a user when their role assignments change. `change` is
+    // either "added" or "removed"; `roleName` is the human-readable
+    // role name. Recipient-facing; the actor's identity isn't named
+    // here to keep the message neutral if the change is e.g. a
+    // bulk-onboarding promotion.
+    USER_ROLE_CHANGED: {
+      subject: "Your access changed: %{roleName}%",
+      body: "Hi %{recipientName}%, the %{roleName}% role was %{change}% on your account. Your effective permissions are updated immediately. If this looks wrong, contact your administrator.",
     },
   };

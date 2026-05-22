@@ -30,6 +30,8 @@ export async function delegationRoutes(app: FastifyInstance) {
     new DelegationRepository(app.prisma),
     new AuditLogRepository(app.prisma),
     (userId) => app.resolvePermissions(userId),
+    app.notifications,
+    app.log,
   );
 
   // Caller permissions live on the request after the auth hooks run.

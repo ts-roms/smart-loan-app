@@ -1240,6 +1240,14 @@ enum NotificationEvent {
   /// view in their portal. No PDF attachment — security; customer logs
   /// in to download. refType = "Customer", refId = customer id.
   STATEMENT_READY
+  /// A delegation has been revoked — tell the delegate immediately so
+  /// they know their proxy authority is gone. refType = "Delegation",
+  /// refId = delegation id. Sent inline from the revoke endpoint.
+  DELEGATION_REVOKED
+  /// A user's role assignments changed (added or removed). Sent
+  /// inline from the assign/unassign endpoints. refType = "User",
+  /// refId = the affected user id (not the actor).
+  USER_ROLE_CHANGED
 }
 
 model Notification {

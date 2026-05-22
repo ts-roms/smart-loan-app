@@ -50,13 +50,19 @@ function makeService() {
   // resolvePermissions for the *delegate* (callerPerms is supplied
   // separately by the controller in real code).
   const resolveDelegatePerms = vi.fn().mockResolvedValue(new Set<string>());
+  const notifications = {
+    dispatch: vi.fn().mockResolvedValue(undefined),
+  };
+  const log = { warn: vi.fn(), info: vi.fn(), error: vi.fn() };
   const service = new DelegationService(
     {} as never,
     repo as never,
     audit as never,
     resolveDelegatePerms,
+    notifications as never,
+    log as never,
   );
-  return { service, audit, repo, resolveDelegatePerms };
+  return { service, audit, repo, resolveDelegatePerms, notifications };
 }
 
 const baseInput = {

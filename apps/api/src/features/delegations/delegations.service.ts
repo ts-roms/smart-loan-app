@@ -1,9 +1,11 @@
 import {
   type AuditLogRepository,
   type DelegationRepository,
+  type NotificationRepository,
   type PrismaClient,
   resolveUserPermissions,
 } from "@loan/db";
+import type { FastifyBaseLogger } from "fastify";
 
 import type {
   CreateDelegationInput,
@@ -96,6 +98,8 @@ export class DelegationService {
     private readonly repo: DelegationRepository,
     private readonly audit: AuditLogRepository,
     private readonly resolvePermissions: PermissionResolver,
+    private readonly notifications: NotificationRepository,
+    private readonly log: FastifyBaseLogger,
   ) {}
 
   // ─── reads ────────────────────────────────────────────────────────
@@ -296,7 +300,74 @@ export class DelegationService {
       targetId: updated.id,
       payload: { reason: args.input.reason },
     });
+
+    // Best-effort lifecycle notification to the delegate — the
+    // revocation is already legally in effect (audit row + DB write
+    // committed); a failed notification must NOT roll back the
+    // primary action. Wrapped in catch + log so an outage on the
+    // notification provider doesn't break revocation.
+    await this.notifyRevoked(updated, args.input.reason).catch((err) =>
+      this.log.warn(
+        { err, delegationId: updated.id },
+        "DELEGATION_REVOKED notification dispatch failed",
+      ),
+    );
+
     return { ok: true, delegation: updated };
+  }
+
+  /**
+   * Notify the delegate that the delegation has been revoked.
+   *
+   * Channel reality check: the `Notification` model only links by
+   * `customerId`, and `User` has no phone column — so for staff
+   * lifecycle events we can deliver to **email only** today.
+   * Skipping in-app + SMS isn't a missed feature; it's the truth of
+   * the current schema, documented in the comments below so the
+   * next contributor doesn't reinvent the design.
+   *
+   * If the delegate has no email on file the notification simply
+   * isn't sent; the revocation itself is already in effect.
+   */
+  private async notifyRevoked(
+    d: { id: string; delegatorId: string; delegateId: string },
+    reason: string | null | undefined,
+  ): Promise<void> {
+    const [delegator, delegate] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: d.delegatorId },
+        select: { name: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: d.delegateId },
+        select: { name: true, email: true },
+      }),
+    ]);
+    if (!delegate || !delegate.email) return;
+
+    await this.notifications.dispatch({
+      event: "DELEGATION_REVOKED",
+      channel: "EMAIL",
+      recipient: delegate.email,
+      data: {
+        delegatorName: delegator?.name ?? "your delegator",
+        delegateName: delegate.name,
+        // Templates can't conditionally include text; build the
+        // suffix so the message reads "…was revoked." vs "…was
+        // revoked. Reason: schedule conflict.".
+        reasonSuffix:
+          reason && reason.trim().length > 0
+            ? `. Reason: ${reason.trim()}`
+            : "",
+      },
+      refType: "Delegation",
+      refId: d.id,
+    });
+    // SMS channel: User has no `phone` column. Skip until schema
+    // grows one — out of scope for this change.
+    // IN_APP channel: the Notification model links via customerId
+    // (borrower-facing), not userId. Adding a staff-user inbox is
+    // a separate design change that's out of scope here.
   }
 
   async extend(args: {

@@ -41,13 +41,25 @@ function makeService(opts?: {
   const prisma = {
     userRoleAssignment: { count: userRoleAssignmentCount },
   };
+  const notifications = {
+    dispatch: vi.fn().mockResolvedValue(undefined),
+  };
+  const log = { warn: vi.fn(), info: vi.fn(), error: vi.fn() };
   const service = new RbacService(
     prisma as never,
     {} as never, // permissions — not called
     roles as never,
     audit as never,
+    notifications as never,
+    log as never,
   );
-  return { service, audit, roles, userRoleAssignmentCount };
+  return {
+    service,
+    audit,
+    roles,
+    userRoleAssignmentCount,
+    notifications,
+  };
 }
 
 describe("RbacService.unassignRole — ADMIN self-lockout guard", () => {

@@ -26,6 +26,8 @@ export async function rbacRoutes(app: FastifyInstance) {
     new PermissionRepository(app.prisma),
     new RoleRepository(app.prisma),
     new AuditLogRepository(app.prisma),
+    app.notifications,
+    app.log,
   );
   const ctrl = new RbacController(service);
 

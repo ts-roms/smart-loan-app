@@ -1,11 +1,13 @@
 import { hashPassword } from "@loan/auth";
 import {
   type AuditLogRepository,
+  type NotificationRepository,
   type PermissionRepository,
   type PrismaClient,
   resolveUserPermissions,
   type RoleRepository,
 } from "@loan/db";
+import type { FastifyBaseLogger } from "fastify";
 
 import type {
   AssignRoleInput,
@@ -159,7 +161,46 @@ export class RbacService {
     private readonly permissions: PermissionRepository,
     private readonly roles: RoleRepository,
     private readonly audit: AuditLogRepository,
+    private readonly notifications: NotificationRepository,
+    private readonly log: FastifyBaseLogger,
   ) {}
+
+  /**
+   * Notify a user that their role assignment changed. Best-effort
+   * dispatch — same schema-reality caveat as DelegationService:
+   * email only (no phone column on User, no user-scoped Notification
+   * rows). Failure must not roll back the role write — the caller
+   * wraps this in .catch().
+   */
+  private async notifyRoleChange(args: {
+    userId: string;
+    roleKey: string;
+    change: "added" | "removed";
+  }): Promise<void> {
+    const [user, role] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: args.userId },
+        select: { name: true, email: true },
+      }),
+      this.prisma.role.findUnique({
+        where: { key: args.roleKey },
+        select: { name: true },
+      }),
+    ]);
+    if (!user || !user.email) return;
+    await this.notifications.dispatch({
+      event: "USER_ROLE_CHANGED",
+      channel: "EMAIL",
+      recipient: user.email,
+      data: {
+        recipientName: user.name,
+        roleName: role?.name ?? args.roleKey,
+        change: args.change,
+      },
+      refType: "User",
+      refId: args.userId,
+    });
+  }
 
   // ─── catalog ──────────────────────────────────────────────────────
 
@@ -569,6 +610,18 @@ export class RbacService {
         targetId: args.userId,
         payload: { roleKey: args.input.roleKey },
       });
+      // Best-effort email to the user whose access just changed.
+      // Failure can't roll back the assignment.
+      await this.notifyRoleChange({
+        userId: args.userId,
+        roleKey: args.input.roleKey,
+        change: "added",
+      }).catch((err) =>
+        this.log.warn(
+          { err, userId: args.userId, roleKey: args.input.roleKey },
+          "USER_ROLE_CHANGED (added) notification dispatch failed",
+        ),
+      );
       return { ok: true, assignment: a };
     } catch (err) {
       return { ok: false, kind: "RepoError", message: (err as Error).message };
@@ -625,6 +678,17 @@ export class RbacService {
       targetId: args.userId,
       payload: { roleKey: args.roleKey },
     });
+    // Best-effort email — same caveat as assignRole.
+    await this.notifyRoleChange({
+      userId: args.userId,
+      roleKey: args.roleKey,
+      change: "removed",
+    }).catch((err) =>
+      this.log.warn(
+        { err, userId: args.userId, roleKey: args.roleKey },
+        "USER_ROLE_CHANGED (removed) notification dispatch failed",
+      ),
+    );
     return { ok: true };
   }
 }
