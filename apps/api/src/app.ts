@@ -1,5 +1,9 @@
 import { fastifyAuth } from "@loan/auth";
-import { fastifyPrisma, resolveEffectivePermissions } from "@loan/db";
+import {
+  fastifyPrisma,
+  fastifyTenantPrisma,
+  resolveEffectivePermissions,
+} from "@loan/db";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import sensible from "@fastify/sensible";
@@ -104,6 +108,19 @@ export async function buildApp() {
     allowList: (req) => req.url === "/api/v1/health",
   });
   await app.register(fastifyPrisma, { databaseUrl: config.databaseUrl });
+  // Multi-tenant resolution. In single-tenant mode (default) this is a
+  // no-op preHandler that points req.tenantCtx.prisma at the shared
+  // app.prisma. In multi-tenant mode it reads the JWT `tenant` claim,
+  // looks up the Tenant row, and binds a per-tenant Prisma client.
+  // Registered after fastifyPrisma since the multi-tenant plugin
+  // depends on app.prisma being available for the Tenant catalog
+  // lookup.
+  await app.register(fastifyTenantPrisma, {
+    multiTenant: config.multiTenant,
+    defaultSlug: config.defaultTenantSlug,
+    databaseUrl: config.databaseUrl,
+    perTenantConnectionLimit: config.perTenantConnectionLimit,
+  });
   // Inject the permission resolver — bridges @loan/auth (no prisma dep)
   // to @loan/db (where the schema + RBAC tables live). The resolver also
   // includes active delegations so the delegate's effective permission set

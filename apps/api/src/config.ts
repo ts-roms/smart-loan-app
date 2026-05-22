@@ -82,6 +82,20 @@ export const config = {
   // ── Scheduled jobs ─────────────────────────────────────────────────
   systemUserId: str("SYSTEM_USER_ID", "00000000-0000-0000-0000-000000000000"),
 
+  // ── Multi-tenancy (Phase 2) ────────────────────────────────────────
+  /**
+   * When true, every tenant route requires a JWT `tenant` claim and
+   * queries hit the per-tenant Postgres schema. When false (the
+   * default during the Phase 2 conversion), the resolveTenant
+   * preHandler is a no-op and `req.tenantCtx.prisma` is just the
+   * shared `app.prisma`. See docs/multi-tenant-implementation.md.
+   */
+  multiTenant: (process.env.MULTI_TENANT ?? "").toLowerCase() === "true",
+  /** Slug returned by resolveTenant in single-tenant mode. */
+  defaultTenantSlug: str("DEFAULT_TENANT_SLUG", "default"),
+  /** Per-tenant Prisma pool size. Default 3 (50 tenants × 3 = 150 conns). */
+  perTenantConnectionLimit: num("PER_TENANT_CONNECTION_LIMIT", 3),
+
   // ── Provider selection (P1) ────────────────────────────────────────
   notificationProvider: enumOf(
     "NOTIFICATION_PROVIDER",

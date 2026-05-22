@@ -92,6 +92,12 @@ export {
 
 export { createPrismaClient } from "./client";
 export { fastifyPrisma } from "./plugin";
+export { TenantPrismaCache } from "./tenant-cache";
+export {
+  fastifyTenantPrisma,
+  type TenantContext,
+  type MultiTenantPluginOptions,
+} from "./multi-tenant-plugin";
 export {
   isUuid,
   idOrNumberWhere,

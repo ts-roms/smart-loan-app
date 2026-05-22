@@ -1,5 +1,5 @@
 import { CustomerLedgerRepository, CustomerRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { BulkImportController } from "./bulk-import.controller";
 import { BulkImportService } from "./bulk-import.service";
@@ -15,44 +15,89 @@ import { CustomerLedgerService } from "./ledger.service";
  * Customers feature entry point — registered by the central router
  * under the `/customers` prefix.
  *
- * Wires up the three sub-surfaces (CRUD, bulk-import, ledger) using
- * shared repositories and the cross-cutting `app.screening` /
- * `app.notifications` decorators. Each sub-surface owns its own
- * controller and service; everything else here is plumbing.
+ * **Phase 2 canary**: this feature is the first to use the
+ * per-request, tenant-scoped service wiring. The pattern is:
+ *
+ *   1. `app.authenticate` verifies the JWT and sets `req.user`.
+ *   2. `app.resolveTenant` reads the JWT's `tenant` claim (in
+ *      multi-tenant mode) and binds a Prisma client whose pool is
+ *      pinned to that tenant's schema. In single-tenant mode it just
+ *      points at `app.prisma`. Either way, `req.tenantCtx.prisma` is
+ *      what every subsequent query should use.
+ *   3. `buildCustomerServices` instantiates repos + services using
+ *      that bound client, stashing the result on `req.customerServices`.
+ *   4. Controllers read services from `req.customerServices` rather
+ *      than capturing them in their constructors. This keeps the
+ *      controller-as-singleton pattern intact while letting the
+ *      service dependencies vary per request.
+ *
+ * Cost is ~5 µs of object allocation per request — negligible
+ * compared to any real DB query. The win is leak-safety: every
+ * service is built on top of a tenant-bound client, so there's no
+ * code path that can query the wrong schema.
+ *
+ * @see docs/multi-tenant-implementation.md §4
  */
+
+/**
+ * Per-request service container for the customers feature. Populated
+ * by `buildCustomerServices` and consumed by every controller in
+ * this folder.
+ */
+export interface CustomerServices {
+  customer: CustomerService;
+  bulkImport: BulkImportService;
+  ledger: CustomerLedgerService;
+}
+
+declare module "fastify" {
+  interface FastifyRequest {
+    customerServices?: CustomerServices;
+  }
+}
+
 export async function customerRoutes(app: FastifyInstance): Promise<void> {
-  // Infrastructure
-  const customerRepo = new CustomerRepository(app.prisma);
-  const ledgerRepo = new CustomerLedgerRepository(app.prisma);
-
-  // Application services
-  const customerService = new CustomerService(
-    customerRepo,
-    app.prisma,
-    app.screening,
-  );
-  const bulkImportService = new BulkImportService(customerRepo, app.screening);
-  const ledgerService = new CustomerLedgerService(
-    customerRepo,
-    ledgerRepo,
-    app.notifications,
-    app.prisma,
-  );
-
-  // Presentation
-  const customerController = new CustomerController(customerService);
-  const bulkImportController = new BulkImportController(bulkImportService);
-  const ledgerController = new CustomerLedgerController(ledgerService);
-
-  // Every customer route requires authentication. Mounted once at the
-  // feature level rather than per-route file to keep route files focused
-  // on URL mapping.
+  // Order matters: authenticate → resolveTenant → build services.
+  // Each preHandler depends on what the previous one set.
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", buildCustomerServices(app));
 
-  // Route registration. Order matters only when paths overlap; here the
-  // three groups have disjoint shapes (`/`, `/bulk`, `/:id/...`) so the
-  // order is just for readability.
+  // Controllers are now stateless — they read services from req.
+  // We keep them as singletons since constructing them is free and
+  // route registration takes a controller reference.
+  const customerController = new CustomerController();
+  const bulkImportController = new BulkImportController();
+  const ledgerController = new CustomerLedgerController();
+
   registerCustomerHttp(app, customerController);
   registerBulkImportHttp(app, bulkImportController);
   registerLedgerHttp(app, ledgerController);
+}
+
+/**
+ * Per-request service factory. Returns a preHandler that builds the
+ * customer service tree on top of `req.tenantCtx.prisma` and stores
+ * it on the request.
+ *
+ * Lives outside `customerRoutes` so tests can exercise the wiring
+ * directly (build a fake request, call the returned function, assert
+ * on the resulting `req.customerServices`).
+ */
+function buildCustomerServices(app: FastifyInstance) {
+  return async (req: FastifyRequest) => {
+    const { prisma } = req.tenantCtx;
+    const customerRepo = new CustomerRepository(prisma);
+    const ledgerRepo = new CustomerLedgerRepository(prisma);
+    req.customerServices = {
+      customer: new CustomerService(customerRepo, prisma, app.screening),
+      bulkImport: new BulkImportService(customerRepo, app.screening),
+      ledger: new CustomerLedgerService(
+        customerRepo,
+        ledgerRepo,
+        app.notifications,
+        prisma,
+      ),
+    };
+  };
 }
