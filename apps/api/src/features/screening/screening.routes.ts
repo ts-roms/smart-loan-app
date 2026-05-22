@@ -1,5 +1,10 @@
-import { ScreeningRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+/**
+ * Screening admin routes. Phase 2: tenant-scoped — `app.screening` is
+ * a factory that builds a ScreeningRepository on top of the calling
+ * tenant's Prisma client (and its AML watchlist).
+ */
+import type { ScreeningRepository } from "@loan/db";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 const overrideSchema = z.object({
@@ -13,68 +18,82 @@ const watchlistSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
-export function screeningRoutes(repo: ScreeningRepository) {
-  return async (app: FastifyInstance) => {
-    app.addHook("preHandler", app.authenticate);
+declare module "fastify" {
+  interface FastifyRequest {
+    screeningCtx?: { repo: ScreeningRepository };
+  }
+}
 
-    // ─── Per-customer screening ────────────────────────────────────
+export async function screeningRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    req.screeningCtx = {
+      repo: app.screening(req.tenantCtx.prisma),
+    };
+  });
 
-    app.get<{ Params: { customerId: string } }>(
-      "/customers/:customerId",
-      async (req) => repo.listForCustomer(req.params.customerId),
-    );
+  // ─── Per-customer screening ────────────────────────────────────
 
-    app.get<{ Params: { customerId: string } }>(
-      "/customers/:customerId/latest",
-      async (req) => repo.latestForCustomer(req.params.customerId),
-    );
+  app.get<{ Params: { customerId: string } }>(
+    "/customers/:customerId",
+    async (req) =>
+      req.screeningCtx!.repo.listForCustomer(req.params.customerId),
+  );
 
-    app.post<{ Params: { customerId: string } }>(
-      "/customers/:customerId/run",
-      { preHandler: app.requirePermission("screening.run") },
-      async (req) => repo.screen(req.params.customerId),
-    );
+  app.get<{ Params: { customerId: string } }>(
+    "/customers/:customerId/latest",
+    async (req) =>
+      req.screeningCtx!.repo.latestForCustomer(req.params.customerId),
+  );
 
-    app.post<{ Params: { customerId: string } }>(
-      "/customers/:customerId/override",
-      { preHandler: app.requirePermission("screening.override") },
-      async (req, reply) => {
-        const parsed = overrideSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return reply
-            .code(400)
-            .send({ error: "ValidationError", issues: parsed.error.issues });
-        }
-        return repo.override(
-          req.params.customerId,
-          parsed.data.note,
-          req.user.sub,
-        );
-      },
-    );
+  app.post<{ Params: { customerId: string } }>(
+    "/customers/:customerId/run",
+    { preHandler: app.requirePermission("screening.run") },
+    async (req) => req.screeningCtx!.repo.screen(req.params.customerId),
+  );
 
-    // ─── Watchlist (mock provider's data source) ───────────────────
+  app.post<{ Params: { customerId: string } }>(
+    "/customers/:customerId/override",
+    { preHandler: app.requirePermission("screening.override") },
+    async (req, reply) => {
+      const parsed = overrideSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
+      }
+      return req.screeningCtx!.repo.override(
+        req.params.customerId,
+        parsed.data.note,
+        req.user.sub,
+      );
+    },
+  );
 
-    app.get("/watchlist", async () => repo.listWatchlist());
+  // ─── Watchlist (mock provider's data source) ───────────────────
 
-    app.post(
-      "/watchlist",
-      { preHandler: app.requirePermission("screening.watchlist") },
-      async (req, reply) => {
-        const parsed = watchlistSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return reply
-            .code(400)
-            .send({ error: "ValidationError", issues: parsed.error.issues });
-        }
-        return reply.code(201).send(await repo.addWatchlistEntry(parsed.data));
-      },
-    );
+  app.get("/watchlist", async (req) => req.screeningCtx!.repo.listWatchlist());
 
-    app.delete<{ Params: { id: string } }>(
-      "/watchlist/:id",
-      { preHandler: app.requirePermission("screening.watchlist") },
-      async (req) => repo.removeWatchlistEntry(req.params.id),
-    );
-  };
+  app.post(
+    "/watchlist",
+    { preHandler: app.requirePermission("screening.watchlist") },
+    async (req, reply) => {
+      const parsed = watchlistSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
+      }
+      return reply
+        .code(201)
+        .send(await req.screeningCtx!.repo.addWatchlistEntry(parsed.data));
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    "/watchlist/:id",
+    { preHandler: app.requirePermission("screening.watchlist") },
+    async (req) => req.screeningCtx!.repo.removeWatchlistEntry(req.params.id),
+  );
 }

@@ -756,6 +756,7 @@ function buildLoanCtx(app: FastifyInstance) {
     const audit = new AuditLogRepository(prisma);
     const delegations = new DelegationRepository(prisma);
     const drafts = new LoanDraftRepository(prisma);
+    const notifications = app.notifications(prisma);
     const workflowService = new LoanWorkflowService(
       loans,
       scores,
@@ -763,13 +764,14 @@ function buildLoanCtx(app: FastifyInstance) {
       rules,
       audit,
       prisma,
-      app.screening,
-      app.notifications,
+      app.screening(prisma),
+      notifications,
       app.log,
-      // Bind the Fastify instance + per-request prisma into a function
-      // shape so the workflow service doesn't have to know about either.
+      // Bind the Fastify instance + per-request prisma + notifications
+      // into a function shape so the workflow service doesn't have to
+      // know about any of those.
       (loanId, stepOrder) =>
-        notifyApproversForStep(app, prisma, loanId, stepOrder),
+        notifyApproversForStep(app, prisma, notifications, loanId, stepOrder),
     );
     req.loanCtx = {
       loans,

@@ -44,7 +44,7 @@ export async function delegationRoutes(app: FastifyInstance) {
         new DelegationRepository(prisma),
         new AuditLogRepository(prisma),
         (userId) => app.resolvePermissions(userId),
-        app.notifications,
+        app.notifications(prisma),
         app.log,
       ),
       resolveCallerPerms: (userId: string) => app.resolvePermissions(userId),

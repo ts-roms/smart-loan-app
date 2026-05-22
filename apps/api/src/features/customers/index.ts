@@ -89,13 +89,15 @@ function buildCustomerServices(app: FastifyInstance) {
     const { prisma } = req.tenantCtx;
     const customerRepo = new CustomerRepository(prisma);
     const ledgerRepo = new CustomerLedgerRepository(prisma);
+    const screening = app.screening(prisma);
+    const notifications = app.notifications(prisma);
     req.customerServices = {
-      customer: new CustomerService(customerRepo, prisma, app.screening),
-      bulkImport: new BulkImportService(customerRepo, app.screening),
+      customer: new CustomerService(customerRepo, prisma, screening),
+      bulkImport: new BulkImportService(customerRepo, screening),
       ledger: new CustomerLedgerService(
         customerRepo,
         ledgerRepo,
-        app.notifications,
+        notifications,
         prisma,
       ),
     };

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   JobRepository,
   NotificationRepository,
+  type PrismaClient,
   ScreeningRepository,
 } from "@loan/db";
 
@@ -36,10 +37,7 @@ import { healthRoutes } from "../features/health/index";
 import { jobRoutes } from "../features/jobs/index";
 import { kycRoutes } from "../features/kyc/index";
 import { leaseRoutes } from "../features/lease/index";
-import {
-  licensingRoutes,
-  type LicensingService,
-} from "../features/licensing/index";
+import { licensingRoutes } from "../features/licensing/index";
 import {
   loanProductRoutes,
   loanApprovalChainRoutes,
@@ -60,45 +58,69 @@ import { uploadRoutes } from "../features/uploads/index";
 import { buildJobDefinitions } from "../jobs";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
-  // Single instances of the cross-cutting repos so the routes + scheduler
-  // share state. The screening provider reads the watchlist via the repo's
-  // loader, so the seed-watchlist endpoint immediately affects screens.
-  // Providers are env-driven (see config.ts + providers.ts). Falls back
-  // to MOCK in dev / when real credentials aren't set.
-  const amlProvider = createAmlProvider(
-    config.amlProvider,
-    async () => {
-      const rows = await app.prisma.amlWatchlistEntry.findMany();
-      return rows.map((r) => ({
-        list: r.list,
-        fullName: r.fullName,
-        aliases: r.aliases,
-        reason: r.reason,
-      }));
-    },
+  // Providers are singletons (env-driven, see config.ts + providers.ts).
+  // The repos that consume them, however, are tenant-scoped: each
+  // request gets a NotificationRepository / ScreeningRepository bound
+  // to the calling tenant's Prisma client so we never read or write
+  // the wrong schema. The factories below are exposed on `app` and
+  // consumed by per-request preHandlers throughout the features tree.
+  const notificationProvider = createNotificationProvider(
+    config.notificationProvider,
     app.log,
   );
-  const screeningRepo: ScreeningRepository = new ScreeningRepository(
-    app.prisma,
-    amlProvider,
+  const buildAmlProvider = (prisma: PrismaClient) =>
+    createAmlProvider(
+      config.amlProvider,
+      async () => {
+        // Each tenant has its own watchlist seed; the provider closes
+        // over the tenant's prisma so the loader hits the right schema.
+        const rows = await prisma.amlWatchlistEntry.findMany();
+        return rows.map((r) => ({
+          list: r.list,
+          fullName: r.fullName,
+          aliases: r.aliases,
+          reason: r.reason,
+        }));
+      },
+      app.log,
+    );
+
+  // Factory decorators. Callers invoke as `app.notifications(prisma)` /
+  // `app.screening(prisma)` from a per-request preHandler with
+  // `req.tenantCtx.prisma`.
+  app.decorate(
+    "notifications",
+    (prisma: PrismaClient) =>
+      new NotificationRepository(prisma, notificationProvider),
   );
-  const notificationRepo = new NotificationRepository(
-    app.prisma,
-    createNotificationProvider(config.notificationProvider, app.log),
+  app.decorate(
+    "screening",
+    (prisma: PrismaClient) =>
+      new ScreeningRepository(prisma, buildAmlProvider(prisma)),
   );
+
+  // Scheduler still runs against the platform's default prisma — the
+  // per-tenant job runner is a separate refactor (P2.10 in the
+  // multi-tenant design doc). For single-tenant deployments this stays
+  // correct as-is; for multi-tenant it'll be replaced by an outer loop
+  // that iterates tenants and runs each job in their context.
   const jobRepo = new JobRepository(app.prisma);
+  const notificationRepoForJobs = new NotificationRepository(
+    app.prisma,
+    notificationProvider,
+  );
+  const screeningRepoForJobs = new ScreeningRepository(
+    app.prisma,
+    buildAmlProvider(app.prisma),
+  );
   const jobDefs = buildJobDefinitions(
     app.prisma,
-    notificationRepo,
-    screeningRepo,
+    notificationRepoForJobs,
+    screeningRepoForJobs,
   );
   await jobRepo.register(jobDefs);
   jobRepo.start(jobDefs);
   app.addHook("onClose", async () => jobRepo.stop());
-
-  // Expose the repos so other route plugins can use them later.
-  app.decorate("notifications", notificationRepo);
-  app.decorate("screening", screeningRepo);
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: "/auth" });
@@ -113,10 +135,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(portalRoutes, { prefix: "/portal" });
   await app.register(uploadRoutes, { prefix: "/uploads-api" });
   await app.register(jobRoutes(jobRepo, jobDefs), { prefix: "/jobs" });
-  await app.register(notificationRoutes(notificationRepo), {
-    prefix: "/notifications",
-  });
-  await app.register(screeningRoutes(screeningRepo), { prefix: "/screening" });
+  await app.register(notificationRoutes, { prefix: "/notifications" });
+  await app.register(screeningRoutes, { prefix: "/screening" });
   await app.register(decisionRuleRoutes, { prefix: "/decision-rules" });
   // PDF documents: officer view + customer-scoped portal mirror.
   await app.register(documentRoutes);
@@ -150,17 +170,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(loanApprovalChainRoutes, { prefix: "/loan-products" });
 }
 
-// Augment FastifyInstance to make the decorated repos visible.
+// Augment FastifyInstance to make the per-tenant repo factories
+// visible. Each factory takes a PrismaClient (the caller's
+// `req.tenantCtx.prisma`) and returns a fresh repo bound to that
+// schema.
 declare module "fastify" {
   interface FastifyInstance {
-    notifications: NotificationRepository;
-    screening: ScreeningRepository;
-    /**
-     * Licensing service decorator. Set by `licensingRoutes` on
-     * register; consumed in Phase 1b by `app.requireFeature(...)`
-     * (and in the meantime by anyone who wants to check the
-     * current license programmatically).
-     */
-    license: LicensingService;
+    notifications: (prisma: PrismaClient) => NotificationRepository;
+    screening: (prisma: PrismaClient) => ScreeningRepository;
   }
 }

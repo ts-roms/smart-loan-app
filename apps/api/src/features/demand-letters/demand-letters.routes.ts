@@ -47,7 +47,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
         prisma,
         new DemandLetterRepository(prisma),
         new LoanRepository(prisma),
-        app.notifications,
+        app.notifications(prisma),
         new AuditLogRepository(prisma),
         app.log,
       ),

@@ -1,23 +1,23 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { LicensingService } from "./licensing.service";
 import { toStatusPayload } from "./licensing.service";
 import { activateLicenseSchema } from "./schemas";
 
 /**
  * HTTP adapter for the licensing routes. The service holds verify +
  * persist; this layer is pure request/response.
+ *
+ * Phase 2: stateless. Reads `req.licensingServices.licensing` per call
+ * so each tenant operates on its own License row.
  */
 export class LicensingController {
-  constructor(private readonly service: LicensingService) {}
-
   /**
    * GET /license/status — current license shape, safe to expose to
    * any authenticated user. Doesn't leak the full token, just the
    * payload fields the UI needs to render the status panel.
    */
-  status = async () => {
-    const current = await this.service.loadCurrent();
+  status = async (req: FastifyRequest) => {
+    const current = await req.licensingServices!.licensing.loadCurrent();
     return toStatusPayload(current);
   };
 
@@ -32,7 +32,7 @@ export class LicensingController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.activate({
+    const result = await req.licensingServices!.licensing.activate({
       input: parsed.data,
       actorId: req.user.sub,
     });
@@ -55,6 +55,8 @@ export class LicensingController {
    * Always succeeds (no-op when nothing is active).
    */
   deactivate = async (req: FastifyRequest) => {
-    return this.service.deactivate({ actorId: req.user.sub });
+    return req.licensingServices!.licensing.deactivate({
+      actorId: req.user.sub,
+    });
   };
 }

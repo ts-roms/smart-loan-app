@@ -1,4 +1,8 @@
-import { LoanApprovalRepository, type PrismaClient } from "@loan/db";
+import {
+  LoanApprovalRepository,
+  type NotificationRepository,
+  type PrismaClient,
+} from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
 /**
@@ -15,12 +19,15 @@ import type { FastifyInstance } from "fastify";
  * ensures both code paths render the same templates with the same
  * context.
  *
- * Phase 2: takes the tenant-scoped Prisma client explicitly. Callers
- * pass `req.tenantCtx.prisma` so the lookup hits the right schema.
+ * Phase 2: takes the tenant-scoped Prisma client AND the tenant-scoped
+ * NotificationRepository explicitly. Callers build both via
+ * `req.tenantCtx.prisma` + `app.notifications(prisma)` so reads and
+ * dispatches hit the correct schema.
  */
 export async function notifyApproversForStep(
   app: FastifyInstance,
   prisma: PrismaClient,
+  notifications: NotificationRepository,
   loanId: string,
   stepOrder: number,
 ): Promise<void> {
@@ -78,7 +85,7 @@ export async function notifyApproversForStep(
       // IN_APP — surfaces in the navbar bell. Recipient is the email
       // since the bell renders it; the body still personalises by
       // recipientName for the staff seeing their own row.
-      await app.notifications.dispatch({
+      await notifications.dispatch({
         event: "LOAN_APPROVAL_PENDING",
         channel: "IN_APP",
         recipient: u.email,
@@ -89,7 +96,7 @@ export async function notifyApproversForStep(
       // EMAIL — only when the user has an address on file (all staff
       // should, but defensive).
       if (u.email) {
-        await app.notifications.dispatch({
+        await notifications.dispatch({
           event: "LOAN_APPROVAL_PENDING",
           channel: "EMAIL",
           recipient: u.email,

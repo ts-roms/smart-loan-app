@@ -16,9 +16,14 @@
  * Audit log entry per call captures the action, target id, and the
  * model identifier. We DON'T log full prompts or full responses (audit
  * payload size + GDPR caution); just the metadata.
+ *
+ * Phase 2: per-request prisma via `req.tenantCtx.prisma`. The LLM
+ * provider itself is tenant-agnostic (singleton at plugin scope) — it
+ * just translates prompts to Ollama. Only the DB reads + audit writes
+ * are tenant-scoped.
  */
 import { AuditLogRepository, LoanRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 // Paths adjusted for the features/assistant/ nesting — config lives two
 // folders up at src/config.ts and the LLM provider factory at src/lib/llm.ts.
@@ -26,13 +31,30 @@ import { config } from "../../config";
 import { createLLMProvider, type LLMProvider } from "../../lib/llm";
 import { draftSchema, explainSchema, summarizeSchema } from "./schemas";
 
+declare module "fastify" {
+  interface FastifyRequest {
+    assistantCtx?: {
+      loans: LoanRepository;
+      audit: AuditLogRepository;
+    };
+  }
+}
+
 export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   const llm: LLMProvider = createLLMProvider({
     url: config.ollamaUrl,
     model: config.ollamaModel,
   });
-  const loans = new LoanRepository(app.prisma);
-  const audit = new AuditLogRepository(app.prisma);
+
+  app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.assistantCtx = {
+      loans: new LoanRepository(prisma),
+      audit: new AuditLogRepository(prisma),
+    };
+  });
 
   // AI assistant is an ENTERPRISE-tier feature. License gate applies
   // to every assistant route — including /ping, which the UI uses to
@@ -70,6 +92,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
+      const { loans, audit } = req.assistantCtx!;
       const loan = await loans.findById(parsed.data.loanId);
       if (!loan) return reply.code(404).send({ error: "NotFound" });
 
@@ -109,6 +132,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
+      const { loans, audit } = req.assistantCtx!;
       const loan = await loans.findById(parsed.data.loanId);
       if (!loan) return reply.code(404).send({ error: "NotFound" });
 
@@ -149,7 +173,8 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      const customer = await app.prisma.customer.findUnique({
+      const { audit } = req.assistantCtx!;
+      const customer = await req.tenantCtx.prisma.customer.findUnique({
         where: { id: parsed.data.customerId },
         include: {
           loanApplications: {

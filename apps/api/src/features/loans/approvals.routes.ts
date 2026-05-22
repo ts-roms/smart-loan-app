@@ -103,9 +103,11 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
       // blocked on the dispatcher round-trip. Uses the tenant-scoped
       // prisma client so the lookup hits the right schema.
       if (!result.isFinal && result.nextStep) {
+        const prisma = req.tenantCtx.prisma;
         void notifyApproversForStep(
           app,
-          req.tenantCtx.prisma,
+          prisma,
+          app.notifications(prisma),
           loan.id,
           result.nextStep,
         );

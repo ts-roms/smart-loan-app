@@ -123,10 +123,10 @@ export class LoanWorkflowService {
     private readonly notifications: NotificationRepository,
     private readonly log: ServiceLogger,
     /**
-     * `notifyApproversForStep` requires the FastifyInstance to pull
-     * `app.notifications`, `app.prisma`, and `app.log`. Rather than
-     * leak Fastify into the service, the plugin passes a pre-bound
-     * function — the equivalent of `(loanId, step) => notifyApproversForStep(app, loanId, step)`.
+     * `notifyApproversForStep` needs the FastifyInstance + tenant
+     * prisma + tenant-scoped NotificationRepository. The plugin
+     * pre-binds all three so the service stays Fastify-agnostic — it
+     * just calls `notifyApprovers(loanId, step)`.
      */
     private readonly notifyApprovers: (
       loanId: string,

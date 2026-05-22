@@ -1,15 +1,15 @@
 /**
  * Licensing routes — status + activate + deactivate.
  *
- * `admin.roles` gates the mutating routes since license state
- * affects which features the org has access to. The read route is
- * open to any authenticated user so the dashboard banner /
- * status pill on every page can show "X days until expiry".
+ * Phase 2: License rows live in each tenant's schema. Both the routes
+ * here and the `app.requireFeature(...)` gate consult the calling
+ * tenant's License via `req.tenantCtx.prisma`. The Ed25519 public key
+ * is resolved once at boot — rotating it requires a restart.
  *
- * This plugin also decorates `app.requireFeature(flag)` — a Fastify
- * middleware factory that blocks routes when the active license
- * doesn't include the given feature flag. Used as the preHandler on
- * premium routes throughout the API.
+ * `admin.roles` gates the mutating routes since license state affects
+ * which features the org has access to. The read route is open to any
+ * authenticated user so the dashboard banner / status pill on every
+ * page can show "X days until expiry".
  *
  * Layered: routes → controller → service → repo + audit.
  */
@@ -39,6 +39,9 @@ declare module "fastify" {
       ...flags: FeatureFlag[]
     ) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
+  interface FastifyRequest {
+    licensingServices?: { licensing: LicensingService };
+  }
 }
 
 export async function licensingRoutes(app: FastifyInstance) {
@@ -52,33 +55,32 @@ export async function licensingRoutes(app: FastifyInstance) {
     );
   }
 
-  const service = new LicensingService(
-    app.prisma,
-    new AuditLogRepository(app.prisma),
-    app.log,
-    publicKey,
-  );
-  const ctrl = new LicensingController(service);
-
-  // Decorate the app with the current license loader so other features
-  // can consult it. The requireFeature decorator (below) wraps a
-  // per-request cache around the same loadCurrent() so we verify the
-  // license signature exactly once per request that needs it.
-  app.decorate("license", service);
-
-  // requireFeature(flag) — feature-gate preHandler factory.
+  // requireFeature(flag) — feature-gate preHandler factory. Builds a
+  // per-request LicensingService against the caller's tenant schema,
+  // so each tenant's license decides their own feature set. Upstream
+  // route plugins must hook `app.resolveTenant` before any route that
+  // uses requireFeature — every multi-tenant feature plugin already
+  // does so as its second preHandler.
   app.decorate("requireFeature", (...flags: FeatureFlag[]) => {
     return async (req: FastifyRequest, reply: FastifyReply) => {
       // Cache on the request so the same call in a multi-preHandler
       // chain doesn't re-verify the Ed25519 signature N times. Cheap
       // either way (microseconds), but keeping things tidy.
-      const cached = (
-        req as {
-          licenseCheck?: Awaited<ReturnType<typeof service.loadCurrent>>;
-        }
-      ).licenseCheck;
-      const current = cached ?? (await service.loadCurrent());
-      (req as { licenseCheck?: typeof current }).licenseCheck = current;
+      const cache = req as {
+        licenseCheck?: Awaited<ReturnType<LicensingService["loadCurrent"]>>;
+      };
+      let current = cache.licenseCheck;
+      if (!current) {
+        const prisma = req.tenantCtx.prisma;
+        const svc = new LicensingService(
+          prisma,
+          new AuditLogRepository(prisma),
+          req.log,
+          publicKey,
+        );
+        current = await svc.loadCurrent();
+        cache.licenseCheck = current;
+      }
 
       if (!current.ok) {
         // Map the failure kind to a 402 body the client can act on.
@@ -107,6 +109,20 @@ export async function licensingRoutes(app: FastifyInstance) {
   });
 
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.licensingServices = {
+      licensing: new LicensingService(
+        prisma,
+        new AuditLogRepository(prisma),
+        req.log,
+        publicKey,
+      ),
+    };
+  });
+
+  const ctrl = new LicensingController();
 
   // Read endpoint — every authenticated user. The dashboard renders
   // a status banner on every page so this needs to be reachable

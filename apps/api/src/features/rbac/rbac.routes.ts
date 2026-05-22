@@ -43,7 +43,7 @@ export async function rbacRoutes(app: FastifyInstance) {
         new PermissionRepository(prisma),
         roles,
         audit,
-        app.notifications,
+        app.notifications(prisma),
         app.log,
       ),
       bulkImport: new UsersBulkImportService(prisma, roles, audit),
