@@ -105,9 +105,13 @@ export class JournalService {
 
   /**
    * Reverse a single journal entry. Writes the reversal row, then the
-   * audit log. If the entry was already reversed, the repo returns
-   * `created: false` and we skip the audit (the previous reverse
-   * already logged it).
+   * audit log unconditionally — including when `result.created === false`
+   * (the entry was already reversed). Logging the no-op is intentional:
+   * compliance reports that count `JOURNAL_REVERSE` rows rely on every
+   * attempt being recorded, and "operator X kept hitting reverse on a
+   * closed entry" is exactly the trail an investigator needs. The
+   * `created` field in the payload distinguishes the first reversal
+   * from the no-op follow-ups.
    */
   async reverse(
     entryId: string,
@@ -119,20 +123,18 @@ export class JournalService {
         postedById: actorId,
         memo: input.memo,
       });
-      if (result.created) {
-        await this.audit.record({
-          action: "JOURNAL_REVERSE",
-          actorId,
-          targetType: "JournalEntry",
-          targetId: entryId,
-          payload: {
-            reversalId: result.reversal.id,
-            reversalNumber: result.reversal.number,
-            created: result.created,
-            memo: input.memo,
-          },
-        });
-      }
+      await this.audit.record({
+        action: "JOURNAL_REVERSE",
+        actorId,
+        targetType: "JournalEntry",
+        targetId: entryId,
+        payload: {
+          reversalId: result.reversal.id,
+          reversalNumber: result.reversal.number,
+          created: result.created,
+          memo: input.memo,
+        },
+      });
       return {
         ok: true,
         original: result.original.id,

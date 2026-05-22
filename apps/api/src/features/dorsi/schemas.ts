@@ -31,7 +31,17 @@ export const configUpdateSchema = z.object({
   companyTotalEquity: z.number().nonnegative(),
 });
 
-/** Auto-screen body — used at customer onboarding (FRD §3.10.1). */
+/**
+ * Auto-screen body — used at customer onboarding (FRD §3.10.1).
+ *
+ * Validated by the controller via `safeParse`, so the failure shape is
+ * the standard `{ error: "ValidationError", issues: [...] }`. The
+ * pre-layered route returned `{ error: "ValidationError", message:
+ * "name required (>= 2 chars)" }` from an inline guard — the new
+ * shape matches every other zod-validated endpoint in the API. If a
+ * caller relied on the literal `message` field, that consumer needs
+ * an update.
+ */
 export const screenByNameSchema = z.object({
   name: z.string().min(2).max(200),
 });

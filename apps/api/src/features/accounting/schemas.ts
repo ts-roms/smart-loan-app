@@ -39,7 +39,17 @@ export const entrySchema = z.object({
 
 export type EntryInput = z.infer<typeof entrySchema>;
 
-/** Bulk reversal — IDs of journal entries to reverse in one call. */
+/**
+ * Bulk reversal — IDs of journal entries to reverse in one call.
+ *
+ * `entryIds` is now `z.string().uuid()` per element. The pre-layered
+ * route accepted any string and deferred the UUID check to the repo,
+ * which meant a malformed input got an opaque database error instead
+ * of a clean 400. The validation tightening is intentional; callers
+ * sending non-UUID identifiers now see the standard zod
+ * `{ error: "ValidationError", issues: [...] }` shape rather than the
+ * old ad-hoc `{ error: "BadRequest", message: "…" }`.
+ */
 export const reverseBulkSchema = z.object({
   entryIds: z.array(z.string().uuid()).min(1).max(200),
   memo: z.string().max(500).optional(),
