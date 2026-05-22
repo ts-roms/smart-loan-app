@@ -2,6 +2,7 @@ import type {
   Delegation,
   DelegationCreateInput,
   DelegationListForUser,
+  DelegationPreview,
 } from "@loan/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -12,6 +13,7 @@ export const delegationKeys = {
   all: ["delegations", "all"] as const,
   active: ["delegations", "active"] as const,
   directory: ["delegations", "users-directory"] as const,
+  preview: (id: string) => ["delegations", "preview", id] as const,
 };
 
 export interface DelegationUserEntry {
@@ -105,5 +107,29 @@ export function useExtendDelegation() {
       qc.invalidateQueries({ queryKey: delegationKeys.all });
       qc.invalidateQueries({ queryKey: delegationKeys.active });
     },
+  });
+}
+
+/**
+ * Resolved-permissions preview for a delegation. Answers the
+ * delegate's natural question "what does this actually grant me right
+ * now?" — and surfaces the `droppedPermissions` list when the
+ * delegator has lost keys since the delegation was created.
+ *
+ * Server-side this is gated to the delegator, the delegate, or
+ * `admin.users` — every other caller gets a 403. The `enabled` gate
+ * keeps the query idle until the UI explicitly opens the preview
+ * panel, since fetching for every row in a list would be wasteful.
+ */
+export function useDelegationPreview(id: string | null) {
+  return useQuery({
+    queryKey: delegationKeys.preview(id ?? ""),
+    queryFn: () =>
+      getApiClient().get<DelegationPreview>(`/delegations/${id}/preview`),
+    enabled: Boolean(id),
+    // Preview is point-in-time but the underlying delegator perms
+    // can change mid-session; refetch every 30s while the panel is
+    // open.
+    staleTime: 30_000,
   });
 }

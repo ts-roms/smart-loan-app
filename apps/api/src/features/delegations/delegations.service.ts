@@ -50,6 +50,46 @@ export type ExtendResult =
       message: string;
     };
 
+/**
+ * Shape returned by `previewResolvedPermissions` — answers the
+ * delegate's natural question "what does this delegation actually
+ * grant me right now?". The interesting fields are:
+ *
+ *   - `resolvedPermissions`: the set the delegate would inherit if
+ *     they exercised this delegation right now. The full set when
+ *     `delegation.permissions[]` is empty ("all of mine"); the
+ *     intersection of the explicit list with the delegator's current
+ *     perms otherwise.
+ *   - `droppedPermissions`: keys the delegation explicitly listed but
+ *     the delegator no longer holds. Empty list ⇒ the delegation
+ *     fully delivers what it promised. Non-empty list ⇒ something
+ *     changed on the delegator's side since the delegation was
+ *     created (a role demotion, a permission removal). The delegate
+ *     sees one place where this is visible instead of having to
+ *     re-derive it.
+ *   - `isActiveNow`: convenience flag matching the resolver's
+ *     definition (not revoked, startsAt ≤ now ≤ endsAt).
+ */
+export interface DelegationPreviewPayload {
+  delegation: {
+    id: string;
+    delegatorId: string;
+    delegateId: string;
+    startsAt: Date;
+    endsAt: Date;
+    permissions: string[];
+    revokedAt: Date | null;
+  };
+  resolvedPermissions: string[];
+  droppedPermissions: string[];
+  isActiveNow: boolean;
+}
+
+export type PreviewResult =
+  | { ok: true; payload: DelegationPreviewPayload }
+  | { ok: false; kind: "NotFound" }
+  | { ok: false; kind: "Forbidden"; message: string };
+
 export class DelegationService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -78,6 +118,78 @@ export class DelegationService {
 
   listActiveFor(callerId: string) {
     return this.repo.listActiveFor(callerId);
+  }
+
+  /**
+   * Compute the resolved permission set this delegation grants right
+   * now. Access is restricted to the delegator, the delegate, or a
+   * caller with `admin.users` — otherwise a curious user could probe
+   * other people's delegation contents.
+   */
+  async previewResolvedPermissions(args: {
+    id: string;
+    callerId: string;
+    callerPerms: Set<string>;
+  }): Promise<PreviewResult> {
+    const d = await this.repo.findById(args.id);
+    if (!d) return { ok: false, kind: "NotFound" };
+
+    const isParty =
+      d.delegatorId === args.callerId || d.delegateId === args.callerId;
+    if (!isParty && !args.callerPerms.has("admin.users")) {
+      return {
+        ok: false,
+        kind: "Forbidden",
+        message:
+          "Only the delegator, the delegate, or an admin can preview this delegation.",
+      };
+    }
+
+    const delegatorPerms = await resolveUserPermissions(
+      this.prisma,
+      d.delegatorId,
+    );
+
+    let resolved: string[];
+    let dropped: string[];
+    if (d.permissions.length === 0) {
+      // "All of mine" — resolved is just the delegator's current set,
+      // and nothing can be "dropped" because nothing was explicitly
+      // promised.
+      resolved = [...delegatorPerms].sort();
+      dropped = [];
+    } else {
+      const resolvedSet = new Set<string>();
+      const droppedSet = new Set<string>();
+      for (const p of d.permissions) {
+        if (delegatorPerms.has(p)) resolvedSet.add(p);
+        else droppedSet.add(p);
+      }
+      resolved = [...resolvedSet].sort();
+      dropped = [...droppedSet].sort();
+    }
+
+    const now = new Date();
+    const isActiveNow =
+      d.revokedAt === null && d.startsAt <= now && now <= d.endsAt;
+
+    return {
+      ok: true,
+      payload: {
+        delegation: {
+          id: d.id,
+          delegatorId: d.delegatorId,
+          delegateId: d.delegateId,
+          startsAt: d.startsAt,
+          endsAt: d.endsAt,
+          permissions: d.permissions,
+          revokedAt: d.revokedAt,
+        },
+        resolvedPermissions: resolved,
+        droppedPermissions: dropped,
+        isActiveNow,
+      },
+    };
   }
 
   // ─── writes ───────────────────────────────────────────────────────

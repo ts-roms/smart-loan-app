@@ -23,6 +23,20 @@ export class RbacController {
 
   listPermissions = async () => this.service.listPermissions();
 
+  listPermissionHolders = async (
+    req: FastifyRequest<{ Params: { key: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const result = await this.service.listPermissionHolders(req.params.key);
+    if (!result.ok) {
+      return reply.code(404).send({
+        error: "NotFound",
+        message: `Permission '${req.params.key}' is not in the catalog.`,
+      });
+    }
+    return result.payload;
+  };
+
   listRoles = async () => this.service.listRoles();
 
   findRole = async (

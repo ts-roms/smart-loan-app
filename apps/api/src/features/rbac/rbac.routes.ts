@@ -47,6 +47,17 @@ export async function rbacRoutes(app: FastifyInstance) {
     ctrl.listPermissions,
   );
 
+  // Reverse lookup: "who currently holds permission X?". Permission-
+  // gated on either admin.roles or admin.audit_log so security auditors
+  // can answer attribution questions without admin.users.
+  app.get<{ Params: { key: string } }>(
+    "/permissions/:key/holders",
+    {
+      preHandler: app.requirePermission("admin.roles", "admin.audit_log"),
+    },
+    ctrl.listPermissionHolders,
+  );
+
   // ─── roles ────────────────────────────────────────────────────────
 
   app.get(

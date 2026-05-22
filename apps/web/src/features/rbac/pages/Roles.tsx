@@ -4,8 +4,8 @@ import {
   usePermissions,
   useRoles,
   useUpdateRole,
-} from '@loan/api-client';
-import type { Permission, RoleWithPermissions } from '@loan/shared-types';
+} from "@loan/api-client";
+import type { Permission, RoleWithPermissions } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -22,11 +22,12 @@ import {
   SkeletonCard,
   useConfirm,
   useToast,
-} from '@loan/ui';
-import { Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
+} from "@loan/ui";
+import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { useMemo, useState, type FormEvent } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
+import { PermissionHoldersPanel } from "../components/PermissionHoldersPanel";
 
 /**
  * Roles + permission matrix admin. Each role is a named collection of
@@ -41,13 +42,13 @@ export function RolesPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = user?.role === "ADMIN";
   const [editing, setEditing] = useState<RoleWithPermissions | null>(null);
   const [creating, setCreating] = useState(false);
 
   const onDelete = async (r: RoleWithPermissions) => {
     if (r.system) {
-      toast.error('System roles cannot be deleted.');
+      toast.error("System roles cannot be deleted.");
       return;
     }
     const assignedCount = r._count?.users ?? 0;
@@ -55,117 +56,126 @@ export function RolesPage() {
       title: `Delete role "${r.name}"?`,
       message:
         assignedCount > 0
-          ? `This role is currently assigned to ${assignedCount} user${assignedCount === 1 ? '' : 's'}. They'll lose every permission this role grants.`
-          : 'This is reversible only by re-creating the role from scratch.',
-      confirmLabel: 'Delete role',
-      tone: 'destructive',
+          ? `This role is currently assigned to ${assignedCount} user${assignedCount === 1 ? "" : "s"}. They'll lose every permission this role grants.`
+          : "This is reversible only by re-creating the role from scratch.",
+      confirmLabel: "Delete role",
+      tone: "destructive",
     });
     if (!ok) return;
     try {
       await remove.mutateAsync(r.key);
-      toast.success('Role deleted');
+      toast.success("Role deleted");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-sky-300" />
-          Roles & permissions
-        </CardTitle>
-        {isAdmin && (
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="h-4 w-4" />
-            New role
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent>
-        <p className="text-xs text-white/55 mb-3">
-          Each role is a collection of fine-grained permissions. Users can hold
-          multiple roles; their effective permissions are the union across all
-          of them.
-        </p>
-        {roles.isLoading ? (
-          <SkeletonCard />
-        ) : (roles.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">No roles configured.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
-              <tr>
-                <th className="py-2 px-2">Key</th>
-                <th className="py-2 px-2">Name</th>
-                <th className="py-2 px-2 text-right">Permissions</th>
-                <th className="py-2 px-2 text-right">Users</th>
-                <th className="py-2 px-2">Type</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {(roles.data ?? []).map((r) => (
-                <tr key={r.id} className="hover:bg-white/[0.03]">
-                  <td className="py-2 px-2 font-mono text-xs">{r.key}</td>
-                  <td className="py-2 px-2">
-                    <div>{r.name}</div>
-                    {r.description && (
-                      <div className="text-xs text-white/45">{r.description}</div>
-                    )}
-                  </td>
-                  <td className="py-2 px-2 text-right font-mono">{r.permissions.length}</td>
-                  <td className="py-2 px-2 text-right">{r._count?.users ?? 0}</td>
-                  <td className="py-2 px-2">
-                    <Badge variant={r.system ? 'muted' : 'success'}>
-                      {r.system ? 'System' : 'Custom'}
-                    </Badge>
-                  </td>
-                  <td className="py-2 px-2 text-right">
-                    {isAdmin && (
-                      <div className="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setEditing(r)}
-                          className="text-white/55 hover:text-sky-300"
-                          title="Edit"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        {!r.system && (
+    <div className="space-y-4">
+      <PermissionHoldersPanel />
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-sky-300" />
+            Roles & permissions
+          </CardTitle>
+          {isAdmin && (
+            <Button onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" />
+              New role
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-white/55 mb-3">
+            Each role is a collection of fine-grained permissions. Users can
+            hold multiple roles; their effective permissions are the union
+            across all of them.
+          </p>
+          {roles.isLoading ? (
+            <SkeletonCard />
+          ) : (roles.data ?? []).length === 0 ? (
+            <p className="text-sm text-white/55">No roles configured.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+                <tr>
+                  <th className="py-2 px-2">Key</th>
+                  <th className="py-2 px-2">Name</th>
+                  <th className="py-2 px-2 text-right">Permissions</th>
+                  <th className="py-2 px-2 text-right">Users</th>
+                  <th className="py-2 px-2">Type</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {(roles.data ?? []).map((r) => (
+                  <tr key={r.id} className="hover:bg-white/[0.03]">
+                    <td className="py-2 px-2 font-mono text-xs">{r.key}</td>
+                    <td className="py-2 px-2">
+                      <div>{r.name}</div>
+                      {r.description && (
+                        <div className="text-xs text-white/45">
+                          {r.description}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono">
+                      {r.permissions.length}
+                    </td>
+                    <td className="py-2 px-2 text-right">
+                      {r._count?.users ?? 0}
+                    </td>
+                    <td className="py-2 px-2">
+                      <Badge variant={r.system ? "muted" : "success"}>
+                        {r.system ? "System" : "Custom"}
+                      </Badge>
+                    </td>
+                    <td className="py-2 px-2 text-right">
+                      {isAdmin && (
+                        <div className="flex justify-end gap-1">
                           <button
                             type="button"
-                            onClick={() => onDelete(r)}
-                            className="text-white/55 hover:text-rose-300"
-                            title="Delete"
+                            onClick={() => setEditing(r)}
+                            className="text-white/55 hover:text-sky-300"
+                            title="Edit"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Pencil className="h-3 w-3" />
                           </button>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                          {!r.system && (
+                            <button
+                              type="button"
+                              onClick={() => onDelete(r)}
+                              className="text-white/55 hover:text-rose-300"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+        {creating && permissions.data && (
+          <RoleDialog
+            allPermissions={permissions.data}
+            onClose={() => setCreating(false)}
+          />
         )}
-      </CardContent>
-      {creating && permissions.data && (
-        <RoleDialog
-          allPermissions={permissions.data}
-          onClose={() => setCreating(false)}
-        />
-      )}
-      {editing && permissions.data && (
-        <RoleDialog
-          allPermissions={permissions.data}
-          role={editing}
-          onClose={() => setEditing(null)}
-        />
-      )}
-    </Card>
+        {editing && permissions.data && (
+          <RoleDialog
+            allPermissions={permissions.data}
+            role={editing}
+            onClose={() => setEditing(null)}
+          />
+        )}
+      </Card>
+    </div>
   );
 }
 
@@ -181,9 +191,9 @@ function RoleDialog({
   const create = useCreateRole();
   const update = useUpdateRole();
   const toast = useToast();
-  const [key, setKey] = useState(role?.key ?? '');
-  const [name, setName] = useState(role?.name ?? '');
-  const [description, setDescription] = useState(role?.description ?? '');
+  const [key, setKey] = useState(role?.key ?? "");
+  const [name, setName] = useState(role?.name ?? "");
+  const [description, setDescription] = useState(role?.description ?? "");
   const [selected, setSelected] = useState<Set<string>>(
     new Set(role?.permissions.map((rp) => rp.permission.key) ?? []),
   );
@@ -192,7 +202,10 @@ function RoleDialog({
   const grouped = useMemo(() => {
     const byCategory = new Map<string, Permission[]>();
     for (const p of allPermissions) {
-      (byCategory.get(p.category) ?? byCategory.set(p.category, []).get(p.category)!).push(p);
+      (
+        byCategory.get(p.category) ??
+        byCategory.set(p.category, []).get(p.category)!
+      ).push(p);
     }
     return [...byCategory.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [allPermissions]);
@@ -222,7 +235,7 @@ function RoleDialog({
           description: description || undefined,
           permissions: [...selected],
         });
-        toast.success('Role saved');
+        toast.success("Role saved");
       } else {
         await create.mutateAsync({
           key,
@@ -234,7 +247,7 @@ function RoleDialog({
       }
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -242,25 +255,36 @@ function RoleDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{role ? `Edit ${role.name}` : 'New role'}</DialogTitle>
+          <DialogTitle>{role ? `Edit ${role.name}` : "New role"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Key (UPPER_SNAKE)">
               <Input
                 value={key}
-                onChange={(e) => setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+                onChange={(e) =>
+                  setKey(
+                    e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""),
+                  )
+                }
                 placeholder="BRANCH_MANAGER"
                 disabled={!!role}
                 required
               />
             </Field>
             <Field label="Display name">
-              <Input value={name} onChange={(e) => setName(e.target.value)} required />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
             </Field>
           </div>
           <Field label="Description">
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </Field>
 
           <div className="rounded-md border border-white/10">
@@ -277,7 +301,9 @@ function RoleDialog({
                 }
                 className="text-sky-300 hover:underline normal-case tracking-normal"
               >
-                {selected.size === allPermissions.length ? 'Deselect all' : 'Select all'}
+                {selected.size === allPermissions.length
+                  ? "Deselect all"
+                  : "Select all"}
               </button>
             </div>
             <div className="divide-y divide-white/5 max-h-80 overflow-y-auto">
@@ -297,7 +323,8 @@ function RoleDialog({
                       />
                       {category}
                       <span className="text-white/35 normal-case tracking-normal">
-                        {perms.filter((p) => selected.has(p.key)).length}/{perms.length}
+                        {perms.filter((p) => selected.has(p.key)).length}/
+                        {perms.length}
                       </span>
                     </label>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 pl-5">
@@ -312,7 +339,9 @@ function RoleDialog({
                             checked={selected.has(p.key)}
                             onChange={() => togglePerm(p.key)}
                           />
-                          <span className="font-mono text-white/70">{p.key}</span>
+                          <span className="font-mono text-white/70">
+                            {p.key}
+                          </span>
                           <span className="text-white/45">{p.label}</span>
                         </label>
                       ))}
@@ -324,9 +353,14 @@ function RoleDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={create.isPending || update.isPending}>
-              {role ? 'Save' : 'Create'}
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={create.isPending || update.isPending}
+            >
+              {role ? "Save" : "Create"}
             </Button>
           </DialogFooter>
         </form>
@@ -335,7 +369,13 @@ function RoleDialog({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <label className="text-xs text-white/55">{label}</label>

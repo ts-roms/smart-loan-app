@@ -31,6 +31,27 @@ export class DelegationController {
   listActive = async (req: FastifyRequest) =>
     this.service.listActiveFor(req.user.sub);
 
+  preview = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const callerPerms = await this.resolveCallerPerms(req);
+    const result = await this.service.previewResolvedPermissions({
+      id: req.params.id,
+      callerId: req.user.sub,
+      callerPerms,
+    });
+    if (!result.ok) {
+      if (result.kind === "NotFound") {
+        return reply.code(404).send({ error: "NotFound" });
+      }
+      return reply
+        .code(403)
+        .send({ error: "Forbidden", message: result.message });
+    }
+    return result.payload;
+  };
+
   create = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {

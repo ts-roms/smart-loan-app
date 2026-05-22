@@ -51,6 +51,13 @@ export async function delegationRoutes(app: FastifyInstance) {
   );
   app.get("/active", ctrl.listActive);
 
+  // Resolved-permissions preview — the service enforces that the
+  // caller is either the delegator, the delegate, or holds
+  // admin.users; no preHandler permission gate (this needs to be
+  // reachable by the delegate themselves, who may have no admin
+  // perms at all).
+  app.get<{ Params: { id: string } }>("/:id/preview", ctrl.preview);
+
   app.post("/", ctrl.create);
   app.post<{ Params: { id: string } }>("/:id/revoke", ctrl.revoke);
   app.post<{ Params: { id: string } }>("/:id/extend", ctrl.extend);

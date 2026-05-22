@@ -1,5 +1,6 @@
 import {
   useCreateDelegation,
+  useDelegationPreview,
   useDelegationUserDirectory,
   useExtendDelegation,
   useMyDelegations,
@@ -43,6 +44,7 @@ import {
   AlertTriangle,
   CalendarClock,
   CalendarPlus,
+  Eye,
   Plus,
   Search,
   ShieldCheck,
@@ -112,6 +114,9 @@ export function DelegationsPage() {
   const prompt = usePrompt();
   const { user: me } = useAuth();
   const [creating, setCreating] = useState(false);
+  // Preview-dialog state. Single string holds the id of the
+  // delegation currently being inspected — null means closed.
+  const [previewId, setPreviewId] = useState<string | null>(null);
 
   // ── Filter state ───────────────────────────────────────────────
   const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
@@ -299,6 +304,7 @@ export function DelegationsPage() {
         meId={me?.id}
         onRevoke={onRevoke}
         onExtend={onExtend}
+        onPreview={(d) => setPreviewId(d.id)}
       />
 
       <DelegationList
@@ -311,6 +317,7 @@ export function DelegationsPage() {
         meId={me?.id}
         onRevoke={onRevoke}
         onExtend={onExtend}
+        onPreview={(d) => setPreviewId(d.id)}
       />
 
       {creating && (
@@ -322,7 +329,144 @@ export function DelegationsPage() {
           onClose={() => setCreating(false)}
         />
       )}
+
+      {previewId && (
+        <DelegationPreviewDialog
+          id={previewId}
+          userById={userById}
+          onClose={() => setPreviewId(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Resolved-permissions preview dialog. Shows what permissions the
+ * delegation actually grants the delegate right now — the
+ * `resolvedPermissions` set — and, importantly, any keys the
+ * delegation explicitly listed that the delegator no longer holds
+ * (`droppedPermissions`). A non-empty dropped list is the signal
+ * "something changed on the delegator's side; this delegation isn't
+ * delivering what it originally promised".
+ */
+function DelegationPreviewDialog({
+  id,
+  userById,
+  onClose,
+}: {
+  id: string;
+  userById: Map<string, DelegationUserEntry>;
+  onClose: () => void;
+}) {
+  const query = useDelegationPreview(id);
+  const data = query.data;
+  const delegator = data ? userById.get(data.delegation.delegatorId) : null;
+  const delegate = data ? userById.get(data.delegation.delegateId) : null;
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Eye className="h-4 w-4 text-sky-300" />
+            Resolved permissions
+          </DialogTitle>
+        </DialogHeader>
+
+        {query.isLoading ? (
+          <SkeletonCard />
+        ) : query.isError ? (
+          <div className="text-sm text-rose-300 bg-rose-500/5 border border-rose-500/20 rounded px-3 py-2">
+            {(query.error as Error).message}
+          </div>
+        ) : data ? (
+          <div className="space-y-4">
+            <div className="text-xs text-white/55">
+              <span className="text-white/85">
+                {delegate?.name ?? data.delegation.delegateId.slice(0, 8)}
+              </span>{" "}
+              gains permissions delegated by{" "}
+              <span className="text-white/85">
+                {delegator?.name ?? data.delegation.delegatorId.slice(0, 8)}
+              </span>
+              .{" "}
+              {data.isActiveNow ? (
+                <Badge variant="success">Active now</Badge>
+              ) : (
+                <Badge variant="muted">Not active</Badge>
+              )}
+            </div>
+
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">
+                {data.delegation.permissions.length === 0
+                  ? `Resolved (all of delegator's permissions)`
+                  : "Resolved permissions"}
+              </div>
+              {data.resolvedPermissions.length === 0 ? (
+                <p className="text-xs text-white/55">
+                  No permissions are currently granted by this delegation.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {data.resolvedPermissions.map((p) => (
+                    <span
+                      key={p}
+                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-sky-400/10 text-sky-200"
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {data.droppedPermissions.length > 0 && (
+              <div className="rounded-md border border-amber-400/30 bg-amber-500/[0.04] p-3">
+                <div className="flex items-center gap-2 text-amber-200 text-xs font-medium">
+                  <AlertTriangle className="h-3 w-3" />
+                  Dropped from the original delegation
+                </div>
+                <p className="text-xs text-white/60 mt-1">
+                  The delegator no longer holds these keys, so they're silently
+                  excluded from what the delegate actually receives right now.
+                </p>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {data.droppedPermissions.map((p) => (
+                    <span
+                      key={p}
+                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-200 line-through"
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="text-[10px] uppercase tracking-wider text-white/45">
+              Window
+            </div>
+            <div className="text-xs text-white/70">
+              {formatDateTime(data.delegation.startsAt)} →{" "}
+              {formatDateTime(data.delegation.endsAt)}
+              {data.delegation.revokedAt && (
+                <span className="ml-2 text-rose-300">
+                  · revoked {formatDateTime(data.delegation.revokedAt)}
+                </span>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -421,6 +565,7 @@ function DelegationList({
   meId,
   onRevoke,
   onExtend,
+  onPreview,
 }: {
   title: string;
   subtitle: string;
@@ -431,6 +576,7 @@ function DelegationList({
   meId?: string;
   onRevoke: (d: Delegation) => void;
   onExtend: (d: Delegation, days: number) => void;
+  onPreview: (d: Delegation) => void;
 }) {
   return (
     <Card>
@@ -525,6 +671,15 @@ function DelegationList({
                     </td>
                     <td className="py-2 px-2 text-right">
                       <div className="inline-flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onPreview(d)}
+                          title="Preview resolved permissions"
+                        >
+                          <Eye className="h-3 w-3" />
+                          Preview
+                        </Button>
                         {canExtend && (
                           <Button
                             size="sm"

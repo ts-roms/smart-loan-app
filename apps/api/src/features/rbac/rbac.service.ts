@@ -3,6 +3,7 @@ import {
   type AuditLogRepository,
   type PermissionRepository,
   type PrismaClient,
+  resolveUserPermissions,
   type RoleRepository,
 } from "@loan/db";
 
@@ -70,6 +71,51 @@ export type UnassignRoleResult =
   | { ok: true }
   | { ok: false; kind: "SelfLockout"; message: string };
 
+/**
+ * Shape returned by `listPermissionHolders` — the reverse-lookup
+ * answer to "who currently has permission X?". Splits the answer into
+ * the two grant paths (direct role membership vs active delegation)
+ * so the UI can show both and explain provenance.
+ */
+export interface PermissionHolderDelegation {
+  id: string;
+  delegatorId: string;
+  delegatorName: string;
+  delegateId: string;
+  delegateName: string;
+  startsAt: Date;
+  endsAt: Date;
+  /**
+   * `true` when the delegation explicitly listed this permission key;
+   * `false` when the delegation has an empty `permissions[]` ("all of
+   * the delegator's permissions") and the delegator happens to hold
+   * this key right now. The latter is fragile — if the delegator
+   * loses the key, the delegation silently drops it too.
+   */
+  viaExplicit: boolean;
+}
+
+export interface PermissionHoldersPayload {
+  permission: {
+    key: string;
+    label: string;
+    description: string | null;
+    category: string;
+  };
+  directRoles: Array<{
+    key: string;
+    name: string;
+    system: boolean;
+    userCount: number;
+  }>;
+  delegations: PermissionHolderDelegation[];
+  totalActiveUsers: number;
+}
+
+export type ListPermissionHoldersResult =
+  | { ok: true; payload: PermissionHoldersPayload }
+  | { ok: false; kind: "NotFound" };
+
 export class RbacService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -99,6 +145,125 @@ export class RbacService {
 
   listPermissions() {
     return this.permissions.list();
+  }
+
+  /**
+   * Reverse lookup: "who currently holds permission X?". Returns the
+   * two grant paths separately:
+   *
+   *   - direct roles that include the permission (with user counts)
+   *   - active delegations (`startsAt ≤ now ≤ endsAt`, not revoked)
+   *     that grant the permission — either by listing it explicitly
+   *     OR by being an "all of my perms" delegation (`permissions[]`
+   *     empty) where the delegator currently holds the key
+   *
+   * The second case requires a per-delegator perm resolve, so we
+   * cache by delegatorId to avoid N+1 when the same delegator has
+   * multiple open delegations.
+   */
+  async listPermissionHolders(
+    key: string,
+  ): Promise<ListPermissionHoldersResult> {
+    const permission = await this.prisma.permission.findUnique({
+      where: { key },
+      select: { key: true, label: true, description: true, category: true },
+    });
+    if (!permission) return { ok: false, kind: "NotFound" };
+
+    // Roles directly granting this permission, each with its user count.
+    const rolePerms = await this.prisma.rolePermission.findMany({
+      where: { permission: { key } },
+      include: {
+        role: {
+          select: {
+            key: true,
+            name: true,
+            system: true,
+            _count: { select: { users: true } },
+          },
+        },
+      },
+    });
+    const directRoles = rolePerms
+      .map((rp) => ({
+        key: rp.role.key,
+        name: rp.role.name,
+        system: rp.role.system,
+        userCount: rp.role._count.users,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Active delegation candidates. Two ways to grant:
+    //   (a) explicit  — `permissions[]` contains the key
+    //   (b) inherited — `permissions[]` is empty AND delegator
+    //                   currently holds the key
+    // We fetch both shapes in one query, then filter (b) via the
+    // permission resolver.
+    const now = new Date();
+    const activeBase = {
+      revokedAt: null,
+      startsAt: { lte: now },
+      endsAt: { gte: now },
+    };
+    const candidates = await this.prisma.delegation.findMany({
+      where: {
+        ...activeBase,
+        OR: [{ permissions: { has: key } }, { permissions: { isEmpty: true } }],
+      },
+      include: {
+        delegator: { select: { name: true } },
+        delegate: { select: { name: true } },
+      },
+    });
+
+    const delegatorPermCache = new Map<string, Set<string>>();
+    const delegations: PermissionHolderDelegation[] = [];
+    for (const d of candidates) {
+      const viaExplicit = d.permissions.includes(key);
+      let included = viaExplicit;
+      if (!included && d.permissions.length === 0) {
+        let perms = delegatorPermCache.get(d.delegatorId);
+        if (!perms) {
+          perms = await resolveUserPermissions(this.prisma, d.delegatorId);
+          delegatorPermCache.set(d.delegatorId, perms);
+        }
+        included = perms.has(key);
+      }
+      if (!included) continue;
+      delegations.push({
+        id: d.id,
+        delegatorId: d.delegatorId,
+        delegatorName: d.delegator.name,
+        delegateId: d.delegateId,
+        delegateName: d.delegate.name,
+        startsAt: d.startsAt,
+        endsAt: d.endsAt,
+        viaExplicit,
+      });
+    }
+
+    // Unique active users = users with one of the listed roles
+    // UNION delegates of the active delegations granting this perm.
+    // We dedup so the count reflects distinct people, not assignments.
+    const usersWithDirectRole = await this.prisma.userRoleAssignment.findMany({
+      where: { role: { permissions: { some: { permission: { key } } } } },
+      select: { userId: true },
+      distinct: ["userId"],
+    });
+    const totalActiveUsers = new Set([
+      ...usersWithDirectRole.map((u) => u.userId),
+      ...delegations.map((d) => d.delegateId),
+    ]).size;
+
+    return {
+      ok: true,
+      payload: {
+        permission,
+        directRoles,
+        delegations,
+        totalActiveUsers,
+      },
+    };
   }
 
   // ─── roles ────────────────────────────────────────────────────────

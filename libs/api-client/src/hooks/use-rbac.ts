@@ -1,6 +1,7 @@
 import type {
   MePermissions,
   Permission,
+  PermissionHoldersPayload,
   Role,
   RoleCreateInput,
   RoleUpdateInput,
@@ -17,6 +18,8 @@ export const rbacKeys = {
   role: (key: string) => ["rbac", "roles", key] as const,
   users: ["rbac", "users"] as const,
   mePermissions: ["rbac", "me-permissions"] as const,
+  permissionHolders: (key: string) =>
+    ["rbac", "permission-holders", key] as const,
 };
 
 export function usePermissions() {
@@ -145,5 +148,26 @@ export function useMyPermissions() {
     queryKey: rbacKeys.mePermissions,
     queryFn: () => getApiClient().get<MePermissions>("/auth/me/permissions"),
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Reverse permission lookup. Returns roles + active delegations
+ * currently granting the key, with a deduped active-user count.
+ * Drives the "who has X?" search box on the roles admin page.
+ * `enabled` gate keeps the query idle until the user actually picks
+ * a key — search-as-you-type would fire one request per keystroke.
+ */
+export function usePermissionHolders(key: string | null) {
+  return useQuery({
+    queryKey: rbacKeys.permissionHolders(key ?? ""),
+    queryFn: () =>
+      getApiClient().get<PermissionHoldersPayload>(
+        `/admin/permissions/${key}/holders`,
+      ),
+    enabled: Boolean(key),
+    // Active-user counts change with role assignments; stale-while-
+    // revalidate at 30s keeps the answer fresh without thrashing.
+    staleTime: 30_000,
   });
 }

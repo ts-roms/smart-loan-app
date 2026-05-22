@@ -699,6 +699,44 @@ export interface MePermissions {
   roles: Array<{ key: string; name: string; system: boolean }>;
 }
 
+/**
+ * Response of `GET /admin/permissions/:key/holders` — answers "who
+ * currently holds permission X?" by splitting grants into direct role
+ * membership vs active delegation. See `RbacService.listPermissionHolders`
+ * for the full semantics.
+ */
+export interface PermissionHolderDelegation {
+  id: string;
+  delegatorId: string;
+  delegatorName: string;
+  delegateId: string;
+  delegateName: string;
+  startsAt: string;
+  endsAt: string;
+  /** True when the delegation explicitly listed this key. False when it
+   * comes via the "all of my perms" rule (the delegator currently
+   * holds the key and the delegation has an empty `permissions[]`). */
+  viaExplicit: boolean;
+}
+
+export interface PermissionHoldersPayload {
+  permission: {
+    key: string;
+    label: string;
+    description: string | null;
+    category: string;
+  };
+  directRoles: Array<{
+    key: string;
+    name: string;
+    system: boolean;
+    userCount: number;
+  }>;
+  delegations: PermissionHolderDelegation[];
+  /** Deduped count across role assignments + active delegations. */
+  totalActiveUsers: number;
+}
+
 // Delegation — time-bounded proxy authority
 export interface Delegation {
   id: string;
@@ -719,6 +757,32 @@ export interface Delegation {
 export interface DelegationListForUser {
   granted: Delegation[];
   held: Delegation[];
+}
+
+/**
+ * Response of `GET /delegations/:id/preview`. Answers "what does this
+ * delegation actually grant me right now?". See
+ * `DelegationService.previewResolvedPermissions` for semantics.
+ *
+ *   - `resolvedPermissions` is what the delegate would inherit if
+ *     they exercised the delegation right now.
+ *   - `droppedPermissions` lists explicit keys the delegator no
+ *     longer holds — non-empty when something changed on the
+ *     delegator's side since the delegation was created.
+ */
+export interface DelegationPreview {
+  delegation: {
+    id: string;
+    delegatorId: string;
+    delegateId: string;
+    startsAt: string;
+    endsAt: string;
+    permissions: string[];
+    revokedAt: string | null;
+  };
+  resolvedPermissions: string[];
+  droppedPermissions: string[];
+  isActiveNow: boolean;
 }
 
 export interface DelegationCreateInput {
