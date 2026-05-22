@@ -1,5 +1,5 @@
 import { AccountingRepository, AuditLogRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { JournalController } from "./journal.controller";
 import { JournalService } from "./journal.service";
@@ -17,6 +17,17 @@ function parseAsOf(value: string | undefined): Date {
   return d;
 }
 
+interface AccountingCtx {
+  accounting: AccountingRepository;
+  journal: JournalService;
+}
+
+declare module "fastify" {
+  interface FastifyRequest {
+    accountingCtx?: AccountingCtx;
+  }
+}
+
 /**
  * Accounting feature plugin. Mixed layering:
  *
@@ -29,20 +40,31 @@ function parseAsOf(value: string | undefined): Date {
  *     accrual jobs) stays as direct AccountingRepository calls inline
  *     below. Per docs/architecture.md "earn its keep" — adding a
  *     service for pure read/CRUD passthroughs is ceremony.
+ *
+ * Phase 2: per-request wiring via `req.accountingCtx`. Inline handlers
+ * read from req.accountingCtx!.accounting; the JournalController is
+ * stateless and reads req.accountingCtx!.journal directly.
  */
 export async function accountingRoutes(app: FastifyInstance) {
-  const accounting = new AccountingRepository(app.prisma);
-  const audit = new AuditLogRepository(app.prisma);
-
-  // Application + presentation for the journal-write paths.
-  const journalService = new JournalService(accounting, audit);
-  const journal = new JournalController(journalService);
+  const journal = new JournalController();
 
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    const accounting = new AccountingRepository(prisma);
+    const audit = new AuditLogRepository(prisma);
+    req.accountingCtx = {
+      accounting,
+      journal: new JournalService(accounting, audit),
+    };
+  });
 
   // ─── Chart of accounts ─────────────────────────────────────────────
 
-  app.get("/accounts", async () => accounting.listAccounts());
+  app.get("/accounts", async (req) =>
+    req.accountingCtx!.accounting.listAccounts(),
+  );
 
   app.post(
     "/accounts",
@@ -54,14 +76,16 @@ export async function accountingRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      return reply.code(201).send(await accounting.createAccount(parsed.data));
+      return reply
+        .code(201)
+        .send(await req.accountingCtx!.accounting.createAccount(parsed.data));
     },
   );
 
   app.post(
     "/accounts/seed",
     { preHandler: app.requirePermission("accounting.accounts") },
-    async () => accounting.seedDefaultChart(),
+    async (req) => req.accountingCtx!.accounting.seedDefaultChart(),
   );
 
   // ─── Journal ────────────────────────────────────────────────────────
@@ -69,7 +93,7 @@ export async function accountingRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { from?: string; to?: string; source?: string } }>(
     "/journal",
     async (req) =>
-      accounting.listEntries({
+      req.accountingCtx!.accounting.listEntries({
         from: req.query.from ? new Date(req.query.from) : undefined,
         to: req.query.to ? new Date(req.query.to) : undefined,
         source: req.query.source,
@@ -78,7 +102,9 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   // GET /accounting/journal/:idOrNumber — accept either form.
   app.get<{ Params: { id: string } }>("/journal/:id", async (req, reply) => {
-    const e = await accounting.findEntryByIdOrNumber(req.params.id);
+    const e = await req.accountingCtx!.accounting.findEntryByIdOrNumber(
+      req.params.id,
+    );
     if (!e) return reply.code(404).send({ error: "NotFound" });
     return e;
   });
@@ -106,7 +132,7 @@ export async function accountingRoutes(app: FastifyInstance) {
     Params: { accountId: string };
     Querystring: { from?: string; to?: string };
   }>("/ledger/:accountId", async (req) =>
-    accounting.ledgerFor(
+    req.accountingCtx!.accounting.ledgerFor(
       req.params.accountId,
       req.query.from ? new Date(req.query.from) : undefined,
       req.query.to ? new Date(req.query.to) : undefined,
@@ -117,7 +143,8 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/trial-balance",
-    async (req) => accounting.trialBalance(parseAsOf(req.query.asOf)),
+    async (req) =>
+      req.accountingCtx!.accounting.trialBalance(parseAsOf(req.query.asOf)),
   );
 
   app.get<{ Querystring: { from?: string; to?: string } }>(
@@ -132,23 +159,28 @@ export async function accountingRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "BadRequest", message: "Invalid from date" });
       }
-      return accounting.incomeStatement(from, to);
+      return req.accountingCtx!.accounting.incomeStatement(from, to);
     },
   );
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/balance-sheet",
-    async (req) => accounting.balanceSheet(parseAsOf(req.query.asOf)),
+    async (req) =>
+      req.accountingCtx!.accounting.balanceSheet(parseAsOf(req.query.asOf)),
   );
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/loan-portfolio",
-    async (req) => accounting.loanPortfolioAging(parseAsOf(req.query.asOf)),
+    async (req) =>
+      req.accountingCtx!.accounting.loanPortfolioAging(
+        parseAsOf(req.query.asOf),
+      ),
   );
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/portfolio-summary",
-    async (req) => accounting.portfolioSummary(parseAsOf(req.query.asOf)),
+    async (req) =>
+      req.accountingCtx!.accounting.portfolioSummary(parseAsOf(req.query.asOf)),
   );
 
   app.get<{ Querystring: { from?: string; to?: string } }>(
@@ -158,15 +190,19 @@ export async function accountingRoutes(app: FastifyInstance) {
       const from = req.query.from
         ? new Date(req.query.from)
         : new Date(to.getFullYear(), to.getMonth() - 11, 1);
-      return accounting.originationsByMonth(from, to);
+      return req.accountingCtx!.accounting.originationsByMonth(from, to);
     },
   );
 
-  app.get("/reports/vintage", async () => accounting.vintageCohorts());
+  app.get("/reports/vintage", async (req) =>
+    req.accountingCtx!.accounting.vintageCohorts(),
+  );
 
   // ─── Periods ────────────────────────────────────────────────────────
 
-  app.get("/periods", async () => accounting.listPeriods());
+  app.get("/periods", async (req) =>
+    req.accountingCtx!.accounting.listPeriods(),
+  );
 
   app.post<{ Params: { year: string; month: string } }>(
     "/periods/:year/:month/close",
@@ -184,7 +220,11 @@ export async function accountingRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "BadRequest", message: "Invalid year/month" });
       }
-      return accounting.closePeriod(year, month, req.user.sub);
+      return req.accountingCtx!.accounting.closePeriod(
+        year,
+        month,
+        req.user.sub,
+      );
     },
   );
 
@@ -205,7 +245,7 @@ export async function accountingRoutes(app: FastifyInstance) {
           .send({ error: "BadRequest", message: "Invalid year/month" });
       }
       try {
-        return await accounting.reopenPeriod(year, month);
+        return await req.accountingCtx!.accounting.reopenPeriod(year, month);
       } catch (err) {
         return reply.code(404).send({
           error: "NotFound",
@@ -240,7 +280,7 @@ export async function accountingRoutes(app: FastifyInstance) {
           .send({ error: "BadRequest", message: "Invalid year/month" });
       }
       try {
-        return await accounting.accrueMonthlyInterest(
+        return await req.accountingCtx!.accounting.accrueMonthlyInterest(
           { year, month },
           req.user.sub,
         );

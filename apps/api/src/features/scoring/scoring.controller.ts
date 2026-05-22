@@ -1,12 +1,16 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { ScoringService } from "./scoring.service";
 import { submitSurveySchema, tierQuerySchema } from "./schemas";
 
+/**
+ * HTTP adapter for the credit-scoring surface.
+ *
+ * Phase 2: stateless. Each method reads `req.scoringServices!.scoring`
+ * — built per-request from the tenant-scoped Prisma client.
+ */
 export class ScoringController {
-  constructor(private readonly service: ScoringService) {}
-
-  questions = async () => this.service.getQuestions();
+  questions = async (req: FastifyRequest) =>
+    req.scoringServices!.scoring.getQuestions();
 
   submit = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = submitSurveySchema.safeParse(req.body);
@@ -15,7 +19,7 @@ export class ScoringController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.submit({
+    const result = await req.scoringServices!.scoring.submit({
       input: parsed.data,
       actorId: req.user.sub,
     });
@@ -26,7 +30,9 @@ export class ScoringController {
     req: FastifyRequest<{ Params: { customerId: string } }>,
     reply: FastifyReply,
   ) => {
-    const s = await this.service.latestForCustomer(req.params.customerId);
+    const s = await req.scoringServices!.scoring.latestForCustomer(
+      req.params.customerId,
+    );
     if (!s) {
       return reply
         .code(404)
@@ -42,6 +48,6 @@ export class ScoringController {
         .code(400)
         .send({ error: "BadRequest", message: "score query required" });
     }
-    return this.service.tier(parsed.data.score);
+    return req.scoringServices!.scoring.tier(parsed.data.score);
   };
 }

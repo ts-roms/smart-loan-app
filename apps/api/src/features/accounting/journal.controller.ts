@@ -1,16 +1,15 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { JournalService } from "./journal.service";
 import { entrySchema, reverseBulkSchema, reverseSingleSchema } from "./schemas";
 
 /**
  * HTTP adapter for the three journal write endpoints
  * (POST /journal, POST /journal/:id/reverse, POST /journal/reverse-bulk).
  * Read endpoints stay inline in accounting.routes.ts.
+ *
+ * Phase 2: stateless. Each method reads `req.accountingCtx!.journal`.
  */
 export class JournalController {
-  constructor(private readonly service: JournalService) {}
-
   post = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = entrySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -18,7 +17,10 @@ export class JournalController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.post(parsed.data, req.user.sub);
+    const result = await req.accountingCtx!.journal.post(
+      parsed.data,
+      req.user.sub,
+    );
     if (!result.ok) {
       return reply
         .code(400)
@@ -37,7 +39,7 @@ export class JournalController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.reverse(
+    const result = await req.accountingCtx!.journal.reverse(
       req.params.id,
       parsed.data,
       req.user.sub,
@@ -61,7 +63,10 @@ export class JournalController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.reverseBulk(parsed.data, req.user.sub);
+    const result = await req.accountingCtx!.journal.reverseBulk(
+      parsed.data,
+      req.user.sub,
+    );
     return reply.code(207).send(result);
   };
 }

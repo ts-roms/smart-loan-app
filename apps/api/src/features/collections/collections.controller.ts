@@ -1,17 +1,19 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { CollectionsService } from "./collections.service";
 import { noteSchema, ptpSchema, resolveSchema } from "./schemas";
 
+/**
+ * HTTP adapter for the collections surface. Phase 2: stateless;
+ * reads `req.collectionsServices!.collections` per call.
+ */
 export class CollectionsController {
-  constructor(private readonly service: CollectionsService) {}
-
-  queue = async () => this.service.overdueQueue();
+  queue = async (req: FastifyRequest) =>
+    req.collectionsServices!.collections.overdueQueue();
 
   // ─── notes ────────────────────────────────────────────────────────
 
   listNotes = async (req: FastifyRequest<{ Params: { loanId: string } }>) =>
-    this.service.listNotes(req.params.loanId);
+    req.collectionsServices!.collections.listNotes(req.params.loanId);
 
   addNote = async (
     req: FastifyRequest<{ Params: { loanId: string } }>,
@@ -24,7 +26,7 @@ export class CollectionsController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     return reply.code(201).send(
-      await this.service.addNote({
+      await req.collectionsServices!.collections.addNote({
         loanId: req.params.loanId,
         input: parsed.data,
         actorId: req.user.sub,
@@ -35,7 +37,7 @@ export class CollectionsController {
   // ─── promises to pay ──────────────────────────────────────────────
 
   listPromises = async (req: FastifyRequest<{ Params: { loanId: string } }>) =>
-    this.service.listPromises(req.params.loanId);
+    req.collectionsServices!.collections.listPromises(req.params.loanId);
 
   createPromise = async (
     req: FastifyRequest<{ Params: { loanId: string } }>,
@@ -48,7 +50,7 @@ export class CollectionsController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     return reply.code(201).send(
-      await this.service.createPromise({
+      await req.collectionsServices!.collections.createPromise({
         loanId: req.params.loanId,
         input: parsed.data,
         actorId: req.user.sub,
@@ -66,13 +68,18 @@ export class CollectionsController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.resolvePromise(req.params.id, parsed.data);
+    return req.collectionsServices!.collections.resolvePromise(
+      req.params.id,
+      parsed.data,
+    );
   };
 
   // ─── late-fee accrual job ─────────────────────────────────────────
 
   accrueLateFees = async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await this.service.accrueLateFees(req.user.sub);
+    const result = await req.collectionsServices!.collections.accrueLateFees(
+      req.user.sub,
+    );
     if (!result.ok) {
       return reply
         .code(409)

@@ -6,28 +6,37 @@
  *   GET  /scoring/customers/:customerId/score  any authenticated
  *   GET  /scoring/tier?score=720               any authenticated
  *
- * Layered: routes → controller → service. The submit path pulls the
- * behavior signal from loan history, runs `computeCreditScore`, and
- * persists both the raw survey response + the rolled-up "latest
- * score" row in a single call so the customer sees their tier
- * immediately.
+ * Phase 2: per-request service wiring via `req.scoringServices`.
+ * Repos + service tree are built fresh per request against the
+ * tenant-scoped Prisma client.
  */
 
 import { CreditScoreRepository, SurveyRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { ScoringController } from "./scoring.controller";
 import { ScoringService } from "./scoring.service";
 
-export async function scoringRoutes(app: FastifyInstance) {
-  const ctrl = new ScoringController(
-    new ScoringService(
-      new SurveyRepository(app.prisma),
-      new CreditScoreRepository(app.prisma),
-    ),
-  );
+declare module "fastify" {
+  interface FastifyRequest {
+    scoringServices?: { scoring: ScoringService };
+  }
+}
 
+export async function scoringRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.scoringServices = {
+      scoring: new ScoringService(
+        new SurveyRepository(prisma),
+        new CreditScoreRepository(prisma),
+      ),
+    };
+  });
+
+  const ctrl = new ScoringController();
 
   app.get("/survey/questions", ctrl.questions);
   app.post("/survey/submit", ctrl.submit);
