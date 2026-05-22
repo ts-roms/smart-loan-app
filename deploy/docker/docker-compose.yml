@@ -1,0 +1,113 @@
+# SmartLoan — production docker-compose for on-prem cooperative installs.
+#
+# Three services:
+#   db      — PostgreSQL 16. Optional: set DATABASE_URL in .env to point
+#             at an external DB and remove this service if you have an
+#             existing Postgres you'd rather use.
+#   api     — Fastify API (Node + tsx + Prisma). Runs migrations on boot.
+#   web     — nginx serving the static SPA + reverse-proxying /api/v1
+#             to the api service.
+#
+# Networking: only `web` publishes a port to the host. `api` is reachable
+# from `web` over the internal compose network; `db` is reachable from
+# `api` the same way. For TLS, either:
+#   (a) put a host-level reverse proxy (Caddy, nginx, Traefik) in front
+#       of `web`, OR
+#   (b) replace the web service with a Caddy container that handles ACME
+#       + serves the static files directly. We ship plain HTTP here
+#       because most cooperatives already have a TLS-terminating proxy.
+#
+# First-time setup is two steps:
+#   $ docker compose up -d
+#   $ docker compose exec api pnpm --filter @loan/db prisma:seed
+# After that, sign in with the seeded admin (check logs for the
+# bootstrap password) and activate your license under Settings.
+
+name: smartloan
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smart_loan}
+      POSTGRES_USER: ${POSTGRES_USER:-loan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting}
+    volumes:
+      - smartloan-db-data:/var/lib/postgresql/data
+    # Health probe so the api service can wait for the DB to be ready.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-loan} -d ${POSTGRES_DB:-smart_loan}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Don't expose to the host by default — keeps the surface small.
+    # Uncomment the ports block if you need to connect via a local
+    # client; consider firewalling externally either way.
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-loan}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-smart_loan}}
+      # HTTP
+      PORT: "3001"
+      HOST: "0.0.0.0"
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in .env to your public URL}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+      # Auth
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (32+ random chars)}
+      # Brand
+      COMPANY_NAME: ${COMPANY_NAME:-SmartLoan}
+      TOTP_ISSUER: ${TOTP_ISSUER:-SmartLoan}
+      # Storage
+      UPLOADS_DIR: /home/node/app/uploads
+      # Licensing — the vendor's public key, distributed with your
+      # license. Set ONE of these.
+      LICENSE_PUBLIC_KEY_PEM: ${LICENSE_PUBLIC_KEY_PEM:-}
+      LICENSE_PUBLIC_KEY_PATH: ${LICENSE_PUBLIC_KEY_PATH:-}
+      # Providers — leave as MOCK unless you've signed up with a real
+      # SMS / email / payment vendor and configured their creds.
+      NOTIFICATION_PROVIDER: ${NOTIFICATION_PROVIDER:-MOCK}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-MOCK}
+      AML_PROVIDER: ${AML_PROVIDER:-MOCK}
+      # Optional Sentry
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # Optional Ollama (in-app assistant) — point at a host or skip
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-phi3:mini}
+      # Multi-tenancy stays off for a cooperative install. Phase 2
+      # makes this a real switch; today it's a no-op flag.
+      MULTI_TENANT: "false"
+    volumes:
+      - smartloan-uploads:/home/node/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    # No host port — only the web service reaches us, via internal DNS.
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      # Default to 8080 to avoid clashing with anything else on the host.
+      # Stick a Caddy/nginx in front for TLS — most cooperatives already
+      # have one of those for their other services.
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  smartloan-db-data:
+  smartloan-uploads:

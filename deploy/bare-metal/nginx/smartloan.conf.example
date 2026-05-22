@@ -1,0 +1,77 @@
+# nginx site config — SmartLoan bare-metal install.
+#
+# Drop this into /etc/nginx/sites-available/smartloan.conf, replace
+# `lending.your-coop.example` with your real hostname, symlink to
+# sites-enabled/, then:
+#
+#   sudo certbot --nginx -d lending.your-coop.example
+#   sudo systemctl reload nginx
+#
+# The certbot call provisions TLS via Let's Encrypt and rewrites this
+# file to add the HTTPS server block — that's the easy path.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name lending.your-coop.example;
+
+    # Serve the static SPA. The installer builds to apps/web/dist; the
+    # default install path is /opt/smartloan, so adjust accordingly if
+    # you used a different --source-dir.
+    root /opt/smartloan/apps/web/dist;
+    index index.html;
+
+    # Health probe target (also reachable via /api/v1/health below).
+    location = /health {
+        access_log off;
+        return 200 'ok';
+        add_header Content-Type text/plain;
+    }
+
+    # Content-hashed assets — cache forever, immutable.
+    location ~* \.(?:js|mjs|css|woff2?|svg|png|jpg|jpeg|gif|webp|ico)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # API proxy. Matches the dev experience: SPA fetches /api/v1/foo,
+    # nginx forwards it to the Fastify process on 127.0.0.1:3001.
+    location /api/v1/ {
+        proxy_pass http://127.0.0.1:3001/api/v1/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 6m;  # KYC docs cap; matches Fastify config.
+    }
+
+    # Uploads — KYC docs, customer ID scans. Served by the API so it
+    # can do auth checks before delivering bytes.
+    location /uploads/ {
+        proxy_pass http://127.0.0.1:3001/uploads/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        expires 5m;
+    }
+
+    # Swagger UI (developer reference). Comment out to hide.
+    location /docs {
+        proxy_pass http://127.0.0.1:3001/docs;
+        proxy_set_header Host $host;
+    }
+
+    # SPA fallback for client-side routing.
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    # Security headers on the static layer. @fastify/helmet handles
+    # the API responses already.
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+}

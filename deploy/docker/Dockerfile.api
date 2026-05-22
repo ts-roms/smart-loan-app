@@ -1,0 +1,116 @@
+# SmartLoan API — production image
+#
+# Multi-stage build:
+#   1. `base`     — pnpm + node, shared by deps and runtime stages
+#   2. `deps`     — installs the full workspace (incl. dev deps for tsc /
+#                   prisma generate). Cached; rebuilds only when lockfile
+#                   or package.json files change.
+#   3. `prisma`   — generates the Prisma client. Separate stage so changes
+#                   to schema.prisma invalidate THIS layer, not the deps
+#                   install layer above.
+#   4. `runtime`  — minimal node image with the source tree + node_modules
+#                   copied in. Uses `tsx` to execute TypeScript directly,
+#                   matching the dev runtime (no separate build step
+#                   needed for the API).
+#
+# Why tsx in production: the API already uses tsx for dev, the cold-start
+# delta vs. compiled JS is negligible at this scale (~50ms), and skipping
+# the tsc compile step means no risk of a mismatch between what we test
+# in dev and what we ship.
+#
+# Image size: ~350 MB. The bulk is node_modules — Prisma's engines alone
+# are ~50 MB per platform. If you need smaller, switch to `prisma generate
+# --no-engine` + a binary engine layer, but the size isn't currently a
+# bottleneck for cooperative installs.
+
+ARG NODE_VERSION=20.18.0
+FROM node:${NODE_VERSION}-bookworm-slim AS base
+
+# pnpm installed via corepack (built into Node 20). Pinned to keep
+# rebuilds deterministic — different pnpm versions resolve workspaces
+# slightly differently.
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+# OpenSSL is required for Prisma's query engine. The slim base doesn't
+# include it; the missing-OpenSSL error is opaque so we install it
+# explicitly.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ─── deps stage ─────────────────────────────────────────────────────────
+FROM base AS deps
+
+# Copy ONLY the manifest files first so Docker can cache the install
+# layer when source changes but deps don't. `pnpm-lock.yaml` is the
+# integrity boundary; the .npmrc carries shamefully-hoist + similar
+# workspace settings.
+COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc* package.json ./
+
+# Copy every workspace package's manifest. Using a glob like
+# `apps/*/package.json` doesn't work with COPY directly, so we copy the
+# whole apps/ and libs/ tree (manifests + sources). This is what makes
+# the deps layer cache invalidation tied to *anything in those dirs*
+# changing — acceptable for a monorepo where most changes also touch
+# the lockfile anyway.
+COPY apps ./apps
+COPY libs ./libs
+
+# Full workspace install, including dev deps (we need tsc + prisma in
+# the runtime image to support `prisma migrate deploy` at boot).
+# --frozen-lockfile ensures the build matches CI; if a deployer edits
+# package.json manually, the build correctly refuses to proceed.
+RUN pnpm install --frozen-lockfile
+
+# ─── prisma stage ───────────────────────────────────────────────────────
+FROM deps AS prisma
+
+# Generate the Prisma client. This is the only "build step" the API
+# really needs — the rest runs as TS via tsx.
+RUN pnpm --filter @loan/db prisma:generate
+
+# ─── runtime stage ──────────────────────────────────────────────────────
+FROM base AS runtime
+
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV HOST=0.0.0.0
+
+# Non-root user for the runtime — the node image already ships with a
+# `node` user (UID 1000), reuse that.
+USER node
+WORKDIR /home/node/app
+
+# Copy the built artefacts from the prisma stage. We bring the whole
+# node_modules + source tree because the API runs from source via tsx
+# at runtime.
+COPY --chown=node:node --from=prisma /app/node_modules ./node_modules
+COPY --chown=node:node --from=prisma /app/apps ./apps
+COPY --chown=node:node --from=prisma /app/libs ./libs
+COPY --chown=node:node --from=prisma /app/package.json ./package.json
+COPY --chown=node:node --from=prisma /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --chown=node:node --from=prisma /app/tsconfig.base.json ./tsconfig.base.json
+
+# Uploads volume mount point. Configure UPLOADS_DIR in the env to point
+# here; the compose stack mounts a named volume.
+RUN mkdir -p /home/node/app/uploads
+VOLUME ["/home/node/app/uploads"]
+
+EXPOSE 3001
+
+# Healthcheck hits /api/v1/health, which the API exposes by default.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://localhost:'+process.env.PORT+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+# Boot. `prisma migrate deploy` is idempotent — running on every start
+# means a fresh container picks up new migrations automatically. Then
+# we hand off to the API.
+#
+# We don't seed in this command — the seed is for first-install only
+# and is run manually by the cooperative's operator (see deploy/README).
+CMD ["sh", "-c", "pnpm --filter @loan/db exec prisma migrate deploy && pnpm --filter @loan/api start"]

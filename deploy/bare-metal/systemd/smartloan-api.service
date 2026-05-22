@@ -1,0 +1,73 @@
+# systemd unit template for the SmartLoan API.
+#
+# The bare-metal installer (deploy/bare-metal/install.sh) substitutes
+# @@TOKENS@@ before copying this to /etc/systemd/system/. Don't hand-
+# edit the installed copy — re-run the installer or edit the env file
+# at /etc/smartloan/smartloan.env, then `systemctl restart smartloan-api`.
+
+[Unit]
+Description=SmartLoan API (Fastify, tenant LMS)
+Documentation=https://github.com/your-org/smart-loan-app
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=@@SERVICE_USER@@
+Group=@@SERVICE_USER@@
+WorkingDirectory=@@SOURCE_DIR@@
+EnvironmentFile=@@ENV_FILE@@
+
+# tsx ships with @loan/api's devDeps. Production-grade: bake a build
+# step into the installer instead if you prefer compiled JS, but tsx's
+# cold-start overhead is ~50ms which doesn't matter for a long-lived
+# server process.
+ExecStart=/usr/bin/env pnpm --filter @loan/api start
+
+# Restart policy: always come back unless the user explicitly stopped
+# the service. 5s delay between attempts so we don't spin a crashloop
+# while waiting for Postgres to recover.
+Restart=always
+RestartSec=5s
+
+# Graceful stop: give Fastify 30s to drain in-flight requests.
+TimeoutStopSec=30s
+KillMode=mixed
+
+# Logging — capture stdout/stderr in the journal. View with:
+#   journalctl -u smartloan-api -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smartloan-api
+
+# ─── Hardening ─────────────────────────────────────────────────────────
+# These directives narrow what the process can do beyond what the
+# service user already restricts. Most are no-ops for a Node app but
+# defense-in-depth costs nothing here.
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=strict
+# Allow writes only to the source tree (Prisma needs cache writes in
+# node_modules) and the uploads volume. Anything else is read-only.
+ReadWritePaths=@@SOURCE_DIR@@
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+# Resource caps. Adjust upward for cooperatives running > 50K loans.
+# These are reasonable defaults for a 4 GB host.
+LimitNOFILE=65536
+MemoryMax=2G
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target
