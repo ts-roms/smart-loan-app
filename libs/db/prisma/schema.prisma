@@ -2377,6 +2377,50 @@ model LeaseAgreement {
   @@index([status])
 }
 
+// ─── Multi-tenancy (Phase 2 foundation) ────────────────────────────────────
+//
+// The `Tenant` table lives in the SHARED `public` schema and acts as the
+// control-plane catalog: one row per cooperative customer on this
+// installation. Domain data (Customer, Loan, etc.) lives in a dedicated
+// Postgres schema named `tenant_<slug>` — a request's tenant is
+// resolved at auth time and Prisma is bound to that schema for the
+// duration of the request via `search_path`.
+//
+// This commit ships ONLY the catalog. Wiring (per-request schema
+// switching, repo-layer enforcement, migration runner) lands in a
+// later commit. See docs/multi-tenant-roadmap.md for the full plan.
+
+model Tenant {
+  id        String   @id @default(uuid())
+  /// URL-safe slug — used as the Postgres schema name (`tenant_<slug>`).
+  /// Lowercase alphanumeric + dashes. Enforced by zod at the API layer
+  /// since Prisma doesn't support CHECK constraints natively.
+  slug      String   @unique
+  /// Human-readable name (cooperative legal name).
+  name      String
+  status    TenantStatus @default(PROVISIONING)
+  /// JSON snapshot of the license that was active when this tenant was
+  /// last seen. Lets the platform console show "Mt Banahaw MPC →
+  /// ENTERPRISE, expires 2027-05-22" without reaching into the tenant
+  /// schema. Refreshed by the tenant's API on every license activation.
+  licenseSnapshot Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  /// When the tenant was last seen calling back to the platform (license
+  /// check-in, telemetry ping). Null until the first contact.
+  lastSeenAt DateTime?
+
+  @@index([status])
+  @@index([lastSeenAt])
+}
+
+enum TenantStatus {
+  PROVISIONING  // schema being created / migrations running
+  ACTIVE        // healthy, serving traffic
+  SUSPENDED     // license lapsed or platform-imposed pause
+  ARCHIVED      // soft-deleted; data retained but no longer served
+}
+
 // ─── Licensing ──────────────────────────────────────────────────────────────
 //
 // Persisted record of every license activation on this instance. The
