@@ -1,5 +1,5 @@
-// reports feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single reports.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// reports feature — exports the route plugin for the central registrar.
+// Layered: routes / controller / service / schemas. Six compliance
+// reports (FRD audit clauses) with JSON/CSV format dispatch on the HTTP
+// edge.
 export { reportRoutes } from "./reports.routes.js";

@@ -1,5 +1,5 @@
-// system feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single system.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// system feature — exports the route plugin for the central registrar.
+// Schemas extracted under ./schemas.ts (idle-policy + branding upsert
+// shapes); controller/service not split — handlers are upserts against
+// the singleton SystemConfig row.
 export { systemRoutes } from "./system.routes.js";

@@ -2,10 +2,10 @@
 //
 // Two plugins exposed for the central registrar:
 //   • loanRoutes — the main loan workflow (apply, decide, disburse,
-//     restructure, write-off, payments). Kept as a single routes.ts
-//     for now; controller/service split deferred until the file is
-//     actively edited again (follow the customers/ canary pattern when
-//     that happens).
+//     restructure, write-off, payments). Layered for the workflow paths
+//     (apply / decide / disburse / dry-run): loans.controller.ts +
+//     loans.service.ts + schemas.ts. The 25-odd routine read endpoints
+//     stay inline in loans.routes.ts where they already are.
 //   • loanApprovalRoutes — the per-step approval surface
 //     (/loans/:id/approvals). Split out here so the matching
 //     product-side endpoints can sit in features/loan-products/.

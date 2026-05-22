@@ -1,5 +1,5 @@
-// rbac feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single rbac.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// rbac feature — exports the route plugin for the central registrar.
+// Layered: routes / controller / service / schemas. Permission catalog
+// + role CRUD + user CRUD + role assignments; the ADMIN self-lockout
+// guard + customer-link rule live in the service.
 export { rbacRoutes } from "./rbac.routes.js";

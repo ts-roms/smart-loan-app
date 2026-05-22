@@ -1,5 +1,5 @@
-// lease feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single lease.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// lease feature — exports the route plugin for the central registrar.
+// Layered: routes / controller / service / schemas. Four state
+// transitions (buyout / pull-out / return / extend); buyout posts a
+// settlement journal entry via LeaseRepository.
 export { leaseRoutes } from "./lease.routes.js";

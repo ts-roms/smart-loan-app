@@ -1,5 +1,5 @@
-// demand-letters feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single demand-letters.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// demand-letters feature — exports the route plugin for the central
+// registrar. Layered: routes / controller / service / schemas. FRD §3.6.5
+// stage-gated approval + segregation-of-duties + best-effort dispatch
+// notifications live in the service.
 export { demandLetterRoutes } from "./demand-letters.routes.js";

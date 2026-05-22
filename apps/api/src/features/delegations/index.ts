@@ -1,5 +1,5 @@
-// delegations feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single delegations.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// delegations feature — exports the route plugin for the central
+// registrar. Layered: routes / controller / service / schemas. Permission
+// gate on contents + delegator-vs-caller authority + extend-after-revoke
+// rules live in the service.
 export { delegationRoutes } from "./delegations.routes.js";

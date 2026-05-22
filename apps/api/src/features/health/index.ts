@@ -1,5 +1,4 @@
-// health feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single health.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// health feature — liveness + readiness probes. No auth, no body, no
+// orchestration; stays as a single routes file by design (see
+// features/README.md).
 export { healthRoutes } from "./health.routes.js";

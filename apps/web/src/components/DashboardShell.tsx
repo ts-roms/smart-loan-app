@@ -20,6 +20,7 @@ import {
   BarChart3,
   BookOpenCheck,
   CalendarClock,
+  Car,
   ChevronDown,
   Clock,
   CreditCard,
@@ -116,6 +117,12 @@ const NAV_SECTIONS: NavSection[] = [
         label: "Repossession",
         icon: ShieldAlert,
         roles: ["ADMIN", "LOAN_OFFICER"],
+      },
+      {
+        to: "/lease",
+        label: "Lease-to-Own",
+        icon: Car,
+        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
       },
       {
         to: "/payments/bulk",

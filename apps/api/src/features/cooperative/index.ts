@@ -1,5 +1,6 @@
-// cooperative feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single cooperative.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// cooperative feature — exports the route plugin for the central registrar.
+// Layered: routes / controller / service / schemas. Seven entity types
+// (contributions, savings, funds, withdrawals, expenses, other-income,
+// big-brother) sharing the same create + list shape; the GL auto-post
+// happens inside CooperativeRepository.
 export { cooperativeRoutes } from "./cooperative.routes.js";

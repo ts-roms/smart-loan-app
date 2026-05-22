@@ -23,12 +23,9 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const TYPE_LABEL: Record<string, string> = {
-  SALARY: "Salary",
-  AUTOMOTIVE: "Auto",
-  MOTORCYCLE: "Motorcycle",
-  HOUSING: "Housing",
-};
+// Pulled from features/loans so the borrower-side product chips render
+// with the same short labels as the officer console.
+import { LOAN_TYPE_LABELS } from "../../loans";
 
 export function PortalDashboard() {
   const me = usePortalMe();
@@ -168,7 +165,7 @@ export function PortalDashboard() {
                     </td>
                     <td className="py-2 px-2">
                       <Badge variant="muted">
-                        {TYPE_LABEL[l.productCode] ?? l.productCode}
+                        {LOAN_TYPE_LABELS[l.productCode] ?? l.productCode}
                       </Badge>
                     </td>
                     <td className="py-2 px-2">

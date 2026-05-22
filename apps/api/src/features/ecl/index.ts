@@ -1,5 +1,5 @@
-// ecl feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single ecl.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// ecl feature — exports the route plugin for the central registrar.
+// Layered: routes / controller / service / schemas. IFRS 9 / PFRS 9
+// expected-credit-loss runs; the impairment journal entry posts inside
+// EclRepository.run.
 export { eclRoutes } from "./ecl.routes.js";

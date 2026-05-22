@@ -1,5 +1,5 @@
-// collections feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single collections.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// collections feature — exports the route plugin for the central registrar.
+// Layered: routes / controller / service / schemas. Wraps the
+// CollectionsRepository for overdue queue + notes + PTPs + the late-fee
+// accrual job (which surfaces closed-period errors as 409).
 export { collectionsRoutes } from "./collections.routes.js";

@@ -1,5 +1,5 @@
-// repossession feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single repossession.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// repossession feature — exports the route plugin for the central
+// registrar. Layered: routes / controller / service / schemas. FRD §3.7
+// state machine with eight audit-coupled transitions; auction posts the
+// settlement journal entry.
 export { repossessionRoutes } from "./repossession.routes.js";

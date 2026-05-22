@@ -1,5 +1,5 @@
-// screening feature — re-exports the route plugin for the central registrar.
-// The handlers remain a single screening.routes.ts for now; controller/service
-// split deferred until the file is actively edited (see customers/ canary
-// for the layered pattern when that happens).
+// screening feature — factory plugin exposing AML watchlist + screening
+// status routes. Not a layered feature router: the actual screening
+// provider is decorated onto `app.screening` for use by customer +
+// loan-apply flows (see features/README.md).
 export { screeningRoutes } from "./screening.routes.js";

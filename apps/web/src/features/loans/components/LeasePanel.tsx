@@ -6,7 +6,6 @@ import {
   usePullOutLease,
   useReturnLease,
 } from "@loan/api-client";
-import type { LeaseStatus } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -28,6 +27,13 @@ import {
 } from "@loan/ui";
 import { formatDateTime, formatMoney } from "@loan/shared-utils";
 import { JournalEntryLink } from "../../accounting";
+// Status labels + colour variants live in features/lease so the
+// per-loan panel and the cross-loan queue page share one source of
+// truth. Local aliases keep the rendering code below readable.
+import {
+  LEASE_STATUS_LABEL as STATUS_LABEL,
+  LEASE_STATUS_VARIANT as STATUS_VARIANT,
+} from "../../lease";
 import {
   AlertTriangle,
   Car,
@@ -37,25 +43,6 @@ import {
   Repeat,
 } from "lucide-react";
 import { useState } from "react";
-
-const STATUS_LABEL: Record<LeaseStatus, string> = {
-  ACTIVE: "Active",
-  PULLED_OUT: "Pulled out",
-  BUYOUT_COMPLETED: "Buyout completed",
-  RETURNED: "Returned",
-  EXTENDED: "Extended",
-};
-
-const STATUS_VARIANT: Record<
-  LeaseStatus,
-  "muted" | "success" | "warning" | "danger"
-> = {
-  ACTIVE: "muted",
-  PULLED_OUT: "danger",
-  BUYOUT_COMPLETED: "success",
-  RETURNED: "success",
-  EXTENDED: "warning",
-};
 
 /**
  * Lease-to-Own panel — FRD §3.5. Renders on a loan detail page only when

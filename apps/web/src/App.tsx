@@ -76,6 +76,10 @@ const RepossessionPage = lazyNamed(
   () => import("./features/repossession"),
   "RepossessionPage",
 );
+const LeaseQueuePage = lazyNamed(
+  () => import("./features/lease"),
+  "LeaseQueuePage",
+);
 const DorsiPage = lazyNamed(() => import("./features/dorsi"), "DorsiPage");
 const ReportsPage = lazyNamed(
   () => import("./features/reports"),
@@ -267,6 +271,7 @@ export function App() {
             element={<DemandLettersPage />}
           />
           <Route path="/repossession" element={<RepossessionPage />} />
+          <Route path="/lease" element={<LeaseQueuePage />} />
           <Route path="/compliance/dorsi" element={<DorsiPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/help" element={<HelpPage />} />

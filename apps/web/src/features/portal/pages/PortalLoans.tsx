@@ -10,12 +10,10 @@ import {
 import { formatDate, formatMoney } from "@loan/shared-utils";
 import { Link } from "react-router-dom";
 
-const TYPE_LABEL: Record<string, string> = {
-  SALARY: "Salary",
-  AUTOMOTIVE: "Auto",
-  MOTORCYCLE: "Motorcycle",
-  HOUSING: "Housing",
-};
+// Pulled from features/loans so the borrower portal renders products
+// with the same short label as the officer console — one source of
+// truth instead of three diverging copies.
+import { LOAN_TYPE_LABELS } from "../../loans";
 
 export function PortalLoans() {
   const loans = usePortalLoans();
@@ -61,7 +59,7 @@ export function PortalLoans() {
                   </td>
                   <td className="py-2 px-2">
                     <Badge variant="muted">
-                      {TYPE_LABEL[l.productCode] ?? l.productCode}
+                      {LOAN_TYPE_LABELS[l.productCode] ?? l.productCode}
                     </Badge>
                   </td>
                   <td className="py-2 px-2">
