@@ -1,5 +1,5 @@
 import { AuditLogRepository, LoanApprovalRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 const stepSchema = z.object({
@@ -13,26 +13,42 @@ const chainSchema = z.object({
   steps: z.array(stepSchema).max(10),
 });
 
+declare module "fastify" {
+  interface FastifyRequest {
+    approvalChainCtx?: {
+      approvals: LoanApprovalRepository;
+      audit: AuditLogRepository;
+    };
+  }
+}
+
 /**
  * Loan-product approval-chain definition routes. Mounted under the
  * /loan-products prefix so paths read /loan-products/:code/approval-chain.
  *
  *   GET /:code/approval-chain  — read chain definition (products.read)
  *   PUT /:code/approval-chain  — replace chain (loans.approval.chain.manage)
+ *
+ * Phase 2: per-request repo wiring against `req.tenantCtx.prisma`.
  */
 export async function loanApprovalChainRoutes(
   app: FastifyInstance,
 ): Promise<void> {
-  const approvals = new LoanApprovalRepository(app.prisma);
-  const audit = new AuditLogRepository(app.prisma);
-
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.approvalChainCtx = {
+      approvals: new LoanApprovalRepository(prisma),
+      audit: new AuditLogRepository(prisma),
+    };
+  });
 
   // Reading the chain is read-only — anyone with product read access.
   app.get<{ Params: { code: string } }>(
     "/:code/approval-chain",
     { preHandler: app.requirePermission("products.read") },
-    async (req) => approvals.listSteps(req.params.code),
+    async (req) => req.approvalChainCtx!.approvals.listSteps(req.params.code),
   );
 
   // Write requires a dedicated permission so only admins (or delegated
@@ -41,6 +57,7 @@ export async function loanApprovalChainRoutes(
     "/:code/approval-chain",
     { preHandler: app.requirePermission("loans.approval.chain.manage") },
     async (req, reply) => {
+      const { approvals, audit } = req.approvalChainCtx!;
       const parsed = chainSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply

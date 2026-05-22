@@ -1,7 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { applySchema, decideSchema } from "./schemas";
-import type { LoanWorkflowService } from "./loans.service";
 
 /**
  * Loan-workflow HTTP adapter. Owns the four orchestration-heavy
@@ -9,14 +8,17 @@ import type { LoanWorkflowService } from "./loans.service";
  * in loans.routes.ts because they're thin repo passthroughs (see
  * docs/architecture.md — "earn its keep").
  *
+ * **Phase 2 pattern**: stateless singleton. Each method reads the
+ * per-request `LoanWorkflowService` from `req.loanCtx.workflowService`,
+ * which the `buildLoanCtx` preHandler in loans.routes.ts instantiates
+ * against the tenant-scoped Prisma client.
+ *
  * Each method follows the same shape:
  *   1. zod-parse the body / params
- *   2. Call the service
+ *   2. Call the service (read from req)
  *   3. Map the discriminated-union result to an HTTP code
  */
 export class LoanWorkflowController {
-  constructor(private readonly service: LoanWorkflowService) {}
-
   apply = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = applySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -24,7 +26,10 @@ export class LoanWorkflowController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.apply(parsed.data, req.user.sub);
+    const result = await req.loanCtx!.workflowService.apply(
+      parsed.data,
+      req.user.sub,
+    );
     if (result.ok) {
       return reply.code(201).send(result.loan);
     }
@@ -51,7 +56,7 @@ export class LoanWorkflowController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.dryRun(parsed.data);
+    const result = await req.loanCtx!.workflowService.dryRun(parsed.data);
     if (!result.ok) {
       return reply.code(404).send({ error: result.kind });
     }
@@ -68,7 +73,7 @@ export class LoanWorkflowController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.decide(
+    const result = await req.loanCtx!.workflowService.decide(
       req.params.id,
       parsed.data,
       req.user.sub,
@@ -89,6 +94,6 @@ export class LoanWorkflowController {
   };
 
   disburse = async (req: FastifyRequest<{ Params: { id: string } }>) => {
-    return this.service.disburse(req.params.id, req.user.sub);
+    return req.loanCtx!.workflowService.disburse(req.params.id, req.user.sub);
   };
 }

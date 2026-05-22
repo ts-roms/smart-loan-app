@@ -3,7 +3,7 @@ import {
   LoanApprovalRepository,
   LoanRepository,
 } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { notifyApproversForStep } from "./notify-approvers";
@@ -15,6 +15,23 @@ const approveSchema = z.object({
 const rejectSchema = z.object({
   notes: z.string().min(1).max(2000),
 });
+
+/**
+ * Per-request context for the loan-approval surface. Same shape as
+ * the parent loans feature, just narrower — these routes only need
+ * three repos.
+ */
+interface ApprovalRouteCtx {
+  loans: LoanRepository;
+  approvals: LoanApprovalRepository;
+  audit: AuditLogRepository;
+}
+
+declare module "fastify" {
+  interface FastifyRequest {
+    approvalCtx?: ApprovalRouteCtx;
+  }
+}
 
 /**
  * Loan-side approval routes. Mounted under the /loans prefix so paths
@@ -30,13 +47,13 @@ const rejectSchema = z.object({
  * isn't gated here at the route layer; the user just needs to be
  * authenticated. A 403 comes back from the repo's "you don't hold"
  * throw and we map that to a clean HTTP 403.
+ *
+ * Phase 2: per-request repo wiring against `req.tenantCtx.prisma`.
  */
 export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
-  const loans = new LoanRepository(app.prisma);
-  const approvals = new LoanApprovalRepository(app.prisma);
-  const audit = new AuditLogRepository(app.prisma);
-
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", buildApprovalCtx());
 
   // List approval rows for a loan. Read-only — anyone who can see the
   // loan can see its approval chain.
@@ -44,6 +61,7 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
     "/:id/approvals",
     { preHandler: app.requirePermission("loans.read") },
     async (req, reply) => {
+      const { loans, approvals } = req.approvalCtx!;
       const loan = await loans.findByIdOrNumber(req.params.id);
       if (!loan) return reply.code(404).send({ error: "NotFound" });
       return approvals.listForLoan(loan.id);
@@ -51,6 +69,7 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.post<{ Params: { id: string } }>("/:id/approvals", async (req, reply) => {
+    const { loans, approvals, audit } = req.approvalCtx!;
     const parsed = approveSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply
@@ -81,9 +100,15 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
       // Hand-off notification: if the step that just landed isn't the
       // final one, the next step's approvers need to know they have
       // something waiting. Fire-and-forget so the HTTP response isn't
-      // blocked on the dispatcher round-trip.
+      // blocked on the dispatcher round-trip. Uses the tenant-scoped
+      // prisma client so the lookup hits the right schema.
       if (!result.isFinal && result.nextStep) {
-        void notifyApproversForStep(app, loan.id, result.nextStep);
+        void notifyApproversForStep(
+          app,
+          req.tenantCtx.prisma,
+          loan.id,
+          result.nextStep,
+        );
       }
       return result;
     } catch (err) {
@@ -101,6 +126,7 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { id: string } }>(
     "/:id/approvals/reject",
     async (req, reply) => {
+      const { loans, approvals, audit } = req.approvalCtx!;
       const parsed = rejectSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply
@@ -137,4 +163,15 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
       }
     },
   );
+}
+
+function buildApprovalCtx() {
+  return async (req: FastifyRequest): Promise<void> => {
+    const prisma = req.tenantCtx.prisma;
+    req.approvalCtx = {
+      loans: new LoanRepository(prisma),
+      approvals: new LoanApprovalRepository(prisma),
+      audit: new AuditLogRepository(prisma),
+    };
+  };
 }

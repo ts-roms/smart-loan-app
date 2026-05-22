@@ -1,4 +1,4 @@
-import { LoanApprovalRepository } from "@loan/db";
+import { LoanApprovalRepository, type PrismaClient } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
 /**
@@ -14,9 +14,13 @@ import type { FastifyInstance } from "fastify";
  * Keeping the recipient lookup + per-channel dispatch in one place
  * ensures both code paths render the same templates with the same
  * context.
+ *
+ * Phase 2: takes the tenant-scoped Prisma client explicitly. Callers
+ * pass `req.tenantCtx.prisma` so the lookup hits the right schema.
  */
 export async function notifyApproversForStep(
   app: FastifyInstance,
+  prisma: PrismaClient,
   loanId: string,
   stepOrder: number,
 ): Promise<void> {
@@ -26,7 +30,7 @@ export async function notifyApproversForStep(
     // inside the helper instead of taking already-fetched data so callers
     // don't have to plumb the customer + product + step relations
     // themselves.
-    const loan = await app.prisma.loanApplication.findUnique({
+    const loan = await prisma.loanApplication.findUnique({
       where: { id: loanId },
       select: {
         id: true,
@@ -35,13 +39,13 @@ export async function notifyApproversForStep(
         customer: { select: { firstName: true, lastName: true } },
       },
     });
-    const step = await app.prisma.loanApproval.findUnique({
+    const step = await prisma.loanApproval.findUnique({
       where: { loanId_stepOrder: { loanId, stepOrder } },
       select: { stepLabel: true, requiredPermission: true, status: true },
     });
     if (!loan || !step || step.status !== "PENDING") return;
 
-    const approvalsRepo = new LoanApprovalRepository(app.prisma);
+    const approvalsRepo = new LoanApprovalRepository(prisma);
     const recipients = await approvalsRepo.findApproversForPermission(
       step.requiredPermission,
     );

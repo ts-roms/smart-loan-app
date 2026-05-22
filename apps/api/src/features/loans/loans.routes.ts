@@ -16,7 +16,7 @@ import {
   LoanRepository,
 } from "@loan/db";
 import { validateKyc } from "@loan/kyc";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { LoanWorkflowController } from "./loans.controller";
 import { LoanWorkflowService } from "./loans.service";
@@ -41,48 +41,51 @@ import {
 } from "./schemas";
 
 /**
+ * Per-request context for the loans feature. Built by `buildLoanCtx`
+ * from `req.tenantCtx.prisma` so every repo + service touches the
+ * tenant's schema.
+ */
+interface LoanRouteCtx {
+  loans: LoanRepository;
+  scores: CreditScoreRepository;
+  kyc: KycRepository;
+  coMakers: CoMakerRepository;
+  rules: DecisionRuleRepository;
+  audit: AuditLogRepository;
+  delegations: DelegationRepository;
+  drafts: LoanDraftRepository;
+  workflowService: LoanWorkflowService;
+}
+
+declare module "fastify" {
+  interface FastifyRequest {
+    loanCtx?: LoanRouteCtx;
+  }
+}
+
+/**
  * Loan routes. The four orchestration-heavy endpoints (apply, decide,
  * disburse, dry-run) delegate to `LoanWorkflowController`; the other
  * ~25 endpoints remain inline because they're thin repo passthroughs
  * (see docs/architecture.md — "earn its keep").
  *
- * This function is the Fastify plugin entry — it constructs every
- * dependency the feature needs (composition root) and registers the
- * full route set. Wiring lives at the top of the function so a reader
- * sees what's in scope before scanning the handlers.
+ * **Phase 2 pattern**: every dependency is rebuilt per-request from
+ * the tenant-scoped Prisma client (via `req.tenantCtx.prisma`). The
+ * controller is a stateless singleton; inline handlers destructure
+ * the per-request repos at the top so each body stays readable.
+ *
+ * Cost: ~10 µs of object allocation per request for the 8 repos +
+ * service. Negligible against the DB roundtrip cost of any query.
  */
 export async function loanRoutes(app: FastifyInstance) {
-  const loans = new LoanRepository(app.prisma);
-  const scores = new CreditScoreRepository(app.prisma);
-  const kyc = new KycRepository(app.prisma);
-  const coMakers = new CoMakerRepository(app.prisma);
-  const rules = new DecisionRuleRepository(app.prisma);
-  const audit = new AuditLogRepository(app.prisma);
-  const delegations = new DelegationRepository(app.prisma);
-  const drafts = new LoanDraftRepository(app.prisma);
-
-  // Application/presentation for the orchestration-heavy paths
-  // (apply / decide / disburse / dry-run). The other endpoints below
-  // still call repositories directly — they don't earn the layer.
-  const workflowService = new LoanWorkflowService(
-    loans,
-    scores,
-    kyc,
-    rules,
-    audit,
-    app.prisma,
-    app.screening,
-    app.notifications,
-    app.log,
-    // Bind the FastifyInstance into a function shape so the service
-    // doesn't have to know about Fastify.
-    (loanId, stepOrder) => notifyApproversForStep(app, loanId, stepOrder),
-  );
-  const workflow = new LoanWorkflowController(workflowService);
+  const workflow = new LoanWorkflowController();
 
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", buildLoanCtx(app));
 
   app.get<{ Params: { id: string } }>("/:id/kyc-status", async (req, reply) => {
+    const { loans, kyc } = req.loanCtx!;
     const loan = await loans.findByIdOrNumber(req.params.id);
     if (!loan) return reply.code(404).send({ error: "NotFound" });
     const docs = await kyc.listForCustomer(loan.customerId);
@@ -109,7 +112,7 @@ export async function loanRoutes(app: FastifyInstance) {
     const { principal, termMonths, annualInterestRate, productCode } =
       parsed.data;
     const product = productCode
-      ? await app.prisma.loanProduct.findUnique({
+      ? await req.tenantCtx.prisma.loanProduct.findUnique({
           where: { code: productCode },
         })
       : null;
@@ -151,13 +154,13 @@ export async function loanRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/", async () => loans.list());
+  app.get("/", async (req) => req.loanCtx!.loans.list());
 
   // GET /loans/:idOrNumber — accept either the UUID or the human "LN-..."
   // number. The number form is what the new frontend uses on URLs; UUIDs
   // are still resolved so old bookmarks / API consumers keep working.
   app.get<{ Params: { id: string } }>("/:id", async (req, reply) => {
-    const l = await loans.findByIdOrNumber(req.params.id);
+    const l = await req.loanCtx!.loans.findByIdOrNumber(req.params.id);
     if (!l) return reply.code(404).send({ error: "NotFound" });
     return l;
   });
@@ -176,6 +179,7 @@ export async function loanRoutes(app: FastifyInstance) {
     "/:id/selfie-match",
     { preHandler: app.requirePermission("loans.read") },
     async (req, reply) => {
+      const { loans, audit } = req.loanCtx!;
       const parsed = selfieMatchSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply
@@ -243,7 +247,7 @@ export async function loanRoutes(app: FastifyInstance) {
     "/drafts",
     { preHandler: app.requirePermission("loans.read") },
     async (req) => {
-      return drafts.listByAuthor(req.user.sub);
+      return req.loanCtx!.drafts.listByAuthor(req.user.sub);
     },
   );
 
@@ -257,7 +261,7 @@ export async function loanRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      const draft = await drafts.create({
+      const draft = await req.loanCtx!.drafts.create({
         authorId: req.user.sub,
         customerId: parsed.data.customerId ?? null,
         productCode: parsed.data.productCode ?? null,
@@ -272,7 +276,10 @@ export async function loanRoutes(app: FastifyInstance) {
     "/drafts/:id",
     { preHandler: app.requirePermission("loans.read") },
     async (req, reply) => {
-      const draft = await drafts.findByIdForAuthor(req.params.id, req.user.sub);
+      const draft = await req.loanCtx!.drafts.findByIdForAuthor(
+        req.params.id,
+        req.user.sub,
+      );
       if (!draft) return reply.code(404).send({ error: "NotFound" });
       return draft;
     },
@@ -282,6 +289,7 @@ export async function loanRoutes(app: FastifyInstance) {
     "/drafts/:id",
     { preHandler: app.requirePermission("loans.read") },
     async (req, reply) => {
+      const { drafts } = req.loanCtx!;
       const existing = await drafts.findByIdForAuthor(
         req.params.id,
         req.user.sub,
@@ -301,6 +309,7 @@ export async function loanRoutes(app: FastifyInstance) {
     "/drafts/:id",
     { preHandler: app.requirePermission("loans.read") },
     async (req, reply) => {
+      const { drafts } = req.loanCtx!;
       const existing = await drafts.findByIdForAuthor(
         req.params.id,
         req.user.sub,
@@ -323,7 +332,7 @@ export async function loanRoutes(app: FastifyInstance) {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     return reply.code(201).send(
-      await loans.recordPayment(req.params.id, {
+      await req.loanCtx!.loans.recordPayment(req.params.id, {
         amount: parsed.data.amount,
         paidOn: parsed.data.paidOn ? new Date(parsed.data.paidOn) : new Date(),
         reference: parsed.data.reference,
@@ -352,7 +361,7 @@ export async function loanRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      const results = await loans.recordPaymentsBulk(
+      const results = await req.loanCtx!.loans.recordPaymentsBulk(
         parsed.data.rows.map((r) => ({
           loanId: r.loanId,
           loanNumber: r.loanNumber,
@@ -378,6 +387,7 @@ export async function loanRoutes(app: FastifyInstance) {
     "/:id/restructure",
     { preHandler: app.requirePermission("loans.restructure") },
     async (req, reply) => {
+      const { loans, audit } = req.loanCtx!;
       const parsed = restructureSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply
@@ -418,14 +428,14 @@ export async function loanRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>(
     "/:id/penalties",
     { preHandler: app.requirePermission("loans.read") },
-    async (req) => loans.accruedPenaltiesFor(req.params.id),
+    async (req) => req.loanCtx!.loans.accruedPenaltiesFor(req.params.id),
   );
 
   /** History of waivers on this loan (drawer audit trail). */
   app.get<{ Params: { id: string } }>(
     "/:id/penalty-waivers",
     { preHandler: app.requirePermission("loans.read") },
-    async (req) => loans.listPenaltyWaivers(req.params.id),
+    async (req) => req.loanCtx!.loans.listPenaltyWaivers(req.params.id),
   );
 
   /** Waive part or all of the outstanding penalty. Posts the reversal. */
@@ -433,6 +443,7 @@ export async function loanRoutes(app: FastifyInstance) {
     "/:id/waive-penalty",
     { preHandler: app.requirePermission("loans.waive_penalty") },
     async (req, reply) => {
+      const { loans, audit } = req.loanCtx!;
       const parsed = waivePenaltySchema.safeParse(req.body);
       if (!parsed.success) {
         return reply
@@ -472,6 +483,7 @@ export async function loanRoutes(app: FastifyInstance) {
     "/:id/write-off",
     { preHandler: app.requirePermission("loans.write_off") },
     async (req, reply) => {
+      const { loans, audit } = req.loanCtx!;
       const parsed = writeOffSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply
@@ -510,6 +522,7 @@ export async function loanRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>(
     "/:id/sign-officer",
     async (req, reply) => {
+      const { delegations, audit } = req.loanCtx!;
       const parsed = signSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply
@@ -559,7 +572,7 @@ export async function loanRoutes(app: FastifyInstance) {
         delegationId = d!.id;
       }
 
-      const loan = await app.prisma.loanApplication.update({
+      const loan = await req.tenantCtx.prisma.loanApplication.update({
         where: { id: req.params.id },
         data: {
           officerSignatureUrl: parsed.data.signatureUrl,
@@ -591,6 +604,7 @@ export async function loanRoutes(app: FastifyInstance) {
     "/:id/sign-borrower",
     { preHandler: app.requirePermission("loans.sign_officer") },
     async (req, reply) => {
+      const { audit } = req.loanCtx!;
       const parsed = signSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply
@@ -601,7 +615,7 @@ export async function loanRoutes(app: FastifyInstance) {
         (req.headers["x-forwarded-for"] as string | undefined)
           ?.split(",")[0]
           ?.trim() ?? req.ip;
-      const loan = await app.prisma.loanApplication.update({
+      const loan = await req.tenantCtx.prisma.loanApplication.update({
         where: { id: req.params.id },
         data: {
           borrowerSignatureUrl: parsed.data.signatureUrl,
@@ -627,7 +641,7 @@ export async function loanRoutes(app: FastifyInstance) {
   // ─── Co-makers ─────────────────────────────────────────────────────
 
   app.get<{ Params: { id: string } }>("/:id/co-makers", async (req) =>
-    coMakers.listForLoan(req.params.id),
+    req.loanCtx!.coMakers.listForLoan(req.params.id),
   );
 
   app.post<{ Params: { id: string } }>("/:id/co-makers", async (req, reply) => {
@@ -639,19 +653,19 @@ export async function loanRoutes(app: FastifyInstance) {
     }
     return reply
       .code(201)
-      .send(await coMakers.create(req.params.id, parsed.data));
+      .send(await req.loanCtx!.coMakers.create(req.params.id, parsed.data));
   });
 
   app.delete<{ Params: { coMakerId: string } }>(
     "/co-makers/:coMakerId",
     { preHandler: app.requirePermission("loans.decide") },
-    async (req) => coMakers.delete(req.params.coMakerId),
+    async (req) => req.loanCtx!.coMakers.delete(req.params.coMakerId),
   );
 
   // ─── In-app messaging (officer ↔ borrower) ─────────────────────────
 
   app.get<{ Params: { id: string } }>("/:id/messages", async (req) =>
-    app.prisma.loanMessage.findMany({
+    req.tenantCtx.prisma.loanMessage.findMany({
       where: { loanId: req.params.id },
       orderBy: { createdAt: "asc" },
     }),
@@ -669,12 +683,12 @@ export async function loanRoutes(app: FastifyInstance) {
       }
       // Author role is captured at send time so a later role change
       // doesn't rewrite the conversation's history.
-      const me = await app.prisma.user.findUnique({
+      const me = await req.tenantCtx.prisma.user.findUnique({
         where: { id: req.user.sub },
         select: { role: true },
       });
       const authorRole = me?.role === "CUSTOMER" ? "BORROWER" : "OFFICER";
-      const msg = await app.prisma.loanMessage.create({
+      const msg = await req.tenantCtx.prisma.loanMessage.create({
         data: {
           loanId: req.params.id,
           authorId: req.user.sub,
@@ -689,7 +703,7 @@ export async function loanRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string; messageId: string } }>(
     "/:id/messages/:messageId/read",
     async (req) =>
-      app.prisma.loanMessage.update({
+      req.tenantCtx.prisma.loanMessage.update({
         where: { id: req.params.messageId },
         data: { readAt: new Date() },
       }),
@@ -707,7 +721,7 @@ export async function loanRoutes(app: FastifyInstance) {
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
       try {
-        return await loans.closeEarly(req.params.id, {
+        return await req.loanCtx!.loans.closeEarly(req.params.id, {
           settlementAmount: parsed.data.settlementAmount,
           reference: parsed.data.reference,
           closedById: req.user.sub,
@@ -720,4 +734,53 @@ export async function loanRoutes(app: FastifyInstance) {
       }
     },
   );
+}
+
+/**
+ * Per-request context builder. Constructs every repo + the workflow
+ * service against the tenant-scoped Prisma client and stashes them
+ * on `req.loanCtx`.
+ *
+ * Object allocation is cheap (~10 µs total); the alternative — letting
+ * services capture `app.prisma` at boot — leaks across tenants and is
+ * the whole reason Phase 2 exists.
+ */
+function buildLoanCtx(app: FastifyInstance) {
+  return async (req: FastifyRequest): Promise<void> => {
+    const prisma = req.tenantCtx.prisma;
+    const loans = new LoanRepository(prisma);
+    const scores = new CreditScoreRepository(prisma);
+    const kyc = new KycRepository(prisma);
+    const coMakers = new CoMakerRepository(prisma);
+    const rules = new DecisionRuleRepository(prisma);
+    const audit = new AuditLogRepository(prisma);
+    const delegations = new DelegationRepository(prisma);
+    const drafts = new LoanDraftRepository(prisma);
+    const workflowService = new LoanWorkflowService(
+      loans,
+      scores,
+      kyc,
+      rules,
+      audit,
+      prisma,
+      app.screening,
+      app.notifications,
+      app.log,
+      // Bind the Fastify instance + per-request prisma into a function
+      // shape so the workflow service doesn't have to know about either.
+      (loanId, stepOrder) =>
+        notifyApproversForStep(app, prisma, loanId, stepOrder),
+    );
+    req.loanCtx = {
+      loans,
+      scores,
+      kyc,
+      coMakers,
+      rules,
+      audit,
+      delegations,
+      drafts,
+      workflowService,
+    };
+  };
 }
