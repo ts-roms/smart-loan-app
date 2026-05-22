@@ -76,6 +76,9 @@ importers:
       "@loan/kyc":
         specifier: workspace:*
         version: link:../../libs/kyc
+      "@loan/licensing":
+        specifier: workspace:*
+        version: link:../../libs/licensing
       "@loan/loans":
         specifier: workspace:*
         version: link:../../libs/loans
@@ -364,6 +367,21 @@ importers:
       "@types/node":
         specifier: ^22.9.0
         version: 22.19.19
+      typescript:
+        specifier: ~5.7.2
+        version: 5.7.3
+      vitest:
+        specifier: ^4.1.6
+        version: 4.1.6(@opentelemetry/api@1.9.1)(@types/node@22.19.19)(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.3)(yaml@2.9.0))
+
+  libs/licensing:
+    devDependencies:
+      "@types/node":
+        specifier: ^22.9.0
+        version: 22.19.19
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.3
       typescript:
         specifier: ~5.7.2
         version: 5.7.3

@@ -91,6 +91,8 @@ model User {
   /// Wizard drafts owned by this user. Cascade-delete because drafts
   /// are throwaway work-in-progress; nothing else references them.
   loanDrafts              LoanDraft[]          @relation("LoanDraftAuthor")
+  licensesActivated       License[]            @relation("LicenseActivatedBy")
+  licensesRevoked         License[]            @relation("LicenseRevokedBy")
 
   // A customer may have a linked self-serve User account
   customer   Customer? @relation("CustomerLogin", fields: [customerId], references: [id], onDelete: SetNull)
@@ -2373,4 +2375,52 @@ model LeaseAgreement {
   journalEntry JournalEntry?   @relation(fields: [buyoutJournalEntryId], references: [id])
 
   @@index([status])
+}
+
+// ─── Licensing ──────────────────────────────────────────────────────────────
+//
+// Persisted record of every license activation on this instance. The
+// "current" license is the most recent row with revokedAt = null and a
+// valid signature (re-verified on every boot). History stays in the DB
+// so admins can see when each upgrade / renewal happened without
+// digging through audit logs.
+//
+// The `token` column is the full wire-format token the platform issued.
+// We keep it in the clear because (a) the signature is the security
+// boundary, (b) we re-verify on boot, and (c) operators can paste it
+// elsewhere if they need to re-install. The `payload` JSON column is a
+// denormalized snapshot of what the token unlocked at activation time
+// — useful for queries ("how many active ENTERPRISE tenants?") without
+// re-parsing every row.
+
+model License {
+  id            String   @id @default(uuid())
+  /// Full wire-format token (SMARTLOAN-LIC-v1.<payload>.<signature>).
+  token         String
+  /// JWT id from the payload — unique per issued license. Lets us
+  /// detect re-activation of the same token and avoid duplicate rows.
+  jti           String   @unique
+  tenantName    String
+  tier          String
+  /// Snapshot of the verified payload at activation. JSON for grep-
+  /// ability without parsing the token on every read.
+  payload       Json
+  issuedAt      DateTime
+  notBefore     DateTime?
+  expiresAt     DateTime
+  seats         Int      @default(0)
+  notes         String?
+  /// When the operator clicked Activate. Distinct from `issuedAt`,
+  /// which is when the platform minted the token.
+  activatedAt   DateTime @default(now())
+  activatedById String?
+  /// When an operator explicitly deactivated this license. Inactive
+  /// when non-null; the boot hook ignores revoked rows.
+  revokedAt     DateTime?
+  revokedById   String?
+
+  activatedBy User? @relation("LicenseActivatedBy", fields: [activatedById], references: [id])
+  revokedBy   User? @relation("LicenseRevokedBy", fields: [revokedById], references: [id])
+
+  @@index([revokedAt, expiresAt])
 }

@@ -37,6 +37,10 @@ import { jobRoutes } from "../features/jobs/index";
 import { kycRoutes } from "../features/kyc/index";
 import { leaseRoutes } from "../features/lease/index";
 import {
+  licensingRoutes,
+  type LicensingService,
+} from "../features/licensing/index";
+import {
   loanProductRoutes,
   loanApprovalChainRoutes,
 } from "../features/loan-products/index";
@@ -134,6 +138,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(reportRoutes, { prefix: "/reports" });
   await app.register(assistantRoutes, { prefix: "/assistant" });
   await app.register(systemRoutes, { prefix: "/system" });
+  // License activation / status. Mounted under /license so the
+  // mutating endpoints (admin.roles-gated) cluster naturally.
+  await app.register(licensingRoutes, { prefix: "/license" });
   // Approval-chain routes mount under their natural parents so URLs read
   // /loans/:idOrNumber/approvals and /loan-products/:code/approval-chain.
   await app.register(loanApprovalRoutes, { prefix: "/loans" });
@@ -145,5 +152,12 @@ declare module "fastify" {
   interface FastifyInstance {
     notifications: NotificationRepository;
     screening: ScreeningRepository;
+    /**
+     * Licensing service decorator. Set by `licensingRoutes` on
+     * register; consumed in Phase 1b by `app.requireFeature(...)`
+     * (and in the meantime by anyone who wants to check the
+     * current license programmatically).
+     */
+    license: LicensingService;
   }
 }

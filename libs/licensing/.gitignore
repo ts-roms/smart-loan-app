@@ -1,0 +1,7 @@
+# Platform-side keys NEVER get committed.
+# - private.pem signs licenses; leaking it lets anyone mint a valid token.
+# - public.pem is technically safe to commit, but keeping the whole keys/
+#   dir gitignored makes the "no key material in git" rule trivial to
+#   enforce — the public key gets distributed via the deploy pipeline,
+#   not via git.
+keys/
