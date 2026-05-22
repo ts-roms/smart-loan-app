@@ -12,28 +12,28 @@ datasource db {
 // ─── Users (internal staff + customer accounts) ──────────────────────────────
 
 enum UserRole {
-  ADMIN          // full access
-  LOAN_OFFICER   // approves/rejects loans, runs KYC
-  ACCOUNTANT     // records payments, reconciles
-  CUSTOMER       // self-serve borrower
+  ADMIN // full access
+  LOAN_OFFICER // approves/rejects loans, runs KYC
+  ACCOUNTANT // records payments, reconciles
+  CUSTOMER // self-serve borrower
 }
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  passwordHash  String
-  name          String
-  role          UserRole  @default(CUSTOMER)
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(CUSTOMER)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   /// Save-once personnel signature. When personnel ask to download a
   /// generated document "with my signature", we embed the image stored at
   /// this URL. Null = no signature saved; the signature block on PDFs is
   /// just omitted in that case. Captured/managed via /auth/me/signature.
-  defaultSignatureUrl   String?
-  signatureSavedAt      DateTime?
+  defaultSignatureUrl String?
+  signatureSavedAt    DateTime?
 
   /// "Mark as read" cursor for the notification bell. Notifications
   /// created after this timestamp count as unseen; opening the bell or
@@ -43,58 +43,58 @@ model User {
   /// TOTP shared secret (base32). Null = 2FA not set up. Even when set,
   /// `totpEnabled` must be true for the login flow to require a code —
   /// gives the user a "configure but don't enable yet" mode.
-  totpSecret    String?
-  totpEnabled   Boolean   @default(false)
+  totpSecret        String?
+  totpEnabled       Boolean  @default(false)
   /// Single-use recovery codes (sha256 hashes). On a successful use the
   /// code is removed from this list; running out → user must reset 2FA.
   totpRecoveryCodes String[] @default([])
 
   // What this user did across the system (auditable trail)
-  kycSubmissions   KycSubmission[]    @relation("KycSubmittedBy")
-  kycDecisions     KycSubmission[]    @relation("KycDecidedBy")
-  loanApplications LoanApplication[]  @relation("LoanSubmittedBy")
-  loanDecisions    LoanApplication[]  @relation("LoanDecidedBy")
-  loanDisbursals   LoanApplication[]  @relation("LoanDisbursedBy")
-  loanPayments     LoanPayment[]      @relation("PaymentRecordedBy")
-  surveyResponses  SurveyResponse[]   @relation("SurveyComputedBy")
-  journalEntries   JournalEntry[]     @relation("JournalPostedBy")
-  collectionNotes  CollectionNote[]   @relation("CollectionNoteBy")
-  promisesToPay    PromiseToPay[]    @relation("PtpCreatedBy")
-  paymentIntents   PaymentIntent[]    @relation("PaymentIntentBy")
-  auditEvents      AuditEvent[]       @relation("AuditActor")
-  roleAssignments  UserRoleAssignment[] @relation("UserRoleAssignedTo")
-  delegationsGranted Delegation[]     @relation("Delegator")
-  delegationsHeld    Delegation[]     @relation("Delegate")
-  loanApprovals      LoanApproval[]   @relation("LoanApprover")
-  refreshTokens      RefreshToken[]   @relation("UserRefreshTokens")
-  penaltyWaivers     PenaltyWaiver[]  @relation("PenaltyWaivedBy")
-  annualDocuments    AnnualDocument[] @relation("AnnualDocSubmittedBy")
-  demandLettersDrafted   DemandLetter[] @relation("DemandLetterDrafted")
-  demandLettersApproved  DemandLetter[] @relation("DemandLetterApproved")
-  demandLettersDispatched DemandLetter[] @relation("DemandLetterDispatched")
-  demandLettersWaived    DemandLetter[] @relation("DemandLetterWaived")
-  reposIdentified    RepossessionCase[] @relation("RepoIdentified")
-  reposBmApproved    RepossessionCase[] @relation("RepoBmApproved")
-  reposCreditApproved RepossessionCase[] @relation("RepoCreditApproved")
-  reposLegalApproved RepossessionCase[] @relation("RepoLegalApproved")
-  reposAgentAssigned RepossessionCase[] @relation("RepoAgentAssigned")
-  reposRecovered     RepossessionCase[] @relation("RepoRecovered")
-  reposAuctioned     RepossessionCase[] @relation("RepoAuctioned")
-  reposCancelled     RepossessionCase[] @relation("RepoCancelled")
-  dorsiTagged        DorsiRecord[]      @relation("DorsiTaggedBy")
-  dorsiReviewed      DorsiRecord[]      @relation("DorsiReviewedBy")
-  dorsiDeactivated   DorsiRecord[]      @relation("DorsiDeactivatedBy")
-  dorsiBoardApproved DorsiBoardApproval[] @relation("DorsiBoardApprovedBy")
-  systemConfigUpdates SystemConfig[]    @relation("SystemConfigUpdatedBy")
-  leaseBuyouts       LeaseAgreement[]   @relation("LeaseBuyoutBy")
-  leasePulledOut     LeaseAgreement[]   @relation("LeasePulledOutBy")
+  kycSubmissions          KycSubmission[]      @relation("KycSubmittedBy")
+  kycDecisions            KycSubmission[]      @relation("KycDecidedBy")
+  loanApplications        LoanApplication[]    @relation("LoanSubmittedBy")
+  loanDecisions           LoanApplication[]    @relation("LoanDecidedBy")
+  loanDisbursals          LoanApplication[]    @relation("LoanDisbursedBy")
+  loanPayments            LoanPayment[]        @relation("PaymentRecordedBy")
+  surveyResponses         SurveyResponse[]     @relation("SurveyComputedBy")
+  journalEntries          JournalEntry[]       @relation("JournalPostedBy")
+  collectionNotes         CollectionNote[]     @relation("CollectionNoteBy")
+  promisesToPay           PromiseToPay[]       @relation("PtpCreatedBy")
+  paymentIntents          PaymentIntent[]      @relation("PaymentIntentBy")
+  auditEvents             AuditEvent[]         @relation("AuditActor")
+  roleAssignments         UserRoleAssignment[] @relation("UserRoleAssignedTo")
+  delegationsGranted      Delegation[]         @relation("Delegator")
+  delegationsHeld         Delegation[]         @relation("Delegate")
+  loanApprovals           LoanApproval[]       @relation("LoanApprover")
+  refreshTokens           RefreshToken[]       @relation("UserRefreshTokens")
+  penaltyWaivers          PenaltyWaiver[]      @relation("PenaltyWaivedBy")
+  annualDocuments         AnnualDocument[]     @relation("AnnualDocSubmittedBy")
+  demandLettersDrafted    DemandLetter[]       @relation("DemandLetterDrafted")
+  demandLettersApproved   DemandLetter[]       @relation("DemandLetterApproved")
+  demandLettersDispatched DemandLetter[]       @relation("DemandLetterDispatched")
+  demandLettersWaived     DemandLetter[]       @relation("DemandLetterWaived")
+  reposIdentified         RepossessionCase[]   @relation("RepoIdentified")
+  reposBmApproved         RepossessionCase[]   @relation("RepoBmApproved")
+  reposCreditApproved     RepossessionCase[]   @relation("RepoCreditApproved")
+  reposLegalApproved      RepossessionCase[]   @relation("RepoLegalApproved")
+  reposAgentAssigned      RepossessionCase[]   @relation("RepoAgentAssigned")
+  reposRecovered          RepossessionCase[]   @relation("RepoRecovered")
+  reposAuctioned          RepossessionCase[]   @relation("RepoAuctioned")
+  reposCancelled          RepossessionCase[]   @relation("RepoCancelled")
+  dorsiTagged             DorsiRecord[]        @relation("DorsiTaggedBy")
+  dorsiReviewed           DorsiRecord[]        @relation("DorsiReviewedBy")
+  dorsiDeactivated        DorsiRecord[]        @relation("DorsiDeactivatedBy")
+  dorsiBoardApproved      DorsiBoardApproval[] @relation("DorsiBoardApprovedBy")
+  systemConfigUpdates     SystemConfig[]       @relation("SystemConfigUpdatedBy")
+  leaseBuyouts            LeaseAgreement[]     @relation("LeaseBuyoutBy")
+  leasePulledOut          LeaseAgreement[]     @relation("LeasePulledOutBy")
   /// Wizard drafts owned by this user. Cascade-delete because drafts
   /// are throwaway work-in-progress; nothing else references them.
-  loanDrafts         LoanDraft[]        @relation("LoanDraftAuthor")
+  loanDrafts              LoanDraft[]          @relation("LoanDraftAuthor")
 
   // A customer may have a linked self-serve User account
-  customer Customer? @relation("CustomerLogin", fields: [customerId], references: [id], onDelete: SetNull)
-  customerId String?  @unique
+  customer   Customer? @relation("CustomerLogin", fields: [customerId], references: [id], onDelete: SetNull)
+  customerId String?   @unique
 }
 
 // ─── Customers (borrowers) — full KYC profile ────────────────────────────────
@@ -157,52 +157,52 @@ enum KycStatus {
 }
 
 model Customer {
-  id              String   @id @default(uuid())
+  id     String @id @default(uuid())
   /// Human-readable: "CUST-2026-000123". Used in URLs and operator UI
   /// in place of the UUID. Generated by CustomerRepository.nextNumber()
   /// at create time; backfilled on existing rows by the
   /// 20260521_customer_number migration.
-  number          String   @unique
+  number String @unique
 
   // ── Personal ─────────────────────────────────────────────────────
-  firstName       String
-  middleName      String?
-  lastName        String
+  firstName   String
+  middleName  String?
+  lastName    String
   /// Generational suffix (Jr, Sr, III, IV). Optional; many borrowers
   /// don't have one.
-  suffix          String?
-  dateOfBirth     DateTime
+  suffix      String?
+  dateOfBirth DateTime
   /// Self-identified gender (FRD §1.4). Nullable for legacy rows;
   /// new applications collect it at registration.
-  gender          Gender?
+  gender      Gender?
   /// Biological sex — collected separately because some compliance
   /// reports require it and not all borrowers want them to match.
-  sex             Sex?
-  civilStatus     CivilStatus?
+  sex         Sex?
+  civilStatus CivilStatus?
 
   // ── Contact ──────────────────────────────────────────────────────
   /// Primary mobile number. Originally just "phone" — kept the column
   /// name for back-compat; the UI now labels it as "Primary phone".
-  phone           String
+  phone          String
   /// Optional secondary number (landline, alt mobile).
-  secondaryPhone  String?
-  email           String?
+  secondaryPhone String?
+  email          String?
 
   // ── Address (expanded for PH PSGC hierarchy) ─────────────────────
   /// Free-form street + house/unit number. Originally "address";
   /// renamed semantically to addressLine1 for the new fields below.
   /// DB column stays "address" so we don't churn historical data.
-  address         String
+  address      String
   /// Subdivision, building, floor — optional second line.
-  addressLine2    String?
+  addressLine2 String?
   /// Barangay (smallest PH admin unit). Required for KYC compliance.
-  barangay        String?
-  city            String
-  province        String?
+  barangay     String?
+  city         String
+  province     String?
   /// PH region (e.g. NCR, Region IV-A CALABARZON). Used in compliance
   /// reports and risk segmentation.
-  region          String?
-  postalCode      String?
+  region       String?
+  postalCode   String?
 
   // ── Civil status + spouse (only when MARRIED) ────────────────────
   // Kept as flat fields rather than a relation — spouses are usually
@@ -217,42 +217,42 @@ model Customer {
   governmentIdNumber String
 
   // ── Employment + income ──────────────────────────────────────────
-  employmentStatus    EmploymentStatus
+  employmentStatus   EmploymentStatus
   /// For EMPLOYED / SELF_EMPLOYED / FREELANCE.
-  employerName        String?
-  jobTitle            String?
+  employerName       String?
+  jobTitle           String?
   /// Department / designation distinct from jobTitle (e.g. job title
   /// "Senior Developer", position "Engineering Lead").
-  position            String?
+  position           String?
   /// PH labour milestone — date of regularization. Lenders treat
   /// regularized employees as lower-risk than probationary.
-  hireDate            DateTime?
-  regularizationDate  DateTime?
+  hireDate           DateTime?
+  regularizationDate DateTime?
   /// Verified monthly income in the system's home currency
-  monthlyIncome       Decimal  @db.Decimal(14, 2)
-  yearsAtCurrentJob   Decimal? @db.Decimal(5, 2)
+  monthlyIncome      Decimal          @db.Decimal(14, 2)
+  yearsAtCurrentJob  Decimal?         @db.Decimal(5, 2)
 
   // Computed KYC rollup (latest)
-  kycStatus       KycStatus @default(NONE)
+  kycStatus KycStatus @default(NONE)
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user            User?           @relation("CustomerLogin")
-  kycSubmissions  KycSubmission[]
+  user             User?             @relation("CustomerLogin")
+  kycSubmissions   KycSubmission[]
   loanApplications LoanApplication[]
-  surveyResponses SurveyResponse[]
-  creditScores    CreditScore[]
-  amlScreenings   AmlScreening[]
-  dorsiRecord     DorsiRecord?
+  surveyResponses  SurveyResponse[]
+  creditScores     CreditScore[]
+  amlScreenings    AmlScreening[]
+  dorsiRecord      DorsiRecord?
 
   // ── Cooperative-side activity (contributions, savings, fund movements). ──
   // A customer-borrower is also a coop member; these relations let the
   // same record show their loans AND their CBU/Mortuary/Emergency balances.
-  contributions      Contribution[]
-  savingsTxns        SavingsTransaction[]
-  fundTxns           FundTransaction[]
-  fundWithdrawals    FundWithdrawal[]
+  contributions   Contribution[]
+  savingsTxns     SavingsTransaction[]
+  fundTxns        FundTransaction[]
+  fundWithdrawals FundWithdrawal[]
 
   @@index([phone])
   @@index([governmentIdType, governmentIdNumber])
@@ -263,13 +263,13 @@ model Customer {
 enum KycDocumentType {
   ID_FRONT
   ID_BACK
-  PROOF_OF_INCOME      // payslip, ITR, COE
-  PROOF_OF_ADDRESS     // utility bill
-  SELFIE               // for face match
-  VEHICLE_OR           // Official Receipt (vehicle)
-  VEHICLE_CR           // Certificate of Registration (vehicle)
-  PROPERTY_TITLE       // TCT / Condo title
-  TAX_DECLARATION      // Tax dec for property
+  PROOF_OF_INCOME // payslip, ITR, COE
+  PROOF_OF_ADDRESS // utility bill
+  SELFIE // for face match
+  VEHICLE_OR // Official Receipt (vehicle)
+  VEHICLE_CR // Certificate of Registration (vehicle)
+  PROPERTY_TITLE // TCT / Condo title
+  TAX_DECLARATION // Tax dec for property
 }
 
 enum KycSubmissionStatus {
@@ -279,19 +279,19 @@ enum KycSubmissionStatus {
 }
 
 model KycSubmission {
-  id            String              @id @default(uuid())
+  id           String              @id @default(uuid())
   /// Human-readable: "KYC-2026-000123". Shown in URLs/UI in place of UUID.
-  number        String              @unique
-  customerId    String
-  documentType  KycDocumentType
+  number       String              @unique
+  customerId   String
+  documentType KycDocumentType
   /// /uploads/kyc/<random>.jpg — served by API static plugin
-  documentUrl   String
-  status        KycSubmissionStatus @default(PENDING)
-  notes         String?
+  documentUrl  String
+  status       KycSubmissionStatus @default(PENDING)
+  notes        String?
   /// Why it was rejected, if applicable
-  reason        String?
-  submittedAt   DateTime            @default(now())
-  decidedAt     DateTime?
+  reason       String?
+  submittedAt  DateTime            @default(now())
+  decidedAt    DateTime?
 
   submittedById String
   decidedById   String?
@@ -313,26 +313,26 @@ model KycSubmission {
 // can render an honest explanation.
 
 enum CreditTier {
-  A   // 750+ "excellent" — auto-approve eligible
-  B   // 700–749 "good"
-  C   // 600–699 "fair"
-  D   // 500–599 "poor"
-  F   // <500 "very poor" — auto-reject candidates
+  A // 750+ "excellent" — auto-approve eligible
+  B // 700–749 "good"
+  C // 600–699 "fair"
+  D // 500–599 "poor"
+  F // <500 "very poor" — auto-reject candidates
 }
 
 model CreditScore {
-  id          String     @id @default(uuid())
-  customerId  String
+  id             String     @id @default(uuid())
+  customerId     String
   /// Numeric score, FICO-flavored range (300–850). See @loan/credit-scoring.
-  score       Int
-  tier        CreditTier
+  score          Int
+  tier           CreditTier
   /// Per-factor explanation: `[{ factor, weight, value, points }, …]`
-  breakdown   Json
+  breakdown      Json
   /// Link to the survey that produced this score, when one applies
   sourceSurveyId String?
-  computedAt  DateTime   @default(now())
+  computedAt     DateTime   @default(now())
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
   source   SurveyResponse? @relation(fields: [sourceSurveyId], references: [id], onDelete: SetNull)
 
   @@index([customerId, computedAt(sort: Desc)])
@@ -345,20 +345,20 @@ model CreditScore {
 // it's typed and easy to evolve; only the answers are persisted.
 
 model SurveyResponse {
-  id            String   @id @default(uuid())
-  customerId    String
+  id           String     @id @default(uuid())
+  customerId   String
   /// `{ questionId: answer, … }` — values are string|number|boolean
-  answers       Json
+  answers      Json
   /// Computed score from these answers at submission time
-  score         Int
-  tier          CreditTier
+  score        Int
+  tier         CreditTier
   /// Per-factor explanation (same shape as CreditScore.breakdown)
-  breakdown     Json
-  computedAt    DateTime @default(now())
-  computedById  String
+  breakdown    Json
+  computedAt   DateTime   @default(now())
+  computedById String
 
-  customer    Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  computedBy  User           @relation("SurveyComputedBy", fields: [computedById], references: [id])
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  computedBy   User          @relation("SurveyComputedBy", fields: [computedById], references: [id])
   creditScores CreditScore[]
 
   @@index([customerId, computedAt(sort: Desc)])
@@ -367,18 +367,18 @@ model SurveyResponse {
 // ─── Loans (application → approved → disbursed → active → closed) ───────────
 
 enum LoanStatus {
-  DRAFT          // not yet submitted
-  SUBMITTED      // waiting for officer review
-  UNDER_REVIEW   // officer picked it up
-  APPROVED       // approved but not yet disbursed
-  REJECTED       // declined; terminal
-  DISBURSED      // funds released; payment schedule active
-  ACTIVE         // alias for in-repayment (kept distinct so reporting is easier)
-  CLOSED         // fully paid; terminal
-  DEFAULTED      // missed too many payments; terminal-ish
-  CANCELLED      // customer cancelled before approval
-  RESTRUCTURED   // replaced by a new loan; terminal on the original
-  WRITTEN_OFF    // lender gave up collecting; principal hits Bad Debt; terminal
+  DRAFT // not yet submitted
+  SUBMITTED // waiting for officer review
+  UNDER_REVIEW // officer picked it up
+  APPROVED // approved but not yet disbursed
+  REJECTED // declined; terminal
+  DISBURSED // funds released; payment schedule active
+  ACTIVE // alias for in-repayment (kept distinct so reporting is easier)
+  CLOSED // fully paid; terminal
+  DEFAULTED // missed too many payments; terminal-ish
+  CANCELLED // customer cancelled before approval
+  RESTRUCTURED // replaced by a new loan; terminal on the original
+  WRITTEN_OFF // lender gave up collecting; principal hits Bad Debt; terminal
 }
 
 // ─── Loan products (product catalog) ─────────────────────────────────────────
@@ -409,19 +409,17 @@ enum CollateralStatus {
  * across multiple sessions; the form state is snapshotted here so they
  * can resume from any device. On final Submit the draft is consumed
  * into a real LoanApplication via /loans/apply and this row is deleted.
- *
  * Design notes:
- *
- *   - `formState` is a JSON blob owned by the web app's wizard. We
- *     intentionally don't strongly type it server-side — the wizard
- *     evolves, the persisted shape comes along. Final-submit validation
- *     happens against the canonical LoanApplyInput zod schema.
- *   - Drafts are scoped per-author. An ADMIN sees their own drafts
- *     only via /loans/drafts; there's no "see all drafts" surface.
- *   - Cascade-delete on author so a deactivated user doesn't leave
- *     orphan drafts haunting the table.
- *   - `customerId` + `productCode` are lifted out of formState to make
- *     listing efficient (no JSON path queries needed for the drafts list).
+ * - `formState` is a JSON blob owned by the web app's wizard. We
+ * intentionally don't strongly type it server-side — the wizard
+ * evolves, the persisted shape comes along. Final-submit validation
+ * happens against the canonical LoanApplyInput zod schema.
+ * - Drafts are scoped per-author. An ADMIN sees their own drafts
+ * only via /loans/drafts; there's no "see all drafts" surface.
+ * - Cascade-delete on author so a deactivated user doesn't leave
+ * orphan drafts haunting the table.
+ * - `customerId` + `productCode` are lifted out of formState to make
+ * listing efficient (no JSON path queries needed for the drafts list).
  */
 model LoanDraft {
   id          String   @id @default(uuid())
@@ -446,91 +444,91 @@ model LoanDraft {
  * One row per LoanType. Admin-tunable without a code change.
  */
 model LoanProduct {
-  id                  String   @id @default(uuid())
+  id              String            @id @default(uuid())
   /// Stable identifier referenced by LoanApplication.productCode.
   /// Conventionally uppercase snake (e.g. "SALARY", "EDUCATIONAL", "BUSINESS_SME").
-  code                String   @unique
-  name                String
-  description         String?
-  collateralKind      CollateralKind   @default(NONE)
+  code            String            @unique
+  name            String
+  description     String?
+  collateralKind  CollateralKind    @default(NONE)
   /// Doc types required ON TOP OF the base KYC pack for this product.
-  requiredKycDocs     KycDocumentType[]
+  requiredKycDocs KycDocumentType[]
 
-  minPrincipal        Decimal  @db.Decimal(14, 2)
-  maxPrincipal        Decimal  @db.Decimal(14, 2)
-  minTermMonths       Int
-  maxTermMonths       Int
+  minPrincipal   Decimal  @db.Decimal(14, 2)
+  maxPrincipal   Decimal  @db.Decimal(14, 2)
+  minTermMonths  Int
+  maxTermMonths  Int
   /// Annual rate as decimal: 0.18 = 18%/year
-  defaultRate         Decimal  @db.Decimal(6, 4)
-  minRate             Decimal  @db.Decimal(6, 4)
-  maxRate             Decimal  @db.Decimal(6, 4)
+  defaultRate    Decimal  @db.Decimal(6, 4)
+  minRate        Decimal  @db.Decimal(6, 4)
+  maxRate        Decimal  @db.Decimal(6, 4)
   /// Maximum loan-to-value for secured loans (0.80 = 80% of appraised value).
   /// Null for unsecured products. Per-tier overrides via `ltvByTier` take precedence.
-  maxLoanToValue      Decimal? @db.Decimal(5, 4)
+  maxLoanToValue Decimal? @db.Decimal(5, 4)
 
   // ── Fees ────────────────────────────────────────────────────────────
   /// One-time processing fee, percent of principal (0.02 = 2%).
-  processingFeeRate   Decimal  @default(0) @db.Decimal(5, 4)
+  processingFeeRate     Decimal @default(0) @db.Decimal(5, 4)
   /// One-time processing fee, flat amount in PHP. Added on top of rate-based.
-  processingFeeFlat   Decimal  @default(0) @db.Decimal(14, 2)
+  processingFeeFlat     Decimal @default(0) @db.Decimal(14, 2)
   /// Documentary stamp tax, percent of principal (PH default ≈ 1.5/200 = 0.0075).
-  documentaryStampRate Decimal @default(0) @db.Decimal(5, 4)
+  documentaryStampRate  Decimal @default(0) @db.Decimal(5, 4)
   /// Daily late-fee rate, percent of installment (0.01 = 1%/day).
-  lateFeeDailyRate    Decimal  @default(0.01) @db.Decimal(5, 4)
+  lateFeeDailyRate      Decimal @default(0.01) @db.Decimal(5, 4)
   /// Late-fee cap as fraction of installment (0.1 = 10%).
-  lateFeeCapFraction  Decimal  @default(0.1) @db.Decimal(5, 4)
+  lateFeeCapFraction    Decimal @default(0.1) @db.Decimal(5, 4)
   /// Free days after due date before fees accrue.
-  lateFeeGraceDays    Int      @default(3)
+  lateFeeGraceDays      Int     @default(3)
   /// Pre-termination fee, percent of remaining principal at close.
   preTerminationFeeRate Decimal @default(0) @db.Decimal(5, 4)
 
   // ── Interest method + frequency ────────────────────────────────────
-  interestMethod      InterestMethod      @default(DECLINING)
-  paymentFrequency    PaymentFrequency    @default(MONTHLY)
+  interestMethod   InterestMethod   @default(DECLINING)
+  paymentFrequency PaymentFrequency @default(MONTHLY)
 
   // ── Tier-based pricing (optional) ──────────────────────────────────
   /// JSON map of credit tier → rate. Format: { "A": 0.08, "B": 0.10, … }
   /// If set, apply uses tierAtApply to look up the rate.
   /// A tier mapped to `null` means rejected for this product.
-  rateByTier          Json?
+  rateByTier Json?
   /// JSON map of credit tier → max LTV. Format: { "A": 0.80, "B": 0.70, … }
   /// Overrides `maxLoanToValue` when set.
-  ltvByTier           Json?
+  ltvByTier  Json?
 
-  active              Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // ── ECL provisioning (IFRS 9 / PFRS 9) ─────────────────────────────
   /// Probability of default — 12-month for Stage 1, lifetime for Stage 2/3.
   /// Decimal in [0,1]. Default 0.05 is a placeholder; tune per cohort.
-  eclPd12m            Decimal  @default(0.05) @db.Decimal(6, 4)
-  eclPdLifetime       Decimal  @default(0.20) @db.Decimal(6, 4)
+  eclPd12m      Decimal @default(0.05) @db.Decimal(6, 4)
+  eclPdLifetime Decimal @default(0.20) @db.Decimal(6, 4)
   /// Loss given default — fraction of EAD expected to be lost net of
   /// recoveries. 0.45 is a typical PH NBFI baseline for unsecured retail.
-  eclLgd              Decimal  @default(0.45) @db.Decimal(6, 4)
+  eclLgd        Decimal @default(0.45) @db.Decimal(6, 4)
 
   // ── Lease-to-Own (FRD §3.5) ────────────────────────────────────────
   /// When true, applications create a LeaseAgreement at disburse. Vehicle
   /// title stays with the company until the borrower pays the residual.
-  isLease             Boolean  @default(false)
+  isLease                   Boolean  @default(false)
   /// Default residual value as a fraction of principal (0.10 = 10%).
   /// A LEASE_AUTO product with 600k principal + 0.10 = 60k buyout fee.
   /// Per-loan override is captured on LeaseAgreement at create time.
-  residualValueFraction Decimal? @db.Decimal(5, 4)
+  residualValueFraction     Decimal? @db.Decimal(5, 4)
   /// True when the product is restricted to company employees (FRD §3.5 —
   /// currently the case; non-employees come in a future phase).
-  employeeOnly        Boolean  @default(false)
+  employeeOnly              Boolean  @default(false)
   /// Number of consecutive missed payments before non-employees lose
   /// possession. FRD says 3.
-  missedPaymentPullOutCount Int @default(3)
+  missedPaymentPullOutCount Int      @default(3)
   /// Months between maintenance reminders (FRD §3.5 — every 6 months).
-  maintenanceReminderMonths Int @default(6)
+  maintenanceReminderMonths Int      @default(6)
 
-  loans               LoanApplication[]
+  loans         LoanApplication[]
   /// Approval-chain steps for this product, ordered by `order`. Empty = no
   /// chain configured; the legacy single-decide flow applies.
-  approvalSteps       LoanApprovalStep[]
+  approvalSteps LoanApprovalStep[]
 }
 
 // ─── Loan approval chain (per product) ──────────────────────────────────────
@@ -563,7 +561,7 @@ model LoanApprovalStep {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  product            LoanProduct @relation(fields: [productCode], references: [code], onDelete: Cascade)
+  product LoanProduct @relation(fields: [productCode], references: [code], onDelete: Cascade)
 
   @@unique([productCode, order])
   @@index([productCode])
@@ -577,7 +575,7 @@ enum LoanApprovalStatus {
 }
 
 model LoanApproval {
-  id                 String   @id @default(uuid())
+  id                 String @id @default(uuid())
   loanId             String
   /// Position in the chain (1-indexed). Copied from LoanApprovalStep at
   /// loan-submit time.
@@ -588,19 +586,19 @@ model LoanApproval {
   /// Permission needed to act on this step (frozen at submit).
   requiredPermission String
 
-  status             LoanApprovalStatus @default(PENDING)
+  status                  LoanApprovalStatus @default(PENDING)
   /// Free-form note left by the approver. Optional — empty when the user
   /// approves without commentary.
-  notes              String?
-  approverId         String?
-  approvedAt         DateTime?
+  notes                   String?
+  approverId              String?
+  approvedAt              DateTime?
   /// When the approver acted under a Delegation. Lets audit reports
   /// distinguish "Manager approved themselves" vs "Officer approved as
   /// stand-in while Manager was on leave".
   signedUnderDelegationId String?
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
   approver   User?           @relation("LoanApprover", fields: [approverId], references: [id])
@@ -628,9 +626,9 @@ enum PaymentFrequency {
 // ─── Collateral (typed per kind) ─────────────────────────────────────────────
 
 model Vehicle {
-  id             String   @id @default(uuid())
+  id             String           @id @default(uuid())
   /// Human-readable: "VEH-000123" — surfaced in operator UI.
-  number         String   @unique
+  number         String           @unique
   /// 'CAR' or 'MOTORCYCLE' — finer than LoanType, kept loose for future kinds.
   kind           String
   make           String
@@ -641,19 +639,19 @@ model Vehicle {
   engineNumber   String?
   color          String?
   /// Appraised value used for LTV computation.
-  appraisedValue Decimal  @db.Decimal(14, 2)
+  appraisedValue Decimal          @db.Decimal(14, 2)
   status         CollateralStatus @default(PROPOSED)
   notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
-  loan           LoanApplication?
+  loan LoanApplication?
 }
 
 model Property {
-  id             String   @id @default(uuid())
+  id             String           @id @default(uuid())
   /// Human-readable: "PROP-000123" — surfaced in operator UI.
-  number         String   @unique
+  number         String           @unique
   /// 'HOUSE_AND_LOT' | 'CONDO' | 'LOT_ONLY' | 'COMMERCIAL' | …
   propertyType   String
   address        String
@@ -664,25 +662,25 @@ model Property {
   titleNumber    String?
   taxDecNumber   String?
   /// In square meters
-  areaSqm        Decimal? @db.Decimal(10, 2)
-  appraisedValue Decimal  @db.Decimal(14, 2)
+  areaSqm        Decimal?         @db.Decimal(10, 2)
+  appraisedValue Decimal          @db.Decimal(14, 2)
   status         CollateralStatus @default(PROPOSED)
   notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
-  loan           LoanApplication?
+  loan LoanApplication?
 }
 
 model LoanApplication {
-  id              String     @id @default(uuid())
+  id         String @id @default(uuid())
   /// Human-readable: "LN-2026-000123"
-  number          String     @unique
-  customerId      String
+  number     String @unique
+  customerId String
 
   /// FK to LoanProduct.code. Legacy rows are backfilled to "SALARY".
-  productCode     String     @default("SALARY")
-  product         LoanProduct @relation(fields: [productCode], references: [code], onDelete: Restrict)
+  productCode String      @default("SALARY")
+  product     LoanProduct @relation(fields: [productCode], references: [code], onDelete: Restrict)
 
   /// URL of the live-capture selfie taken at apply. Used for face-match
   /// against ID_FRONT KYC doc + as a fraud signal.
@@ -710,31 +708,31 @@ model LoanApplication {
   /// If this loan restructured an older one, the original loan's id.
   /// Mutually exclusive with `restructuredById`. Kept on the new loan so
   /// the timeline is easy to walk forward.
-  restructuredFromId String?  @unique
-  restructuredFrom   LoanApplication?  @relation("Restructure", fields: [restructuredFromId], references: [id])
-  restructuredBy     LoanApplication?  @relation("Restructure")
+  restructuredFromId String?          @unique
+  restructuredFrom   LoanApplication? @relation("Restructure", fields: [restructuredFromId], references: [id])
+  restructuredBy     LoanApplication? @relation("Restructure")
 
   /// True if the customer had a prior fully-paid loan when this application
   /// was submitted (FRD §3.1 — "Repeat Loan"). Set automatically at apply
   /// time; treated as a hint by the underwriter, not a hard gate.
-  isRepeat        Boolean   @default(false)
+  isRepeat Boolean @default(false)
 
   /// Write-off bookkeeping. `writeOffAmount` is whatever principal remained
   /// outstanding at the time of write-off (what we Dr'd Bad Debt for).
-  writeOffAmount  Decimal?  @db.Decimal(14, 2)
-  writeOffReason  String?
-  writtenOffAt    DateTime?
-  writtenOffById  String?
+  writeOffAmount Decimal?  @db.Decimal(14, 2)
+  writeOffReason String?
+  writtenOffAt   DateTime?
+  writtenOffById String?
 
   // ── E-signature audit trail ──────────────────────────────────────────
   /// URL of the borrower's captured signature PNG (typically /uploads/signatures/<id>.png).
-  borrowerSignatureUrl String?
-  borrowerSignedAt     DateTime?
+  borrowerSignatureUrl           String?
+  borrowerSignedAt               DateTime?
   /// Source IP at signing — captured for audit. May be IPv6.
-  borrowerSignedFromIp String?
-  officerSignatureUrl String?
-  officerSignedAt     DateTime?
-  officerSignedById   String?
+  borrowerSignedFromIp           String?
+  officerSignatureUrl            String?
+  officerSignedAt                DateTime?
+  officerSignedById              String?
   /// If the officer signed under delegation, the Delegation id. Lets the
   /// PDF render "Signed by X under delegation from Y".
   officerSignedUnderDelegationId String?
@@ -746,29 +744,29 @@ model LoanApplication {
   ///   STAGE_3 = credit-impaired       → lifetime ECL, individual treatment
   /// Updated by the periodic ECL job based on DPD + risk signals; never
   /// edited directly by hand.
-  eclStage          EclStage @default(STAGE_1)
+  eclStage      EclStage  @default(STAGE_1)
   /// Most recent computed ECL amount in PHP. Snapshot only — the
   /// authoritative history lives in EclRun.
-  eclProvision      Decimal? @db.Decimal(18, 2)
-  eclComputedAt     DateTime?
+  eclProvision  Decimal?  @db.Decimal(18, 2)
+  eclComputedAt DateTime?
 
   /// SHA-256 of the agreement PDF as rendered at signing time. Lets us
   /// detect whether the document was tampered with after signature.
-  agreementHash       String?
+  agreementHash String?
 
   // Terms requested
-  principal       Decimal    @db.Decimal(14, 2)
-  termMonths      Int
+  principal          Decimal @db.Decimal(14, 2)
+  termMonths         Int
   /// Annual rate as decimal: 0.18 = 18%/year
   annualInterestRate Decimal @db.Decimal(6, 4)
-  purpose         String?
+  purpose            String?
 
   // Underwriting context — frozen at application time
   creditScoreAtApply Int?
   tierAtApply        CreditTier?
 
-  status            LoanStatus @default(SUBMITTED)
-  decisionReason    String?
+  status         LoanStatus @default(SUBMITTED)
+  decisionReason String?
 
   /// Current step in the approval chain (1-indexed). Null when:
   ///   • the product has no chain configured (legacy single-decide),
@@ -776,37 +774,37 @@ model LoanApplication {
   /// Bumped by LoanApprovalRepository.approveStep() as each step lands.
   currentApprovalStep Int?
 
-  submittedAt       DateTime   @default(now())
-  decidedAt         DateTime?
-  disbursedAt       DateTime?
-  closedAt          DateTime?
+  submittedAt DateTime  @default(now())
+  decidedAt   DateTime?
+  disbursedAt DateTime?
+  closedAt    DateTime?
 
-  submittedById     String
-  decidedById       String?
-  disbursedById     String?
+  submittedById String
+  decidedById   String?
+  disbursedById String?
 
   // Optional collateral. At most one of these is populated, gated by product.
-  vehicleId         String?   @unique
-  propertyId        String?   @unique
-  vehicle           Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
-  property          Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  vehicleId  String?   @unique
+  propertyId String?   @unique
+  vehicle    Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
   submittedBy User     @relation("LoanSubmittedBy", fields: [submittedById], references: [id])
   decidedBy   User?    @relation("LoanDecidedBy", fields: [decidedById], references: [id])
   disbursedBy User?    @relation("LoanDisbursedBy", fields: [disbursedById], references: [id])
 
-  schedule LoanSchedule[]
-  payments LoanPayment[]
-  collectionNotes CollectionNote[]
-  promisesToPay   PromiseToPay[]
-  paymentIntents  PaymentIntent[]
-  coMakers        CoMaker[]
-  messages        LoanMessage[]
-  penaltyWaivers  PenaltyWaiver[]
-  annualDocuments AnnualDocument[]
-  demandLetters   DemandLetter[]
-  repossessionCase RepossessionCase?
+  schedule           LoanSchedule[]
+  payments           LoanPayment[]
+  collectionNotes    CollectionNote[]
+  promisesToPay      PromiseToPay[]
+  paymentIntents     PaymentIntent[]
+  coMakers           CoMaker[]
+  messages           LoanMessage[]
+  penaltyWaivers     PenaltyWaiver[]
+  annualDocuments    AnnualDocument[]
+  demandLetters      DemandLetter[]
+  repossessionCase   RepossessionCase?
   dorsiBoardApproval DorsiBoardApproval?
   leaseAgreement     LeaseAgreement?
   approvals          LoanApproval[]
@@ -823,19 +821,19 @@ model LoanApplication {
 // next-due schedule row at payment time.
 
 model LoanSchedule {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   loanId        String
   /// 1-indexed installment number
   installmentNo Int
   dueDate       DateTime
   /// Principal portion of this installment
-  principalDue  Decimal  @db.Decimal(14, 2)
+  principalDue  Decimal   @db.Decimal(14, 2)
   /// Interest portion of this installment
-  interestDue   Decimal  @db.Decimal(14, 2)
+  interestDue   Decimal   @db.Decimal(14, 2)
   /// `principalDue + interestDue`
-  totalDue      Decimal  @db.Decimal(14, 2)
+  totalDue      Decimal   @db.Decimal(14, 2)
   /// Cumulative principal paid up to and including this row
-  principalPaid Decimal  @default(0) @db.Decimal(14, 2)
+  principalPaid Decimal   @default(0) @db.Decimal(14, 2)
   paidInFullAt  DateTime?
 
   loan LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
@@ -845,13 +843,13 @@ model LoanSchedule {
 }
 
 model LoanPayment {
-  id          String   @id @default(uuid())
-  loanId      String
-  amount      Decimal  @db.Decimal(14, 2)
-  paidOn      DateTime @default(now())
-  reference   String?
+  id           String   @id @default(uuid())
+  loanId       String
+  amount       Decimal  @db.Decimal(14, 2)
+  paidOn       DateTime @default(now())
+  reference    String?
   /// Free-form note (e.g. "settled via GCash REF abc123")
-  notes       String?
+  notes        String?
   recordedById String
 
   loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
@@ -881,21 +879,21 @@ enum NormalBalance {
 }
 
 model Account {
-  id            String         @id @default(uuid())
+  id            String        @id @default(uuid())
   /// Numeric account code, e.g. "1100" — sorts lexically in standard order.
-  code          String         @unique
+  code          String        @unique
   name          String
   type          AccountType
   normalBalance NormalBalance
   description   String?
-  active        Boolean        @default(true)
+  active        Boolean       @default(true)
   /// System accounts are referenced by code from auto-posting code and
   /// cannot be deleted (they may be deactivated only by an admin).
-  system        Boolean        @default(false)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  system        Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  lines         JournalLine[]
+  lines JournalLine[]
 
   @@index([type])
   @@index([code])
@@ -948,50 +946,50 @@ enum PeriodStatus {
 /// One row per (year, month). Once CLOSED, no postings can hit it
 /// (caller must reopen first). Year-end close is just December close.
 model AccountingPeriod {
-  id          String       @id @default(uuid())
-  year        Int
-  month       Int          // 1–12
-  status      PeriodStatus @default(OPEN)
-  closedAt    DateTime?
-  closedById  String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id         String       @id @default(uuid())
+  year       Int
+  month      Int // 1–12
+  status     PeriodStatus @default(OPEN)
+  closedAt   DateTime?
+  closedById String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 
-  entries     JournalEntry[]
+  entries JournalEntry[]
 
   @@unique([year, month])
   @@index([status])
 }
 
 model JournalEntry {
-  id          String         @id @default(uuid())
+  id            String        @id @default(uuid())
   /// Human-readable: "JE-2026-000123"
-  number      String         @unique
+  number        String        @unique
   /// Date the entry affects the books (may differ from postedAt).
-  entryDate   DateTime
-  memo        String?
-  source      JournalSource  @default(MANUAL)
+  entryDate     DateTime
+  memo          String?
+  source        JournalSource @default(MANUAL)
   /// For auto-posted entries: the originating loan/payment id, so we
   /// can detect duplicates and link from the loan detail page.
   sourceRefType String?
   sourceRefId   String?
 
-  postedAt    DateTime       @default(now())
-  postedById  String
+  postedAt   DateTime @default(now())
+  postedById String
 
   /// The accounting period this entry hit. Resolved from entryDate at
   /// post time. Nullable for legacy entries that pre-date the periods table.
-  periodId    String?
-  period      AccountingPeriod? @relation(fields: [periodId], references: [id])
+  periodId String?
+  period   AccountingPeriod? @relation(fields: [periodId], references: [id])
 
   /// If this entry was reversed, the id of the reversing entry.
   reversedById String?       @unique
   reversedBy   JournalEntry? @relation("JournalReversal", fields: [reversedById], references: [id])
   reverses     JournalEntry? @relation("JournalReversal")
 
-  postedBy    User           @relation("JournalPostedBy", fields: [postedById], references: [id])
-  lines       JournalLine[]
-  penaltyWaivers PenaltyWaiver[]
+  postedBy          User               @relation("JournalPostedBy", fields: [postedById], references: [id])
+  lines             JournalLine[]
+  penaltyWaivers    PenaltyWaiver[]
   repossessionCases RepossessionCase[]
   leaseAgreements   LeaseAgreement[]
 
@@ -1028,15 +1026,15 @@ enum CollectionNoteType {
 }
 
 model CollectionNote {
-  id          String              @id @default(uuid())
+  id          String             @id @default(uuid())
   loanId      String
-  type        CollectionNoteType  @default(OTHER)
+  type        CollectionNoteType @default(OTHER)
   body        String
-  createdAt   DateTime            @default(now())
+  createdAt   DateTime           @default(now())
   createdById String
 
-  loan        LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  createdBy   User            @relation("CollectionNoteBy", fields: [createdById], references: [id])
+  loan      LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  createdBy User            @relation("CollectionNoteBy", fields: [createdById], references: [id])
 
   @@index([loanId, createdAt(sort: Desc)])
 }
@@ -1053,18 +1051,18 @@ enum PromiseStatus {
 }
 
 model PromiseToPay {
-  id            String        @id @default(uuid())
-  loanId        String
-  amount        Decimal       @db.Decimal(14, 2)
-  promisedDate  DateTime
-  status        PromiseStatus @default(PROMISED)
-  note          String?
-  createdAt     DateTime      @default(now())
-  resolvedAt    DateTime?
-  createdById   String
+  id           String        @id @default(uuid())
+  loanId       String
+  amount       Decimal       @db.Decimal(14, 2)
+  promisedDate DateTime
+  status       PromiseStatus @default(PROMISED)
+  note         String?
+  createdAt    DateTime      @default(now())
+  resolvedAt   DateTime?
+  createdById  String
 
-  loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  createdBy  User            @relation("PtpCreatedBy", fields: [createdById], references: [id])
+  loan      LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  createdBy User            @relation("PtpCreatedBy", fields: [createdById], references: [id])
 
   @@index([loanId, promisedDate])
   @@index([status])
@@ -1087,25 +1085,25 @@ enum PaymentIntentStatus {
 }
 
 model PaymentIntent {
-  id              String              @id @default(uuid())
+  id             String              @id @default(uuid())
   /// Human-readable: "PI-2026-000123" — surfaced in URLs/UI.
-  number          String              @unique
-  loanId          String
-  provider        PaymentProvider     @default(MOCK)
+  number         String              @unique
+  loanId         String
+  provider       PaymentProvider     @default(MOCK)
   /// Provider-side id (e.g. "ch_abc123" or "mock_...").
-  externalId      String
+  externalId     String
   /// Idempotency key the API supplied at create; safe to retry.
-  idempotencyKey  String              @unique
-  amount          Decimal             @db.Decimal(14, 2)
-  paymentUrl      String
-  status          PaymentIntentStatus @default(CREATED)
+  idempotencyKey String              @unique
+  amount         Decimal             @db.Decimal(14, 2)
+  paymentUrl     String
+  status         PaymentIntentStatus @default(CREATED)
   /// When status flipped to PAID/FAILED/EXPIRED.
-  resolvedAt      DateTime?
+  resolvedAt     DateTime?
   /// If PAID, link to the LoanPayment row that recorded it.
-  paymentId       String?             @unique
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  createdById     String
+  paymentId      String?             @unique
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  createdById    String
 
   loan      LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
   payment   LoanPayment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
@@ -1123,19 +1121,19 @@ model PaymentIntent {
 // any route can call AuditLogRepository.record() without coordination.
 
 model AuditEvent {
-  id          String   @id @default(uuid())
+  id         String   @id @default(uuid())
   /// Coarse action label, e.g. "LOAN_DECIDE", "JOURNAL_REVERSE", "PRODUCT_CREATE".
-  action      String
+  action     String
   /// User who performed the action.
-  actorId     String
+  actorId    String
   /// Optional pointer to the affected row.
-  targetType  String?
-  targetId    String?
+  targetType String?
+  targetId   String?
   /// Free-form context — reason, before/after snapshot, payload, etc.
-  payload     Json?
-  createdAt   DateTime @default(now())
+  payload    Json?
+  createdAt  DateTime @default(now())
 
-  actor       User     @relation("AuditActor", fields: [actorId], references: [id])
+  actor User @relation("AuditActor", fields: [actorId], references: [id])
 
   @@index([createdAt(sort: Desc)])
   @@index([actorId, createdAt(sort: Desc)])
@@ -1159,36 +1157,36 @@ enum JobStatus {
 }
 
 model ScheduledJob {
-  id          String   @id @default(uuid())
-  name        String   @unique
+  id          String    @id @default(uuid())
+  name        String    @unique
   description String?
   /// Standard cron expression, e.g. "0 1 * * *" = daily 01:00.
   cron        String
-  enabled     Boolean  @default(true)
+  enabled     Boolean   @default(true)
   lastRunAt   DateTime?
   /// Computed by the scheduler each tick; informational only.
   nextRunAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  runs        JobRun[]
+  runs JobRun[]
 
   @@index([enabled])
 }
 
 model JobRun {
-  id          String   @id @default(uuid())
-  jobId       String
-  status      JobStatus @default(PENDING)
-  startedAt   DateTime  @default(now())
-  finishedAt  DateTime?
+  id         String    @id @default(uuid())
+  jobId      String
+  status     JobStatus @default(PENDING)
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
   /// Free-form result payload (e.g. {posted, skipped}).
-  result      Json?
-  error       String?
+  result     Json?
+  error      String?
   /// Whether the run was triggered by the schedule (false = manual).
-  manual      Boolean   @default(false)
+  manual     Boolean   @default(false)
 
-  job         ScheduledJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job ScheduledJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId, startedAt(sort: Desc)])
   @@index([status])
@@ -1251,7 +1249,7 @@ enum NotificationEvent {
 }
 
 model Notification {
-  id          String   @id @default(uuid())
+  id          String              @id @default(uuid())
   event       NotificationEvent
   channel     NotificationChannel
   /// Email address or phone number, depending on channel.
@@ -1260,7 +1258,7 @@ model Notification {
   subject     String?
   /// Rendered body.
   body        String
-  status      NotificationStatus @default(QUEUED)
+  status      NotificationStatus  @default(QUEUED)
   /// Provider-side id if the provider returned one (e.g. SendGrid msg id).
   providerRef String?
   error       String?
@@ -1270,8 +1268,8 @@ model Notification {
   /// Optional customer link for filtering.
   customerId  String?
 
-  createdAt   DateTime @default(now())
-  sentAt      DateTime?
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
 
   @@index([createdAt(sort: Desc)])
   @@index([status])
@@ -1295,22 +1293,22 @@ enum AmlStatus {
 }
 
 model AmlScreening {
-  id           String   @id @default(uuid())
-  customerId   String
-  status       AmlStatus @default(PENDING)
+  id             String    @id @default(uuid())
+  customerId     String
+  status         AmlStatus @default(PENDING)
   /// Provider-side id (which provider ran the screen).
-  provider     String   @default("MOCK")
+  provider       String    @default("MOCK")
   /// Provider's own reference for this screen.
-  providerRef  String?
+  providerRef    String?
   /// Array of `{ list, name, score, details }` for matches found.
-  matches      Json?
-  notes        String?
-  screenedAt   DateTime @default(now())
+  matches        Json?
+  notes          String?
+  screenedAt     DateTime  @default(now())
   /// If OVERRIDDEN, who cleared it.
   overriddenById String?
   overriddenAt   DateTime?
 
-  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, screenedAt(sort: Desc)])
   @@index([status])
@@ -1337,34 +1335,34 @@ model AmlWatchlistEntry {
 // plus their relationship to the customer.
 
 enum CoMakerRole {
-  CO_BORROWER   // jointly liable
-  GUARANTOR     // backstop if primary defaults
-  CO_MAKER      // generic "second signer"
+  CO_BORROWER // jointly liable
+  GUARANTOR // backstop if primary defaults
+  CO_MAKER // generic "second signer"
 }
 
 model CoMaker {
-  id                 String      @id @default(uuid())
+  id                 String            @id @default(uuid())
   loanId             String
   fullName           String
-  role               CoMakerRole @default(CO_MAKER)
-  relationship       String?     // "Spouse" / "Parent" / "Sibling" / "Friend" / "Employer"
+  role               CoMakerRole       @default(CO_MAKER)
+  relationship       String? // "Spouse" / "Parent" / "Sibling" / "Friend" / "Employer"
   phone              String
   email              String?
   address            String?
   governmentIdType   GovernmentIdType?
   governmentIdNumber String?
   /// Monthly income for capacity calculations.
-  monthlyIncome      Decimal?    @db.Decimal(14, 2)
+  monthlyIncome      Decimal?          @db.Decimal(14, 2)
   /// URL of signed co-maker agreement, when available.
   signedAgreementUrl String?
   /// In-app signature PNG URL (canvas capture).
   signatureUrl       String?
   signedAt           DateTime?
   notes              String?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
-  loan               LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loan LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
 
   @@index([loanId])
 }
@@ -1382,21 +1380,21 @@ enum RuleAction {
 }
 
 model DecisionRule {
-  id          String   @id @default(uuid())
-  name        String   @unique
+  id          String     @id @default(uuid())
+  name        String     @unique
   description String?
   /// Lower = evaluated first. Conventionally: rejects use 10-90,
   /// approvals 100-900, manual-review fallbacks 1000+.
-  priority    Int      @default(500)
+  priority    Int        @default(500)
   /// JSON array of `{ field, op, value }` conditions; ALL must match.
   /// See @loan/decisioning for the schema.
   conditions  Json
   action      RuleAction
   /// Stored on the loan's `decisionReason` when this rule fires.
   reason      String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@index([priority, active])
 }
@@ -1413,15 +1411,15 @@ model DecisionRule {
 // still be edited if the lender wants tighter or looser defaults.
 
 model Permission {
-  id          String   @id @default(uuid())
+  id          String           @id @default(uuid())
   /// Stable identifier referenced by code (e.g. "loans.approve").
-  key         String   @unique
+  key         String           @unique
   label       String
   description String?
   /// UI grouping ("Loans", "Accounting", etc.)
   category    String
   /// System permissions can't be deleted (code references them).
-  system      Boolean  @default(true)
+  system      Boolean          @default(true)
   /// Lifecycle gate:
   ///   - ACTIVE     — fully effective (the historical default)
   ///   - DRAFT      — present in the catalog but the resolver does not
@@ -1431,7 +1429,7 @@ model Permission {
   ///                  flows), but flagged in the UI so admins can plan
   ///                  removal from role permission sets
   status      PermissionStatus @default(ACTIVE)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime         @default(now())
 
   roles RolePermission[]
 
@@ -1463,8 +1461,8 @@ model Role {
   /// "parent" roles whose permissions are unioned into its effective
   /// set at resolve time. Cycles are rejected by the write path; the
   /// resolver still cycle-guards with a visited set as belt-and-braces.
-  parents     RoleInheritance[] @relation("ChildToParent")
-  children    RoleInheritance[] @relation("ParentToChild")
+  parents  RoleInheritance[] @relation("ChildToParent")
+  children RoleInheritance[] @relation("ParentToChild")
 }
 
 /// Join table for the Role ⇆ Role self-many-to-many inheritance graph.
@@ -1526,7 +1524,7 @@ model UserRoleAssignment {
 // authority.
 
 model Delegation {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   delegatorId   String
   delegateId    String
   /// Permission keys included. Empty = all of delegator's role permissions.
@@ -1539,14 +1537,14 @@ model Delegation {
   revokedAt     DateTime?
   revokedById   String?
   revokedReason String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   delegator User @relation("Delegator", fields: [delegatorId], references: [id])
-  delegate  User @relation("Delegate",  fields: [delegateId],  references: [id])
+  delegate  User @relation("Delegate", fields: [delegateId], references: [id])
 
-  signedLoans LoanApplication[] @relation("OfficerSignedUnderDelegation")
-  loanApprovals LoanApproval[]  @relation("LoanApprovalDelegation")
+  signedLoans   LoanApplication[] @relation("OfficerSignedUnderDelegation")
+  loanApprovals LoanApproval[]    @relation("LoanApprovalDelegation")
 
   @@index([delegateId, startsAt, endsAt])
   @@index([delegatorId])
@@ -1566,18 +1564,18 @@ enum LoanMessageAuthor {
 }
 
 model LoanMessage {
-  id          String   @id @default(uuid())
-  loanId      String
+  id         String            @id @default(uuid())
+  loanId     String
   /// User id of whoever wrote it. The author's role at send-time is
   /// captured separately so a role change later doesn't rewrite history.
-  authorId    String
-  authorRole  LoanMessageAuthor
-  body        String   @db.Text
+  authorId   String
+  authorRole LoanMessageAuthor
+  body       String            @db.Text
   /// Set when the recipient has acknowledged the message.
-  readAt      DateTime?
-  createdAt   DateTime @default(now())
+  readAt     DateTime?
+  createdAt  DateTime          @default(now())
 
-  loan        LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  loan LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
 
   @@index([loanId, createdAt])
   @@index([readAt])
@@ -1608,23 +1606,23 @@ enum EclStage {
 }
 
 model EclRun {
-  id            String   @id @default(uuid())
+  id          String   @id @default(uuid())
   /// First day of the period this run computes for (typically month start).
-  periodStart   DateTime
-  periodEnd     DateTime
+  periodStart DateTime
+  periodEnd   DateTime
   /// As-of date the computation ran against — usually periodEnd.
-  asOf          DateTime @default(now())
+  asOf        DateTime @default(now())
 
   /// Aggregate snapshot — the per-loan provisions live on LoanApplication
   /// (eclProvision/eclStage); EclRun is the journal.
-  totalEad      Decimal  @db.Decimal(18, 2)
-  totalEcl      Decimal  @db.Decimal(18, 2)
-  stage1Count   Int
-  stage2Count   Int
-  stage3Count   Int
-  stage1Ecl     Decimal  @db.Decimal(18, 2)
-  stage2Ecl     Decimal  @db.Decimal(18, 2)
-  stage3Ecl     Decimal  @db.Decimal(18, 2)
+  totalEad    Decimal @db.Decimal(18, 2)
+  totalEcl    Decimal @db.Decimal(18, 2)
+  stage1Count Int
+  stage2Count Int
+  stage3Count Int
+  stage1Ecl   Decimal @db.Decimal(18, 2)
+  stage2Ecl   Decimal @db.Decimal(18, 2)
+  stage3Ecl   Decimal @db.Decimal(18, 2)
 
   /// Journal entry that booked the impairment movement, if any.
   journalEntryId String?
@@ -1649,20 +1647,20 @@ enum BankStatementStatus {
 }
 
 model BankStatement {
-  id            String   @id @default(uuid())
+  id             String              @id @default(uuid())
   /// e.g. "BPI-Current-202605", picked by the user at import time.
-  label         String
+  label          String
   /// The user-named bank account this statement covers. Could promote to a
   /// FK to a BankAccount table later — single source of truth for now.
-  bankAccount   String
-  periodStart   DateTime
-  periodEnd     DateTime
+  bankAccount    String
+  periodStart    DateTime
+  periodEnd      DateTime
   /// Reported opening / closing balance from the bank.
-  openingBalance Decimal @db.Decimal(18, 2)
-  closingBalance Decimal @db.Decimal(18, 2)
-  importedById  String?
-  importedAt    DateTime @default(now())
-  status        BankStatementStatus @default(IMPORTED)
+  openingBalance Decimal             @db.Decimal(18, 2)
+  closingBalance Decimal             @db.Decimal(18, 2)
+  importedById   String?
+  importedAt     DateTime            @default(now())
+  status         BankStatementStatus @default(IMPORTED)
 
   lines BankStatementLine[]
 
@@ -1671,26 +1669,26 @@ model BankStatement {
 }
 
 model BankStatementLine {
-  id            String   @id @default(uuid())
-  statementId   String
-  txnDate       DateTime
-  description   String
+  id             String    @id @default(uuid())
+  statementId    String
+  txnDate        DateTime
+  description    String
   /// Positive = credit (money in), negative = debit (money out).
-  amount        Decimal  @db.Decimal(18, 2)
-  reference     String?
+  amount         Decimal   @db.Decimal(18, 2)
+  reference      String?
   /// Running balance per the bank, if present in the CSV.
-  runningBalance Decimal? @db.Decimal(18, 2)
+  runningBalance Decimal?  @db.Decimal(18, 2)
   /// Set when reconciled. Match type tells us *what* it was matched to —
   /// a LoanPayment for incoming, a Loan disbursement for outgoing, or
   /// MANUAL for everything else (bank fees, owner draws, etc).
-  matchedType   String?
-  matchedRefId  String?
-  matchedAt     DateTime?
-  matchedById   String?
+  matchedType    String?
+  matchedRefId   String?
+  matchedAt      DateTime?
+  matchedById    String?
   /// Free-form note typed by the reconciler — useful for MANUAL matches.
-  matchNote     String?
+  matchNote      String?
 
-  statement     BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  statement BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
 
   @@index([statementId])
   @@index([txnDate])
@@ -1710,18 +1708,18 @@ model BankStatementLine {
 // (= token theft), we revoke the entire family for that user.
 
 model RefreshToken {
-  id            String   @id @default(uuid())
-  userId        String
+  id           String    @id @default(uuid())
+  userId       String
   /// SHA-256 of the opaque token returned to the client. Never the raw value.
-  tokenHash     String   @unique
-  expiresAt     DateTime
-  revokedAt     DateTime?
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  revokedAt    DateTime?
   /// When rotated, points at the replacement so we can detect re-use
   /// (presenting a revoked token whose successor is still active).
-  replacedById  String?
-  createdAt     DateTime @default(now())
+  replacedById String?
+  createdAt    DateTime  @default(now())
 
-  user          User @relation("UserRefreshTokens", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("UserRefreshTokens", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -1743,27 +1741,26 @@ model RefreshToken {
  * FundTransaction, FundWithdrawal, Expense (sourceOfFunds) and OtherIncome
  * (sourceTo). Kept as a string rather than an enum so admins can add new
  * buckets without a migration; the canonical set is documented in the UI.
- *
- *   CAPITAL_BUILD_UP | MORTUARY_FUND | EMERGENCY_FUND |
- *   SAVINGS | BIG_BROTHER | GENERAL | OTHER
+ * CAPITAL_BUILD_UP | MORTUARY_FUND | EMERGENCY_FUND |
+ * SAVINGS | BIG_BROTHER | GENERAL | OTHER
  */
 
 model Contribution {
-  id              String   @id @default(uuid())
-  customerId      String
+  id             String   @id @default(uuid())
+  customerId     String
   /// Equity contribution — each member's stake in the coop.
-  capitalBuildUp  Decimal  @default(0) @db.Decimal(14, 2)
+  capitalBuildUp Decimal  @default(0) @db.Decimal(14, 2)
   /// Death-benefit pool.
-  mortuaryFund    Decimal  @default(0) @db.Decimal(14, 2)
+  mortuaryFund   Decimal  @default(0) @db.Decimal(14, 2)
   /// Short-term emergency assistance pool.
-  emergencyFund   Decimal  @default(0) @db.Decimal(14, 2)
-  notes           String?
-  contributedAt   DateTime @default(now())
-  recordedById    String?
+  emergencyFund  Decimal  @default(0) @db.Decimal(14, 2)
+  notes          String?
+  contributedAt  DateTime @default(now())
+  recordedById   String?
   /// Journal entry that booked this contribution. Null = posting deferred.
-  journalEntryId  String?
+  journalEntryId String?
 
-  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, contributedAt])
   @@index([contributedAt])
@@ -1775,16 +1772,16 @@ enum SavingsTxnKind {
 }
 
 model SavingsTransaction {
-  id              String   @id @default(uuid())
-  customerId      String
-  kind            SavingsTxnKind @default(DEPOSIT)
-  amount          Decimal  @db.Decimal(14, 2)
-  notes           String?
-  txnDate         DateTime @default(now())
-  recordedById    String?
-  journalEntryId  String?
+  id             String         @id @default(uuid())
+  customerId     String
+  kind           SavingsTxnKind @default(DEPOSIT)
+  amount         Decimal        @db.Decimal(14, 2)
+  notes          String?
+  txnDate        DateTime       @default(now())
+  recordedById   String?
+  journalEntryId String?
 
-  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId, txnDate])
   @@index([txnDate])
@@ -1794,74 +1791,73 @@ model SavingsTransaction {
  * Generic fund inflow — anything that increases a fund balance and doesn't
  * fit Contribution (member dues) or Savings (voluntary deposits). Examples:
  * interest earned by the mortuary fund, transfers in from other accounts.
- *
  * `customerId` is optional because not all inflows are member-attributable.
  */
 model FundTransaction {
-  id              String   @id @default(uuid())
-  customerId      String?
-  transactionRef  String?
-  sourceOfFunds   String
-  amount          Decimal  @db.Decimal(14, 2)
-  txnDate         DateTime @default(now())
+  id             String   @id @default(uuid())
+  customerId     String?
+  transactionRef String?
+  sourceOfFunds  String
+  amount         Decimal  @db.Decimal(14, 2)
+  txnDate        DateTime @default(now())
   /// Who recorded the row — UI shows their name as "Author".
-  authorId        String?
-  notes           String?
-  journalEntryId  String?
+  authorId       String?
+  notes          String?
+  journalEntryId String?
 
-  customer        Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([sourceOfFunds, txnDate])
   @@index([customerId])
 }
 
 model FundWithdrawal {
-  id              String   @id @default(uuid())
-  customerId      String?
-  sourceOfFunds   String
-  amount          Decimal  @db.Decimal(14, 2)
-  notes           String?
-  txnDate         DateTime @default(now())
-  authorId        String?
-  journalEntryId  String?
+  id             String   @id @default(uuid())
+  customerId     String?
+  sourceOfFunds  String
+  amount         Decimal  @db.Decimal(14, 2)
+  notes          String?
+  txnDate        DateTime @default(now())
+  authorId       String?
+  journalEntryId String?
 
-  customer        Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([sourceOfFunds, txnDate])
   @@index([customerId])
 }
 
 model Expense {
-  id              String   @id @default(uuid())
-  type            String
-  amount          Decimal  @db.Decimal(14, 2)
-  sourceOfFunds   String
-  txnDate         DateTime @default(now())
+  id             String   @id @default(uuid())
+  type           String
+  amount         Decimal  @db.Decimal(14, 2)
+  sourceOfFunds  String
+  txnDate        DateTime @default(now())
   /// Repeating expenses (rent, utilities). UI surfaces these so they can
   /// be reviewed periodically; doesn't auto-create future instances —
   /// that's a separate scheduling concern.
-  isRecurring     Boolean  @default(false)
+  isRecurring    Boolean  @default(false)
   /// Receipt / invoice URLs (uploaded via /uploads-api).
-  attachments     String[]
-  notes           String?
-  recordedById    String?
-  journalEntryId  String?
+  attachments    String[]
+  notes          String?
+  recordedById   String?
+  journalEntryId String?
 
   @@index([type, txnDate])
   @@index([txnDate])
 }
 
 model OtherIncome {
-  id              String   @id @default(uuid())
-  type            String
-  amount          Decimal  @db.Decimal(14, 2)
+  id             String   @id @default(uuid())
+  type           String
+  amount         Decimal  @db.Decimal(14, 2)
   /// Which fund this income credits — same string buckets as Funds.
-  sourceTo        String
-  txnDate         DateTime @default(now())
-  attachments     String[]
-  notes           String?
-  recordedById    String?
-  journalEntryId  String?
+  sourceTo       String
+  txnDate        DateTime @default(now())
+  attachments    String[]
+  notes          String?
+  recordedById   String?
+  journalEntryId String?
 
   @@index([type, txnDate])
   @@index([txnDate])
@@ -1875,19 +1871,19 @@ model OtherIncome {
  * arrangement is a grant rather than a return-of-capital deal.
  */
 model BigBrotherAccount {
-  id              String   @id @default(uuid())
+  id             String   @id @default(uuid())
   /// Lender / sponsor name.
-  name            String
+  name           String
   /// Their reference / account identifier.
-  account         String
-  capital         Decimal  @db.Decimal(18, 2)
-  periodFrom      DateTime
-  periodTo        DateTime
-  notes           String?
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  recordedById    String?
-  journalEntryId  String?
+  account        String
+  capital        Decimal  @db.Decimal(18, 2)
+  periodFrom     DateTime
+  periodTo       DateTime
+  notes          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  recordedById   String?
+  journalEntryId String?
 
   @@index([active])
   @@index([periodFrom, periodTo])
@@ -2002,34 +1998,34 @@ enum DemandLetterStatus {
 }
 
 model DemandLetter {
-  id              String   @id @default(uuid())
-  loanId          String
-  stage           DemandLetterStage
-  status          DemandLetterStatus @default(DRAFTED)
+  id     String             @id @default(uuid())
+  loanId String
+  stage  DemandLetterStage
+  status DemandLetterStatus @default(DRAFTED)
 
   /// Snapshot of the financials at draft time so the letter remains
   /// faithful even if the borrower part-pays before dispatch.
-  principalOwed   Decimal  @db.Decimal(14, 2)
-  interestOwed    Decimal  @db.Decimal(14, 2)
-  penaltiesOwed   Decimal  @db.Decimal(14, 2)
-  totalOwed       Decimal  @db.Decimal(14, 2)
-  daysOverdue     Int
+  principalOwed Decimal @db.Decimal(14, 2)
+  interestOwed  Decimal @db.Decimal(14, 2)
+  penaltiesOwed Decimal @db.Decimal(14, 2)
+  totalOwed     Decimal @db.Decimal(14, 2)
+  daysOverdue   Int
 
   /// Date the borrower must pay by per the letter (FRD: 7–15 days).
   paymentDeadline DateTime
 
   /// Rendered letter body — what the dispatcher sends. Captured at draft
   /// time so re-render-on-dispatch can't drift from what was approved.
-  body            String   @db.Text
+  body String @db.Text
 
   /// Created at draft time.
-  draftedAt       DateTime @default(now())
-  draftedById     String
+  draftedAt   DateTime @default(now())
+  draftedById String
 
   /// Approval gate (FRD §3.6.5). Set when status -> APPROVED.
-  approvedAt      DateTime?
-  approvedById    String?
-  approvalNote    String?  @db.VarChar(500)
+  approvedAt   DateTime?
+  approvedById String?
+  approvalNote String?   @db.VarChar(500)
 
   /// Set when status -> DISPATCHED.
   dispatchedAt    DateTime?
@@ -2039,15 +2035,15 @@ model DemandLetter {
   dispatchRef     String?
 
   /// Set when status -> WAIVED or RESPONDED.
-  closedAt        DateTime?
-  closedById      String?
-  closedReason    String?  @db.VarChar(500)
+  closedAt     DateTime?
+  closedById   String?
+  closedReason String?   @db.VarChar(500)
 
-  loan          LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  draftedBy     User            @relation("DemandLetterDrafted", fields: [draftedById], references: [id])
-  approvedBy    User?           @relation("DemandLetterApproved", fields: [approvedById], references: [id])
-  dispatchedBy  User?           @relation("DemandLetterDispatched", fields: [dispatchedById], references: [id])
-  closedBy      User?           @relation("DemandLetterWaived", fields: [closedById], references: [id])
+  loan         LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  draftedBy    User            @relation("DemandLetterDrafted", fields: [draftedById], references: [id])
+  approvedBy   User?           @relation("DemandLetterApproved", fields: [approvedById], references: [id])
+  dispatchedBy User?           @relation("DemandLetterDispatched", fields: [dispatchedById], references: [id])
+  closedBy     User?           @relation("DemandLetterWaived", fields: [closedById], references: [id])
 
   @@index([loanId, status])
   @@index([stage, status])
@@ -2055,25 +2051,25 @@ model DemandLetter {
 }
 
 model AnnualDocument {
-  id              String   @id @default(uuid())
-  loanId          String
-  type            AnnualDocumentType
+  id             String               @id @default(uuid())
+  loanId         String
+  type           AnnualDocumentType
   /// Free-form display label, e.g. "Comprehensive insurance 2026-2027".
-  name            String   @db.VarChar(200)
-  documentUrl     String?
-  effectiveFrom   DateTime
-  expiresAt       DateTime
-  status          AnnualDocumentStatus @default(VALID)
-  notes           String?
-  submittedAt     DateTime @default(now())
-  submittedById   String
+  name           String               @db.VarChar(200)
+  documentUrl    String?
+  effectiveFrom  DateTime
+  expiresAt      DateTime
+  status         AnnualDocumentStatus @default(VALID)
+  notes          String?
+  submittedAt    DateTime             @default(now())
+  submittedById  String
   /// Last reminder sent for this row — tracked so the daily job doesn't
   /// re-spam the borrower every tick within the 30-day window.
-  lastReminderAt  DateTime?
-  reminderCount   Int      @default(0)
+  lastReminderAt DateTime?
+  reminderCount  Int                  @default(0)
 
-  loan          LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  submittedBy   User            @relation("AnnualDocSubmittedBy", fields: [submittedById], references: [id])
+  loan        LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  submittedBy User            @relation("AnnualDocSubmittedBy", fields: [submittedById], references: [id])
 
   @@index([loanId, expiresAt])
   @@index([expiresAt])
@@ -2114,15 +2110,15 @@ enum RepossessionStatus {
 }
 
 model RepossessionCase {
-  id                String   @id @default(uuid())
+  id     String             @id @default(uuid())
   /// One active case per loan. Cancelling closes the case so a future one
   /// can be opened if the borrower defaults again.
-  loanId            String   @unique
-  status            RepossessionStatus @default(IDENTIFIED)
-  reason            String   @db.VarChar(500)
+  loanId String             @unique
+  status RepossessionStatus @default(IDENTIFIED)
+  reason String             @db.VarChar(500)
 
-  identifiedAt      DateTime @default(now())
-  identifiedById    String
+  identifiedAt   DateTime @default(now())
+  identifiedById String
 
   // ── Approval chain (FRD §3.7 — Branch Manager → Credit Head → Legal) ──
   bmApprovedAt           DateTime?
@@ -2136,50 +2132,50 @@ model RepossessionCase {
   legalApprovalNote      String?
 
   // ── Agent assignment ──────────────────────────────────────────────────
-  agentName          String?
-  agentContact       String?
-  agentAssignedAt    DateTime?
-  agentAssignedById  String?
+  agentName         String?
+  agentContact      String?
+  agentAssignedAt   DateTime?
+  agentAssignedById String?
 
   // ── Vehicle recovery (FRD §3.7 — Inventory and Storage) ───────────────
-  recoveredAt        DateTime?
-  recoveredById      String?
-  vehicleCondition   String?  @db.VarChar(500)
-  vehicleMileage     Int?
+  recoveredAt      DateTime?
+  recoveredById    String?
+  vehicleCondition String?   @db.VarChar(500)
+  vehicleMileage   Int?
   /// Comma-separated photo URLs. Simple list; promote to a separate table
   /// if we need per-photo metadata later.
-  vehiclePhotos      String?
-  storageLocation    String?
+  vehiclePhotos    String?
+  storageLocation  String?
 
   // ── Auction (FRD §3.7 — Disposal of Vehicle) ──────────────────────────
-  auctionedAt          DateTime?
-  auctionedById        String?
+  auctionedAt           DateTime?
+  auctionedById         String?
   /// "PUBLIC" / "DEALER" / etc.
-  auctionMethod        String?
-  auctionProceeds      Decimal? @db.Decimal(14, 2)
+  auctionMethod         String?
+  auctionProceeds       Decimal?  @db.Decimal(14, 2)
   /// Outstanding loan balance at the moment of recovery — snapshot used
   /// to compute the deficiency.
-  outstandingAtRecovery Decimal? @db.Decimal(14, 2)
+  outstandingAtRecovery Decimal?  @db.Decimal(14, 2)
   /// max(0, outstandingAtRecovery - auctionProceeds). Booked as bad debt.
-  deficiency           Decimal? @db.Decimal(14, 2)
+  deficiency            Decimal?  @db.Decimal(14, 2)
   /// FK to the auction settlement JE (REPOSSESSION_AUCTION source).
-  journalEntryId       String?
+  journalEntryId        String?
 
   // ── Cancellation ──────────────────────────────────────────────────────
   cancelledAt        DateTime?
   cancelledById      String?
-  cancellationReason String?  @db.VarChar(500)
+  cancellationReason String?   @db.VarChar(500)
 
-  loan               LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  identifiedBy       User @relation("RepoIdentified", fields: [identifiedById], references: [id])
-  bmApprovedBy       User? @relation("RepoBmApproved", fields: [bmApprovedById], references: [id])
-  creditHeadApprovedBy User? @relation("RepoCreditApproved", fields: [creditHeadApprovedById], references: [id])
-  legalApprovedBy    User? @relation("RepoLegalApproved", fields: [legalApprovedById], references: [id])
-  agentAssignedBy    User? @relation("RepoAgentAssigned", fields: [agentAssignedById], references: [id])
-  recoveredBy        User? @relation("RepoRecovered", fields: [recoveredById], references: [id])
-  auctionedBy        User? @relation("RepoAuctioned", fields: [auctionedById], references: [id])
-  cancelledBy        User? @relation("RepoCancelled", fields: [cancelledById], references: [id])
-  journalEntry       JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  loan                 LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  identifiedBy         User            @relation("RepoIdentified", fields: [identifiedById], references: [id])
+  bmApprovedBy         User?           @relation("RepoBmApproved", fields: [bmApprovedById], references: [id])
+  creditHeadApprovedBy User?           @relation("RepoCreditApproved", fields: [creditHeadApprovedById], references: [id])
+  legalApprovedBy      User?           @relation("RepoLegalApproved", fields: [legalApprovedById], references: [id])
+  agentAssignedBy      User?           @relation("RepoAgentAssigned", fields: [agentAssignedById], references: [id])
+  recoveredBy          User?           @relation("RepoRecovered", fields: [recoveredById], references: [id])
+  auctionedBy          User?           @relation("RepoAuctioned", fields: [auctionedById], references: [id])
+  cancelledBy          User?           @relation("RepoCancelled", fields: [cancelledById], references: [id])
+  journalEntry         JournalEntry?   @relation(fields: [journalEntryId], references: [id])
 
   @@index([status])
   @@index([identifiedAt(sort: Desc)])
@@ -2212,30 +2208,30 @@ enum DorsiCategory {
 }
 
 model DorsiRecord {
-  id            String   @id @default(uuid())
+  id               String        @id @default(uuid())
   /// One DORSI record per customer.
-  customerId    String   @unique
-  category      DorsiCategory
+  customerId       String        @unique
+  category         DorsiCategory
   /// Free-form basis for the tag — required for the audit trail.
-  basis         String   @db.VarChar(500)
+  basis            String        @db.VarChar(500)
   /// False once the relationship ends (resigned, sold shares, etc.).
-  active        Boolean  @default(true)
+  active           Boolean       @default(true)
   /// FRD §3.10.1 requires re-attestation on account renewal — admins
   /// stamp this when they confirm the record is still accurate.
   lastReviewedAt   DateTime?
   lastReviewedById String?
 
-  taggedAt      DateTime @default(now())
-  taggedById    String
+  taggedAt   DateTime @default(now())
+  taggedById String
 
   deactivatedAt      DateTime?
   deactivatedById    String?
-  deactivationReason String?  @db.VarChar(500)
+  deactivationReason String?   @db.VarChar(500)
 
   customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  taggedBy      User @relation("DorsiTaggedBy", fields: [taggedById], references: [id])
-  reviewedBy    User? @relation("DorsiReviewedBy", fields: [lastReviewedById], references: [id])
-  deactivatedBy User? @relation("DorsiDeactivatedBy", fields: [deactivatedById], references: [id])
+  taggedBy      User     @relation("DorsiTaggedBy", fields: [taggedById], references: [id])
+  reviewedBy    User?    @relation("DorsiReviewedBy", fields: [lastReviewedById], references: [id])
+  deactivatedBy User?    @relation("DorsiDeactivatedBy", fields: [deactivatedById], references: [id])
 
   @@index([category, active])
   @@index([active])
@@ -2259,7 +2255,7 @@ model DorsiBoardApproval {
   approvedById             String
 
   loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  approvedBy User @relation("DorsiBoardApprovedBy", fields: [approvedById], references: [id])
+  approvedBy User            @relation("DorsiBoardApprovedBy", fields: [approvedById], references: [id])
 }
 
 /// Singleton config row (id = "singleton"). Holds runtime-tunable values
@@ -2267,41 +2263,41 @@ model DorsiBoardApproval {
 /// Currently just the Company Total Equity used as the base for DORSI
 /// cap calculations; future settings go here too.
 model SystemConfig {
-  id                 String   @id @default("singleton")
-  companyTotalEquity Decimal  @db.Decimal(20, 2) @default(0)
+  id                 String  @id @default("singleton")
+  companyTotalEquity Decimal @default(0) @db.Decimal(20, 2)
 
   /// Org-wide ceiling on session idle. When the browser sees no user
   /// activity for this many seconds, the shell pops the warning dialog.
   /// Per-user override can be stricter but never longer. Default tracks
   /// the financial-app norm of "short fuse" — change in /settings.
-  idleTimeoutSeconds Int      @default(60)
+  idleTimeoutSeconds Int @default(60)
   /// Countdown shown inside the warning dialog before forced logout.
   /// The user can dismiss (Stay signed in) to reset both timers.
-  idleWarningSeconds Int      @default(60)
+  idleWarningSeconds Int @default(60)
 
   // ── Branding ───────────────────────────────────────────────────────
   // Surfaced in the sidebar, document.title, generated PDFs, and the
   // body of operator-facing notifications. Admin-editable from /settings.
   /// Display name. Defaults to the env-var convention so existing
   /// installs keep their identity until an admin sets a custom value.
-  companyName        String   @default("SmartLoan")
+  companyName    String  @default("SmartLoan")
   /// `/uploads/branding/…` path — null = no custom logo, shell falls
   /// back to the built-in Wallet icon glyph.
-  companyLogoUrl     String?
+  companyLogoUrl String?
   /// Short marketing line shown beneath the brand glyph in the sidebar.
-  companyTagline     String?
+  companyTagline String?
   /// Postal address used in PDF letterheads.
-  companyAddress     String?
+  companyAddress String?
   /// Contact phone for letterheads / demand letters.
-  companyPhone       String?
+  companyPhone   String?
   /// Contact email for letterheads / demand letters.
-  companyEmail       String?
+  companyEmail   String?
   /// Marketing site URL for letterhead footer.
-  companyWebsite     String?
+  companyWebsite String?
 
-  updatedAt          DateTime @updatedAt
-  updatedById        String?
-  updatedBy          User?    @relation("SystemConfigUpdatedBy", fields: [updatedById], references: [id])
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   User?    @relation("SystemConfigUpdatedBy", fields: [updatedById], references: [id])
 }
 
 // ─── Lease-to-Own agreement (FRD §3.5) ───────────────────────────────────────
@@ -2337,44 +2333,44 @@ enum LeaseTitleHolder {
 }
 
 model LeaseAgreement {
-  id                 String   @id @default(uuid())
-  loanId             String   @unique
-  status             LeaseStatus @default(ACTIVE)
+  id                        String           @id @default(uuid())
+  loanId                    String           @unique
+  status                    LeaseStatus      @default(ACTIVE)
   /// Snapshot of the residual amount due at end-of-term.
-  residualValue      Decimal  @db.Decimal(14, 2)
+  residualValue             Decimal          @db.Decimal(14, 2)
   /// Title holder — flips to CUSTOMER after BUYOUT_COMPLETED.
-  titleHolder        LeaseTitleHolder @default(COMPANY)
+  titleHolder               LeaseTitleHolder @default(COMPANY)
   /// True if the borrower is a company employee (employees can never be
   /// pulled out per FRD; the pull-out flow is non-employee only).
-  isEmployee         Boolean
+  isEmployee                Boolean
   /// Consecutive missed payments counter (reset on payment).
-  missedPaymentStreak Int     @default(0)
+  missedPaymentStreak       Int              @default(0)
   /// When the customer was last warned about an impending pull-out.
-  lastPullOutWarningAt DateTime?
+  lastPullOutWarningAt      DateTime?
   /// 60-day-before-end-of-term notice fired.
-  endOfTermNoticeSentAt DateTime?
+  endOfTermNoticeSentAt     DateTime?
   /// Last maintenance reminder fired (6-month cadence).
   lastMaintenanceReminderAt DateTime?
   /// Set when status -> BUYOUT_COMPLETED. FK to the buyout JE.
-  buyoutPaidAmount   Decimal? @db.Decimal(14, 2)
-  buyoutAt           DateTime?
-  buyoutById         String?
-  buyoutJournalEntryId String?
+  buyoutPaidAmount          Decimal?         @db.Decimal(14, 2)
+  buyoutAt                  DateTime?
+  buyoutById                String?
+  buyoutJournalEntryId      String?
   /// Set when status -> PULLED_OUT.
-  pulledOutAt        DateTime?
-  pulledOutById      String?
-  pullOutReason      String?  @db.VarChar(500)
+  pulledOutAt               DateTime?
+  pulledOutById             String?
+  pullOutReason             String?          @db.VarChar(500)
   /// Set when status -> RETURNED or EXTENDED.
-  closedAt           DateTime?
-  closedReason       String?  @db.VarChar(500)
+  closedAt                  DateTime?
+  closedReason              String?          @db.VarChar(500)
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   loan         LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  buyoutBy     User? @relation("LeaseBuyoutBy", fields: [buyoutById], references: [id])
-  pulledOutBy  User? @relation("LeasePulledOutBy", fields: [pulledOutById], references: [id])
-  journalEntry JournalEntry? @relation(fields: [buyoutJournalEntryId], references: [id])
+  buyoutBy     User?           @relation("LeaseBuyoutBy", fields: [buyoutById], references: [id])
+  pulledOutBy  User?           @relation("LeasePulledOutBy", fields: [pulledOutById], references: [id])
+  journalEntry JournalEntry?   @relation(fields: [buyoutJournalEntryId], references: [id])
 
   @@index([status])
 }

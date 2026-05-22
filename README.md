@@ -62,126 +62,72 @@ action, Sentry integration.
 
 ## Quickstart
 
-### One command — full stack + AI (recommended)
+Everything runs on the host directly — `tsx` for the API, Vite for the
+web app, Postgres as a local service. No Docker.
+
+### Prerequisites
+
+- **Node ≥ 20.11** and **pnpm ≥ 9** (see `engines` in `package.json`)
+- **Postgres ≥ 14** running locally on `localhost:5432`
+  - macOS: [Postgres.app](https://postgresapp.com) or `brew install postgresql@16`
+  - Windows: [installer from postgresql.org](https://www.postgresql.org/download/windows/)
+  - Linux: `sudo apt install postgresql` (or your distro's equivalent)
+
+### One-time setup
 
 ```bash
-pnpm start
+# 1. Create the database (any client; this is the psql one-liner)
+createdb -U postgres smart_loan
+# or, from inside psql:
+#   CREATE DATABASE smart_loan;
+
+# 2. Copy the env template + tweak DATABASE_URL if your Postgres user
+#    / password / port differ from the defaults
+cp .env.example .env
+
+# 3. Install workspace deps + generate the Prisma client + run migrations
+pnpm install
+pnpm db:migrate
+pnpm db:seed
 ```
 
-That's it. The bootstrap script handles everything:
-
-1. Copies `.env.example` → `.env` if missing
-2. Brings up **postgres + api + web + pgadmin + ollama** via Docker
-3. Waits for Postgres + API health (migrations apply automatically on api boot)
-4. Seeds the DB (idempotent — uses upsert; safe to re-run)
-5. Pulls the `phi3:mini` Ollama model (~2.3 GB, first run only)
-6. Wires `OLLAMA_URL` into `.env` and restarts the api so the assistant flips on
-7. Prints URLs + creds
-
-Every step is idempotent, so re-running `pnpm start` after code changes is the right move — it'll rebuild only what's changed and skip whatever's already done.
-
-| Command           | What it does                                                                         |
-| ----------------- | ------------------------------------------------------------------------------------ |
-| `pnpm start`      | Full stack + AI assistant (default). First run pulls the model.                      |
-| `pnpm start:lite` | Full stack only (skip the 2.3 GB Ollama download). Assistant stays mocked.           |
-| `pnpm start:fast` | Full stack + AI, **but** skip the docker image rebuild — fastest if nothing changed. |
-| `pnpm stop`       | Stop every container (postgres, api, web, pgadmin, ollama). Data preserved.          |
-
-Open:
-
-- **Web**: <http://localhost:5173>
-- **API**: <http://localhost:3001/docs> (Swagger)
-- **pgAdmin**: <http://localhost:5050> (`admin@loan.local` / `admin`)
-- **Ollama**: <http://localhost:11434> (`pnpm start` only)
-
-Sign in:
+The seed creates two demo users:
 
 | Email              | Password    | Role         |
 | ------------------ | ----------- | ------------ |
 | admin@loan.local   | P@ssw0rd123 | ADMIN        |
 | officer@loan.local | P@ssw0rd123 | LOAN_OFFICER |
 
----
-
-### Option A — dev workflow (hot reload for hacking)
-
-Database in Docker, api + web on the host so hot-reload works.
+### Running
 
 ```bash
-# 1. One-time env setup
-cp .env.example .env
-cp apps/api/.env.example apps/api/.env       # optional, falls back to root .env
-
-# 2. Bring up just postgres
-pnpm db:up
-
-# 3. Install + generate Prisma client + migrate + seed
-pnpm install
-pnpm db:migrate          # applies all migrations
-pnpm db:seed             # creates admin@loan.local / P@ssw0rd123 + demo data
-
-# 4. Run api + web together (hot reload on both)
-pnpm dev
+pnpm dev          # api + web in parallel, hot reload on both
+# or one side only:
+pnpm dev:api
+pnpm dev:web
 ```
 
 Open:
 
 - **Web**: <http://localhost:5173>
-- **API**: <http://localhost:3001> (Swagger at `/docs`)
+- **API**: <http://localhost:3001/docs> (Swagger)
 
-### Option B — full Docker stack
+### Optional — AI assistant via Ollama
 
-Everything containerized: postgres + api + web (nginx) + pgadmin.
-
-```bash
-cp .env.example .env
-# Edit JWT_SECRET — the default is fine for a single-machine demo, but
-# any deployment that talks to the open internet must override it.
-
-docker compose --profile full up -d --build
-```
-
-Open:
-
-- **Web**: <http://localhost:5173> (nginx, proxies `/api` to the api container)
-- **API**: <http://localhost:3001> (direct, `/docs` for Swagger)
-- **pgAdmin**: <http://localhost:5050> (`admin@loan.local` / `admin`)
-
-Migrations run automatically on every api container boot
-(`prisma migrate deploy`). To re-seed:
+The AI side-panel works without this; it just returns canned mock
+responses. To enable real LLM-backed answers:
 
 ```bash
-docker compose --profile full exec api node -e "import('@loan/db/src/seed.js')"
+# 1. Install Ollama for your platform: https://ollama.com
+# 2. Pull a model
+ollama pull phi3:mini
+# 3. Point the API at it
+echo 'OLLAMA_URL=http://localhost:11434' >> .env
+# 4. Restart the api (pnpm dev:api)
 ```
 
-Stop everything:
-
-```bash
-docker compose --profile full down              # keeps data
-docker compose --profile full down -v           # nukes db + uploads volumes
-```
-
-### Option C — full stack + AI assistant
-
-Adds a local Ollama service for the assistant features.
-
-```bash
-# Start everything including the optional `ai` profile
-docker compose --profile full --profile ai up -d --build
-
-# One-time: pull the model (~2.3 GB for phi3:mini)
-docker compose --profile ai exec ollama ollama pull phi3:mini
-
-# Tell the api to use it (only needed once; persists in your .env)
-echo 'OLLAMA_URL=http://ollama:11434' >> .env
-
-# Restart the api so it picks up the new env
-docker compose --profile full restart api
-```
-
-Now the AI assistant card on the loan detail page flips from
-"Mock · not ready" to "phi3:mini · ready". The whole app works
-without this — the assistant just returns canned responses.
+The assistant card on the loan detail page flips from "Mock · not
+ready" to "phi3:mini · ready" once the URL resolves.
 
 ---
 
@@ -189,17 +135,17 @@ without this — the assistant just returns canned responses.
 
 Everything is documented in `.env.example`. The essentials:
 
-| Variable         | Required?           | What it does                                                                            |
-| ---------------- | ------------------- | --------------------------------------------------------------------------------------- |
-| `DATABASE_URL`   | Yes                 | Postgres connection. Defaults to `postgres://loan:loan@localhost:5433/smart_loan`.      |
-| `JWT_SECRET`     | Yes                 | Signs JWTs. Must be 32+ chars; production refuses to boot with the default.             |
-| `WEB_ORIGIN`     | Yes                 | CORS allowlist. Set to your public web URL in prod.                                     |
-| `PUBLIC_API_URL` | Prod only           | Public URL the API advertises in payment webhooks + PDF document refs.                  |
-| `COMPANY_NAME`   | No                  | Display name in generated PDFs. Defaults to "SmartLoan".                                |
-| `TOTP_ISSUER`    | No                  | Issuer label in 2FA apps.                                                               |
-| `SENTRY_DSN`     | Recommended in prod | Empty disables error reporting.                                                         |
-| `UPLOADS_DIR`    | No                  | Where uploaded docs land. Defaults to `./uploads` (host) or `/app/uploads` (container). |
-| `SYSTEM_USER_ID` | Recommended         | UUID of a real "system" user for scheduled-job audit attribution.                       |
+| Variable         | Required?           | What it does                                                                       |
+| ---------------- | ------------------- | ---------------------------------------------------------------------------------- |
+| `DATABASE_URL`   | Yes                 | Postgres connection. Defaults to `postgres://loan:loan@localhost:5432/smart_loan`. |
+| `JWT_SECRET`     | Yes                 | Signs JWTs. Must be 32+ chars; production refuses to boot with the default.        |
+| `WEB_ORIGIN`     | Yes                 | CORS allowlist. Set to your public web URL in prod.                                |
+| `PUBLIC_API_URL` | Prod only           | Public URL the API advertises in payment webhooks + PDF document refs.             |
+| `COMPANY_NAME`   | No                  | Display name in generated PDFs. Defaults to "SmartLoan".                           |
+| `TOTP_ISSUER`    | No                  | Issuer label in 2FA apps.                                                          |
+| `SENTRY_DSN`     | Recommended in prod | Empty disables error reporting.                                                    |
+| `UPLOADS_DIR`    | No                  | Where uploaded docs land. Defaults to `./uploads` relative to cwd.                 |
+| `SYSTEM_USER_ID` | Recommended         | UUID of a real "system" user for scheduled-job audit attribution.                  |
 
 ### Optional provider switches (default all `MOCK`)
 
@@ -215,12 +161,11 @@ network.
 
 ### Optional AI assistant
 
-| Variable            | Default      | Notes                                                                                   |
-| ------------------- | ------------ | --------------------------------------------------------------------------------------- |
-| `OLLAMA_URL`        | empty (mock) | `http://ollama:11434` for docker-compose, `http://localhost:11434` for host-run Ollama. |
-| `OLLAMA_MODEL`      | `phi3:mini`  | The first model you pull. `llama3.1:8b` is smarter but ~4.7 GB and slower.              |
-| `OLLAMA_MAX_TOKENS` | `512`        | Soft cap on response length.                                                            |
-| `OLLAMA_PORT`       | `11434`      | Host port mapping for the ollama service.                                               |
+| Variable            | Default      | Notes                                                                      |
+| ------------------- | ------------ | -------------------------------------------------------------------------- |
+| `OLLAMA_URL`        | empty (mock) | Set to `http://localhost:11434` after installing Ollama on the host.       |
+| `OLLAMA_MODEL`      | `phi3:mini`  | The first model you pull. `llama3.1:8b` is smarter but ~4.7 GB and slower. |
+| `OLLAMA_MAX_TOKENS` | `512`        | Soft cap on response length.                                               |
 
 ### Optional face-match models
 
@@ -270,21 +215,17 @@ See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the request flow and
 
 ## Common scripts
 
-| Command                         | What it does                                                                  |
-| ------------------------------- | ----------------------------------------------------------------------------- |
-| `pnpm start`                    | Bring up the entire stack (postgres + api + web + pgadmin + ollama) and seed. |
-| `pnpm start:lite`               | Same, but skip the 2.3 GB AI model pull.                                      |
-| `pnpm start:fast`               | Same as `start` but reuse existing images (no rebuild).                       |
-| `pnpm stop`                     | Stop every container. Data preserved.                                         |
-| `pnpm dev`                      | Run `api` and `web` in parallel via Nx (hot-reload dev mode).                 |
-| `pnpm dev:api` / `pnpm dev:web` | Just one side.                                                                |
-| `pnpm db:up`                    | Bring up just the postgres container.                                         |
-| `pnpm db:migrate`               | Apply Prisma migrations to your local Postgres.                               |
-| `pnpm db:seed`                  | Re-seed the demo users + starter customer + default products.                 |
-| `pnpm db:studio`                | Open Prisma Studio for browsing the DB.                                       |
-| `pnpm typecheck`                | TypeScript across every package.                                              |
-| `pnpm build`                    | Production build of api + web.                                                |
-| `pnpm test`                     | Run unit tests (vitest).                                                      |
+| Command                         | What it does                                                  |
+| ------------------------------- | ------------------------------------------------------------- |
+| `pnpm dev`                      | Run `api` and `web` in parallel via Nx (hot-reload dev mode). |
+| `pnpm dev:api` / `pnpm dev:web` | Just one side.                                                |
+| `pnpm db:migrate`               | Apply Prisma migrations to your local Postgres.               |
+| `pnpm db:generate`              | Regenerate the Prisma client after a schema edit.             |
+| `pnpm db:seed`                  | Re-seed the demo users + starter customer + default products. |
+| `pnpm db:studio`                | Open Prisma Studio for browsing the DB.                       |
+| `pnpm typecheck`                | TypeScript across every package.                              |
+| `pnpm build`                    | Production build of api + web.                                |
+| `pnpm test`                     | Run unit tests (vitest).                                      |
 
 After schema changes, regenerate the Prisma client:
 
@@ -337,17 +278,14 @@ above.
 empty. Either set it to a reachable Ollama server, or accept the mock
 provider (everything else still works).
 
-**Container won't come up: `Network smart-loan_loan-net Resource is
-still in use`** — services under the `full` profile are still running.
-Bring them down with the profile flag:
+**`ECONNREFUSED` against Postgres on `pnpm db:migrate`** — Postgres
+isn't running, or it's listening on a port `DATABASE_URL` doesn't
+expect. Check the service is up (`pg_isready` / `brew services list` /
+your OS service manager) and that the port matches.
 
-```bash
-docker compose --profile full down
-```
-
-**`docker compose down` removed the DB but left api/web/pgadmin** —
-those services are under the `full` profile. Use the profile flag (see
-above) or set `COMPOSE_PROFILES=full` in your shell.
+**`database "smart_loan" does not exist`** — create it once:
+`createdb -U postgres smart_loan` (or `CREATE DATABASE smart_loan` in
+psql).
 
 ---
 

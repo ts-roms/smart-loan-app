@@ -57,11 +57,11 @@ class MockProvider implements LLMProvider {
   async complete(): Promise<LLMCompletionResult> {
     return {
       text:
-        "⚠️ AI assistant is not configured. To enable real responses, start the Ollama service:\n\n" +
-        "  docker compose --profile full --profile ai up -d --build\n\n" +
+        "⚠️ AI assistant is not configured. To enable real responses, install Ollama on the host:\n\n" +
+        "  https://ollama.com\n\n" +
         "Then pull a model (one-time):\n\n" +
-        "  docker compose --profile ai exec ollama ollama pull phi3:mini\n\n" +
-        "Set OLLAMA_URL=http://ollama:11434 in the api environment and restart the api container.",
+        "  ollama pull phi3:mini\n\n" +
+        "Set OLLAMA_URL=http://localhost:11434 in the api environment and restart the api.",
       tokenCount: null,
       model: "mock",
       isMock: true,

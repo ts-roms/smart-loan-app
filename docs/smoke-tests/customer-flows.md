@@ -12,39 +12,20 @@ not topology.
 
 ## How to start
 
-### Option A: one-shot Docker (recommended)
+Postgres runs natively on the host (see README for one-time setup).
+With the database up and `.env` configured:
 
 ```bash
-pnpm start            # full stack + Ollama AI assistant
-# or
-pnpm start:lite       # full stack, skip the 2.3 GB model pull
-# or
-pnpm start:fast       # skip `docker compose --build` (faster on reruns)
+pnpm db:generate
+pnpm db:migrate                   # or `prisma migrate reset` to wipe + reseed
+pnpm db:seed                      # seeds admin / officer / accountant users
+pnpm dev                          # api + web in parallel, hot reload
 ```
-
-`scripts/start-all.mjs` is idempotent — safe to re-run. It will:
-
-1. Copy `.env.example` → `.env` if missing.
-2. `docker compose --profile full up -d --build` (db + api + web + pgadmin).
-3. Wait for the API healthcheck to go green.
-4. Seed the DB (Prisma's seed is upsert-based — re-runs are safe).
-5. If `--lite` not set, also start Ollama and pull the model.
 
 Then visit:
 
-- http://localhost:5173 — web app (vite build via nginx)
+- http://localhost:5173 — web app (Vite dev server)
 - http://localhost:3001/docs — Swagger UI
-- http://localhost:5050 — pgAdmin (admin@loan.local / admin)
-
-### Option B: native dev mode (faster reloads)
-
-```bash
-docker compose up -d postgres     # just the DB
-pnpm db:generate
-pnpm db:migrate deploy            # or pnpm db:reset for wipe + reseed
-pnpm db:seed                      # seeds the admin user
-pnpm dev                          # api + web on the host with hot reload
-```
 
 ### Seed accounts
 

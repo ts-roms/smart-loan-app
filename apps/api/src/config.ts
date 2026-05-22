@@ -94,9 +94,9 @@ export const config = {
   // ── Local LLM (Ollama) ─────────────────────────────────────────────
   /**
    * When unset, the assistant routes return canned "configure Ollama"
-   * responses instead of failing. Set to `http://ollama:11434` (docker
-   * compose service name) in full-stack deployments or `http://localhost:11434`
-   * for a host-running Ollama.
+   * responses instead of failing. Set to `http://localhost:11434`
+   * once Ollama is installed on the host (https://ollama.com), or to
+   * the URL of a remote Ollama deployment.
    */
   ollamaUrl: str("OLLAMA_URL", ""),
   ollamaModel: str("OLLAMA_MODEL", "phi3:mini"),
@@ -120,7 +120,7 @@ export function validateConfig(log?: {
   // The literal dev-only secret string is a hard-fail in prod — that's the
   // file-checked-in placeholder and is a real security risk. Short secrets
   // (< 32 chars) are also a hard-fail because they're easy to brute-force.
-  // The docker-compose default ("change-me-in-prod-please-32-chars-minimum")
+  // The .env.example default ("change-me-in-prod-please-32-chars-minimum")
   // is 41 chars and trips neither check; we expect deployers to actually
   // override it via env, but we don't refuse to boot if they don't.
   if (
@@ -134,9 +134,8 @@ export function validateConfig(log?: {
     });
   }
 
-  // The default loan:loan DB creds are baked into docker-compose for dev
-  // convenience — full-stack `docker compose up` would refuse to start
-  // otherwise. We warn even in production but don't hard-fail; deployers
+  // The default loan:loan DB creds are baked into .env.example for dev
+  // convenience. We warn even in production but don't hard-fail; deployers
   // who care will see the warning and rotate the creds.
   if (config.databaseUrl.includes("loan:loan@")) {
     issues.push({

@@ -509,10 +509,9 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "  • Explain decision — plain-language summary of why the engine reached its verdict.\n" +
       "  • Draft demand letter — first-pass body for FIRST / FINAL / Attorney variants.\n" +
       "  • Summarize account — borrower history rollup (loan count, payment behavior, open balance, verdict).\n\n" +
-      'The assistant is an opt-in feature. With no Ollama service running, the panel shows "Mock · not ready" and the buttons return canned configure-Ollama hints. To enable real responses:\n\n' +
-      "  docker compose --profile full --profile ai up -d --build\n" +
-      "  docker compose --profile ai exec ollama ollama pull phi3:mini\n" +
-      "  export OLLAMA_URL=http://ollama:11434  # then restart api\n\n" +
+      'The assistant is an opt-in feature. With no Ollama service running, the panel shows "Mock · not ready" and the buttons return canned configure-Ollama hints. To enable real responses, install Ollama on the host (https://ollama.com), then:\n\n' +
+      "  ollama pull phi3:mini\n" +
+      "  export OLLAMA_URL=http://localhost:11434  # then restart api\n\n" +
       'Important: the LLM is a drafting assistant, not a decision-maker. Every response carries a "Review before using" disclaimer. The officer always edits the output before sending or saving. Every assistant call is audit-logged (action + model + token count), but the prompt + response bodies are intentionally NOT logged (PII size).',
   },
   {
@@ -644,11 +643,11 @@ export const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "Does the AI assistant send our customer data to OpenAI?",
-    a: 'No. Never. The assistant runs entirely on infrastructure you control — Ollama in a docker container. No cloud AI service is contacted. With OLLAMA_URL unset, the assistant returns a "configure Ollama" mock response and writes nothing externally either. Every assistant call is audit-logged with the model id and token count (but NOT the prompt or response body — those are PII-adjacent).',
+    a: 'No. Never. The assistant runs entirely on infrastructure you control — Ollama installed on the host (or a private Ollama deployment you point at). No cloud AI service is contacted. With OLLAMA_URL unset, the assistant returns a "configure Ollama" mock response and writes nothing externally either. Every assistant call is audit-logged with the model id and token count (but NOT the prompt or response body — those are PII-adjacent).',
   },
   {
     q: "How do I turn on the AI assistant?",
-    a: 'Two steps. First, bring up the optional ai-profile container: `docker compose --profile full --profile ai up -d --build`. Then pull a model (one-time, ~2.3 GB): `docker compose --profile ai exec ollama ollama pull phi3:mini`. Set OLLAMA_URL=http://ollama:11434 on the api container and restart it. The assistant panel\'s status badge flips from "Mock · not ready" to "phi3:mini · ready".',
+    a: 'Two steps. First, install Ollama on the host: https://ollama.com. Then pull a model (one-time, ~2.3 GB): `ollama pull phi3:mini`. Set OLLAMA_URL=http://localhost:11434 in the api environment and restart the api. The assistant panel\'s status badge flips from "Mock · not ready" to "phi3:mini · ready".',
   },
   {
     q: "The face-match score is low — does that mean fraud?",

@@ -20,7 +20,7 @@ For per-package contracts see **[PACKAGES.md](./PACKAGES.md)**.
         │                                    ▼
 ┌─────────────────┐                  ┌──────────────────┐
 │  @loan/api-     │                  │  PostgreSQL 16   │
-│  client (hooks) │                  │  (docker compose)│
+│  client (hooks) │                  │  (local install) │
 └─────────────────┘                  └──────────────────┘
 ```
 
@@ -52,7 +52,7 @@ because the catalog only changes on deploy.
 ### 2. Submitting answers
 
 ```ts
-useSubmitSurvey().mutateAsync({ customerId, answers })
+useSubmitSurvey().mutateAsync({ customerId, answers });
 ```
 
 Hits `POST /scoring/survey/submit`. The route handler:
@@ -71,7 +71,7 @@ Hits `POST /scoring/survey/submit`. The route handler:
 For each factor:
 
 ```ts
-points = clamp(rawPoints(answer), 0, factor.maxPoints) * factor.weight
+points = clamp(rawPoints(answer), 0, factor.maxPoints) * factor.weight;
 ```
 
 Survey factors max out at **100 weighted points**. Behavioral factors
