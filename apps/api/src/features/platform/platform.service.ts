@@ -1,5 +1,10 @@
 import { hashPassword, verifyPassword } from "@loan/auth";
-import type { PrismaClient } from "@loan/db";
+import {
+  createTenantSchema,
+  migrateTenantSchema,
+  seedTenant,
+  type PrismaClient,
+} from "@loan/db";
 import {
   defaultFeaturesForTier,
   loadPrivateKeyPem,
@@ -59,6 +64,21 @@ export type ProvisionResult =
   | {
       ok: true;
       tenant: { id: string; slug: string; name: string; status: string };
+      /**
+       * Plaintext bootstrap admin password. Present ONLY when
+       * multi-tenant mode actually provisioned a schema synchronously
+       * AND a fresh admin user was created. Treated as sensitive —
+       * the UI shows it once with a copy button and a warning that
+       * it won't be retrievable later.
+       *
+       * Null when:
+       *   - Single-tenant mode (no schema provisioning happened)
+       *   - Multi-tenant mode but the provisioning runs in the
+       *     background (status starts as PROVISIONING and the
+       *     credentials are surfaced via the separate retry endpoint)
+       */
+      bootstrapPassword?: string | null;
+      bootstrapAdminEmail?: string | null;
     }
   | { ok: false; kind: "SlugTaken" | "RepoError"; message: string };
 
@@ -77,6 +97,16 @@ export type IssueLicenseResult =
 export type RevokeLicenseResult =
   | { ok: true; jti: string; clearedSnapshot: boolean }
   | { ok: false; kind: "NotFound" | "AlreadyRevoked"; message: string };
+
+/**
+ * Whether this installation is configured to actually provision per-
+ * tenant schemas on provision-tenant calls. Same source of truth the
+ * multi-tenant-plugin uses for `resolveTenant`. Reading via env keeps
+ * the service free of a config dependency.
+ */
+function isMultiTenantMode(): boolean {
+  return (process.env.MULTI_TENANT ?? "").toLowerCase() === "true";
+}
 
 export class PlatformService {
   constructor(
@@ -181,35 +211,239 @@ export class PlatformService {
         message: `A tenant with slug "${args.input.slug}" already exists.`,
       };
     }
+
+    let row: { id: string; slug: string; name: string; status: string };
     try {
-      const row = await this.prisma.tenant.create({
+      const created = await this.prisma.tenant.create({
         data: {
           slug: args.input.slug,
           name: args.input.name,
-          // Status stays PROVISIONING. Phase 2 provisioning (schema
-          // create + migrations + seed) flips this to ACTIVE; until
-          // then, a new row is a placeholder the platform console can
-          // issue a license against, but no tenant API actually runs.
           status: "PROVISIONING",
         },
       });
+      row = {
+        id: created.id,
+        slug: created.slug,
+        name: created.name,
+        status: created.status,
+      };
       await this.audit({
         action: "PLATFORM_TENANT_PROVISION",
         actor: args.actor,
         tenantSlug: row.slug,
         payload: { name: row.name },
       });
-      return {
-        ok: true,
-        tenant: {
-          id: row.id,
-          slug: row.slug,
-          name: row.name,
-          status: row.status,
-        },
-      };
     } catch (err) {
       return { ok: false, kind: "RepoError", message: (err as Error).message };
+    }
+
+    // In single-tenant mode (default during the Phase 2 conversion),
+    // provisioning stops here — the row is a catalog entry only, no
+    // schema gets created. Useful for vendor staff dry-running the UI
+    // before flipping MULTI_TENANT on for real.
+    if (!isMultiTenantMode()) {
+      return { ok: true, tenant: row };
+    }
+
+    // Multi-tenant mode: actually create the schema + run migrations +
+    // seed canonical content. Runs synchronously so the HTTP response
+    // can carry the bootstrap admin credentials.
+    //
+    // Latency budget: ~10–15s end-to-end for a fresh tenant on a warm
+    // host. The frontend's TanStack Query default timeout (no timeout)
+    // handles this fine; we just need to set a generous one on the
+    // platform console's fetch wrapper if we ever introduce one.
+    const adminEmail = args.input.adminEmail ?? `admin@${row.slug}.local`;
+    const adminName = args.input.adminName ?? "Cooperative Admin";
+
+    const result = await this.runProvisioning({
+      slug: row.slug,
+      adminEmail,
+      adminName,
+      actor: args.actor,
+    });
+
+    if (!result.ok) {
+      // Tenant row stays in PROVISIONING with provisioningError set.
+      // The caller (controller) still returns 201 — provisioning is
+      // recoverable via retry; only the row creation itself failing
+      // would be a hard error.
+      return {
+        ok: true,
+        tenant: { ...row, status: "PROVISIONING" },
+        bootstrapPassword: null,
+        bootstrapAdminEmail: adminEmail,
+      };
+    }
+
+    return {
+      ok: true,
+      tenant: { ...row, status: "ACTIVE" },
+      bootstrapPassword: result.password,
+      bootstrapAdminEmail: adminEmail,
+    };
+  }
+
+  /**
+   * Retry the schema+migrate+seed sequence for a tenant that's stuck
+   * in PROVISIONING. Same code path as the initial provision; safe to
+   * call repeatedly because every step in the chain is idempotent
+   * (schema CREATE IF NOT EXISTS, migrate deploy skips applied
+   * migrations, seedTenant skips work if rows already exist).
+   *
+   * Only usable when MULTI_TENANT=true.
+   */
+  async retryProvisioning(args: {
+    slug: string;
+    adminEmail?: string;
+    adminName?: string;
+    actor: { id: string; email: string };
+  }): Promise<
+    | {
+        ok: true;
+        status: "ACTIVE";
+        bootstrapPassword: string | null;
+        bootstrapAdminEmail: string;
+      }
+    | {
+        ok: false;
+        kind: "NotFound" | "NotInProvisioning" | "ModeDisabled";
+        message: string;
+      }
+    | { ok: false; kind: "ProvisioningFailed"; message: string }
+  > {
+    if (!isMultiTenantMode()) {
+      return {
+        ok: false,
+        kind: "ModeDisabled",
+        message: "MULTI_TENANT is not enabled on this installation.",
+      };
+    }
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: args.slug },
+    });
+    if (!tenant) {
+      return {
+        ok: false,
+        kind: "NotFound",
+        message: `Tenant "${args.slug}" not found.`,
+      };
+    }
+    if (tenant.status !== "PROVISIONING") {
+      return {
+        ok: false,
+        kind: "NotInProvisioning",
+        message: `Tenant is in status ${tenant.status}; retry only applies to PROVISIONING.`,
+      };
+    }
+    const adminEmail = args.adminEmail ?? `admin@${tenant.slug}.local`;
+    const adminName = args.adminName ?? "Cooperative Admin";
+
+    const result = await this.runProvisioning({
+      slug: tenant.slug,
+      adminEmail,
+      adminName,
+      actor: args.actor,
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "ProvisioningFailed",
+        message: result.error,
+      };
+    }
+    return {
+      ok: true,
+      status: "ACTIVE",
+      bootstrapPassword: result.password,
+      bootstrapAdminEmail: adminEmail,
+    };
+  }
+
+  /**
+   * Core provisioning sequence. Extracted so both `provisionTenant`
+   * and `retryProvisioning` can share it. Updates Tenant.status +
+   * .provisioningError as side effects; audits on completion.
+   */
+  private async runProvisioning(args: {
+    slug: string;
+    adminEmail: string;
+    adminName: string;
+    actor: { id: string; email: string };
+  }): Promise<
+    { ok: true; password: string | null } | { ok: false; error: string }
+  > {
+    const startedAt = Date.now();
+    try {
+      // 1. CREATE SCHEMA IF NOT EXISTS — idempotent
+      await createTenantSchema(args.slug, this.prisma);
+
+      // 2. Run prisma migrate deploy against tenant_<slug>. Streams
+      //    stdout/stderr to the request's logger so operators can
+      //    see migration progress in the API logs.
+      await migrateTenantSchema(args.slug, {
+        logLine: (line, stream) => {
+          if (stream === "stderr") {
+            this.log.warn({ slug: args.slug }, `[migrate] ${line}`);
+          } else {
+            this.log.info({ slug: args.slug }, `[migrate] ${line}`);
+          }
+        },
+      });
+
+      // 3. Seed canonical content via a tenant-scoped client. The
+      //    cache lazily acquires a connection bound to tenant_<slug>
+      //    — by this point, the schema exists and has all tables.
+      const tenantPrisma = this.app.tenantPrisma.get(args.slug);
+      const seedResult = await seedTenant({
+        prisma: tenantPrisma,
+        adminEmail: args.adminEmail,
+        adminName: args.adminName,
+      });
+
+      // 4. Flip status to ACTIVE + clear any prior error.
+      await this.prisma.tenant.update({
+        where: { slug: args.slug },
+        data: {
+          status: "ACTIVE",
+          provisioningError: null,
+        },
+      });
+
+      const elapsedMs = Date.now() - startedAt;
+      await this.audit({
+        action: "PLATFORM_TENANT_PROVISION_COMPLETE",
+        actor: args.actor,
+        tenantSlug: args.slug,
+        payload: {
+          elapsedMs,
+          summary: seedResult.summary,
+          adminEmail: args.adminEmail,
+        },
+      });
+      this.log.info(
+        { slug: args.slug, elapsedMs },
+        "Tenant provisioning completed",
+      );
+
+      return { ok: true, password: seedResult.generatedPassword };
+    } catch (err) {
+      const message = (err as Error).message;
+      // Persist the error so the platform console can show it.
+      await this.prisma.tenant
+        .update({
+          where: { slug: args.slug },
+          data: { provisioningError: message },
+        })
+        .catch(() => {});
+      await this.audit({
+        action: "PLATFORM_TENANT_PROVISION_FAILED",
+        actor: args.actor,
+        tenantSlug: args.slug,
+        payload: { error: message },
+      });
+      this.log.error({ slug: args.slug, err }, "Tenant provisioning failed");
+      return { ok: false, error: message };
     }
   }
 

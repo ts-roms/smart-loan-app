@@ -68,7 +68,50 @@ export class PlatformController {
         message: result.message,
       });
     }
-    return reply.code(201).send(result.tenant);
+    // Bundle the bootstrap credentials with the tenant payload when
+    // multi-tenant provisioning produced fresh ones. The platform UI
+    // surfaces them once with a copy button — they aren't recoverable
+    // later (the password's plaintext form never gets persisted).
+    return reply.code(201).send({
+      ...result.tenant,
+      bootstrapPassword: result.bootstrapPassword ?? null,
+      bootstrapAdminEmail: result.bootstrapAdminEmail ?? null,
+    });
+  };
+
+  retryProvisioning = async (
+    req: FastifyRequest<{
+      Params: { slug: string };
+      Body: { adminEmail?: string; adminName?: string };
+    }>,
+    reply: FastifyReply,
+  ) => {
+    const body = req.body ?? {};
+    const result = await this.service.retryProvisioning({
+      slug: req.params.slug,
+      adminEmail: body.adminEmail,
+      adminName: body.adminName,
+      actor: platformActor(req),
+    });
+    if (!result.ok) {
+      const code =
+        result.kind === "NotFound"
+          ? 404
+          : result.kind === "ModeDisabled"
+            ? 400
+            : result.kind === "NotInProvisioning"
+              ? 409
+              : 500;
+      return reply.code(code).send({
+        error: result.kind,
+        message: result.message,
+      });
+    }
+    return {
+      status: result.status,
+      bootstrapPassword: result.bootstrapPassword,
+      bootstrapAdminEmail: result.bootstrapAdminEmail,
+    };
   };
 
   suspendTenant = async (

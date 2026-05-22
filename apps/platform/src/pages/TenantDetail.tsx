@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { btnSecondary } from "../App";
+import { btnPrimary, btnSecondary } from "../App";
 import { makeApi, useAuth } from "../AuthProvider";
 
 interface Tenant {
@@ -12,6 +13,7 @@ interface Tenant {
   createdAt: string;
   updatedAt: string;
   lastSeenAt: string | null;
+  provisioningError?: string | null;
   licenseSnapshot: {
     jti?: string;
     tier?: string;
@@ -19,6 +21,12 @@ interface Tenant {
     features?: string[];
     seats?: number;
   } | null;
+}
+
+interface RetryProvisioningResponse {
+  status: "ACTIVE";
+  bootstrapPassword: string | null;
+  bootstrapAdminEmail: string;
 }
 
 interface IssuedLicense {
@@ -79,6 +87,21 @@ export function TenantDetail() {
     },
   });
 
+  const [retryResult, setRetryResult] =
+    useState<RetryProvisioningResponse | null>(null);
+  const retry = useMutation({
+    mutationFn: () =>
+      api<RetryProvisioningResponse>(
+        `/platform/tenants/${slug}/retry-provisioning`,
+        { method: "POST", body: JSON.stringify({}) },
+      ),
+    onSuccess: (res) => {
+      setRetryResult(res);
+      qc.invalidateQueries({ queryKey: ["platform", "tenant", slug] });
+      qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
+    },
+  });
+
   if (isLoading) return <p style={{ color: "#94a3b8" }}>Loading…</p>;
   if (!data) return <p style={{ color: "#fca5a5" }}>Tenant not found.</p>;
 
@@ -91,6 +114,17 @@ export function TenantDetail() {
       <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 24 }}>
         <code>{data.slug}</code> · {data.status}
       </div>
+
+      {data.status === "PROVISIONING" && (
+        <ProvisioningSection
+          tenant={data}
+          retryResult={retryResult}
+          onRetry={() => retry.mutate()}
+          retrying={retry.isPending}
+          retryError={retry.error as Error | null}
+          canRetry={isAdmin}
+        />
+      )}
 
       <section style={card}>
         <h2 style={h2}>License snapshot</h2>
@@ -264,6 +298,177 @@ export function TenantDetail() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function ProvisioningSection({
+  tenant,
+  retryResult,
+  onRetry,
+  retrying,
+  retryError,
+  canRetry,
+}: {
+  tenant: Tenant;
+  retryResult: RetryProvisioningResponse | null;
+  onRetry: () => void;
+  retrying: boolean;
+  retryError: Error | null;
+  canRetry: boolean;
+}) {
+  const failed = Boolean(tenant.provisioningError);
+  const bg = failed ? "rgba(239,68,68,0.08)" : "rgba(245,158,11,0.08)";
+  const border = failed
+    ? "1px solid rgba(239,68,68,0.3)"
+    : "1px solid rgba(245,158,11,0.3)";
+
+  return (
+    <section
+      style={{
+        ...card,
+        background: bg,
+        border,
+      }}
+    >
+      <h2 style={h2}>
+        {failed ? "Provisioning failed" : "Provisioning in progress"}
+      </h2>
+      {!failed && (
+        <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 12px" }}>
+          The tenant schema is being created and seeded. If you just clicked
+          "Provision", this page refreshes automatically every few seconds.
+          Expected duration: ~10 seconds.
+        </p>
+      )}
+      {failed && (
+        <>
+          <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 8px" }}>
+            The last provisioning attempt couldn't finish. The recorded error:
+          </p>
+          <pre
+            style={{
+              padding: 12,
+              background: "#0a0f1e",
+              border: "1px solid #1e293b",
+              borderRadius: 4,
+              fontSize: 12,
+              color: "#fca5a5",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              margin: "0 0 12px",
+            }}
+          >
+            {tenant.provisioningError}
+          </pre>
+          <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 12px" }}>
+            Retry is safe — every step (schema create, migrations, seed) is
+            idempotent. If you keep hitting the same error, fix the underlying
+            cause first (DATABASE_URL reachable, migrations folder intact, disk
+            space) before retrying.
+          </p>
+        </>
+      )}
+
+      {retryResult && <RetrySuccessBanner result={retryResult} />}
+
+      {retryError && (
+        <div
+          style={{
+            padding: 10,
+            background: "rgba(239,68,68,0.1)",
+            border: "1px solid rgba(239,68,68,0.3)",
+            borderRadius: 4,
+            fontSize: 13,
+            color: "#fca5a5",
+            marginBottom: 12,
+          }}
+        >
+          {retryError.message}
+        </div>
+      )}
+
+      {canRetry && failed && !retryResult && (
+        <button
+          onClick={onRetry}
+          disabled={retrying}
+          style={{
+            ...btnPrimary,
+            background: "#dc2626",
+          }}
+        >
+          {retrying ? "Retrying…" : "Retry provisioning"}
+        </button>
+      )}
+    </section>
+  );
+}
+
+function RetrySuccessBanner({ result }: { result: RetryProvisioningResponse }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (!result.bootstrapPassword) return;
+    try {
+      await navigator.clipboard.writeText(result.bootstrapPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* manual copy fallback */
+    }
+  };
+  return (
+    <div
+      style={{
+        padding: 16,
+        background: "rgba(16,185,129,0.1)",
+        border: "1px solid rgba(16,185,129,0.3)",
+        borderRadius: 8,
+        marginBottom: 12,
+      }}
+    >
+      <strong style={{ color: "#34d399" }}>Provisioning complete.</strong>
+      <p style={{ fontSize: 13, color: "#94a3b8", margin: "4px 0 12px" }}>
+        Status is now ACTIVE. Refresh to see the rest of the tenant page.
+      </p>
+      {result.bootstrapPassword && (
+        <div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
+            Admin email
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              fontFamily: "monospace",
+              marginBottom: 12,
+            }}
+          >
+            {result.bootstrapAdminEmail}
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
+            Initial password (shown once)
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div
+              style={{
+                flex: 1,
+                padding: "8px 12px",
+                background: "#0a0f1e",
+                border: "1px solid #1e293b",
+                borderRadius: 4,
+                fontSize: 13,
+                fontFamily: "monospace",
+                color: "#fbbf24",
+                userSelect: "all",
+              }}
+            >
+              {result.bootstrapPassword}
+            </div>
+            <button onClick={copy} style={btnPrimary}>
+              {copied ? "Copied!" : "Copy"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

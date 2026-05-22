@@ -2409,6 +2409,12 @@ model Tenant {
   /// When the tenant was last seen calling back to the platform (license
   /// check-in, telemetry ping). Null until the first contact.
   lastSeenAt DateTime?
+  /// Captures the most recent provisioning failure. Set when
+  /// background provisioning throws; cleared when provisioning
+  /// succeeds (status flips to ACTIVE). Surfaced on the platform
+  /// console's tenant detail page so vendor staff can see what
+  /// went wrong without trawling logs.
+  provisioningError String? @db.Text
 
   @@index([status])
   @@index([lastSeenAt])

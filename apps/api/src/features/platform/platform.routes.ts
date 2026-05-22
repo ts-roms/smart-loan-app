@@ -10,6 +10,7 @@
  *   POST   /platform/tenants/:slug/suspend  PLATFORM_ADMIN
  *   POST   /platform/tenants/:slug/restore  PLATFORM_ADMIN
  *   POST   /platform/tenants/:slug/archive  PLATFORM_ADMIN
+ *   POST   /platform/tenants/:slug/retry-provisioning  PLATFORM_ADMIN
  *
  *   POST   /platform/licenses          PLATFORM_SALES+ (issue)
  *   GET    /platform/tenants/:slug/licenses  PLATFORM_SALES+ (history)
@@ -126,6 +127,14 @@ export async function platformRoutes(app: FastifyInstance) {
       "/tenants/:slug/archive",
       { preHandler: requirePlatformRole("PLATFORM_ADMIN") },
       ctrl.archiveTenant,
+    );
+    scoped.post<{
+      Params: { slug: string };
+      Body: { adminEmail?: string; adminName?: string };
+    }>(
+      "/tenants/:slug/retry-provisioning",
+      { preHandler: requirePlatformRole("PLATFORM_ADMIN") },
+      ctrl.retryProvisioning,
     );
 
     // ─── licenses ────────────────────────────────────────────────────

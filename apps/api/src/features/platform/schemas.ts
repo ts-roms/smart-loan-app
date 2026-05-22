@@ -26,6 +26,15 @@ export const tenantSlugSchema = z
 export const provisionTenantSchema = z.object({
   slug: tenantSlugSchema,
   name: z.string().min(1).max(200),
+  /**
+   * Email for the bootstrap admin user that gets seeded into the new
+   * tenant. Defaults to `admin@<slug>.local` — a reserved TLD, so
+   * mail won't accidentally route anywhere. The cooperative admin
+   * changes this on first login.
+   */
+  adminEmail: z.string().email().max(180).optional(),
+  /** Display name for the bootstrap admin. Defaults to "Cooperative Admin". */
+  adminName: z.string().min(1).max(120).optional(),
 });
 export type ProvisionTenantInput = z.infer<typeof provisionTenantSchema>;
 

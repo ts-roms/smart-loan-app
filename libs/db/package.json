@@ -16,7 +16,8 @@
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "prisma:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
-    "prisma:studio": "dotenv -e ../../.env -- prisma studio"
+    "prisma:studio": "dotenv -e ../../.env -- prisma studio",
+    "migrate-tenants": "dotenv -e ../../.env -- tsx scripts/migrate-tenants.mjs"
   },
   "dependencies": {
     "@loan/accounting": "workspace:*",

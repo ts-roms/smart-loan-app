@@ -99,6 +99,20 @@ export {
   type MultiTenantPluginOptions,
 } from "./multi-tenant-plugin";
 export {
+  createTenantSchema,
+  dropTenantSchema,
+  migrateTenantSchema,
+  tenantSchemaName,
+  tenantSchemaExists,
+  tenantDatabaseUrl,
+  type MigrateOptions,
+} from "./lib/multi-tenant-migrate";
+export {
+  seedTenant,
+  type SeedTenantArgs,
+  type SeedTenantResult,
+} from "./lib/seed-tenant";
+export {
   isUuid,
   idOrNumberWhere,
   nextCustomerNumber,
