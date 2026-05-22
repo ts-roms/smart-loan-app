@@ -1458,6 +1458,28 @@ model Role {
 
   permissions RolePermission[]
   users       UserRoleAssignment[]
+
+  /// Composition / inheritance. A role can declare zero or more
+  /// "parent" roles whose permissions are unioned into its effective
+  /// set at resolve time. Cycles are rejected by the write path; the
+  /// resolver still cycle-guards with a visited set as belt-and-braces.
+  parents     RoleInheritance[] @relation("ChildToParent")
+  children    RoleInheritance[] @relation("ParentToChild")
+}
+
+/// Join table for the Role ⇆ Role self-many-to-many inheritance graph.
+/// `child` inherits from `parent` — picking up parent's permission set.
+model RoleInheritance {
+  childId  String
+  parentId String
+
+  child  Role @relation("ChildToParent", fields: [childId], references: [id], onDelete: Cascade)
+  parent Role @relation("ParentToChild", fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@id([childId, parentId])
+  // Reverse-lookup index for "who inherits from me?" queries (used
+  // by the cycle-detection check at write time).
+  @@index([parentId])
 }
 
 model RolePermission {

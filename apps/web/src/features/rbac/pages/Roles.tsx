@@ -198,12 +198,18 @@ function RoleDialog({
   const create = useCreateRole();
   const update = useUpdateRole();
   const impactCheck = useRoleEditImpact();
+  const allRoles = useRoles();
   const toast = useToast();
   const [key, setKey] = useState(role?.key ?? "");
   const [name, setName] = useState(role?.name ?? "");
   const [description, setDescription] = useState(role?.description ?? "");
   const [selected, setSelected] = useState<Set<string>>(
     new Set(role?.permissions.map((rp) => rp.permission.key) ?? []),
+  );
+  // Inheritance: keys of roles whose perms this role unions in at
+  // resolve time. Excludes the role itself (server filters too).
+  const [parents, setParents] = useState<Set<string>>(
+    new Set(role?.parents?.map((p) => p.parent.key) ?? []),
   );
   // When the impact check finds at-risk users, stage the impact here
   // and freeze the dialog while a confirmation modal asks the admin
@@ -253,6 +259,7 @@ function RoleDialog({
           name,
           description: description || undefined,
           permissions: [...selected],
+          parents: [...parents],
         });
         toast.success("Role saved");
       } else {
@@ -261,6 +268,7 @@ function RoleDialog({
           name,
           description: description || undefined,
           permissions: [...selected],
+          parents: [...parents],
         });
         toast.success(`Role ${key} created`);
       }
@@ -334,6 +342,58 @@ function RoleDialog({
               onChange={(e) => setDescription(e.target.value)}
             />
           </Field>
+
+          <div className="rounded-md border border-white/10">
+            <div className="px-3 py-2 text-xs uppercase tracking-wider text-white/45 border-b border-white/10 flex items-center justify-between">
+              <span>Inherits from ({parents.size})</span>
+              {parents.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setParents(new Set())}
+                  className="text-sky-300 hover:underline normal-case tracking-normal"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="p-2 max-h-40 overflow-y-auto grid grid-cols-2 gap-x-3 gap-y-1">
+              {(allRoles.data ?? [])
+                // A role can't inherit from itself. The server enforces
+                // this too, but filtering client-side keeps the option
+                // out of the UI entirely.
+                .filter((r) => r.key !== role?.key)
+                .map((r) => (
+                  <label
+                    key={r.id}
+                    className="flex items-center gap-2 text-xs cursor-pointer"
+                    title={r.description ?? undefined}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={parents.has(r.key)}
+                      onChange={() => {
+                        const next = new Set(parents);
+                        if (next.has(r.key)) next.delete(r.key);
+                        else next.add(r.key);
+                        setParents(next);
+                      }}
+                    />
+                    <span className="font-mono text-white/70">{r.key}</span>
+                    <span className="text-white/45">{r.name}</span>
+                  </label>
+                ))}
+              {(allRoles.data ?? []).length === 0 && (
+                <span className="text-xs text-white/45">
+                  No other roles yet.
+                </span>
+              )}
+            </div>
+            <div className="px-3 py-1.5 text-[10px] text-white/45 border-t border-white/10">
+              At resolve time, this role's effective permission set is the union
+              of its own permissions and every parent's (recursively). Cycles
+              are rejected on save.
+            </div>
+          </div>
 
           <div className="rounded-md border border-white/10">
             <div className="px-3 py-2 text-xs uppercase tracking-wider text-white/45 border-b border-white/10 flex items-center justify-between">

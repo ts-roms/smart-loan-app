@@ -51,7 +51,7 @@ interface UserCreateRow {
 
 export type RoleResult =
   | { ok: true; role: RoleRow }
-  | { ok: false; kind: "Conflict" | "RepoError"; message: string };
+  | { ok: false; kind: "Conflict" | "RepoError" | "Cycle"; message: string };
 
 export type RoleDeleteResult =
   | { ok: true; role: RoleRow }
@@ -400,12 +400,36 @@ export class RbacService {
   }): Promise<RoleResult> {
     try {
       const role = await this.roles.create(args.input);
+      // Apply inheritance edges if supplied. A new role has no
+      // existing edges so a cycle is impossible unless one of the
+      // proposed parents already inherits from this key — the
+      // setParents call still walks the graph defensively.
+      if (args.input.parents && args.input.parents.length > 0) {
+        const parentResult = await this.roles.setParents(
+          role.key,
+          args.input.parents,
+        );
+        if (!parentResult.ok) {
+          // Roll back the newly-created role so the user can re-try
+          // with a different parent set without a phantom row.
+          await this.roles.delete(role.key).catch(() => {});
+          return {
+            ok: false,
+            kind: "Cycle",
+            message: `Adding those parents would create an inheritance cycle: ${parentResult.cycle.join(" → ")}`,
+          };
+        }
+      }
       await this.audit.record({
         action: "ROLE_CREATE",
         actorId: args.actorId,
         targetType: "Role",
         targetId: role.id,
-        payload: { key: role.key, permissions: args.input.permissions },
+        payload: {
+          key: role.key,
+          permissions: args.input.permissions,
+          parents: args.input.parents,
+        },
       });
       return { ok: true, role };
     } catch (err) {
@@ -494,16 +518,39 @@ export class RbacService {
     key: string;
     input: UpdateRoleInput;
     actorId: string;
-  }): Promise<RoleRow> {
-    const role = await this.roles.update(args.key, args.input);
-    await this.audit.record({
-      action: "ROLE_UPDATE",
-      actorId: args.actorId,
-      targetType: "Role",
-      targetId: role.id,
-      payload: { key: role.key, ...args.input },
-    });
-    return role;
+  }): Promise<RoleResult> {
+    // Apply parents BEFORE the main update so we can fail fast on
+    // cycle detection without having mutated the role's other fields.
+    if (args.input.parents !== undefined) {
+      const parentResult = await this.roles.setParents(
+        args.key,
+        args.input.parents,
+      );
+      if (!parentResult.ok) {
+        return {
+          ok: false,
+          kind: "Cycle",
+          message: `Adding those parents would create an inheritance cycle: ${parentResult.cycle.join(" → ")}`,
+        };
+      }
+    }
+    try {
+      // Pull `parents` out — the repo's update path doesn't know about
+      // inheritance and would just ignore it, but stripping is honest.
+      const { parents: _ignored, ...rest } = args.input;
+      void _ignored;
+      const role = await this.roles.update(args.key, rest);
+      await this.audit.record({
+        action: "ROLE_UPDATE",
+        actorId: args.actorId,
+        targetType: "Role",
+        targetId: role.id,
+        payload: { key: role.key, ...args.input },
+      });
+      return { ok: true, role };
+    } catch (err) {
+      return { ok: false, kind: "RepoError", message: (err as Error).message };
+    }
   }
 
   async deleteRole(args: {

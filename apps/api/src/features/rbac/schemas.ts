@@ -20,6 +20,12 @@ export const createRoleSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(500).optional(),
   permissions: z.array(z.string()).max(200).optional(),
+  /**
+   * Optional inheritance: each entry is a role key whose permissions
+   * the new role will inherit. Cycle detection runs in the service.
+   * Empty array or omitted = standalone role.
+   */
+  parents: z.array(z.string()).max(20).optional(),
 });
 export type CreateRoleInput = z.infer<typeof createRoleSchema>;
 
@@ -27,6 +33,7 @@ export const updateRoleSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(500).optional(),
   permissions: z.array(z.string()).max(200).optional(),
+  parents: z.array(z.string()).max(20).optional(),
 });
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
 

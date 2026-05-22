@@ -678,6 +678,12 @@ export interface Role {
 
 export interface RoleWithPermissions extends Role {
   permissions: Array<{ permission: Permission }>;
+  /**
+   * Immediate inheritance edges. The resolver expands these
+   * transitively at permission-check time; this list is the
+   * editable surface.
+   */
+  parents?: Array<{ parent: Role }>;
   _count?: { users: number };
 }
 
@@ -686,12 +692,18 @@ export interface RoleCreateInput {
   name: string;
   description?: string;
   permissions?: string[];
+  /**
+   * Optional inheritance — role keys whose permissions this role
+   * picks up at resolve time. Cycles are rejected server-side.
+   */
+  parents?: string[];
 }
 
 export interface RoleUpdateInput {
   name?: string;
   description?: string;
   permissions?: string[];
+  parents?: string[];
 }
 
 export interface UserWithRoles {

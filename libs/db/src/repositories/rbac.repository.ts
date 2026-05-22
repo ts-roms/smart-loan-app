@@ -103,6 +103,7 @@ export class RoleRepository {
     Array<
       Role & {
         permissions: { permission: Permission }[];
+        parents: { parent: Role }[];
         _count: { users: number };
       }
     >
@@ -111,6 +112,7 @@ export class RoleRepository {
       orderBy: { key: "asc" },
       include: {
         permissions: { include: { permission: true } },
+        parents: { include: { parent: true } },
         _count: { select: { users: true } },
       },
     });
@@ -120,12 +122,19 @@ export class RoleRepository {
     return this.prisma.role.findUnique({ where: { key } });
   }
 
-  async findByKeyWithPermissions(
-    key: string,
-  ): Promise<(Role & { permissions: { permission: Permission }[] }) | null> {
+  async findByKeyWithPermissions(key: string): Promise<
+    | (Role & {
+        permissions: { permission: Permission }[];
+        parents: { parent: Role }[];
+      })
+    | null
+  > {
     return this.prisma.role.findUnique({
       where: { key },
-      include: { permissions: { include: { permission: true } } },
+      include: {
+        permissions: { include: { permission: true } },
+        parents: { include: { parent: true } },
+      },
     });
   }
 
@@ -165,6 +174,127 @@ export class RoleRepository {
     if (!role) throw new Error(`Role ${key} not found`);
     if (role.system) throw new Error("System roles cannot be deleted.");
     return this.prisma.role.delete({ where: { id: role.id } });
+  }
+
+  // ─── Inheritance ────────────────────────────────────────────────────
+
+  /**
+   * Replace the parent set of `childKey` with the roles named by
+   * `parentKeys`. Rejects cycles by walking from each proposed parent
+   * upward and checking that `childKey` isn't reachable — if it is,
+   * adding the edge would create a loop in the inheritance graph and
+   * `resolveUserPermissions` would happily infinite-loop without its
+   * visited-set guard.
+   *
+   * Returns `{ ok: false, cycle: [...keys] }` when the proposed graph
+   * would cycle so the caller can surface a useful error.
+   */
+  async setParents(
+    childKey: string,
+    parentKeys: string[],
+  ): Promise<{ ok: true } | { ok: false; cycle: string[] }> {
+    const child = await this.findByKey(childKey);
+    if (!child) throw new Error(`Role ${childKey} not found`);
+    const filteredKeys = parentKeys.filter((k) => k !== childKey);
+    const parents = filteredKeys.length
+      ? await this.prisma.role.findMany({
+          where: { key: { in: filteredKeys } },
+        })
+      : [];
+    const parentIds = parents.map((p) => p.id);
+
+    // Cycle check: would adding any of these edges create a path from
+    // child → ... → child? Equivalently: is child reachable when we
+    // BFS from each proposed parent through the existing graph?
+    if (parentIds.length > 0) {
+      const cyclePath = await this.findCycleIfAdded(child.id, parentIds);
+      if (cyclePath) {
+        return { ok: false, cycle: cyclePath };
+      }
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.roleInheritance.deleteMany({ where: { childId: child.id } }),
+      this.prisma.roleInheritance.createMany({
+        data: parentIds.map((parentId) => ({ childId: child.id, parentId })),
+      }),
+    ]);
+    return { ok: true };
+  }
+
+  /**
+   * Return the immediate parents of a role (does not transitively
+   * expand). The resolver does the full expansion at permission-check
+   * time; this helper is for editor UIs and audit payloads.
+   */
+  listParents(childKey: string): Promise<Role[]> {
+    return this.prisma.role
+      .findUnique({
+        where: { key: childKey },
+        select: {
+          parents: { include: { parent: true } },
+        },
+      })
+      .then((row) =>
+        (row?.parents ?? [])
+          .map((p) => p.parent)
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      );
+  }
+
+  /**
+   * Cycle-detection helper. Returns a key-path (parent → ... → child)
+   * iff adding `proposedParentIds` to `childId`'s parent set would
+   * create a cycle, otherwise null.
+   *
+   * Implementation: for each proposed parent, BFS UP through existing
+   * parent edges. If childId is reachable, that's the cycle.
+   */
+  private async findCycleIfAdded(
+    childId: string,
+    proposedParentIds: string[],
+  ): Promise<string[] | null> {
+    const edges = await this.prisma.roleInheritance.findMany({
+      select: { childId: true, parentId: true },
+    });
+    const parentsByChild = new Map<string, string[]>();
+    for (const e of edges) {
+      const arr = parentsByChild.get(e.childId);
+      if (arr) arr.push(e.parentId);
+      else parentsByChild.set(e.childId, [e.parentId]);
+    }
+
+    for (const seed of proposedParentIds) {
+      const cameFrom = new Map<string, string | null>();
+      cameFrom.set(seed, null);
+      const queue: string[] = [seed];
+      while (queue.length > 0) {
+        const cur = queue.shift()!;
+        if (cur === childId) {
+          // Reconstruct the path seed → ... → cur (childId).
+          const path: string[] = [];
+          let n: string | null = cur;
+          while (n !== null) {
+            path.unshift(n);
+            n = cameFrom.get(n) ?? null;
+          }
+          // Translate ids → keys for the human-readable error.
+          const rows = await this.prisma.role.findMany({
+            where: { id: { in: path } },
+            select: { id: true, key: true },
+          });
+          const byId = new Map(rows.map((r) => [r.id, r.key]));
+          return path.map((id) => byId.get(id) ?? id);
+        }
+        for (const p of parentsByChild.get(cur) ?? []) {
+          if (!cameFrom.has(p)) {
+            cameFrom.set(p, cur);
+            queue.push(p);
+          }
+        }
+      }
+    }
+    return null;
   }
 
   /** Replace the role's permission set with the given keys (atomic). */
@@ -279,39 +409,77 @@ export class RoleRepository {
 
 /**
  * Resolve the effective permission key set for a user — the union across
- * every role they've been assigned. Used by the requirePermission middleware.
+ * every role they've been assigned, expanded through role inheritance.
+ * Used by the requirePermission middleware.
  *
- * Two filters layer on top of the role union:
+ * Three filters / expansions layer on top of the direct user→role link:
  *
  *   - role assignments with `expiresAt` in the past are dropped (the
  *     row stays in the DB for audit but no longer contributes)
- *   - permissions whose `status` is `DRAFT` are dropped — DRAFT lets an
- *     admin wire role membership in advance, then flip the perm on by
- *     setting status=ACTIVE. DEPRECATED perms still grant at runtime so
- *     in-flight workflows don't break.
+ *   - the resolver walks the RoleInheritance graph from each direct
+ *     role and unions in every parent's permissions. Cycles are
+ *     guarded by a visited set (the write path also refuses cycles,
+ *     but this is belt-and-braces against legacy bad data)
+ *   - permissions whose `status` is `DRAFT` are dropped — DRAFT lets
+ *     an admin wire role membership in advance, then flip the perm on
+ *     by setting status=ACTIVE. DEPRECATED perms still grant at runtime
+ *     so in-flight workflows don't break.
+ *
+ * Costs ~3 round-trips: direct assignments → inheritance edges → role
+ * permissions for the expanded set. The edges table is small enough
+ * that this stays cheap even at 100+ roles; the postgres planner
+ * happily index-only-scans it.
  */
 export async function resolveUserPermissions(
   prisma: PrismaClient,
   userId: string,
 ): Promise<Set<string>> {
   const now = new Date();
-  const rows = await prisma.userRoleAssignment.findMany({
+
+  // 1. Direct role assignments — filtered for expiry.
+  const assignments = await prisma.userRoleAssignment.findMany({
     where: {
       userId,
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
     },
-    include: {
-      role: { include: { permissions: { include: { permission: true } } } },
-    },
+    select: { roleId: true },
+  });
+  if (assignments.length === 0) return new Set();
+
+  // 2. Expand through inheritance. Fetch every edge in one shot
+  //    (table is small) and walk parents in-memory.
+  const edges = await prisma.roleInheritance.findMany({
+    select: { childId: true, parentId: true },
+  });
+  const parentsByChild = new Map<string, string[]>();
+  for (const e of edges) {
+    const arr = parentsByChild.get(e.childId);
+    if (arr) arr.push(e.parentId);
+    else parentsByChild.set(e.childId, [e.parentId]);
+  }
+  const visited = new Set<string>();
+  const queue: string[] = assignments.map((a) => a.roleId);
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const parents = parentsByChild.get(id);
+    if (parents) {
+      for (const p of parents) {
+        if (!visited.has(p)) queue.push(p);
+      }
+    }
+  }
+
+  // 3. Permissions for the expanded role set.
+  const rps = await prisma.rolePermission.findMany({
+    where: { roleId: { in: [...visited] } },
+    include: { permission: { select: { key: true, status: true } } },
   });
   const keys = new Set<string>();
-  for (const a of rows) {
-    for (const rp of a.role.permissions) {
-      // DRAFT perms exist in the catalog but don't grant. DEPRECATED
-      // still grants so we don't break callers mid-rollout.
-      if (rp.permission.status === "DRAFT") continue;
-      keys.add(rp.permission.key);
-    }
+  for (const rp of rps) {
+    if (rp.permission.status === "DRAFT") continue;
+    keys.add(rp.permission.key);
   }
   return keys;
 }

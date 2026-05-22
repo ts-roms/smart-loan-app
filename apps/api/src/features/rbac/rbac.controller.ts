@@ -140,11 +140,13 @@ export class RbacController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.updateRole({
+    const result = await this.service.updateRole({
       key: req.params.key,
       input: parsed.data,
       actorId: req.user.sub,
     });
+    if (!result.ok) return this.mapRoleError(result, reply);
+    return result.role;
   };
 
   deleteRole = async (
@@ -245,6 +247,14 @@ export class RbacController {
       return reply
         .code(409)
         .send({ error: "Conflict", message: result.message });
+    }
+    if (result.kind === "Cycle") {
+      // Cycle is a client error — they sent a parent set that would
+      // create a loop. 400 with the cycle path in the message lets the
+      // UI render it directly.
+      return reply
+        .code(400)
+        .send({ error: "InheritanceCycle", message: result.message });
     }
     return reply
       .code(400)
