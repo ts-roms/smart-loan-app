@@ -22,13 +22,24 @@ WORKDIR /repo
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml nx.json tsconfig.base.json ./
 COPY apps/api/package.json              ./apps/api/
 COPY apps/web/package.json              ./apps/web/
+# Every libs/*/package.json the lockfile references must be present —
+# `pnpm install --frozen-lockfile` validates the entire workspace, so a
+# missing manifest fails the install even if the web app doesn't import
+# from that lib transitively.
+COPY libs/accounting/package.json       ./libs/accounting/
 COPY libs/api-client/package.json       ./libs/api-client/
 COPY libs/auth/package.json             ./libs/auth/
 COPY libs/credit-scoring/package.json   ./libs/credit-scoring/
 COPY libs/db/package.json               ./libs/db/
+COPY libs/decisioning/package.json      ./libs/decisioning/
 COPY libs/features/package.json         ./libs/features/
+COPY libs/jobs/package.json             ./libs/jobs/
 COPY libs/kyc/package.json              ./libs/kyc/
 COPY libs/loans/package.json            ./libs/loans/
+COPY libs/notifications/package.json    ./libs/notifications/
+COPY libs/payments/package.json         ./libs/payments/
+COPY libs/pdf/package.json              ./libs/pdf/
+COPY libs/screening/package.json        ./libs/screening/
 COPY libs/shared-types/package.json     ./libs/shared-types/
 COPY libs/shared-utils/package.json     ./libs/shared-utils/
 COPY libs/ui/package.json               ./libs/ui/

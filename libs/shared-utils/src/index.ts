@@ -54,8 +54,15 @@ export function isEmail(v: string): boolean {
 export {
   PSGC_REGIONS,
   PSGC_PROVINCES,
+  PSGC_CITIES,
+  PSGC_BARANGAYS,
   provincesForRegion,
+  citiesForProvince,
+  citiesForRegion,
+  barangaysForCity,
   regionForName,
   type PsgcRegion,
   type PsgcProvince,
+  type PsgcCity,
+  type PsgcBarangay,
 } from "./lib/psgc.js";

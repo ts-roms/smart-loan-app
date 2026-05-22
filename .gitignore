@@ -12,3 +12,9 @@ build/
 uploads/
 coverage/
 .DS_Store
+
+# Raw PSA PSGC publication CSV — downloaded by an operator and fed to
+# scripts/ingest-psgc.mjs to regenerate the bundled city/barangay
+# datasets. Not tracked because the file is freely re-downloadable and
+# we don't want a 3 MB raw CSV in git history.
+data/

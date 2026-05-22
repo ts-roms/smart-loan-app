@@ -108,7 +108,9 @@ export class RepossessionRepository {
   async bmApprove(input: ApprovalInput): Promise<RepossessionCase> {
     return this.transition(input.caseId, "IDENTIFIED", "BM_APPROVED", {
       bmApprovedAt: new Date(),
-      bmApprovedById: input.approvedById,
+      // Prisma's UpdateInput excludes the raw FK column when a relation is
+      // declared on it (`bmApprovedBy`). Use the relation accessor instead.
+      bmApprovedBy: { connect: { id: input.approvedById } },
       bmApprovalNote: input.note,
     });
   }
@@ -120,7 +122,7 @@ export class RepossessionRepository {
       "CREDIT_HEAD_APPROVED",
       {
         creditHeadApprovedAt: new Date(),
-        creditHeadApprovedById: input.approvedById,
+        creditHeadApprovedBy: { connect: { id: input.approvedById } },
         creditHeadApprovalNote: input.note,
       },
     );
@@ -133,7 +135,7 @@ export class RepossessionRepository {
       "LEGAL_APPROVED",
       {
         legalApprovedAt: new Date(),
-        legalApprovedById: input.approvedById,
+        legalApprovedBy: { connect: { id: input.approvedById } },
         legalApprovalNote: input.note,
       },
     );
@@ -146,14 +148,14 @@ export class RepossessionRepository {
       agentName: input.agentName,
       agentContact: input.agentContact,
       agentAssignedAt: new Date(),
-      agentAssignedById: input.assignedById,
+      agentAssignedBy: { connect: { id: input.assignedById } },
     });
   }
 
   async recover(input: RecoverInput): Promise<RepossessionCase> {
     return this.transition(input.caseId, "AGENT_ASSIGNED", "RECOVERED", {
       recoveredAt: new Date(),
-      recoveredById: input.recoveredById,
+      recoveredBy: { connect: { id: input.recoveredById } },
       vehicleCondition: input.vehicleCondition.slice(0, 500),
       vehicleMileage: input.vehicleMileage,
       vehiclePhotos: (input.vehiclePhotos ?? []).join(","),

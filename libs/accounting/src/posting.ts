@@ -32,7 +32,14 @@ export type JournalSourceKind =
   | "COOP_FUND_OUT"
   | "COOP_EXPENSE"
   | "COOP_OTHER_INCOME"
-  | "COOP_BIG_BROTHER";
+  | "COOP_BIG_BROTHER"
+  // The three below mirror the Prisma JournalSource enum (schema.prisma
+  // lines 932–940) — added so penaltyWaiveEntry / repossessionAuctionEntry /
+  // leaseBuyoutEntry can declare the right `source` literal without tsc
+  // narrowing it back to a generic string.
+  | "PENALTY_WAIVE"
+  | "REPOSSESSION_AUCTION"
+  | "LEASE_BUYOUT";
 
 export interface JournalEntryInput {
   entryDate: Date;
@@ -51,21 +58,28 @@ function round2(n: number): number {
 
 /** Build + validate an entry. Throws if it doesn't balance. */
 export function buildEntry(input: JournalEntryInput): JournalEntryInput {
-  const lines = input.lines
-    .map((l) => ({ ...l, debit: round2(l.debit), credit: round2(l.credit) }))
-    .filter((l) => l.debit > 0 || l.credit > 0);
-  if (lines.length < 2) {
-    throw new Error("A journal entry needs at least two lines.");
-  }
-  for (const line of lines) {
+  const rounded = input.lines.map((l) => ({
+    ...l,
+    debit: round2(l.debit),
+    credit: round2(l.credit),
+  }));
+  // Validate BEFORE the zero-filter so negative amounts don't get
+  // silently swept under the rug: a line with `debit: -5, credit: 0`
+  // would otherwise be filtered out (both columns ≤ 0) and never
+  // surface as an error.
+  for (const line of rounded) {
+    if (line.debit < 0 || line.credit < 0) {
+      throw new Error(`Line for ${line.accountCode} has a negative amount.`);
+    }
     if (line.debit > 0 && line.credit > 0) {
       throw new Error(
         `Line for ${line.accountCode} has both debit and credit.`,
       );
     }
-    if (line.debit < 0 || line.credit < 0) {
-      throw new Error(`Line for ${line.accountCode} has a negative amount.`);
-    }
+  }
+  const lines = rounded.filter((l) => l.debit > 0 || l.credit > 0);
+  if (lines.length < 2) {
+    throw new Error("A journal entry needs at least two lines.");
   }
   const debits = lines.reduce((s, l) => s + l.debit, 0);
   const credits = lines.reduce((s, l) => s + l.credit, 0);

@@ -1,0 +1,83 @@
+import type { FastifyReply, FastifyRequest } from "fastify";
+
+import type { CollectionsService } from "./collections.service.js";
+import { noteSchema, ptpSchema, resolveSchema } from "./schemas.js";
+
+export class CollectionsController {
+  constructor(private readonly service: CollectionsService) {}
+
+  queue = async () => this.service.overdueQueue();
+
+  // ─── notes ────────────────────────────────────────────────────────
+
+  listNotes = async (req: FastifyRequest<{ Params: { loanId: string } }>) =>
+    this.service.listNotes(req.params.loanId);
+
+  addNote = async (
+    req: FastifyRequest<{ Params: { loanId: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = noteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    return reply.code(201).send(
+      await this.service.addNote({
+        loanId: req.params.loanId,
+        input: parsed.data,
+        actorId: req.user.sub,
+      }),
+    );
+  };
+
+  // ─── promises to pay ──────────────────────────────────────────────
+
+  listPromises = async (req: FastifyRequest<{ Params: { loanId: string } }>) =>
+    this.service.listPromises(req.params.loanId);
+
+  createPromise = async (
+    req: FastifyRequest<{ Params: { loanId: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = ptpSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    return reply.code(201).send(
+      await this.service.createPromise({
+        loanId: req.params.loanId,
+        input: parsed.data,
+        actorId: req.user.sub,
+      }),
+    );
+  };
+
+  resolvePromise = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = resolveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    return this.service.resolvePromise(req.params.id, parsed.data);
+  };
+
+  // ─── late-fee accrual job ─────────────────────────────────────────
+
+  accrueLateFees = async (req: FastifyRequest, reply: FastifyReply) => {
+    const result = await this.service.accrueLateFees(req.user.sub);
+    if (!result.ok) {
+      return reply
+        .code(409)
+        .send({ error: "AccrualFailed", message: result.message });
+    }
+    return result.result;
+  };
+}

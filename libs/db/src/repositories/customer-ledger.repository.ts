@@ -256,7 +256,9 @@ export class CustomerLedgerRepository {
     let savingsDeposits = 0;
     let savingsWithdrawals = 0;
 
-    if (wantCoop || scope === "ALL") {
+    // `wantCoop` already covers scope === "ALL" || scope === "COOP" (line 142),
+    // so the previous belt-and-braces `|| scope === "ALL"` was dead code.
+    if (wantCoop) {
       const contributions = await this.prisma.contribution.findMany({
         where: {
           customerId,

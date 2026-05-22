@@ -58,7 +58,7 @@ export interface DraftBatchInput {
   draftedById: string;
 }
 
-export interface DispatchInput {
+export interface DemandLetterDispatchInput {
   channel: string;
   ref?: string;
   dispatchedById: string;
@@ -264,7 +264,10 @@ export class DemandLetterRepository {
   }
 
   /** Mark APPROVED -> DISPATCHED. The dispatcher fires the notification. */
-  async dispatch(id: string, input: DispatchInput): Promise<DemandLetter> {
+  async dispatch(
+    id: string,
+    input: DemandLetterDispatchInput,
+  ): Promise<DemandLetter> {
     const letter = await this.prisma.demandLetter.findUnique({ where: { id } });
     if (!letter) throw new Error("Demand letter not found");
     if (letter.status !== "APPROVED") {

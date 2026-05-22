@@ -6,6 +6,9 @@ import type {
 } from "@loan/shared-types";
 import {
   PSGC_REGIONS,
+  barangaysForCity,
+  citiesForProvince,
+  citiesForRegion,
   provincesForRegion,
   type PsgcRegion,
 } from "@loan/shared-utils";
@@ -21,7 +24,7 @@ import {
   SelectValue,
   useToast,
 } from "@loan/ui";
-import { useMemo, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 /**
  * Shared sectioned customer-profile form used by both the create flow
@@ -229,12 +232,13 @@ export function CustomerProfileForm({
               placeholder="Optional"
             />
           </Field>
-          <Field label="Email" className="sm:col-span-2">
+          <Field label="Email" required className="sm:col-span-2">
             <Input
               type="email"
               value={form.email ?? ""}
               onChange={(e) => set("email", e.target.value)}
-              placeholder="Optional"
+              placeholder="customer@example.com"
+              required
             />
           </Field>
         </Grid>
@@ -426,6 +430,25 @@ function AddressBlock({
   // hint so the operator knows to skip it.
   const noProvinces = selectedRegion?.name === "NCR";
 
+  // City suggestions cascade from province (or directly from region for
+  // NCR which has no provinces). The list is bundled in PSGC_CITIES;
+  // SuggestInput allows free-typing when the operator's city isn't in
+  // the bundled subset.
+  const cityCandidates = useMemo(() => {
+    if (province) return citiesForProvince(province);
+    if (noProvinces && region) return citiesForRegion(region);
+    return [];
+  }, [province, noProvinces, region]);
+
+  // Barangay suggestions cascade from the typed city — looked up by
+  // exact-name match against the bundled cities. If the city was typed
+  // freely (not in the bundle), the lookup returns [] and the field
+  // falls back to a plain typeahead-less input via the same component.
+  const barangayCandidates = useMemo(
+    () => (city ? barangaysForCity(city) : []),
+    [city],
+  );
+
   return (
     <Grid>
       <Field label="Address line 1" required className="sm:col-span-2">
@@ -451,8 +474,11 @@ function AddressBlock({
           onSelect={(r) =>
             onChange({
               region: r?.name ?? undefined,
-              // Picking a different region invalidates the province choice.
+              // Picking a different region invalidates everything
+              // downstream so the cascade stays consistent.
               province: undefined,
+              city: "",
+              barangay: undefined,
             })
           }
           matches={(r, q) =>
@@ -485,7 +511,14 @@ function AddressBlock({
           <SearchInput
             items={provincesInRegion}
             value={selectedProvince}
-            onSelect={(p) => onChange({ province: p?.name ?? undefined })}
+            onSelect={(p) =>
+              onChange({
+                province: p?.name ?? undefined,
+                // Different province → city + barangay no longer valid.
+                city: "",
+                barangay: undefined,
+              })
+            }
             matches={(p, q) => p.name.toLowerCase().includes(q)}
             getDisplayLabel={(p) => p.name}
             getItemKey={(p) => p.code}
@@ -497,19 +530,47 @@ function AddressBlock({
       </Field>
 
       <Field label="City / Municipality" required>
-        <Input
+        <SuggestInput
           value={city}
-          onChange={(e) => onChange({ city: e.target.value })}
+          onChange={(v) =>
+            onChange({
+              city: v,
+              // Changing the city invalidates the barangay choice.
+              barangay: undefined,
+            })
+          }
+          suggestions={cityCandidates.map((c) => ({
+            key: c.code,
+            label: c.name + (c.isCapital ? " · capital" : ""),
+          }))}
+          placeholder={
+            province || noProvinces
+              ? "Type or pick a city"
+              : "e.g. Quezon City, Cebu City"
+          }
           required
-          placeholder="e.g. Quezon City, Cebu City"
+          emptyHint={
+            (province || noProvinces) && cityCandidates.length === 0
+              ? "No bundled cities for this area — type the name."
+              : undefined
+          }
         />
       </Field>
 
       <Field label="Barangay">
-        <Input
+        <SuggestInput
           value={barangay ?? ""}
-          onChange={(e) => onChange({ barangay: e.target.value })}
-          placeholder="e.g. Brgy. 123, San Antonio"
+          onChange={(v) => onChange({ barangay: v || undefined })}
+          suggestions={barangayCandidates.map((b) => ({
+            key: b.code,
+            label: b.name,
+          }))}
+          placeholder={city ? "Type or pick a barangay" : "Pick a city first"}
+          emptyHint={
+            city && barangayCandidates.length === 0
+              ? "No bundled barangays for this city — type the name."
+              : undefined
+          }
         />
       </Field>
 
@@ -568,6 +629,97 @@ function Field({
         {required && <span className="text-danger">*</span>}
       </label>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Free-text input with an inline floating suggestion list. Used by the
+ * AddressBlock for City and Barangay, where:
+ *   • the operator's value should pass through unchanged (so a city
+ *     not in our bundled PSGC subset still saves correctly),
+ *   • but a typeahead list helps autocomplete + normalise spelling
+ *     when a bundled match is available.
+ *
+ * The dropdown only renders when the user has actively typed (i.e. it
+ * doesn't open the moment the field is focused). That keeps the UI
+ * quiet for empty / pre-filled inputs and prevents the suggestion
+ * panel from covering downstream fields.
+ */
+function SuggestInput({
+  value,
+  onChange,
+  suggestions,
+  placeholder,
+  required,
+  disabled,
+  emptyHint,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  suggestions: ReadonlyArray<{ key: string; label: string }>;
+  placeholder?: string;
+  required?: boolean;
+  disabled?: boolean;
+  /** Small caption when no suggestions are available for the current parent. */
+  emptyHint?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const q = value.trim().toLowerCase();
+  const matches = useMemo(() => {
+    if (!q) return [] as typeof suggestions;
+    return suggestions
+      .filter((s) => s.label.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [q, suggestions]);
+
+  // Close the dropdown on outside click. The panel itself is a child of
+  // the same container so clicks on a suggestion don't trigger this.
+  useEffect(() => {
+    if (!open) return;
+    function handle(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    window.addEventListener("mousedown", handle);
+    return () => window.removeEventListener("mousedown", handle);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          if (value.trim().length > 0) setOpen(true);
+        }}
+        placeholder={placeholder}
+        required={required}
+        disabled={disabled}
+      />
+      {open && matches.length > 0 && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-md border border-border bg-surface-2 shadow-lg">
+          {matches.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => {
+                onChange(m.label);
+                setOpen(false);
+              }}
+              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-3"
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {emptyHint && q.length === 0 && (
+        <div className="mt-1 text-[10px] text-fg-subtle">{emptyHint}</div>
+      )}
     </div>
   );
 }

@@ -186,7 +186,10 @@ function NewCustomerDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto">
+      {/* max-w-5xl so the 2-column sectioned form has breathing room. The
+          previous 3xl crammed Identity / Contact / Address fields into a
+          narrow strip and forced extra scrolling on a desktop browser. */}
+      <DialogContent className="max-w-5xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-4 w-4" />

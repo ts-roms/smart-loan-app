@@ -10,7 +10,7 @@
  * install renders cleanly before any admin has visited /settings.
  */
 
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@loan/db";
 
 export interface BrandingSnapshot {
   companyName: string;

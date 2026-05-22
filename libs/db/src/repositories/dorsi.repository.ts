@@ -19,8 +19,14 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
-const AGGREGATE_CAP_RATE = 0.15;
-const INDIVIDUAL_CAP_RATE = 0.3; // of aggregate cap
+// Pure cap math + name-screening helpers live in ../lib/dorsi-helpers
+// so they can be unit-tested without standing up Prisma.
+import {
+  computeCaps,
+  round2,
+  scoreNameMatch,
+  tokenize,
+} from "../lib/dorsi-helpers.js";
 
 export interface DorsiUtilization {
   /// Company total equity (the base).
@@ -221,59 +227,24 @@ export class DorsiRepository {
         .filter(Boolean)
         .join(" ");
       const dorsiTokens = tokenize(dorsiName);
-
       if (dorsiTokens.length === 0) continue;
 
-      // Exact full-name match.
-      if (
-        candidateTokens.length === dorsiTokens.length &&
-        candidateTokens.every((t, i) => t === dorsiTokens[i])
-      ) {
+      // Scoring algorithm is the pure helper in ../lib/dorsi-helpers so
+      // it's unit-testable without standing up Prisma. Hits at
+      // similarity ≥ 0.5 surface to the UI; the helper returns 0
+      // (filtered below) for non-matches.
+      const { similarity, reason } = scoreNameMatch(
+        candidateTokens,
+        dorsiTokens,
+      );
+      if (similarity > 0 && reason) {
         matches.push({
           recordId: r.id,
           customerId: r.customerId,
           customerName: dorsiName,
           category: r.category,
-          similarity: 1.0,
-          reason: "Exact name match",
-        });
-        continue;
-      }
-
-      // Token subset match (one name's tokens all appear in the other).
-      const cSet = new Set(candidateTokens);
-      const dSet = new Set(dorsiTokens);
-      const intersect = [...cSet].filter((t) => dSet.has(t)).length;
-      const smallerCount = Math.min(cSet.size, dSet.size);
-      if (smallerCount > 0 && intersect === smallerCount && intersect >= 2) {
-        matches.push({
-          recordId: r.id,
-          customerId: r.customerId,
-          customerName: dorsiName,
-          category: r.category,
-          similarity: 0.85,
-          reason: `Token subset match (${intersect} of ${smallerCount} tokens)`,
-        });
-        continue;
-      }
-
-      // Last-name match (lowest confidence — same surname is a common pattern
-      // for related-interest screening — spouse, parent, child).
-      const candidateLast = candidateTokens[candidateTokens.length - 1];
-      const dorsiLast = dorsiTokens[dorsiTokens.length - 1];
-      if (
-        candidateLast &&
-        dorsiLast &&
-        candidateLast.length >= 3 &&
-        candidateLast === dorsiLast
-      ) {
-        matches.push({
-          recordId: r.id,
-          customerId: r.customerId,
-          customerName: dorsiName,
-          category: r.category,
-          similarity: 0.5,
-          reason: `Family-name match: ${candidateLast}`,
+          similarity,
+          reason,
         });
       }
     }
@@ -292,8 +263,7 @@ export class DorsiRepository {
   async utilization(): Promise<DorsiUtilization> {
     const config = await this.systemConfig();
     const totalEquity = Number(config.companyTotalEquity);
-    const aggregateCap = round2(totalEquity * AGGREGATE_CAP_RATE);
-    const individualCap = round2(aggregateCap * INDIVIDUAL_CAP_RATE);
+    const { aggregateCap, individualCap } = computeCaps(totalEquity);
 
     const records = await this.prisma.dorsiRecord.findMany({
       where: { active: true },
@@ -477,17 +447,5 @@ export class DorsiRepository {
   }
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-/** Normalize for fuzzy matching: lowercase, strip diacritics, split on spaces. */
-function tokenize(name: string): string[] {
-  return name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((t) => t.length >= 2);
-}
+// round2 + tokenize moved to ../lib/dorsi-helpers so they can be unit-tested
+// without standing up Prisma. Imported at the top of this file.

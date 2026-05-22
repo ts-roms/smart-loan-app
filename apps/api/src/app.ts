@@ -8,7 +8,7 @@ import rateLimit from "@fastify/rate-limit";
 import staticPlugin from "@fastify/static";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import Fastify from "fastify";
+import Fastify, { type FastifyError } from "fastify";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -69,12 +69,15 @@ export async function buildApp() {
   });
 
   if (sentry) {
-    app.setErrorHandler((err, req, reply) => {
+    app.setErrorHandler((err: FastifyError, req, reply) => {
       // Don't ship validation/expected 4xx noise to Sentry — only the
       // genuine 5xx-class problems are useful signal.
       if (!err.statusCode || err.statusCode >= 500) {
         sentry.captureException(err, (scope) => {
-          scope.setTag("route", req.routerPath ?? req.url);
+          // Fastify 5 dropped req.routerPath in favour of routeOptions.url;
+          // we fall through to the raw request URL when the route hasn't
+          // been resolved (e.g. 404s before routing).
+          scope.setTag("route", req.routeOptions?.url ?? req.url);
           scope.setTag("method", req.method);
           const sub = (req.user as { sub?: string } | undefined)?.sub;
           if (sub) scope.setUser({ id: sub });
