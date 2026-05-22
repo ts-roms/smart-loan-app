@@ -84,6 +84,15 @@ export async function rbacRoutes(app: FastifyInstance) {
     ctrl.updateRole,
   );
 
+  // Pre-flight check before submitting a role update: returns the
+  // user-loss count per removed permission so the UI can show a
+  // confirmation dialog. Read-only — never writes anything.
+  app.post<{ Params: { key: string } }>(
+    "/roles/:key/edit-impact",
+    { preHandler: app.requirePermission("admin.roles") },
+    ctrl.computeRoleEditImpact,
+  );
+
   app.delete<{ Params: { key: string } }>(
     "/roles/:key",
     { preHandler: app.requirePermission("admin.roles") },

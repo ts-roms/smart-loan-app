@@ -9,6 +9,7 @@ import {
   assignSchema,
   createRoleSchema,
   createUserSchema,
+  editImpactSchema,
   updateRoleSchema,
 } from "./schemas.js";
 
@@ -22,6 +23,26 @@ export class RbacController {
   sync = async (req: FastifyRequest) => this.service.sync(req.user.sub);
 
   listPermissions = async () => this.service.listPermissions();
+
+  computeRoleEditImpact = async (
+    req: FastifyRequest<{ Params: { key: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = editImpactSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await this.service.computeRoleEditImpact({
+      roleKey: req.params.key,
+      newPermissionKeys: parsed.data.permissions,
+    });
+    if (!result.ok) {
+      return reply.code(404).send({ error: "NotFound" });
+    }
+    return result.payload;
+  };
 
   listPermissionHolders = async (
     req: FastifyRequest<{ Params: { key: string } }>,
@@ -149,6 +170,18 @@ export class RbacController {
       actorId: req.user.sub,
     });
     if (!result.ok) {
+      if (result.kind === "LastAdmin") {
+        // Server-state conflict (org would have zero admins) — 409
+        // lets the UI distinguish "you typed something wrong" from
+        // "you'd lock everyone out of admin".
+        return reply
+          .code(409)
+          .send({ error: "Conflict", message: result.message });
+      }
+      // SelfLockout retains its pre-existing 400 + BadRequest shape
+      // for parity with the unrefactored route. Both errors are
+      // "would lock you/the org out", but the wire format stays
+      // unchanged.
       return reply
         .code(400)
         .send({ error: "BadRequest", message: result.message });

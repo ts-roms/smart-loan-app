@@ -36,6 +36,16 @@ export const assignSchema = z.object({
 export type AssignRoleInput = z.infer<typeof assignSchema>;
 
 /**
+ * Body for POST /admin/roles/:key/edit-impact — the safety-net dialog
+ * preview before saving a role-permission change. Same `permissions`
+ * shape as the create/update schemas.
+ */
+export const editImpactSchema = z.object({
+  permissions: z.array(z.string()).max(200),
+});
+export type EditImpactInput = z.infer<typeof editImpactSchema>;
+
+/**
  * Admin-side user creation. The public /auth/register endpoint creates
  * CUSTOMER-only users and is rate-limited; this lets an ADMIN onboard
  * any primary role (including another ADMIN).

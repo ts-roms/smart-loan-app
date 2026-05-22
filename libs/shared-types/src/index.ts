@@ -737,6 +737,20 @@ export interface PermissionHoldersPayload {
   totalActiveUsers: number;
 }
 
+/**
+ * Response of `POST /admin/roles/:key/edit-impact` — preview of the
+ * downstream effect of a proposed role permission change. The dialog
+ * uses this to show "X users will lose perm Z" before save commits.
+ * `usersLosing` counts active users for whom this role is the *only*
+ * grant of the permission — users with overlapping role grants are
+ * unaffected and not counted.
+ */
+export interface RoleEditImpact {
+  role: { key: string; name: string; system: boolean };
+  removed: Array<{ key: string; label: string; usersLosing: number }>;
+  addedKeys: string[];
+}
+
 // Delegation — time-bounded proxy authority
 export interface Delegation {
   id: string;

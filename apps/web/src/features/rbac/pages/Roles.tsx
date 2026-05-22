@@ -2,10 +2,15 @@ import {
   useCreateRole,
   useDeleteRole,
   usePermissions,
+  useRoleEditImpact,
   useRoles,
   useUpdateRole,
 } from "@loan/api-client";
-import type { Permission, RoleWithPermissions } from "@loan/shared-types";
+import type {
+  Permission,
+  RoleEditImpact,
+  RoleWithPermissions,
+} from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -190,12 +195,20 @@ function RoleDialog({
 }) {
   const create = useCreateRole();
   const update = useUpdateRole();
+  const impactCheck = useRoleEditImpact();
   const toast = useToast();
   const [key, setKey] = useState(role?.key ?? "");
   const [name, setName] = useState(role?.name ?? "");
   const [description, setDescription] = useState(role?.description ?? "");
   const [selected, setSelected] = useState<Set<string>>(
     new Set(role?.permissions.map((rp) => rp.permission.key) ?? []),
+  );
+  // When the impact check finds at-risk users, stage the impact here
+  // and freeze the dialog while a confirmation modal asks the admin
+  // "really?". `null` means "no pending confirmation; submit goes
+  // straight through".
+  const [pendingImpact, setPendingImpact] = useState<RoleEditImpact | null>(
+    null,
   );
 
   // Group the catalog by category for the matrix UI.
@@ -225,8 +238,12 @@ function RoleDialog({
     setSelected(next);
   };
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  /**
+   * Commit the update without a further preview. Called either
+   * directly (no removals / no at-risk users) or after the admin
+   * confirms the impact dialog.
+   */
+  const persist = async () => {
     try {
       if (role) {
         await update.mutateAsync({
@@ -249,6 +266,35 @@ function RoleDialog({
     } catch (err) {
       toast.error((err as Error).message ?? "Failed");
     }
+  };
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    // Edits only: ask the API what changes between the saved set and
+    // the current draft. Removed perms with `usersLosing > 0` mean
+    // active users will silently lose access — surface a confirmation
+    // dialog before the write. Creates skip this entirely (no prior
+    // assignments to consider).
+    if (role) {
+      try {
+        const impact = await impactCheck.mutateAsync({
+          roleKey: role.key,
+          permissions: [...selected],
+        });
+        const anyAtRisk = impact.removed.some((r) => r.usersLosing > 0);
+        if (anyAtRisk) {
+          setPendingImpact(impact);
+          return;
+        }
+      } catch (err) {
+        // If the impact check itself fails, fall through to the
+        // optimistic save — the server still enforces invariants;
+        // we just lose the warning UX.
+        // eslint-disable-next-line no-console
+        console.warn("Role edit-impact check failed; proceeding to save", err);
+      }
+    }
+    await persist();
   };
 
   return (
@@ -358,12 +404,103 @@ function RoleDialog({
             </Button>
             <Button
               type="submit"
-              disabled={create.isPending || update.isPending}
+              disabled={
+                create.isPending || update.isPending || impactCheck.isPending
+              }
             >
-              {role ? "Save" : "Create"}
+              {role
+                ? impactCheck.isPending
+                  ? "Checking impact…"
+                  : "Save"
+                : "Create"}
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+      {pendingImpact && (
+        <ImpactConfirmDialog
+          impact={pendingImpact}
+          isSaving={update.isPending}
+          onCancel={() => setPendingImpact(null)}
+          onConfirm={async () => {
+            setPendingImpact(null);
+            await persist();
+          }}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+/**
+ * Confirmation dialog rendered when the impact check finds at-risk
+ * users. Lists each permission being removed alongside the
+ * (this-role-is-their-only-grant) user count. The admin has to
+ * explicitly confirm before the actual write fires — saves them from
+ * silently dropping permissions for a dozen people.
+ */
+function ImpactConfirmDialog({
+  impact,
+  isSaving,
+  onCancel,
+  onConfirm,
+}: {
+  impact: RoleEditImpact;
+  isSaving: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const atRisk = impact.removed.filter((r) => r.usersLosing > 0);
+  const totalUsersHit = atRisk.reduce((sum, r) => sum + r.usersLosing, 0);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-amber-200">
+            Confirm role-edit impact
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p className="text-white/70">
+            Saving this update removes the following permissions from{" "}
+            <span className="font-mono text-white/85">{impact.role.key}</span>.
+            Active users for whom this role is the only grant will lose access
+            immediately.
+          </p>
+          <ul className="space-y-1.5 rounded-md border border-amber-400/30 bg-amber-500/[0.04] p-3">
+            {atRisk.map((r) => (
+              <li
+                key={r.key}
+                className="flex items-center justify-between text-xs"
+              >
+                <span>
+                  <span className="font-mono text-amber-200">{r.key}</span>
+                  <span className="ml-2 text-white/70">{r.label}</span>
+                </span>
+                <span className="tabular-nums text-amber-200">
+                  {r.usersLosing}{" "}
+                  {r.usersLosing === 1
+                    ? "user loses access"
+                    : "users lose access"}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-white/55">
+            Up to {totalUsersHit} permission-grant{" "}
+            {totalUsersHit === 1 ? "removal" : "removals"} across affected
+            users. A user is counted once per removed permission if this role is
+            their only grant for that key.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button onClick={onConfirm} disabled={isSaving}>
+            {isSaving ? "Saving…" : "Save anyway"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

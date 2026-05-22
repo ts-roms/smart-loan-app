@@ -69,7 +69,11 @@ export type AssignRoleResult =
 
 export type UnassignRoleResult =
   | { ok: true }
-  | { ok: false; kind: "SelfLockout"; message: string };
+  | {
+      ok: false;
+      kind: "SelfLockout" | "LastAdmin";
+      message: string;
+    };
 
 /**
  * Shape returned by `listPermissionHolders` — the reverse-lookup
@@ -114,6 +118,39 @@ export interface PermissionHoldersPayload {
 
 export type ListPermissionHoldersResult =
   | { ok: true; payload: PermissionHoldersPayload }
+  | { ok: false; kind: "NotFound" };
+
+/**
+ * Shape returned by `computeRoleEditImpact` — the safety-net answer to
+ * "if I save this role with these permissions, who loses what?". The
+ * heavy lift is computing the per-permission user count: a user only
+ * "loses" a permission if no OTHER role they hold grants the same
+ * key. Users with overlapping role membership won't show up here.
+ *
+ * Delegation knock-on (empty-permissions delegations whose delegator
+ * loses a perm) is intentionally NOT included — discoverable via the
+ * separate `/admin/permissions/:key/holders` endpoint after the save.
+ * Bundling it here would double the query count for a marginal gain.
+ */
+export interface RoleEditImpactPayload {
+  role: { key: string; name: string; system: boolean };
+  /**
+   * Permissions present on the current role but absent from the
+   * proposed update. Each entry's `usersLosing` is the count of
+   * active users for whom this role is the *only* grant.
+   */
+  removed: Array<{
+    key: string;
+    label: string;
+    usersLosing: number;
+  }>;
+  /** Keys being newly added by the proposed update. No risk count;
+   * adding permissions is additive. */
+  addedKeys: string[];
+}
+
+export type RoleEditImpactResult =
+  | { ok: true; payload: RoleEditImpactPayload }
   | { ok: false; kind: "NotFound" };
 
 export class RbacService {
@@ -294,6 +331,82 @@ export class RbacService {
       // The repo throws on unique-key collisions — surface as 409.
       return { ok: false, kind: "Conflict", message: (err as Error).message };
     }
+  }
+
+  /**
+   * Compute the downstream impact of editing a role's permission list.
+   * Returns the diff plus, for each removed permission, how many
+   * active users would lose it (no other role they hold grants the
+   * same key). The dialog UI calls this before the actual save to
+   * warn the admin "you're about to take loans.decide away from 12
+   * people via this role" — much better than discovering it after.
+   */
+  async computeRoleEditImpact(args: {
+    roleKey: string;
+    newPermissionKeys: string[];
+  }): Promise<RoleEditImpactResult> {
+    const role = await this.prisma.role.findUnique({
+      where: { key: args.roleKey },
+      include: {
+        permissions: {
+          include: {
+            permission: {
+              select: { key: true, label: true },
+            },
+          },
+        },
+      },
+    });
+    if (!role) return { ok: false, kind: "NotFound" };
+
+    const currentKeyToLabel = new Map(
+      role.permissions.map((rp) => [rp.permission.key, rp.permission.label]),
+    );
+    const newKeys = new Set(args.newPermissionKeys);
+    const removedKeys = [...currentKeyToLabel.keys()].filter(
+      (k) => !newKeys.has(k),
+    );
+    const addedKeys = args.newPermissionKeys.filter(
+      (k) => !currentKeyToLabel.has(k),
+    );
+
+    // Per-permission: count active users for whom this role is the
+    // sole grant. The NOT…some pattern eliminates users with at least
+    // one other role granting the same key — those users aren't
+    // affected by removing the perm from THIS role.
+    const removed: RoleEditImpactPayload["removed"] = [];
+    for (const key of removedKeys) {
+      const usersLosing = await this.prisma.user.count({
+        where: {
+          active: true,
+          roleAssignments: { some: { roleId: role.id } },
+          NOT: {
+            roleAssignments: {
+              some: {
+                roleId: { not: role.id },
+                role: {
+                  permissions: { some: { permission: { key } } },
+                },
+              },
+            },
+          },
+        },
+      });
+      removed.push({
+        key,
+        label: currentKeyToLabel.get(key) ?? key,
+        usersLosing,
+      });
+    }
+
+    return {
+      ok: true,
+      payload: {
+        role: { key: role.key, name: role.name, system: role.system },
+        removed,
+        addedKeys,
+      },
+    };
   }
 
   async updateRole(args: {
@@ -478,6 +591,32 @@ export class RbacService {
           "You cannot remove the ADMIN role from yourself. Ask another admin to do it.",
       };
     }
+
+    // Last-admin guard: an admin removing another admin is fine UNTIL
+    // it would leave the org with zero active admins. The
+    // self-lockout above doesn't cover this case — e.g. Alice (admin)
+    // removes Bob's ADMIN when Bob was the only other admin. The
+    // org then has only Alice; if her account is later disabled,
+    // nobody can rescue it. Refuse pre-emptively.
+    if (args.roleKey === "ADMIN") {
+      const remainingActiveAdmins = await this.prisma.userRoleAssignment.count({
+        where: {
+          role: { key: "ADMIN" },
+          user: { active: true },
+          // Don't double-count the user about to lose their ADMIN.
+          userId: { not: args.userId },
+        },
+      });
+      if (remainingActiveAdmins === 0) {
+        return {
+          ok: false,
+          kind: "LastAdmin",
+          message:
+            "Cannot remove ADMIN — this is the last active admin on the org. Promote another user to ADMIN first.",
+        };
+      }
+    }
+
     await this.roles.unassign(args.userId, args.roleKey);
     await this.audit.record({
       action: "USER_ROLE_UNASSIGN",

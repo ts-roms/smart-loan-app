@@ -4,6 +4,7 @@ import type {
   PermissionHoldersPayload,
   Role,
   RoleCreateInput,
+  RoleEditImpact,
   RoleUpdateInput,
   RoleWithPermissions,
   UserWithRoles,
@@ -148,6 +149,23 @@ export function useMyPermissions() {
     queryKey: rbacKeys.mePermissions,
     queryFn: () => getApiClient().get<MePermissions>("/auth/me/permissions"),
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Pre-flight check for a role edit. Computes the user-loss count per
+ * permission being removed so the UI can show a confirmation dialog
+ * before saving the actual update. Imperative mutation rather than a
+ * query because the inputs (permission list) come from a live form
+ * and we want the call to fire exactly when Save is clicked.
+ */
+export function useRoleEditImpact() {
+  return useMutation({
+    mutationFn: (input: { roleKey: string; permissions: string[] }) =>
+      getApiClient().post<RoleEditImpact>(
+        `/admin/roles/${input.roleKey}/edit-impact`,
+        { permissions: input.permissions },
+      ),
   });
 }
 
