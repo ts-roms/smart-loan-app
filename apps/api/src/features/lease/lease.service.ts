@@ -5,7 +5,7 @@ import type {
   CloseInput,
   ListQuery,
   PullOutInput,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * Repo-agnostic alias for the LeaseAgreement row shape — we pin it via

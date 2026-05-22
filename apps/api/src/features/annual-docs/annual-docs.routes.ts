@@ -15,7 +15,7 @@
 import { AnnualDocumentRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { createSchema, listExpiringQuerySchema } from "./schemas.js";
+import { createSchema, listExpiringQuerySchema } from "./schemas";
 
 export async function annualDocsLoanRoutes(app: FastifyInstance) {
   const repo = new AnnualDocumentRepository(app.prisma);

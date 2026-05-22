@@ -24,8 +24,8 @@ import {
 import { MockProvider } from "@loan/payments";
 import type { FastifyInstance } from "fastify";
 
-import { PortalController } from "./portal.controller.js";
-import { PortalService } from "./portal.service.js";
+import { PortalController } from "./portal.controller";
+import { PortalService } from "./portal.service";
 
 export async function portalRoutes(app: FastifyInstance) {
   const baseUrl =

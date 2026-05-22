@@ -21,8 +21,8 @@ import {
 } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import { DemandLetterController } from "./demand-letters.controller.js";
-import { DemandLetterService } from "./demand-letters.service.js";
+import { DemandLetterController } from "./demand-letters.controller";
+import { DemandLetterService } from "./demand-letters.service";
 
 export async function demandLetterRoutes(app: FastifyInstance) {
   const service = new DemandLetterService(

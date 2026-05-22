@@ -9,7 +9,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { getApiClient } from "../client.js";
+import { getApiClient } from "../client";
 
 export interface AssistantResponse {
   text: string;

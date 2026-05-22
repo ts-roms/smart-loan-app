@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { customerBaseSchema, customerSchema } from "./schemas.js";
-import type { CustomerService } from "./customers.service.js";
+import { customerBaseSchema, customerSchema } from "./schemas";
+import type { CustomerService } from "./customers.service";
 
 /**
  * Presentation layer for the base customer CRUD surface. Controllers

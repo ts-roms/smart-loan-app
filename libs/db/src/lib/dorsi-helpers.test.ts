@@ -6,7 +6,7 @@ import {
   computeCaps,
   scoreNameMatch,
   tokenize,
-} from "./dorsi-helpers.js";
+} from "./dorsi-helpers";
 
 /**
  * Unit tests for the pure DORSI helpers (FRD §3.10).

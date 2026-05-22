@@ -1,6 +1,6 @@
 import { type CollectionsRepository } from "@loan/db";
 
-import type { NoteInput, PtpInput, ResolveInput } from "./schemas.js";
+import type { NoteInput, PtpInput, ResolveInput } from "./schemas";
 
 /**
  * Collections orchestration. Notes + PTPs + queue + the late-fee

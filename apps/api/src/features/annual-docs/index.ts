@@ -8,7 +8,4 @@
 //
 // Both share the same repository and document-status logic so they
 // live in one routes file.
-export {
-  annualDocsLoanRoutes,
-  annualDocsRoutes,
-} from "./annual-docs.routes.js";
+export { annualDocsLoanRoutes, annualDocsRoutes } from "./annual-docs.routes";

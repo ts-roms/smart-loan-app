@@ -1,12 +1,12 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { LeaseService } from "./lease.service.js";
+import type { LeaseService } from "./lease.service";
 import {
   buyoutSchema,
   closeSchema,
   listQuerySchema,
   pullOutSchema,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * HTTP layer for lease-to-Own routes. Each handler is a small body-parse

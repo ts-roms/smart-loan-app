@@ -15,8 +15,8 @@
 import { DecisionRuleRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { DecisionRuleController } from "./decision-rules.controller.js";
-import { DecisionRuleService } from "./decision-rules.service.js";
+import { DecisionRuleController } from "./decision-rules.controller";
+import { DecisionRuleService } from "./decision-rules.service";
 
 export async function decisionRuleRoutes(app: FastifyInstance) {
   const ctrl = new DecisionRuleController(

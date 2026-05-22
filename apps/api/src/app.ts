@@ -12,8 +12,8 @@ import Fastify, { type FastifyError } from "fastify";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import { config } from "./config.js";
-import { registerRoutes } from "./routes/index.js";
+import { config } from "./config";
+import { registerRoutes } from "./routes/index";
 
 /**
  * Sentry is opt-in via SENTRY_DSN — keeping the dep skin-deep so local

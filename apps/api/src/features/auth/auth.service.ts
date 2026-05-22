@@ -15,8 +15,8 @@ import {
   generateRefreshToken,
   hashRecoveryCode,
   hashRefreshToken,
-} from "./helpers.js";
-import type { LoginInput, RegisterInput, TotpCodeInput } from "./schemas.js";
+} from "./helpers";
+import type { LoginInput, RegisterInput, TotpCodeInput } from "./schemas";
 
 // Standard TOTP: 30-second window, 6-digit codes, ±1 step tolerance
 // for clock skew. Matches Google Authenticator / Authy / 1Password

@@ -5,8 +5,8 @@ import type {
   ScreeningRepository,
 } from "@loan/db";
 
-import type { CustomerPatchInput, CustomerWriteInput } from "./schemas.js";
-import { toDateOrUndefined } from "./helpers.js";
+import type { CustomerPatchInput, CustomerWriteInput } from "./schemas";
+import { toDateOrUndefined } from "./helpers";
 
 /**
  * CustomerService — the application/business layer for customer CRUD +

@@ -22,7 +22,7 @@ import {
   startDoc,
   table,
   type PersonnelSignature,
-} from "./chrome.js";
+} from "./chrome";
 
 export type CustomerStatementEntryKind =
   | "LOAN_DISBURSEMENT"

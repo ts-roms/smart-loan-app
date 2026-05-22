@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-import type { DorsiController } from "./dorsi.controller.js";
+import type { DorsiController } from "./dorsi.controller";
 
 /**
  * HTTP wiring for the DORSI compliance feature. Permissions are

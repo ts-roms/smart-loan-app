@@ -15,8 +15,8 @@
 import { AuditLogRepository, EclRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { EclController } from "./ecl.controller.js";
-import { EclService } from "./ecl.service.js";
+import { EclController } from "./ecl.controller";
+import { EclService } from "./ecl.service";
 
 export async function eclRoutes(app: FastifyInstance) {
   const ctrl = new EclController(

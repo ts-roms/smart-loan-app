@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-import type { CustomerController } from "./customers.controller.js";
+import type { CustomerController } from "./customers.controller";
 
 /**
  * HTTP wiring for the base customer CRUD surface. This file is

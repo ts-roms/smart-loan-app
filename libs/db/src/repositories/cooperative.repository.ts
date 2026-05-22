@@ -33,7 +33,7 @@ import {
   savingsEntry,
 } from "@loan/accounting";
 
-import { AccountingRepository } from "./accounting.repository.js";
+import { AccountingRepository } from "./accounting.repository";
 
 /** A coop member is just a Customer — see Phase 5 design choice. */
 function memberName(

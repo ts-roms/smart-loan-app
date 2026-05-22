@@ -8,7 +8,7 @@ import {
   IDLE_TIMEOUT_MIN,
   IDLE_WARNING_MAX,
   IDLE_WARNING_MIN,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * System-wide settings the operator can tweak at runtime without a

@@ -7,7 +7,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from "../client.js";
+import { getApiClient } from "../client";
 
 // ─── Shared types (kept light — the UI mostly displays raw rows) ──
 

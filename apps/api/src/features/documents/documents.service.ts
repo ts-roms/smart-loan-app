@@ -7,9 +7,9 @@ import {
   renderStatementOfAccount,
 } from "@loan/pdf";
 
-import { getBranding } from "../../lib/branding.js";
+import { getBranding } from "../../lib/branding";
 
-import { loadSignature } from "./helpers.js";
+import { loadSignature } from "./helpers";
 
 /**
  * Document rendering orchestration. The reason this earns a layer:

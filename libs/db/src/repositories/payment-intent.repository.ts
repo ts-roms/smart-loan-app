@@ -26,11 +26,11 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
-import { LoanRepository } from "./loan.repository.js";
+import { LoanRepository } from "./loan.repository";
 import {
   idOrNumberWhere,
   nextPaymentIntentNumber,
-} from "../lib/reference-numbers.js";
+} from "../lib/reference-numbers";
 
 export interface CreatePaymentIntentInput {
   loanId: string;

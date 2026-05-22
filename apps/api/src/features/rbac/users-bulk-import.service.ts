@@ -9,7 +9,7 @@ import {
   bulkUserRowSchema,
   type BulkUserRowInput,
   type UserBulkImportInput,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * Output row in the bulk-import response. Successful real-run rows

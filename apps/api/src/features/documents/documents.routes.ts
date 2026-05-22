@@ -19,8 +19,8 @@
 import { LoanRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { DocumentsController } from "./documents.controller.js";
-import { DocumentsService } from "./documents.service.js";
+import { DocumentsController } from "./documents.controller";
+import { DocumentsService } from "./documents.service";
 
 function makeController(app: FastifyInstance): DocumentsController {
   return new DocumentsController(

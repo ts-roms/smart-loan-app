@@ -16,7 +16,7 @@
  * by routes/payments.ts. We don't duplicate it here.
  */
 
-import type { AmlProviderName, NotificationProviderName } from "./config.js";
+import type { AmlProviderName, NotificationProviderName } from "./config";
 import {
   MockNotificationProvider,
   type NotificationProvider,

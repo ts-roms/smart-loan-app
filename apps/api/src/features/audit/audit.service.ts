@@ -1,6 +1,6 @@
 import { type PrismaClient } from "@loan/db";
 
-import type { AuditListQuery } from "./schemas.js";
+import type { AuditListQuery } from "./schemas";
 
 /**
  * Audit-log reads. Append-only writes happen inline from feature

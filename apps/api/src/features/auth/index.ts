@@ -5,5 +5,5 @@
 // so the orchestration contract (login, refresh-rotation, 2FA enable
 // flow, recovery-code single-use) lives in auth.service.ts where it
 // can be reviewed + tested independently of the HTTP shell.
-export { authRoutes } from "./auth.routes.js";
-export * from "./schemas.js";
+export { authRoutes } from "./auth.routes";
+export * from "./schemas";

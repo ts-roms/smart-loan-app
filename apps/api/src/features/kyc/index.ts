@@ -1,9 +1,9 @@
 import { KycRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { KycController } from "./kyc.controller.js";
-import { registerKycHttp } from "./kyc.routes.js";
-import { KycService } from "./kyc.service.js";
+import { KycController } from "./kyc.controller";
+import { registerKycHttp } from "./kyc.routes";
+import { KycService } from "./kyc.service";
 
 /**
  * KYC feature entry point — registered by the central router under

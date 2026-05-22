@@ -9,7 +9,7 @@
 import type { CustomerLedger, CustomerLedgerScope } from "@loan/shared-types";
 import { useQuery } from "@tanstack/react-query";
 
-import { getApiClient } from "../client.js";
+import { getApiClient } from "../client";
 
 export interface CustomerLedgerQuery {
   from?: string;

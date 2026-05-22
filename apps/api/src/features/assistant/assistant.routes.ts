@@ -22,9 +22,9 @@ import type { FastifyInstance } from "fastify";
 
 // Paths adjusted for the features/assistant/ nesting — config lives two
 // folders up at src/config.ts and the LLM provider factory at src/lib/llm.ts.
-import { config } from "../../config.js";
-import { createLLMProvider, type LLMProvider } from "../../lib/llm.js";
-import { draftSchema, explainSchema, summarizeSchema } from "./schemas.js";
+import { config } from "../../config";
+import { createLLMProvider, type LLMProvider } from "../../lib/llm";
+import { draftSchema, explainSchema, summarizeSchema } from "./schemas";
 
 export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   const llm: LLMProvider = createLLMProvider({

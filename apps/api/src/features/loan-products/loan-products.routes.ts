@@ -1,7 +1,7 @@
 import { LoanProductRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { createSchema, updateSchema } from "./schemas.js";
+import { createSchema, updateSchema } from "./schemas";
 
 /**
  * Loan product CRUD. The product model carries the full set of

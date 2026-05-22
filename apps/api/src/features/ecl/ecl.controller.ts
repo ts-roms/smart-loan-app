@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { EclService } from "./ecl.service.js";
-import { runSchema } from "./schemas.js";
+import type { EclService } from "./ecl.service";
+import { runSchema } from "./schemas";
 
 export class EclController {
   constructor(private readonly service: EclService) {}

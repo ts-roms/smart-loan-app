@@ -3,4 +3,4 @@
 // (contributions, savings, funds, withdrawals, expenses, other-income,
 // big-brother) sharing the same create + list shape; the GL auto-post
 // happens inside CooperativeRepository.
-export { cooperativeRoutes } from "./cooperative.routes.js";
+export { cooperativeRoutes } from "./cooperative.routes";

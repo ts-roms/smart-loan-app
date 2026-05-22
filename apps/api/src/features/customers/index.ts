@@ -1,15 +1,15 @@
 import { CustomerLedgerRepository, CustomerRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { BulkImportController } from "./bulk-import.controller.js";
-import { BulkImportService } from "./bulk-import.service.js";
-import { registerBulkImportHttp } from "./bulk-import.routes.js";
-import { CustomerController } from "./customers.controller.js";
-import { registerCustomerHttp } from "./customers.routes.js";
-import { CustomerService } from "./customers.service.js";
-import { CustomerLedgerController } from "./ledger.controller.js";
-import { registerLedgerHttp } from "./ledger.routes.js";
-import { CustomerLedgerService } from "./ledger.service.js";
+import { BulkImportController } from "./bulk-import.controller";
+import { BulkImportService } from "./bulk-import.service";
+import { registerBulkImportHttp } from "./bulk-import.routes";
+import { CustomerController } from "./customers.controller";
+import { registerCustomerHttp } from "./customers.routes";
+import { CustomerService } from "./customers.service";
+import { CustomerLedgerController } from "./ledger.controller";
+import { registerLedgerHttp } from "./ledger.routes";
+import { CustomerLedgerService } from "./ledger.service";
 
 /**
  * Customers feature entry point — registered by the central router

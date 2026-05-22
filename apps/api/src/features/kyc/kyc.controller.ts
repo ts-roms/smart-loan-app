@@ -1,8 +1,8 @@
 import { KycDuplicateError } from "@loan/db";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { KycService } from "./kyc.service.js";
-import { decisionSchema, submitSchema } from "./schemas.js";
+import type { KycService } from "./kyc.service";
+import { decisionSchema, submitSchema } from "./schemas";
 
 /**
  * HTTP adapter for the KYC surface. Three endpoints:

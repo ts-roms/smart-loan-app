@@ -12,11 +12,11 @@
 //
 // The notify-approvers helper is shared by both above and is colocated
 // in this folder.
-export { loanRoutes } from "./loans.routes.js";
-export { loanApprovalRoutes } from "./approvals.routes.js";
-export { notifyApproversForStep } from "./notify-approvers.js";
+export { loanRoutes } from "./loans.routes";
+export { loanApprovalRoutes } from "./approvals.routes";
+export { notifyApproversForStep } from "./notify-approvers";
 
 // Schemas live separately so future consumers (e.g. a bulk-loan
 // importer, contract tests, or an alternate REST client) can validate
 // the same wire shapes without dragging the route file in.
-export * from "./schemas.js";
+export * from "./schemas";

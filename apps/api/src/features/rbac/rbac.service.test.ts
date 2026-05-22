@@ -15,7 +15,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { RbacService } from "./rbac.service.js";
+import { RbacService } from "./rbac.service";
 
 // Minimal duck-typed deps. The service only touches the methods we
 // stub, so the `as unknown as <Type>` cast is safe — TypeScript's

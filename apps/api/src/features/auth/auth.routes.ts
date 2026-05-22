@@ -1,8 +1,8 @@
 import { AuditLogRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { AuthController } from "./auth.controller.js";
-import { AuthService } from "./auth.service.js";
+import { AuthController } from "./auth.controller";
+import { AuthService } from "./auth.service";
 
 /**
  * Auth feature plugin. Owns every write path on /auth and every /me

@@ -1,6 +1,6 @@
 import { type AuditLogRepository, type EclRepository } from "@loan/db";
 
-import type { RunInput } from "./schemas.js";
+import type { RunInput } from "./schemas";
 
 /**
  * IFRS 9 / PFRS 9 expected-credit-loss orchestration.

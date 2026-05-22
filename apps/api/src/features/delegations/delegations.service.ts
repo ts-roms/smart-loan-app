@@ -11,7 +11,7 @@ import type {
   CreateDelegationInput,
   ExtendDelegationInput,
   RevokeDelegationInput,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * Delegation orchestration. The HTTP layer is intentionally a thin

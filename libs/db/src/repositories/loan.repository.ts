@@ -28,12 +28,12 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
-import { AccountingRepository } from "./accounting.repository.js";
+import { AccountingRepository } from "./accounting.repository";
 import {
   idOrNumberWhere,
   nextPropertyNumber,
   nextVehicleNumber,
-} from "../lib/reference-numbers.js";
+} from "../lib/reference-numbers";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 

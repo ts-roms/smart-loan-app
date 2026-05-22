@@ -13,8 +13,8 @@
 
 import type { FastifyInstance } from "fastify";
 
-import { AuditController } from "./audit.controller.js";
-import { AuditService } from "./audit.service.js";
+import { AuditController } from "./audit.controller";
+import { AuditService } from "./audit.service";
 
 export async function auditRoutes(app: FastifyInstance) {
   const ctrl = new AuditController(new AuditService(app.prisma));

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-import type { BulkImportController } from "./bulk-import.controller.js";
+import type { BulkImportController } from "./bulk-import.controller";
 
 /**
  * HTTP wiring for bulk customer import. Single endpoint mounted under

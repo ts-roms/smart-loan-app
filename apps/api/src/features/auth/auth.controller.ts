@@ -5,14 +5,14 @@ import type {
   LoginResult,
   RegisterResult,
   RefreshResult,
-} from "./auth.service.js";
+} from "./auth.service";
 import {
   loginSchema,
   refreshSchema,
   registerSchema,
   saveSignatureSchema,
   totpCodeSchema,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * HTTP adapter for the auth feature. Every method maps an HTTP

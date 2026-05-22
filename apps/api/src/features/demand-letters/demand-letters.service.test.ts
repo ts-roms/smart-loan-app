@@ -21,19 +21,17 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { DemandLetterService } from "./demand-letters.service.js";
+import { DemandLetterService } from "./demand-letters.service";
 
 function makeService(opts?: { letter?: unknown | null }) {
   const audit = { record: vi.fn().mockResolvedValue(undefined) };
   const repo = {
     findById: vi.fn().mockResolvedValue(opts?.letter ?? null),
-    approve: vi
-      .fn()
-      .mockResolvedValue({
-        id: "letter-1",
-        stage: "FIRST",
-        status: "APPROVED",
-      }),
+    approve: vi.fn().mockResolvedValue({
+      id: "letter-1",
+      stage: "FIRST",
+      status: "APPROVED",
+    }),
   };
   const loans = {};
   const notifications = {};

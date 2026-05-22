@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { applySchema, decideSchema } from "./schemas.js";
-import type { LoanWorkflowService } from "./loans.service.js";
+import { applySchema, decideSchema } from "./schemas";
+import type { LoanWorkflowService } from "./loans.service";
 
 /**
  * Loan-workflow HTTP adapter. Owns the four orchestration-heavy

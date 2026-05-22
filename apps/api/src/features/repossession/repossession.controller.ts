@@ -4,7 +4,7 @@ import type {
   AuctionOutcome,
   CaseResult,
   RepossessionService,
-} from "./repossession.service.js";
+} from "./repossession.service";
 import {
   approvalSchema,
   assignSchema,
@@ -13,7 +13,7 @@ import {
   listQuerySchema,
   openSchema,
   recoverSchema,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * HTTP adapter for repossession. All 4xx mapping lives here so the

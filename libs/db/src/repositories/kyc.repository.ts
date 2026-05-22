@@ -4,7 +4,7 @@ import type {
   KycSubmissionStatus,
   PrismaClient,
 } from "@prisma/client";
-import { idOrNumberWhere, nextKycNumber } from "../lib/reference-numbers.js";
+import { idOrNumberWhere, nextKycNumber } from "../lib/reference-numbers";
 
 export interface KycSubmitInput {
   customerId: string;

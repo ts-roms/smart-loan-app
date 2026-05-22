@@ -6,7 +6,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
-import { notifyApproversForStep } from "./notify-approvers.js";
+import { notifyApproversForStep } from "./notify-approvers";
 
 const approveSchema = z.object({
   notes: z.string().max(2000).optional(),

@@ -18,9 +18,9 @@ import {
 import { validateKyc } from "@loan/kyc";
 import type { FastifyInstance } from "fastify";
 
-import { LoanWorkflowController } from "./loans.controller.js";
-import { LoanWorkflowService } from "./loans.service.js";
-import { notifyApproversForStep } from "./notify-approvers.js";
+import { LoanWorkflowController } from "./loans.controller";
+import { LoanWorkflowService } from "./loans.service";
+import { notifyApproversForStep } from "./notify-approvers";
 
 // All zod request schemas live in ./schemas.ts. They're inferred here
 // so request-handler bodies stay close to the wire shape without zod
@@ -38,7 +38,7 @@ import {
   signSchema,
   waivePenaltySchema,
   writeOffSchema,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * Loan routes. The four orchestration-heavy endpoints (apply, decide,

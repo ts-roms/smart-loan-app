@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { AuditService } from "./audit.service.js";
-import { listQuerySchema } from "./schemas.js";
+import type { AuditService } from "./audit.service";
+import { listQuerySchema } from "./schemas";
 
 export class AuditController {
   constructor(private readonly service: AuditService) {}

@@ -6,7 +6,7 @@ import {
 } from "@loan/credit-scoring";
 import { type CreditScoreRepository, type SurveyRepository } from "@loan/db";
 
-import type { SubmitSurveyInput } from "./schemas.js";
+import type { SubmitSurveyInput } from "./schemas";
 
 /**
  * Credit-scoring orchestration. The submit path is the only real

@@ -10,8 +10,8 @@
  * result with `Content-Type: application/pdf`; nothing is persisted to disk.
  */
 
-export * from "./agreement.js";
-export * from "./receipt.js";
-export * from "./statement.js";
-export * from "./customer-statement.js";
-export { moneyPHP, pct, fmtDate, type PersonnelSignature } from "./chrome.js";
+export * from "./agreement";
+export * from "./receipt";
+export * from "./statement";
+export * from "./customer-statement";
+export { moneyPHP, pct, fmtDate, type PersonnelSignature } from "./chrome";

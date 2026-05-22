@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { clientIp, parseScope, toCsv, type LedgerScope } from "./helpers.js";
-import type { PortalService } from "./portal.service.js";
+import { clientIp, parseScope, toCsv, type LedgerScope } from "./helpers";
+import type { PortalService } from "./portal.service";
 import {
   applySchema,
   intentSchema,
@@ -9,7 +9,7 @@ import {
   ledgerQuerySchema,
   profileUpdateSchema,
   signSchema,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * HTTP adapter for the borrower portal. Every endpoint follows the

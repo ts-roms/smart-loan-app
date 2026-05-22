@@ -2,4 +2,4 @@
 // Layered: routes / controller / service / schemas. Wraps the
 // CollectionsRepository for overdue queue + notes + PTPs + the late-fee
 // accrual job (which surfaces closed-period errors as 409).
-export { collectionsRoutes } from "./collections.routes.js";
+export { collectionsRoutes } from "./collections.routes";

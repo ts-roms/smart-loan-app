@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { CollectionsService } from "./collections.service.js";
-import { noteSchema, ptpSchema, resolveSchema } from "./schemas.js";
+import type { CollectionsService } from "./collections.service";
+import { noteSchema, ptpSchema, resolveSchema } from "./schemas";
 
 export class CollectionsController {
   constructor(private readonly service: CollectionsService) {}

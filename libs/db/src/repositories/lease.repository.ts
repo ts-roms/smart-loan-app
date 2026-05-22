@@ -16,7 +16,7 @@
 
 import type { LeaseAgreement, LeaseStatus, PrismaClient } from "@prisma/client";
 
-import { AccountingRepository } from "./accounting.repository.js";
+import { AccountingRepository } from "./accounting.repository";
 
 export interface CreateLeaseInput {
   loanId: string;

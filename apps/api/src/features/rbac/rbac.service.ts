@@ -14,7 +14,7 @@ import type {
   CreateRoleInput,
   CreateUserInput,
   UpdateRoleInput,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * RBAC orchestration. Three reasons this earns a service:

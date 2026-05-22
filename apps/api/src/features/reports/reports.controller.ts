@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { ReportsService } from "./reports.service.js";
-import { querySchema, reportTypeSchema } from "./schemas.js";
+import type { ReportsService } from "./reports.service";
+import { querySchema, reportTypeSchema } from "./schemas";
 
 /**
  * HTTP adapter for compliance reports. Owns:

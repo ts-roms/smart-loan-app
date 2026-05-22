@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-import type { KycController } from "./kyc.controller.js";
+import type { KycController } from "./kyc.controller";
 
 /**
  * HTTP wiring for the KYC surface. All endpoints sit under /kyc; the

@@ -9,8 +9,8 @@ import type {
 } from "@loan/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from "../client.js";
-import type { Contribution, SavingsTransaction } from "./use-cooperative.js";
+import { getApiClient } from "../client";
+import type { Contribution, SavingsTransaction } from "./use-cooperative";
 
 export const portalKeys = {
   me: ["portal", "me"] as const,

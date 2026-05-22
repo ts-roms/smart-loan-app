@@ -1,11 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { JournalService } from "./journal.service.js";
-import {
-  entrySchema,
-  reverseBulkSchema,
-  reverseSingleSchema,
-} from "./schemas.js";
+import type { JournalService } from "./journal.service";
+import { entrySchema, reverseBulkSchema, reverseSingleSchema } from "./schemas";
 
 /**
  * HTTP adapter for the three journal write endpoints

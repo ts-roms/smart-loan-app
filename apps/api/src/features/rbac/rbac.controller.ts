@@ -1,10 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type {
-  CreateUserResult,
-  RbacService,
-  RoleResult,
-} from "./rbac.service.js";
+import type { CreateUserResult, RbacService, RoleResult } from "./rbac.service";
 import {
   assignSchema,
   createRoleSchema,
@@ -13,8 +9,8 @@ import {
   permissionPatchSchema,
   updateRoleSchema,
   userBulkImportSchema,
-} from "./schemas.js";
-import type { UsersBulkImportService } from "./users-bulk-import.service.js";
+} from "./schemas";
+import type { UsersBulkImportService } from "./users-bulk-import.service";
 
 /**
  * HTTP adapter for RBAC admin routes. Body parsing + service-result

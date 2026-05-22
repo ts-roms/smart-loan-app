@@ -5,7 +5,7 @@ import {
   requiredDocsFor,
   validateKyc,
   type KycSubmissionLite,
-} from "./index.js";
+} from "./index";
 
 /**
  * Unit tests for the KYC rollup. `validateKyc` is the single source of

@@ -28,8 +28,8 @@ import {
 } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { RepossessionController } from "./repossession.controller.js";
-import { RepossessionService } from "./repossession.service.js";
+import { RepossessionController } from "./repossession.controller";
+import { RepossessionService } from "./repossession.service";
 
 export async function repossessionRoutes(app: FastifyInstance) {
   const service = new RepossessionService(

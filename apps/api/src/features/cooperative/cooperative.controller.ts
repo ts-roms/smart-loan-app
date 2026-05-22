@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { CooperativeService } from "./cooperative.service.js";
+import type { CooperativeService } from "./cooperative.service";
 import {
   bigBrotherSchema,
   contributionSchema,
@@ -10,7 +10,7 @@ import {
   otherIncomeSchema,
   savingsSchema,
   withdrawalSchema,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * HTTP adapter for cooperative routes. 14 endpoints (list + create

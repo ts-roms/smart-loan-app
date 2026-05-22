@@ -3,5 +3,5 @@
 // "record a payment against a loan" endpoint lives under /loans
 // (see features/loans/loans.routes.ts) — different concern, different
 // folder.
-export { paymentsRoutes } from "./payments.routes.js";
-export * from "./schemas.js";
+export { paymentsRoutes } from "./payments.routes";
+export * from "./schemas";

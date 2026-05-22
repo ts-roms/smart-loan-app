@@ -5,7 +5,7 @@ import type {
   CheckInput,
   DeactivateInput,
   TagInput,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * DorsiService — application layer for FRD §3.10. The repository

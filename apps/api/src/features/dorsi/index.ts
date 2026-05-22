@@ -1,9 +1,9 @@
 import { AuditLogRepository, DorsiRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { DorsiController } from "./dorsi.controller.js";
-import { registerDorsiHttp } from "./dorsi.routes.js";
-import { DorsiService } from "./dorsi.service.js";
+import { DorsiController } from "./dorsi.controller";
+import { registerDorsiHttp } from "./dorsi.routes";
+import { DorsiService } from "./dorsi.service";
 
 /**
  * DORSI feature entry point — registered under the `/dorsi` prefix.

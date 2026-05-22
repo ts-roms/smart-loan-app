@@ -18,8 +18,8 @@
 import { CollectionsRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { CollectionsController } from "./collections.controller.js";
-import { CollectionsService } from "./collections.service.js";
+import { CollectionsController } from "./collections.controller";
+import { CollectionsService } from "./collections.service";
 
 export async function collectionsRoutes(app: FastifyInstance) {
   const ctrl = new CollectionsController(

@@ -5,5 +5,5 @@
 // The rest (COA, journal reads, ledger, reports, periods, accrual job)
 // stay inline in accounting.routes.ts because they're thin repo
 // passthroughs — see docs/architecture.md "earn its keep".
-export { accountingRoutes } from "./accounting.routes.js";
-export * from "./schemas.js";
+export { accountingRoutes } from "./accounting.routes";
+export * from "./schemas";

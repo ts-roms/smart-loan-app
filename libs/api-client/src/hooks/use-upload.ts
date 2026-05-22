@@ -1,7 +1,7 @@
 import type { UploadResult } from "@loan/shared-types";
 import { useMutation } from "@tanstack/react-query";
 
-import { getApiClient } from "../client.js";
+import { getApiClient } from "../client";
 
 export type UploadSubdir =
   | "kyc"

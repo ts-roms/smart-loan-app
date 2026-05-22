@@ -1,7 +1,7 @@
 import type { KycRepository, KycSubmission } from "@loan/db";
 import { validateKyc } from "@loan/kyc";
 
-import type { DecideKycInput, SubmitKycInput } from "./schemas.js";
+import type { DecideKycInput, SubmitKycInput } from "./schemas";
 
 /**
  * KycService — application layer for KYC document submission +

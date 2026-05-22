@@ -11,15 +11,15 @@ import { validateKyc } from "@loan/kyc";
 import { renderCustomerStatement } from "@loan/pdf";
 import { randomUUID } from "node:crypto";
 
-import { getBranding } from "../../lib/branding.js";
+import { getBranding } from "../../lib/branding";
 
-import type { LedgerScope } from "./helpers.js";
+import type { LedgerScope } from "./helpers";
 import type {
   ApplyInput,
   IntentInput,
   KycSubmitInput,
   ProfileUpdateInput,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * Borrower-portal orchestration. The portal is implicitly scoped to

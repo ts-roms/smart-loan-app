@@ -3,7 +3,7 @@ import { MockProvider } from "@loan/payments";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 
-import { createIntentSchema } from "./schemas.js";
+import { createIntentSchema } from "./schemas";
 
 /**
  * Payment-gateway routes. Today only the MockProvider is wired up;

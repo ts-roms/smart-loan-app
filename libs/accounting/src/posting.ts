@@ -7,7 +7,7 @@
  * `buildEntry` enforces it.
  */
 
-import { ACCOUNT_CODES, bucketToAccount } from "./chart.js";
+import { ACCOUNT_CODES, bucketToAccount } from "./chart";
 
 export interface JournalLineInput {
   /** Account code from the chart (resolved to id by the repository). */

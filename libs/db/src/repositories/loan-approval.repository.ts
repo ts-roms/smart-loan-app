@@ -30,7 +30,7 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
-import { resolveEffectivePermissions } from "./delegation.repository.js";
+import { resolveEffectivePermissions } from "./delegation.repository";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 

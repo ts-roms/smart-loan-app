@@ -7,8 +7,8 @@ import type {
 } from "@loan/db";
 import { renderCustomerStatement } from "@loan/pdf";
 
-import { getBranding } from "../../lib/branding.js";
-import type { LedgerScope } from "./schemas.js";
+import { getBranding } from "../../lib/branding";
+import type { LedgerScope } from "./schemas";
 
 /**
  * Statement-ready notification result. Same shape for both the

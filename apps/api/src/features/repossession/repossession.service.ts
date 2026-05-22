@@ -13,7 +13,7 @@ import type {
   ListQuery,
   OpenInput,
   RecoverInput,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * Repossession orchestration. Eight state-transition methods, each

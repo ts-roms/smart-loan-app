@@ -1,9 +1,9 @@
 import { AccountingRepository, AuditLogRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { JournalController } from "./journal.controller.js";
-import { JournalService } from "./journal.service.js";
-import { accountSchema } from "./schemas.js";
+import { JournalController } from "./journal.controller";
+import { JournalService } from "./journal.service";
+import { accountSchema } from "./schemas";
 
 /**
  * Helper for the report endpoints — defaults to "now" when `asOf` is

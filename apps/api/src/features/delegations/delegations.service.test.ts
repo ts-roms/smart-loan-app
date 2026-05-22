@@ -33,7 +33,7 @@ vi.mock("@loan/db", async (importOriginal) => {
 });
 
 import { resolveUserPermissions } from "@loan/db";
-import { DelegationService } from "./delegations.service.js";
+import { DelegationService } from "./delegations.service";
 
 // The `resolveUserPermissions` mock is module-scoped, so call counts
 // accumulate across tests. Reset between every test so each one can

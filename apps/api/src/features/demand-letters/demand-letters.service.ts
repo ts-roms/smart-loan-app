@@ -14,7 +14,7 @@ import type {
   DemandLetterStageEnum,
   DispatchInput,
   ListQuery,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * Demand-letter orchestration — FRD §3.6.

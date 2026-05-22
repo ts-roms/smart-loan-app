@@ -1,6 +1,6 @@
 import { type DecisionRuleRepository } from "@loan/db";
 
-import type { CreateRuleInput, UpdateRuleInput } from "./schemas.js";
+import type { CreateRuleInput, UpdateRuleInput } from "./schemas";
 
 /**
  * Decision-rule orchestration. Mostly a thin pass-through over the

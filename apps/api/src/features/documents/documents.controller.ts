@@ -2,9 +2,9 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import type { PrismaClient } from "@loan/db";
 
-import type { DocumentsService, RenderResult } from "./documents.service.js";
-import { sendPdf } from "./helpers.js";
-import { signQuerySchema, wantsPersonnelSign } from "./schemas.js";
+import type { DocumentsService, RenderResult } from "./documents.service";
+import { sendPdf } from "./helpers";
+import { signQuerySchema, wantsPersonnelSign } from "./schemas";
 
 /**
  * HTTP adapter for document streaming. Officer routes accept

@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { ScoringService } from "./scoring.service.js";
-import { submitSurveySchema, tierQuerySchema } from "./schemas.js";
+import type { ScoringService } from "./scoring.service";
+import { submitSurveySchema, tierQuerySchema } from "./schemas";
 
 export class ScoringController {
   constructor(private readonly service: ScoringService) {}

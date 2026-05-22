@@ -26,8 +26,8 @@
 import { CooperativeRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { CooperativeController } from "./cooperative.controller.js";
-import { CooperativeService } from "./cooperative.service.js";
+import { CooperativeController } from "./cooperative.controller";
+import { CooperativeService } from "./cooperative.service";
 
 export async function cooperativeRoutes(app: FastifyInstance) {
   const service = new CooperativeService(new CooperativeRepository(app.prisma));

@@ -5,8 +5,8 @@ import type {
   DelegationService,
   ExtendResult,
   RevokeResult,
-} from "./delegations.service.js";
-import { createSchema, extendSchema, revokeSchema } from "./schemas.js";
+} from "./delegations.service";
+import { createSchema, extendSchema, revokeSchema } from "./schemas";
 
 /**
  * HTTP adapter for delegations. Caller permissions are resolved here

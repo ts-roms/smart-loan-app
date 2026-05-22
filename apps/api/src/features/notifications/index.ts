@@ -3,4 +3,4 @@
 // pathway is owned by NotificationRepository, decorated onto
 // `app.notifications` for use by feature services (see
 // features/README.md).
-export { notificationRoutes } from "./notifications.routes.js";
+export { notificationRoutes } from "./notifications.routes";

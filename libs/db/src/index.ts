@@ -90,8 +90,8 @@ export {
   UserRole,
 } from "@prisma/client";
 
-export { createPrismaClient } from "./client.js";
-export { fastifyPrisma } from "./plugin.js";
+export { createPrismaClient } from "./client";
+export { fastifyPrisma } from "./plugin";
 export {
   isUuid,
   idOrNumberWhere,
@@ -100,32 +100,32 @@ export {
   nextPaymentIntentNumber,
   nextVehicleNumber,
   nextPropertyNumber,
-} from "./lib/reference-numbers.js";
-export * from "./repositories/customer.repository.js";
-export * from "./repositories/kyc.repository.js";
-export * from "./repositories/credit-score.repository.js";
-export * from "./repositories/survey.repository.js";
-export * from "./repositories/loan.repository.js";
-export * from "./repositories/loan-draft.repository.js";
-export * from "./repositories/loan-product.repository.js";
-export * from "./repositories/accounting.repository.js";
-export * from "./repositories/collections.repository.js";
-export * from "./repositories/payment-intent.repository.js";
-export * from "./repositories/audit-log.repository.js";
-export * from "./repositories/job.repository.js";
-export * from "./repositories/notification.repository.js";
-export * from "./repositories/screening.repository.js";
-export * from "./repositories/co-maker.repository.js";
-export * from "./repositories/decision-rule.repository.js";
-export * from "./repositories/rbac.repository.js";
-export * from "./repositories/delegation.repository.js";
-export * from "./repositories/bank-reconciliation.repository.js";
-export * from "./repositories/ecl.repository.js";
-export * from "./repositories/cooperative.repository.js";
-export * from "./repositories/annual-document.repository.js";
-export * from "./repositories/demand-letter.repository.js";
-export * from "./repositories/repossession.repository.js";
-export * from "./repositories/dorsi.repository.js";
-export * from "./repositories/lease.repository.js";
-export * from "./repositories/loan-approval.repository.js";
-export * from "./repositories/customer-ledger.repository.js";
+} from "./lib/reference-numbers";
+export * from "./repositories/customer.repository";
+export * from "./repositories/kyc.repository";
+export * from "./repositories/credit-score.repository";
+export * from "./repositories/survey.repository";
+export * from "./repositories/loan.repository";
+export * from "./repositories/loan-draft.repository";
+export * from "./repositories/loan-product.repository";
+export * from "./repositories/accounting.repository";
+export * from "./repositories/collections.repository";
+export * from "./repositories/payment-intent.repository";
+export * from "./repositories/audit-log.repository";
+export * from "./repositories/job.repository";
+export * from "./repositories/notification.repository";
+export * from "./repositories/screening.repository";
+export * from "./repositories/co-maker.repository";
+export * from "./repositories/decision-rule.repository";
+export * from "./repositories/rbac.repository";
+export * from "./repositories/delegation.repository";
+export * from "./repositories/bank-reconciliation.repository";
+export * from "./repositories/ecl.repository";
+export * from "./repositories/cooperative.repository";
+export * from "./repositories/annual-document.repository";
+export * from "./repositories/demand-letter.repository";
+export * from "./repositories/repossession.repository";
+export * from "./repositories/dorsi.repository";
+export * from "./repositories/lease.repository";
+export * from "./repositories/loan-approval.repository";
+export * from "./repositories/customer-ledger.repository";

@@ -4,8 +4,8 @@ import {
   customerSchema,
   type BulkImportInput,
   type CustomerWriteInput,
-} from "./schemas.js";
-import { toDateOrUndefined } from "./helpers.js";
+} from "./schemas";
+import { toDateOrUndefined } from "./helpers";
 
 /**
  * Output row in a bulk-import response. Successful real-run rows carry

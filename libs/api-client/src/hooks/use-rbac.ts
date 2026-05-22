@@ -14,7 +14,7 @@ import type {
 } from "@loan/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from "../client.js";
+import { getApiClient } from "../client";
 
 export const rbacKeys = {
   permissions: ["rbac", "permissions"] as const,

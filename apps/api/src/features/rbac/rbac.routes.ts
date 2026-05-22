@@ -17,9 +17,9 @@ import {
 } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { RbacController } from "./rbac.controller.js";
-import { RbacService } from "./rbac.service.js";
-import { UsersBulkImportService } from "./users-bulk-import.service.js";
+import { RbacController } from "./rbac.controller";
+import { RbacService } from "./rbac.service";
+import { UsersBulkImportService } from "./users-bulk-import.service";
 
 export async function rbacRoutes(app: FastifyInstance) {
   const roles = new RoleRepository(app.prisma);

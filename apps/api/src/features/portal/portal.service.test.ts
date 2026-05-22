@@ -25,7 +25,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { PortalService } from "./portal.service.js";
+import { PortalService } from "./portal.service";
 
 interface MockOptions {
   user?: { role: string; customerId: string | null } | null;

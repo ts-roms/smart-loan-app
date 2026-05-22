@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { DecisionRuleService } from "./decision-rules.service.js";
-import { createRuleSchema, updateRuleSchema } from "./schemas.js";
+import type { DecisionRuleService } from "./decision-rules.service";
+import { createRuleSchema, updateRuleSchema } from "./schemas";
 
 export class DecisionRuleController {
   constructor(private readonly service: DecisionRuleService) {}

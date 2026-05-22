@@ -118,7 +118,7 @@ export class DelegationRepository {
  * the delegator (e.g. removing a role) instantly tightens what the
  * delegate inherits.
  */
-import { resolveUserPermissions } from "./rbac.repository.js";
+import { resolveUserPermissions } from "./rbac.repository";
 
 export async function resolveEffectivePermissions(
   prisma: PrismaClient,

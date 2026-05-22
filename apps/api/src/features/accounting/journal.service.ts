@@ -5,7 +5,7 @@ import type {
   EntryInput,
   ReverseBulkInput,
   ReverseSingleInput,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * Per-row outcome for the bulk-reverse endpoint. Returned via 207

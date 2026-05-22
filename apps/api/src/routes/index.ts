@@ -5,55 +5,55 @@ import {
   ScreeningRepository,
 } from "@loan/db";
 
-import { config } from "../config.js";
-import { createAmlProvider, createNotificationProvider } from "../providers.js";
+import { config } from "../config";
+import { createAmlProvider, createNotificationProvider } from "../providers";
 
 // Every route plugin lives under apps/api/src/features/<feature>/ now.
 // Alphabetised for readability; the registrar at the bottom mounts each
 // at its URL prefix (the prefix is the source of truth for path, not
 // the import order here).
-import { accountingRoutes } from "../features/accounting/index.js";
+import { accountingRoutes } from "../features/accounting/index";
 import {
   annualDocsLoanRoutes,
   annualDocsRoutes,
-} from "../features/annual-docs/index.js";
-import { assistantRoutes } from "../features/assistant/index.js";
-import { auditRoutes } from "../features/audit/index.js";
-import { authRoutes } from "../features/auth/index.js";
-import { collectionsRoutes } from "../features/collections/index.js";
-import { cooperativeRoutes } from "../features/cooperative/index.js";
-import { customerRoutes } from "../features/customers/index.js";
-import { decisionRuleRoutes } from "../features/decision-rules/index.js";
-import { delegationRoutes } from "../features/delegations/index.js";
-import { demandLetterRoutes } from "../features/demand-letters/index.js";
+} from "../features/annual-docs/index";
+import { assistantRoutes } from "../features/assistant/index";
+import { auditRoutes } from "../features/audit/index";
+import { authRoutes } from "../features/auth/index";
+import { collectionsRoutes } from "../features/collections/index";
+import { cooperativeRoutes } from "../features/cooperative/index";
+import { customerRoutes } from "../features/customers/index";
+import { decisionRuleRoutes } from "../features/decision-rules/index";
+import { delegationRoutes } from "../features/delegations/index";
+import { demandLetterRoutes } from "../features/demand-letters/index";
 import {
   documentRoutes,
   portalDocumentRoutes,
-} from "../features/documents/index.js";
-import { dorsiRoutes } from "../features/dorsi/index.js";
-import { eclRoutes } from "../features/ecl/index.js";
-import { healthRoutes } from "../features/health/index.js";
-import { jobRoutes } from "../features/jobs/index.js";
-import { kycRoutes } from "../features/kyc/index.js";
-import { leaseRoutes } from "../features/lease/index.js";
+} from "../features/documents/index";
+import { dorsiRoutes } from "../features/dorsi/index";
+import { eclRoutes } from "../features/ecl/index";
+import { healthRoutes } from "../features/health/index";
+import { jobRoutes } from "../features/jobs/index";
+import { kycRoutes } from "../features/kyc/index";
+import { leaseRoutes } from "../features/lease/index";
 import {
   loanProductRoutes,
   loanApprovalChainRoutes,
-} from "../features/loan-products/index.js";
-import { loanRoutes, loanApprovalRoutes } from "../features/loans/index.js";
-import { notificationRoutes } from "../features/notifications/index.js";
-import { paymentsRoutes } from "../features/payments/index.js";
-import { portalRoutes } from "../features/portal/index.js";
-import { rbacRoutes } from "../features/rbac/index.js";
-import { reconciliationRoutes } from "../features/reconciliation/index.js";
-import { reportRoutes } from "../features/reports/index.js";
-import { repossessionRoutes } from "../features/repossession/index.js";
-import { scoringRoutes } from "../features/scoring/index.js";
-import { screeningRoutes } from "../features/screening/index.js";
-import { systemRoutes } from "../features/system/index.js";
-import { uploadRoutes } from "../features/uploads/index.js";
+} from "../features/loan-products/index";
+import { loanRoutes, loanApprovalRoutes } from "../features/loans/index";
+import { notificationRoutes } from "../features/notifications/index";
+import { paymentsRoutes } from "../features/payments/index";
+import { portalRoutes } from "../features/portal/index";
+import { rbacRoutes } from "../features/rbac/index";
+import { reconciliationRoutes } from "../features/reconciliation/index";
+import { reportRoutes } from "../features/reports/index";
+import { repossessionRoutes } from "../features/repossession/index";
+import { scoringRoutes } from "../features/scoring/index";
+import { screeningRoutes } from "../features/screening/index";
+import { systemRoutes } from "../features/system/index";
+import { uploadRoutes } from "../features/uploads/index";
 
-import { buildJobDefinitions } from "../jobs.js";
+import { buildJobDefinitions } from "../jobs";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Single instances of the cross-cutting repos so the routes + scheduler

@@ -8,7 +8,7 @@ import type {
   OtherIncomeInput,
   SavingsInput,
   WithdrawalInput,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * Cooperative orchestration. Seven entity types, each with `list` and

@@ -9,4 +9,4 @@
 //
 // Both live in one file because they share the bulk of the PDF
 // composition and asset-resolution logic.
-export { documentRoutes, portalDocumentRoutes } from "./documents.routes.js";
+export { documentRoutes, portalDocumentRoutes } from "./documents.routes";

@@ -19,8 +19,8 @@
 import { AuditLogRepository, LeaseRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { LeaseController } from "./lease.controller.js";
-import { LeaseService } from "./lease.service.js";
+import { LeaseController } from "./lease.controller";
+import { LeaseService } from "./lease.service";
 
 export async function leaseRoutes(app: FastifyInstance) {
   const service = new LeaseService(

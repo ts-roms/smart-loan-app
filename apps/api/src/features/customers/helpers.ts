@@ -1,7 +1,7 @@
 import type { CustomerLedger } from "@loan/db";
 import type { FastifyReply } from "fastify";
 
-import type { LedgerScope } from "./schemas.js";
+import type { LedgerScope } from "./schemas";
 
 /** Sentinel returned by parseDateOr400 when it already sent a 400 reply. */
 export const FAILED = Symbol("FAILED");

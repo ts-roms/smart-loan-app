@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { DorsiService } from "./dorsi.service.js";
+import type { DorsiService } from "./dorsi.service";
 import {
   boardApprovalSchema,
   checkSchema,
@@ -8,7 +8,7 @@ import {
   deactivateSchema,
   screenByNameSchema,
   tagSchema,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * HTTP adapter for the DORSI compliance surface. Each method maps a

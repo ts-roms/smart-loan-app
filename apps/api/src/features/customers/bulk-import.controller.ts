@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { BulkImportService } from "./bulk-import.service.js";
-import { bulkImportSchema } from "./schemas.js";
+import type { BulkImportService } from "./bulk-import.service";
+import { bulkImportSchema } from "./schemas";
 
 /**
  * HTTP adapter for the bulk customer import flow. Validates the

@@ -65,4 +65,4 @@ export {
   type PsgcProvince,
   type PsgcCity,
   type PsgcBarangay,
-} from "./lib/psgc.js";
+} from "./lib/psgc";

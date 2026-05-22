@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
-import type { LedgerQuery } from "./schemas.js";
-import type { CustomerLedgerController } from "./ledger.controller.js";
+import type { LedgerQuery } from "./schemas";
+import type { CustomerLedgerController } from "./ledger.controller";
 
 /**
  * HTTP wiring for the customer ledger surface. Three endpoints share

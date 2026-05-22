@@ -9,7 +9,7 @@ import {
   loanDisbursementEntry,
   loanPaymentEntry,
   penaltyWaiveEntry,
-} from "./posting.js";
+} from "./posting";
 
 /**
  * Journal-entry posting tests. These factories are the spine of the

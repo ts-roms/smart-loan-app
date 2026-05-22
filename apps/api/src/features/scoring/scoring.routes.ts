@@ -16,8 +16,8 @@
 import { CreditScoreRepository, SurveyRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { ScoringController } from "./scoring.controller.js";
-import { ScoringService } from "./scoring.service.js";
+import { ScoringController } from "./scoring.controller";
+import { ScoringService } from "./scoring.service";
 
 export async function scoringRoutes(app: FastifyInstance) {
   const ctrl = new ScoringController(

@@ -7,10 +7,7 @@ import type {
   PrismaClient,
   Sex,
 } from "@prisma/client";
-import {
-  idOrNumberWhere,
-  nextCustomerNumber,
-} from "../lib/reference-numbers.js";
+import { idOrNumberWhere, nextCustomerNumber } from "../lib/reference-numbers";
 
 /**
  * Input shape for creating a customer. Mirrors the expanded schema —

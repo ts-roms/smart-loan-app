@@ -1,6 +1,6 @@
 import { type DorsiRepository, type PrismaClient } from "@loan/db";
 
-import type { ReportType } from "./schemas.js";
+import type { ReportType } from "./schemas";
 
 /**
  * Compliance reports — FRD audit requirements (§3.1.5, §3.2.3, §3.3.7,

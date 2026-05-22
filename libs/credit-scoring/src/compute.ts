@@ -4,13 +4,8 @@ import {
   SURVEY_QUESTIONS,
   type SurveyAnswer,
   type SurveyQuestion,
-} from "./factors.js";
-import {
-  toBureauBucket,
-  toTier,
-  type BureauBucket,
-  type Tier,
-} from "./tier.js";
+} from "./factors";
+import { toBureauBucket, toTier, type BureauBucket, type Tier } from "./tier";
 
 export interface BehaviorInput {
   priorLoans: number;

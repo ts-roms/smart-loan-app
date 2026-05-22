@@ -4,7 +4,7 @@ import type {
   ApproveResult,
   DemandLetterService,
   LetterResult,
-} from "./demand-letters.service.js";
+} from "./demand-letters.service";
 import {
   approveSchema,
   batchSchema,
@@ -12,7 +12,7 @@ import {
   closeSchema,
   dispatchSchema,
   listQuerySchema,
-} from "./schemas.js";
+} from "./schemas";
 
 /**
  * HTTP adapter for demand letters. Owns body parsing and the mapping

@@ -26,7 +26,7 @@ import {
   round2,
   scoreNameMatch,
   tokenize,
-} from "../lib/dorsi-helpers.js";
+} from "../lib/dorsi-helpers";
 
 export interface DorsiUtilization {
   /// Company total equity (the base).

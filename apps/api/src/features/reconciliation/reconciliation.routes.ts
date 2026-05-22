@@ -16,7 +16,7 @@
 import { AuditLogRepository, BankReconciliationRepository } from "@loan/db";
 import type { FastifyInstance } from "fastify";
 
-import { manualMatchSchema, statementSchema } from "./schemas.js";
+import { manualMatchSchema, statementSchema } from "./schemas";
 
 export async function reconciliationRoutes(app: FastifyInstance) {
   const repo = new BankReconciliationRepository(app.prisma);

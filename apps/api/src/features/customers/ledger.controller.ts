@@ -1,13 +1,8 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import {
-  FAILED,
-  ledgerToCsv,
-  normalizeScope,
-  parseDateOr400,
-} from "./helpers.js";
-import type { LedgerQuery } from "./schemas.js";
-import type { CustomerLedgerService } from "./ledger.service.js";
+import { FAILED, ledgerToCsv, normalizeScope, parseDateOr400 } from "./helpers";
+import type { LedgerQuery } from "./schemas";
+import type { CustomerLedgerService } from "./ledger.service";
 
 type LedgerReq = FastifyRequest<{
   Params: { id: string };

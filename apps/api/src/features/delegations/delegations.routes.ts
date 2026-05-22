@@ -21,8 +21,8 @@
 import { AuditLogRepository, DelegationRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import { DelegationController } from "./delegations.controller.js";
-import { DelegationService } from "./delegations.service.js";
+import { DelegationController } from "./delegations.controller";
+import { DelegationService } from "./delegations.service";
 
 export async function delegationRoutes(app: FastifyInstance) {
   const service = new DelegationService(
