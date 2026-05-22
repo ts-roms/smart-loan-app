@@ -1,26 +1,43 @@
-import { ApiError, useLogin } from '@loan/api-client';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, useToast } from '@loan/ui';
-import { Lock, Wallet } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../providers/auth';
+import { ApiError, useLogin } from "@loan/api-client";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  useToast,
+} from "@loan/ui";
+import { Lock, Wallet } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../../../providers/auth";
 
 /**
  * Sign-in. After a successful POST we stash the token + user in the
  * auth provider; the App's router will swing over to the dashboard
  * automatically on the next render.
+ *
+ * Multi-tenant deployments: the tenant slug is read from the URL
+ * query (`?tenant=<slug>`) and forwarded with the login request. In
+ * single-tenant deployments the query param is absent and the server
+ * falls back to DEFAULT_TENANT_SLUG. Full path-prefix routing (`/t/<slug>`)
+ * lands in P2.4+; for now the deep-link / vendor email is the entry
+ * point.
  */
 export function LoginPage() {
   const { signIn } = useAuth();
   const login = useLogin();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const tenantSlug = params.get("tenant") ?? undefined;
   const toast = useToast();
-  const [email, setEmail] = useState('admin@loan.local');
-  const [password, setPassword] = useState('');
-  const [totpCode, setTotpCode] = useState('');
+  const [email, setEmail] = useState("admin@loan.local");
+  const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
   const [requires2fa, setRequires2fa] = useState(false);
   const [useRecovery, setUseRecovery] = useState(false);
-  const [recoveryCode, setRecoveryCode] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState("");
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -28,27 +45,35 @@ export function LoginPage() {
       const res = await login.mutateAsync({
         email,
         password,
-        ...(useRecovery ? { recoveryCode } : { totpCode: totpCode || undefined }),
+        ...(tenantSlug ? { tenantSlug } : {}),
+        ...(useRecovery
+          ? { recoveryCode }
+          : { totpCode: totpCode || undefined }),
       });
       signIn({
         accessToken: res.accessToken,
         refreshToken: res.refreshToken,
         user: res.user,
       });
-      navigate('/', { replace: true });
+      navigate("/", { replace: true });
     } catch (err) {
       // Server signals "needs 2FA" via a 401 with `requires2fa: true` in
       // the body. Switch the form into 2FA mode instead of toasting an
       // error — keeps the password the user just typed and prompts for
       // the code.
-      if (err instanceof ApiError && err.body && typeof err.body === 'object' && 'requires2fa' in err.body) {
+      if (
+        err instanceof ApiError &&
+        err.body &&
+        typeof err.body === "object" &&
+        "requires2fa" in err.body
+      ) {
         setRequires2fa(true);
         if (totpCode || recoveryCode) {
-          toast.error((err as Error).message ?? 'Wrong 2FA code');
+          toast.error((err as Error).message ?? "Wrong 2FA code");
         }
         return;
       }
-      toast.error((err as Error).message ?? 'Sign-in failed');
+      toast.error((err as Error).message ?? "Sign-in failed");
     }
   };
 
@@ -61,6 +86,11 @@ export function LoginPage() {
             <span className="text-xl font-semibold">SmartLoan</span>
           </div>
           <CardTitle>Sign in</CardTitle>
+          {tenantSlug && (
+            <p className="text-xs text-white/55 mt-1">
+              Tenant: <code className="text-sky-300">{tenantSlug}</code>
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-3">
@@ -95,7 +125,9 @@ export function LoginPage() {
                   maxLength={6}
                   placeholder="000000"
                   value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) =>
+                    setTotpCode(e.target.value.replace(/\D/g, ""))
+                  }
                   autoFocus
                 />
                 <button
@@ -115,7 +147,9 @@ export function LoginPage() {
                 <Input
                   placeholder="XXXX-XXXX"
                   value={recoveryCode}
-                  onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+                  onChange={(e) =>
+                    setRecoveryCode(e.target.value.toUpperCase())
+                  }
                   autoFocus
                 />
                 <button
@@ -128,7 +162,11 @@ export function LoginPage() {
               </div>
             )}
             <Button type="submit" className="w-full" disabled={login.isPending}>
-              {login.isPending ? 'Signing in…' : requires2fa ? 'Verify and sign in' : 'Sign in'}
+              {login.isPending
+                ? "Signing in…"
+                : requires2fa
+                  ? "Verify and sign in"
+                  : "Sign in"}
             </Button>
             <p className="text-xs text-white/45 text-center pt-2">
               Default admin · admin@loan.local / P@ssw0rd123

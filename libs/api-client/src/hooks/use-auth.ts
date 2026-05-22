@@ -24,6 +24,14 @@ export function useLogin() {
     mutationFn: (input: {
       email: string;
       password: string;
+      /**
+       * Tenant slug for multi-tenant deployments. In single-tenant
+       * mode (the default during the Phase 2 conversion) the server
+       * ignores this and uses DEFAULT_TENANT_SLUG. The web app reads
+       * the slug from `?tenant=<slug>` on the login URL and forwards
+       * it here.
+       */
+      tenantSlug?: string;
       totpCode?: string;
       recoveryCode?: string;
     }) => getApiClient().post<LoginResponse>("/auth/login", input),
@@ -32,16 +40,29 @@ export function useLogin() {
 
 export function useRegister() {
   return useMutation({
-    mutationFn: (input: { email: string; password: string; name: string }) =>
-      getApiClient().post<LoginResponse>("/auth/register", input),
+    mutationFn: (input: {
+      email: string;
+      password: string;
+      name: string;
+      tenantSlug?: string;
+    }) => getApiClient().post<LoginResponse>("/auth/register", input),
   });
 }
 
-/** Exchange a refresh token for a new access+refresh pair. */
+/**
+ * Exchange a refresh token for a new access+refresh pair. The tenant
+ * slug must be carried alongside — refresh tokens live in the
+ * tenant's RefreshToken table, so the server needs to know which
+ * schema to read from.
+ */
 export async function refreshSession(
   refreshToken: string,
+  tenantSlug?: string,
 ): Promise<LoginResponse> {
-  return getApiClient().post<LoginResponse>("/auth/refresh", { refreshToken });
+  return getApiClient().post<LoginResponse>("/auth/refresh", {
+    refreshToken,
+    ...(tenantSlug ? { tenantSlug } : {}),
+  });
 }
 
 /** Revoke the current refresh token (logout). */

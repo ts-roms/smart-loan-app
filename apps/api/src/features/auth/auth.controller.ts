@@ -1,7 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import type {
-  AuthService,
   LoginResult,
   RegisterResult,
   RefreshResult,
@@ -15,14 +14,19 @@ import {
 } from "./schemas";
 
 /**
- * HTTP adapter for the auth feature. Every method maps an HTTP
- * contract onto one AuthService call. The discriminated-union results
- * from the service map to specific HTTP codes here — never a throw,
- * so the wire shape is predictable on every error path.
+ * HTTP adapter for the auth feature.
+ *
+ * **Phase 2 pattern**: stateless singleton. Each method reads the
+ * per-request `AuthService` instance from `req.authServices.auth` —
+ * that container is built by the preHandler chain in routes.ts from
+ * the tenant-scoped Prisma client.
+ *
+ * The tenant slug is also surfaced on `req.tenantCtx.slug`. Login
+ * and register need it for the JWT payload; the resolveTenant
+ * preHandler (or, for unauthenticated requests, resolveTenantFromBody)
+ * is responsible for populating it.
  */
 export class AuthController {
-  constructor(private readonly service: AuthService) {}
-
   // ── Login + register + refresh + logout ────────────────────────────
 
   login = async (req: FastifyRequest, reply: FastifyReply) => {
@@ -32,7 +36,10 @@ export class AuthController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.login(parsed.data);
+    const result = await req.authServices!.auth.login(
+      parsed.data,
+      req.tenantCtx.slug,
+    );
     if (result.ok) return this.tokenResponse(result.tokens, result.user);
     return this.mapLoginError(result, reply);
   };
@@ -44,7 +51,10 @@ export class AuthController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.register(parsed.data);
+    const result = await req.authServices!.auth.register(
+      parsed.data,
+      req.tenantCtx.slug,
+    );
     if (result.ok) {
       return reply
         .code(201)
@@ -60,7 +70,10 @@ export class AuthController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.refresh(parsed.data.refreshToken);
+    const result = await req.authServices!.auth.refresh(
+      parsed.data.refreshToken,
+      req.tenantCtx.slug,
+    );
     if (result.ok) return this.tokenResponse(result.tokens, result.user);
     return this.mapRefreshError(result, reply);
   };
@@ -68,20 +81,20 @@ export class AuthController {
   logout = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = refreshSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(204).send();
-    await this.service.logout(parsed.data.refreshToken);
+    await req.authServices!.auth.logout(parsed.data.refreshToken);
     return reply.code(204).send();
   };
 
   // ── /me ────────────────────────────────────────────────────────────
 
   me = async (req: FastifyRequest, reply: FastifyReply) => {
-    const user = await this.service.me(req.user.sub);
+    const user = await req.authServices!.auth.me(req.user.sub);
     if (!user) return reply.code(404).send({ error: "NotFound" });
     return user;
   };
 
   getSignature = async (req: FastifyRequest, reply: FastifyReply) => {
-    const sig = await this.service.getSignature(req.user.sub);
+    const sig = await req.authServices!.auth.getSignature(req.user.sub);
     if (!sig) return reply.code(404).send({ error: "NotFound" });
     return sig;
   };
@@ -93,37 +106,40 @@ export class AuthController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.setSignature(req.user.sub, parsed.data.signatureUrl);
+    return req.authServices!.auth.setSignature(
+      req.user.sub,
+      parsed.data.signatureUrl,
+    );
   };
 
   clearSignature = async (req: FastifyRequest) => {
-    return this.service.clearSignature(req.user.sub);
+    return req.authServices!.auth.clearSignature(req.user.sub);
   };
 
   permissions = async (req: FastifyRequest) => {
-    return this.service.permissions(req.user.sub);
+    return req.authServices!.auth.permissions(req.user.sub);
   };
 
   notificationsState = async (req: FastifyRequest, reply: FastifyReply) => {
-    const state = await this.service.notificationsState(req.user.sub);
+    const state = await req.authServices!.auth.notificationsState(req.user.sub);
     if (!state) return reply.code(404).send({ error: "NotFound" });
     return state;
   };
 
   markNotificationsSeen = async (req: FastifyRequest) => {
-    return this.service.markNotificationsSeen(req.user.sub);
+    return req.authServices!.auth.markNotificationsSeen(req.user.sub);
   };
 
   // ── 2FA ────────────────────────────────────────────────────────────
 
   totpStatus = async (req: FastifyRequest, reply: FastifyReply) => {
-    const status = await this.service.totpStatus(req.user.sub);
+    const status = await req.authServices!.auth.totpStatus(req.user.sub);
     if (!status) return reply.code(404).send({ error: "NotFound" });
     return status;
   };
 
   totpSetup = async (req: FastifyRequest, reply: FastifyReply) => {
-    const result = await this.service.totpSetup(req.user.sub);
+    const result = await req.authServices!.auth.totpSetup(req.user.sub);
     if (result.ok) return { secret: result.secret, otpauth: result.otpauth };
     if (result.kind === "NotFound") {
       return reply.code(404).send({ error: "NotFound" });
@@ -141,7 +157,10 @@ export class AuthController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.totpEnable(req.user.sub, parsed.data);
+    const result = await req.authServices!.auth.totpEnable(
+      req.user.sub,
+      parsed.data,
+    );
     if (result.ok) {
       return { enabled: true, recoveryCodes: result.recoveryCodes };
     }
@@ -164,7 +183,10 @@ export class AuthController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.totpDisable(req.user.sub, parsed.data);
+    const result = await req.authServices!.auth.totpDisable(
+      req.user.sub,
+      parsed.data,
+    );
     if (result.ok) return { enabled: false };
     if (result.kind === "NotEnabled") {
       return reply

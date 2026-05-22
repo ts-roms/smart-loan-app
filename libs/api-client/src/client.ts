@@ -14,6 +14,15 @@ export interface ApiClientOptions {
   getToken?: () => string | null | undefined;
   /** Returns the current refresh token, or null if there isn't one. */
   getRefreshToken?: () => string | null | undefined;
+  /**
+   * Returns the tenant slug the current session belongs to. Used to
+   * carry the slug along with the refresh token (Phase 2 — refresh
+   * tokens live in tenant_<slug> tables; server needs to know which
+   * schema to look in). In single-tenant deployments the value is
+   * ignored server-side, so omitting this is fine; in multi-tenant
+   * deployments returning null/undefined makes refresh fail.
+   */
+  getTenantSlug?: () => string | null | undefined;
   /** Called when /auth/refresh returns a new access+refresh pair. */
   onTokenRefreshed?: (next: {
     accessToken: string;
@@ -31,7 +40,7 @@ export class ApiError extends Error {
     public readonly body?: unknown,
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 
@@ -41,20 +50,27 @@ export class ApiClient {
 
   constructor(private readonly opts: ApiClientOptions) {}
 
-  async request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  async request<T>(
+    path: string,
+    init: RequestInit = {},
+    retry = true,
+  ): Promise<T> {
     const token = this.opts.getToken?.();
     const headers = new Headers(init.headers);
     // For FormData, let the browser set Content-Type (with the multipart boundary).
     // For anything else with a body, default to JSON.
     const isFormData =
-      typeof FormData !== 'undefined' && init.body instanceof FormData;
-    if (init.body != null && !isFormData && !headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json');
+      typeof FormData !== "undefined" && init.body instanceof FormData;
+    if (init.body != null && !isFormData && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
     }
-    if (token) headers.set('Authorization', `Bearer ${token}`);
+    if (token) headers.set("Authorization", `Bearer ${token}`);
 
-    const res = await fetch(`${this.opts.baseUrl}${path}`, { ...init, headers });
-    if (res.status === 401 && retry && !path.startsWith('/auth/')) {
+    const res = await fetch(`${this.opts.baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
+    if (res.status === 401 && retry && !path.startsWith("/auth/")) {
       // Try the refresh dance — once. If it succeeds, we recurse with
       // `retry=false` so a still-401 response just propagates.
       const nextToken = await this.tryRefresh();
@@ -66,8 +82,10 @@ export class ApiClient {
       const text = await res.text();
       const parsed = safeParse(text);
       const message =
-        parsed && typeof parsed === 'object' && 'message' in parsed &&
-        typeof (parsed as { message: unknown }).message === 'string'
+        parsed &&
+        typeof parsed === "object" &&
+        "message" in parsed &&
+        typeof (parsed as { message: unknown }).message === "string"
           ? (parsed as { message: string }).message
           : `API ${res.status}`;
       throw new ApiError(res.status, message, parsed);
@@ -86,10 +104,18 @@ export class ApiClient {
     if (!this.refreshing) {
       this.refreshing = (async () => {
         try {
+          // Carry the tenant slug if the host has one. Single-tenant
+          // deployments ignore the field server-side; multi-tenant
+          // ones require it (refresh tokens are tenant-scoped).
+          const tenantSlug = this.opts.getTenantSlug?.();
+          const body: { refreshToken: string; tenantSlug?: string } = {
+            refreshToken: refresh,
+          };
+          if (tenantSlug) body.tenantSlug = tenantSlug;
           const res = await fetch(`${this.opts.baseUrl}/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken: refresh }),
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
           });
           if (!res.ok) {
             this.opts.onRefreshFailed?.();
@@ -115,10 +141,13 @@ export class ApiClient {
   }
 
   get<T>(path: string): Promise<T> {
-    return this.request<T>(path, { method: 'GET' });
+    return this.request<T>(path, { method: "GET" });
   }
   post<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>(path, { method: 'POST', body: JSON.stringify(body) });
+    return this.request<T>(path, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   }
 }
 
@@ -138,6 +167,9 @@ export function configureApiClient(opts: ApiClientOptions): ApiClient {
 }
 
 export function getApiClient(): ApiClient {
-  if (!singleton) throw new Error('ApiClient not configured. Call configureApiClient() at startup.');
+  if (!singleton)
+    throw new Error(
+      "ApiClient not configured. Call configureApiClient() at startup.",
+    );
   return singleton;
 }

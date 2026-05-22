@@ -27,9 +27,18 @@ authenticator.options = { window: 1, step: 30 };
  * Function signature for the JWT signer the controller passes in. We
  * type it minimally so the service doesn't import Fastify or
  * @fastify/jwt — both stay in the composition root (index.ts).
+ *
+ * `tenant` is required at the signature site so we can't accidentally
+ * mint a tenant-less token in multi-tenant mode. In single-tenant
+ * mode the caller passes the default slug ("default").
  */
 export type JwtSigner = (
-  payload: { sub: string; email: string; role: UserRole },
+  payload: {
+    sub: string;
+    email: string;
+    role: UserRole;
+    tenant: string;
+  },
   opts: { expiresIn: string },
 ) => string;
 
@@ -125,13 +134,19 @@ export class AuthService {
    * `replacesId` lets callers thread the rotation chain — the new row
    * records that it supersedes the old one, which is the breadcrumb
    * theft detection reads on reuse.
+   *
+   * `tenant` is embedded into the access token so the per-request
+   * resolveTenant preHandler knows which Postgres schema to bind to.
+   * Required even in single-tenant mode (the value is the default
+   * slug) so the verification path doesn't have to fork on env.
    */
   private async issueTokens(
     user: User,
+    tenant: string,
     opts: { replacesId?: string } = {},
   ): Promise<TokenPair> {
     const accessToken = this.signJwt(
-      { sub: user.id, email: user.email, role: user.role },
+      { sub: user.id, email: user.email, role: user.role, tenant },
       { expiresIn: ACCESS_TOKEN_TTL },
     );
     const { raw, hash } = generateRefreshToken();
@@ -154,7 +169,7 @@ export class AuthService {
 
   // ── Login + register + refresh + logout ────────────────────────────
 
-  async login(input: LoginInput): Promise<LoginResult> {
+  async login(input: LoginInput, tenant: string): Promise<LoginResult> {
     const user = await this.prisma.user.findUnique({
       where: { email: input.email },
     });
@@ -199,11 +214,14 @@ export class AuthService {
       }
     }
 
-    const tokens = await this.issueTokens(user);
+    const tokens = await this.issueTokens(user, tenant);
     return { ok: true, tokens, user: digest(user) };
   }
 
-  async register(input: RegisterInput): Promise<RegisterResult> {
+  async register(
+    input: RegisterInput,
+    tenant: string,
+  ): Promise<RegisterResult> {
     const exists = await this.prisma.user.findUnique({
       where: { email: input.email },
     });
@@ -217,7 +235,7 @@ export class AuthService {
         role: "CUSTOMER",
       },
     });
-    const tokens = await this.issueTokens(user);
+    const tokens = await this.issueTokens(user, tenant);
     return { ok: true, tokens, user: digest(user) };
   }
 
@@ -227,7 +245,7 @@ export class AuthService {
    * created. Re-use of an already-revoked token is the theft signal:
    * we revoke every active refresh token for that user.
    */
-  async refresh(refreshToken: string): Promise<RefreshResult> {
+  async refresh(refreshToken: string, tenant: string): Promise<RefreshResult> {
     const hash = hashRefreshToken(refreshToken);
     const row = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: hash },
@@ -261,7 +279,7 @@ export class AuthService {
       where: { id: row.id },
       data: { revokedAt: new Date() },
     });
-    const tokens = await this.issueTokens(user, { replacesId: row.id });
+    const tokens = await this.issueTokens(user, tenant, { replacesId: row.id });
     return { ok: true, tokens, user: digest(user) };
   }
 
