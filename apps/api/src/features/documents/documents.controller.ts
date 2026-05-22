@@ -1,30 +1,22 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { PrismaClient } from "@loan/db";
-
-import type { DocumentsService, RenderResult } from "./documents.service";
+import type { RenderResult } from "./documents.service";
 import { sendPdf } from "./helpers";
 import { signQuerySchema, wantsPersonnelSign } from "./schemas";
 
 /**
- * HTTP adapter for document streaming. Officer routes accept
- * `?sign=1` to embed the caller's personnel signature; portal routes
- * resolve the customer id from the JWT and refuse to render anyone
- * else's documents.
+ * HTTP adapter for document streaming. Phase 2: stateless. Reads
+ * `req.documentsServices.documents` per call. Customer resolution
+ * for the portal mirror uses `req.tenantCtx.prisma` directly.
  */
 export class DocumentsController {
-  constructor(
-    private readonly service: DocumentsService,
-    private readonly prisma: PrismaClient,
-  ) {}
-
   // ─── officer ──────────────────────────────────────────────────────
 
   agreement = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) => {
-    const result = await this.service.agreement({
+    const result = await req.documentsServices!.documents.agreement({
       idOrNumber: req.params.id,
       actorId: req.user.sub,
       wantsSign: wantsPersonnelSign(this.parseSign(req.query)),
@@ -36,7 +28,7 @@ export class DocumentsController {
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) => {
-    const result = await this.service.statement({
+    const result = await req.documentsServices!.documents.statement({
       idOrNumber: req.params.id,
       actorId: req.user.sub,
       wantsSign: wantsPersonnelSign(this.parseSign(req.query)),
@@ -50,7 +42,7 @@ export class DocumentsController {
     }>,
     reply: FastifyReply,
   ) => {
-    const result = await this.service.receipt({
+    const result = await req.documentsServices!.documents.receipt({
       loanId: req.params.loanId,
       paymentId: req.params.paymentId,
       actorId: req.user.sub,
@@ -65,9 +57,9 @@ export class DocumentsController {
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) => {
-    const customerId = await this.resolveCustomer(req.user.sub);
+    const customerId = await this.resolveCustomer(req);
     if (!customerId) return reply.code(404).send({ error: "NotFound" });
-    const result = await this.service.portalAgreement({
+    const result = await req.documentsServices!.documents.portalAgreement({
       idOrNumber: req.params.id,
       customerId,
     });
@@ -78,9 +70,9 @@ export class DocumentsController {
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) => {
-    const customerId = await this.resolveCustomer(req.user.sub);
+    const customerId = await this.resolveCustomer(req);
     if (!customerId) return reply.code(404).send({ error: "NotFound" });
-    const result = await this.service.portalStatement({
+    const result = await req.documentsServices!.documents.portalStatement({
       idOrNumber: req.params.id,
       customerId,
     });
@@ -93,9 +85,9 @@ export class DocumentsController {
     }>,
     reply: FastifyReply,
   ) => {
-    const customerId = await this.resolveCustomer(req.user.sub);
+    const customerId = await this.resolveCustomer(req);
     if (!customerId) return reply.code(404).send({ error: "NotFound" });
-    const result = await this.service.portalReceipt({
+    const result = await req.documentsServices!.documents.portalReceipt({
       loanId: req.params.loanId,
       paymentId: req.params.paymentId,
       customerId,
@@ -110,15 +102,9 @@ export class DocumentsController {
     return parsed.success ? parsed.data : { sign: undefined };
   }
 
-  /**
-   * JWT subject → linked customer id, with a 404-safe failure when
-   * the user isn't a CUSTOMER or isn't linked. We use 404 (not 403)
-   * to match `portalRoutes` semantics: from the borrower's
-   * perspective, anything they can't see "doesn't exist."
-   */
-  private async resolveCustomer(userId: string): Promise<string | null> {
-    const u = await this.prisma.user.findUnique({
-      where: { id: userId },
+  private async resolveCustomer(req: FastifyRequest): Promise<string | null> {
+    const u = await req.tenantCtx.prisma.user.findUnique({
+      where: { id: req.user.sub },
       select: { role: true, customerId: true },
     });
     if (!u || u.role !== "CUSTOMER" || !u.customerId) return null;
