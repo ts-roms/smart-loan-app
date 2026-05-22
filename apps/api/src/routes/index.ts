@@ -40,6 +40,7 @@ import {
   licensingRoutes,
   type LicensingService,
 } from "../features/licensing/index";
+import { platformRoutes } from "../features/platform/index";
 import {
   loanProductRoutes,
   loanApprovalChainRoutes,
@@ -141,6 +142,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // License activation / status. Mounted under /license so the
   // mutating endpoints (admin.roles-gated) cluster naturally.
   await app.register(licensingRoutes, { prefix: "/license" });
+  // Platform console — vendor control plane. Shares the same Fastify
+  // instance + JWT secret but uses a distinct `platform: true` claim,
+  // a distinct PlatformUser table, and a distinct audit log. Tenant
+  // and platform tokens are non-interchangeable: tenant routes reject
+  // platform tokens (via fail-close permission resolution), platform
+  // routes reject tenant tokens (via the platform: true check).
+  await app.register(platformRoutes, { prefix: "/platform" });
   // Approval-chain routes mount under their natural parents so URLs read
   // /loans/:idOrNumber/approvals and /loan-products/:code/approval-chain.
   await app.register(loanApprovalRoutes, { prefix: "/loans" });

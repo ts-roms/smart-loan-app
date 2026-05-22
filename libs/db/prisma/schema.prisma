@@ -2421,6 +2421,46 @@ enum TenantStatus {
   ARCHIVED      // soft-deleted; data retained but no longer served
 }
 
+// Platform-side users — the vendor's team, NOT a tenant's staff. Lives
+// in `public` schema. Authenticates against /platform/auth/login and
+// receives a JWT with `platform: true` claim. Strictly separate from
+// the per-tenant User table.
+model PlatformUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         PlatformRole @default(PLATFORM_SALES)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastLoginAt  DateTime?
+}
+
+enum PlatformRole {
+  PLATFORM_ADMIN  // everything: provision, suspend, archive, issue licenses
+  PLATFORM_SALES  // view + issue licenses, no destructive ops
+}
+
+// Append-only platform-action audit. Separate from per-tenant AuditLog
+// so cross-tenant queries are cheap and so tenant admins can't see the
+// vendor's internal actions.
+model PlatformAuditLog {
+  id         String   @id @default(uuid())
+  action     String   // PLATFORM_TENANT_PROVISION, PLATFORM_LICENSE_ISSUE, ...
+  actorId    String
+  actorEmail String
+  /// The tenant the action targeted, when applicable. Null for system-level
+  /// actions (cross-tenant report exports, etc.).
+  tenantSlug String?
+  payload    Json
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([tenantSlug])
+}
+
 // ─── Licensing ──────────────────────────────────────────────────────────────
 //
 // Persisted record of every license activation on this instance. The
