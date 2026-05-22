@@ -34,9 +34,9 @@ contract is `docs/architecture.md`; this file is the running scoreboard.
 | **ecl**            | ✓           | ✓            | ✓            | ✓       | —       | Full split — period-default rules + audit-coupled recompute                                                                         |
 | **scoring**        | ✓           | ✓            | ✓            | ✓       | —       | Full split — survey submit orchestrates `computeCreditScore` + save + upsert latest                                                 |
 | **health**         | ✓           | —            | —            | —       | —       | Liveness/readiness — no auth, no body, no orchestration                                                                             |
-| **jobs**           | ✓ (factory) | —            | —            | —       | —       | Factory plugin — decorates `app.jobs`; not a feature router                                                                         |
-| **notifications**  | ✓ (factory) | —            | —            | —       | —       | Factory plugin — decorates `app.notifications`                                                                                      |
-| **screening**      | ✓ (factory) | —            | —            | —       | —       | Factory plugin — decorates `app.screening`                                                                                          |
+| **jobs**           | ✓ (factory) | —            | —            | —       | —       | Factory plugin — admin routes for the scheduler; scheduler itself is platform-wide (P2.11 makes it per-tenant)                      |
+| **notifications**  | ✓           | —            | —            | —       | —       | Admin routes + `app.notifications(prisma)` factory decorator for per-tenant `NotificationRepository`                                |
+| **screening**      | ✓           | —            | —            | —       | —       | Admin routes + `app.screening(prisma)` factory decorator for per-tenant `ScreeningRepository`                                       |
 | **uploads**        | ✓           | —            | —            | —       | —       | Multipart → disk → URL; orchestration lives in `@fastify/multipart`                                                                 |
 
 ## Rationale
@@ -52,10 +52,16 @@ The four exceptions are not feature routers:
 
 - **health**: liveness/readiness; no auth, no body, no future
   orchestration imaginable.
-- **jobs**, **notifications**, **screening**: factory plugins that
-  decorate `app.jobs` / `app.notifications` / `app.screening` for
-  consumption by other features. They expose no public surface beyond
-  the decoration.
+- **jobs**: factory plugin that decorates `app.jobs` with the
+  scheduler (cron-driven background jobs) and exposes admin routes
+  for inspecting runs. The scheduler itself is platform-wide today;
+  the per-tenant outer loop lands in P2.11.
+- **notifications**, **screening**: admin route plugins + per-tenant
+  factory decorators (`app.notifications(prisma)`,
+  `app.screening(prisma)`). Callers build a fresh repo per request
+  using `req.tenantCtx.prisma` so reads and dispatches stay scoped to
+  the calling tenant's schema. Provider singletons (Twilio, SendGrid,
+  AML clients) are shared across tenants.
 - **uploads**: multipart streaming where `@fastify/multipart` owns the
   orchestration and the route is a thin disk-write adapter.
 
