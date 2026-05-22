@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { AuditLogRepository } from "@loan/db";
 
 import {
@@ -12,28 +12,32 @@ import {
 
 /**
  * System-wide settings the operator can tweak at runtime without a
- * redeploy. Today: idle-then-logout policy + company branding. Future
- * home for other cross-cutting toggles (session length, password
- * rotation, etc.).
+ * redeploy. Today: idle-then-logout policy + company branding.
  *
- * Authorization:
- *   • GET  — any authenticated user can read (the frontend needs the
- *            values to wire its idle hook + brand the shell).
- *   • PUT  — `admin.system_config` permission required.
+ * Phase 2: every read/write hits the per-request tenant client
+ * (req.tenantCtx.prisma); the audit repo is built per-request too.
  */
 
-export async function systemRoutes(app: FastifyInstance): Promise<void> {
-  const audit = new AuditLogRepository(app.prisma);
+declare module "fastify" {
+  interface FastifyRequest {
+    systemAuditRepo?: AuditLogRepository;
+  }
+}
 
+export async function systemRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    req.systemAuditRepo = new AuditLogRepository(req.tenantCtx.prisma);
+  });
 
   // ── Idle-then-logout policy ────────────────────────────────────────
 
-  app.get("/idle-policy", async () => {
+  app.get("/idle-policy", async (req) => {
     // SystemConfig is a singleton row; upsert the defaults on first read
     // so a fresh install never returns nulls. Cheap; runs once per
     // database lifetime.
-    const cfg = await app.prisma.systemConfig.upsert({
+    const cfg = await req.tenantCtx.prisma.systemConfig.upsert({
       where: { id: "singleton" },
       update: {},
       create: { id: "singleton" },
@@ -64,7 +68,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      const updated = await app.prisma.systemConfig.upsert({
+      const updated = await req.tenantCtx.prisma.systemConfig.upsert({
         where: { id: "singleton" },
         update: {
           idleTimeoutSeconds: parsed.data.idleTimeoutSeconds,
@@ -83,9 +87,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
           updatedAt: true,
         },
       });
-      // Audit so policy drift is auditable. The audit drawer surfaces
-      // SYSTEM_CONFIG_UPDATE rows from the navbar.
-      await audit.record({
+      await req.systemAuditRepo!.record({
         action: "SYSTEM_CONFIG_UPDATE",
         actorId: req.user.sub,
         targetType: "SystemConfig",
@@ -101,8 +103,6 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Branding (company name, logo, contact details) ─────────────────
 
-  // Branding fields the GET response includes — kept narrow on purpose
-  // so the bell endpoint doesn't accidentally leak equity totals.
   const BRANDING_SELECT = {
     companyName: true,
     companyLogoUrl: true,
@@ -114,8 +114,8 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
     updatedAt: true,
   } as const;
 
-  app.get("/branding", async () => {
-    const cfg = await app.prisma.systemConfig.upsert({
+  app.get("/branding", async (req) => {
+    const cfg = await req.tenantCtx.prisma.systemConfig.upsert({
       where: { id: "singleton" },
       update: {},
       create: { id: "singleton" },
@@ -134,12 +134,9 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      // Map "" → null for optional fields so blanking an input clears
-      // the column rather than storing a literal empty string (which the
-      // UI would then render as a zero-width tagline).
       const empty = (v: string | null | undefined) =>
         v == null || v.trim() === "" ? null : v.trim();
-      const updated = await app.prisma.systemConfig.upsert({
+      const updated = await req.tenantCtx.prisma.systemConfig.upsert({
         where: { id: "singleton" },
         update: {
           companyName: parsed.data.companyName.trim(),
@@ -164,7 +161,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
         },
         select: BRANDING_SELECT,
       });
-      await audit.record({
+      await req.systemAuditRepo!.record({
         action: "SYSTEM_CONFIG_UPDATE",
         actorId: req.user.sub,
         targetType: "SystemConfig",

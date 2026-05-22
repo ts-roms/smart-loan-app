@@ -7,19 +7,28 @@
  *   GET /audit                       admin.audit_log
  *   GET /audit/distinct/actions      admin.audit_log
  *
- * Layered: routes → controller → service. The service flattens the
- * Prisma actor join into the row shape the audit drawer expects.
+ * Phase 2: per-request service wiring.
  */
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { AuditController } from "./audit.controller";
 import { AuditService } from "./audit.service";
 
-export async function auditRoutes(app: FastifyInstance) {
-  const ctrl = new AuditController(new AuditService(app.prisma));
+declare module "fastify" {
+  interface FastifyRequest {
+    auditServices?: { audit: AuditService };
+  }
+}
 
+export async function auditRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    req.auditServices = { audit: new AuditService(req.tenantCtx.prisma) };
+  });
+
+  const ctrl = new AuditController();
 
   app.get(
     "/",

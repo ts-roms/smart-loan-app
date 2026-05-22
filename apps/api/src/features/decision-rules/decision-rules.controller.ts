@@ -1,12 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { DecisionRuleService } from "./decision-rules.service";
 import { createRuleSchema, updateRuleSchema } from "./schemas";
 
+/** Phase 2: stateless. Reads `req.decisionRulesServices!.rules`. */
 export class DecisionRuleController {
-  constructor(private readonly service: DecisionRuleService) {}
-
-  list = async () => this.service.list();
+  list = async (req: FastifyRequest) => req.decisionRulesServices!.rules.list();
 
   create = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = createRuleSchema.safeParse(req.body);
@@ -15,7 +13,7 @@ export class DecisionRuleController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.create(parsed.data);
+    const result = await req.decisionRulesServices!.rules.create(parsed.data);
     if (!result.ok) {
       return reply
         .code(409)
@@ -34,11 +32,12 @@ export class DecisionRuleController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.update(req.params.id, parsed.data);
+    return req.decisionRulesServices!.rules.update(req.params.id, parsed.data);
   };
 
   delete = async (req: FastifyRequest<{ Params: { id: string } }>) =>
-    this.service.delete(req.params.id);
+    req.decisionRulesServices!.rules.delete(req.params.id);
 
-  seedDefaults = async () => this.service.seedDefaults();
+  seedDefaults = async (req: FastifyRequest) =>
+    req.decisionRulesServices!.rules.seedDefaults();
 }

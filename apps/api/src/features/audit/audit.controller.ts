@@ -1,11 +1,9 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { AuditService } from "./audit.service";
 import { listQuerySchema } from "./schemas";
 
+/** Phase 2: stateless. Reads `req.auditServices!.audit` per call. */
 export class AuditController {
-  constructor(private readonly service: AuditService) {}
-
   list = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = listQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -13,8 +11,9 @@ export class AuditController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.list(parsed.data);
+    return req.auditServices!.audit.list(parsed.data);
   };
 
-  listDistinctActions = async () => this.service.listDistinctActions();
+  listDistinctActions = async (req: FastifyRequest) =>
+    req.auditServices!.audit.listDistinctActions();
 }

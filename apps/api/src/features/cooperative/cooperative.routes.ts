@@ -24,14 +24,18 @@
  */
 
 import { CooperativeRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { CooperativeController } from "./cooperative.controller";
 import { CooperativeService } from "./cooperative.service";
 
+declare module "fastify" {
+  interface FastifyRequest {
+    cooperativeServices?: { coop: CooperativeService };
+  }
+}
+
 export async function cooperativeRoutes(app: FastifyInstance) {
-  const service = new CooperativeService(new CooperativeRepository(app.prisma));
-  const ctrl = new CooperativeController(service);
   app.addHook("preHandler", app.authenticate);
   // Cooperative module is ENTERPRISE-tier. Any of the three cooperative
   // flags unlocks the whole prefix; the platform CLI ships all three
@@ -44,6 +48,16 @@ export async function cooperativeRoutes(app: FastifyInstance) {
       "cooperative.funds",
     ),
   );
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    req.cooperativeServices = {
+      coop: new CooperativeService(
+        new CooperativeRepository(req.tenantCtx.prisma),
+      ),
+    };
+  });
+
+  const ctrl = new CooperativeController();
 
   // ── contributions ──
   app.get(
