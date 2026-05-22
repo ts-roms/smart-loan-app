@@ -4,6 +4,7 @@ import {
   NotificationRepository,
   type PrismaClient,
   ScreeningRepository,
+  TenantScheduler,
 } from "@loan/db";
 
 import { config } from "../config";
@@ -99,28 +100,36 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       new ScreeningRepository(prisma, buildAmlProvider(prisma)),
   );
 
-  // Scheduler still runs against the platform's default prisma — the
-  // per-tenant job runner is a separate refactor (P2.10 in the
-  // multi-tenant design doc). For single-tenant deployments this stays
-  // correct as-is; for multi-tenant it'll be replaced by an outer loop
-  // that iterates tenants and runs each job in their context.
-  const jobRepo = new JobRepository(app.prisma);
-  const notificationRepoForJobs = new NotificationRepository(
-    app.prisma,
-    notificationProvider,
-  );
-  const screeningRepoForJobs = new ScreeningRepository(
-    app.prisma,
-    buildAmlProvider(app.prisma),
-  );
-  const jobDefs = buildJobDefinitions(
-    app.prisma,
-    notificationRepoForJobs,
-    screeningRepoForJobs,
-  );
-  await jobRepo.register(jobDefs);
-  jobRepo.start(jobDefs);
-  app.addHook("onClose", async () => jobRepo.stop());
+  // Per-tenant job scheduler. One interval at the platform level fans
+  // out across every ACTIVE tenant on each tick (single-tenant mode
+  // short-circuits to the default slug). The factory rebuilds the job
+  // definitions with each tenant's prisma so notification dispatches
+  // + screening runs land in the right schema.
+  //
+  // We keep the legacy `app.jobs` shape — the /jobs admin routes still
+  // need a JobRepository handle and the registered defs — but we point
+  // them at a builder bound to `app.prisma`. In single-tenant mode that
+  // matches the scheduler's view exactly. In multi-tenant mode the
+  // admin routes have to be invoked from a tenant context anyway
+  // (they're per-request, sit behind resolveTenant); the platform-bound
+  // jobRepo here is purely for the legacy job definitions reference.
+  const buildJobsForPrisma = (prisma: PrismaClient) =>
+    buildJobDefinitions(
+      prisma,
+      new NotificationRepository(prisma, notificationProvider),
+      new ScreeningRepository(prisma, buildAmlProvider(prisma)),
+    );
+
+  const scheduler = new TenantScheduler({
+    platformPrisma: app.prisma,
+    tenantCache: app.tenantPrisma,
+    multiTenant: config.multiTenant,
+    defaultSlug: "default",
+    buildJobDefinitions: buildJobsForPrisma,
+    log: app.log,
+  });
+  scheduler.start();
+  app.addHook("onClose", async () => scheduler.stop());
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: "/auth" });
@@ -134,7 +143,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(paymentsRoutes, { prefix: "/payments" });
   await app.register(portalRoutes, { prefix: "/portal" });
   await app.register(uploadRoutes, { prefix: "/uploads-api" });
-  await app.register(jobRoutes(jobRepo, jobDefs), { prefix: "/jobs" });
+  await app.register(
+    jobRoutes((req) => {
+      const prisma = req.tenantCtx.prisma;
+      return {
+        repo: new JobRepository(prisma),
+        defs: buildJobsForPrisma(prisma),
+      };
+    }),
+    { prefix: "/jobs" },
+  );
   await app.register(notificationRoutes, { prefix: "/notifications" });
   await app.register(screeningRoutes, { prefix: "/screening" });
   await app.register(decisionRuleRoutes, { prefix: "/decision-rules" });

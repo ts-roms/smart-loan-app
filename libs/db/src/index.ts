@@ -94,6 +94,10 @@ export { createPrismaClient } from "./client";
 export { fastifyPrisma } from "./plugin";
 export { TenantPrismaCache } from "./tenant-cache";
 export {
+  TenantScheduler,
+  type TenantSchedulerOptions,
+} from "./tenant-scheduler";
+export {
   fastifyTenantPrisma,
   type TenantContext,
   type MultiTenantPluginOptions,

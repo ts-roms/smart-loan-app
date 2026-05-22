@@ -18,8 +18,13 @@ import {
   type JobContext,
   cronIsValid,
   parseNextRun,
-} from '@loan/jobs';
-import type { JobRun, JobStatus, PrismaClient, ScheduledJob } from '@prisma/client';
+} from "@loan/jobs";
+import type {
+  JobRun,
+  JobStatus,
+  PrismaClient,
+  ScheduledJob,
+} from "@prisma/client";
 
 export class JobRepository {
   /** Tick interval. 60s is plenty; cron precision is per-minute anyway. */
@@ -30,7 +35,7 @@ export class JobRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   list(): Promise<ScheduledJob[]> {
-    return this.prisma.scheduledJob.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.scheduledJob.findMany({ orderBy: { name: "asc" } });
   }
 
   findByName(name: string): Promise<ScheduledJob | null> {
@@ -40,7 +45,7 @@ export class JobRepository {
   listRuns(jobId: string, take = 50): Promise<JobRun[]> {
     return this.prisma.jobRun.findMany({
       where: { jobId },
-      orderBy: { startedAt: 'desc' },
+      orderBy: { startedAt: "desc" },
       take,
     });
   }
@@ -85,7 +90,7 @@ export class JobRepository {
    */
   async runOne(
     name: string,
-    fn: JobDefinition['fn'],
+    fn: JobDefinition["fn"],
     opts: { manual?: boolean } = {},
   ): Promise<JobRun> {
     const job = await this.findByName(name);
@@ -93,7 +98,7 @@ export class JobRepository {
     const run = await this.prisma.jobRun.create({
       data: {
         jobId: job.id,
-        status: 'RUNNING' as JobStatus,
+        status: "RUNNING" as JobStatus,
         manual: opts.manual ?? false,
       },
     });
@@ -111,7 +116,7 @@ export class JobRepository {
       return this.prisma.jobRun.update({
         where: { id: run.id },
         data: {
-          status: 'SUCCEEDED' as JobStatus,
+          status: "SUCCEEDED" as JobStatus,
           finishedAt: new Date(),
           result: (result as never) ?? undefined,
         },
@@ -124,7 +129,7 @@ export class JobRepository {
       return this.prisma.jobRun.update({
         where: { id: run.id },
         data: {
-          status: 'FAILED' as JobStatus,
+          status: "FAILED" as JobStatus,
           finishedAt: new Date(),
           error: (err as Error).message,
         },
@@ -133,28 +138,41 @@ export class JobRepository {
   }
 
   /**
-   * Start ticking. On every tick we look at enabled jobs whose `nextRunAt`
-   * is in the past and fire them. We don't try to "catch up" missed runs —
-   * a job that should have fired during a 5-minute outage just runs once
-   * when the scheduler comes back.
+   * One scheduler tick: find every enabled job whose `nextRunAt` is in
+   * the past and fire it. Catch-up after an outage is intentionally
+   * cheap — a job that should have fired during a 5-minute downtime
+   * runs once when the scheduler comes back, not N times.
+   *
+   * Public so a higher-level orchestrator (e.g. the multi-tenant
+   * scheduler that fans out across schemas) can call it per tenant
+   * without owning its own interval.
+   */
+  async tickDueJobs(defs: JobDefinition[]): Promise<void> {
+    const byName = new Map(defs.map((d) => [d.name, d]));
+    const now = new Date();
+    const due = await this.prisma.scheduledJob.findMany({
+      where: { enabled: true, nextRunAt: { lte: now } },
+    });
+    for (const job of due) {
+      const def = byName.get(job.name);
+      if (!def) continue;
+      await this.runOne(job.name, def.fn, { manual: false }).catch(() => {});
+    }
+  }
+
+  /**
+   * Start an internal interval that ticks this repository's schema.
+   * Use only for single-tenant deployments; multi-tenant deployments
+   * should let `TenantScheduler` own the interval and call
+   * `tickDueJobs` per tenant.
    */
   start(defs: JobDefinition[]): void {
     if (this.intervalRef) return;
-    const byName = new Map(defs.map((d) => [d.name, d]));
-    const tick = async () => {
-      const now = new Date();
-      const due = await this.prisma.scheduledJob.findMany({
-        where: { enabled: true, nextRunAt: { lte: now } },
-      });
-      for (const job of due) {
-        const def = byName.get(job.name);
-        if (!def) continue;
-        await this.runOne(job.name, def.fn, { manual: false }).catch(() => {});
-      }
-    };
     // Fire once right away to handle any catch-up at process boot.
-    tick().catch(() => {});
-    this.intervalRef = setInterval(tick, JobRepository.TICK_MS);
+    this.tickDueJobs(defs).catch(() => {});
+    this.intervalRef = setInterval(() => {
+      this.tickDueJobs(defs).catch(() => {});
+    }, JobRepository.TICK_MS);
   }
 
   stop(): void {
