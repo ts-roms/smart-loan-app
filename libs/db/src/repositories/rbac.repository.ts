@@ -9,23 +9,21 @@
  *     permission keys a user holds across all their assigned roles.
  */
 
-import {
-  DEFAULT_ROLES,
-  PERMISSIONS,
-  PERMISSION_KEYS,
-} from '@loan/auth';
+import { DEFAULT_ROLES, PERMISSIONS, PERMISSION_KEYS } from "@loan/auth";
 import type {
   Permission,
   PrismaClient,
   Role,
   UserRoleAssignment,
-} from '@prisma/client';
+} from "@prisma/client";
 
 export class PermissionRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   list(): Promise<Permission[]> {
-    return this.prisma.permission.findMany({ orderBy: [{ category: 'asc' }, { key: 'asc' }] });
+    return this.prisma.permission.findMany({
+      orderBy: [{ category: "asc" }, { key: "asc" }],
+    });
   }
 
   /** Idempotent: upsert one row per code-defined permission. */
@@ -33,13 +31,23 @@ export class PermissionRepository {
     let created = 0;
     let existing = 0;
     for (const p of PERMISSIONS) {
-      const found = await this.prisma.permission.findUnique({ where: { key: p.key } });
+      const found = await this.prisma.permission.findUnique({
+        where: { key: p.key },
+      });
       if (found) {
         // Keep labels in sync if the code definition has been updated.
-        if (found.label !== p.label || found.category !== p.category || found.description !== (p.description ?? null)) {
+        if (
+          found.label !== p.label ||
+          found.category !== p.category ||
+          found.description !== (p.description ?? null)
+        ) {
           await this.prisma.permission.update({
             where: { id: found.id },
-            data: { label: p.label, category: p.category, description: p.description ?? null },
+            data: {
+              label: p.label,
+              category: p.category,
+              description: p.description ?? null,
+            },
           });
         }
         existing += 1;
@@ -76,9 +84,16 @@ export interface RoleUpdateInput {
 export class RoleRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  list(): Promise<Array<Role & { permissions: { permission: Permission }[]; _count: { users: number } }>> {
+  list(): Promise<
+    Array<
+      Role & {
+        permissions: { permission: Permission }[];
+        _count: { users: number };
+      }
+    >
+  > {
     return this.prisma.role.findMany({
-      orderBy: { key: 'asc' },
+      orderBy: { key: "asc" },
       include: {
         permissions: { include: { permission: true } },
         _count: { select: { users: true } },
@@ -133,7 +148,7 @@ export class RoleRepository {
   async delete(key: string): Promise<Role> {
     const role = await this.findByKey(key);
     if (!role) throw new Error(`Role ${key} not found`);
-    if (role.system) throw new Error('System roles cannot be deleted.');
+    if (role.system) throw new Error("System roles cannot be deleted.");
     return this.prisma.role.delete({ where: { id: role.id } });
   }
 
@@ -180,21 +195,36 @@ export class RoleRepository {
 
   // ─── Assignments ────────────────────────────────────────────────────
 
-  listAssignmentsForUser(userId: string): Promise<Array<UserRoleAssignment & { role: Role }>> {
+  listAssignmentsForUser(
+    userId: string,
+  ): Promise<Array<UserRoleAssignment & { role: Role }>> {
     return this.prisma.userRoleAssignment.findMany({
       where: { userId },
       include: { role: true },
-      orderBy: { grantedAt: 'asc' },
+      orderBy: { grantedAt: "asc" },
     });
   }
 
-  async assign(userId: string, roleKey: string, grantedById: string): Promise<UserRoleAssignment> {
+  /**
+   * Assign a role to a user. Idempotent — on conflict, only `expiresAt`
+   * is updated. That's the legitimate "extend or convert this grant"
+   * path: passing `expiresAt: null` on a re-assign promotes a temporary
+   * grant to perpetual; passing a new date pushes the expiry out. We
+   * deliberately do not touch `grantedById`/`grantedAt` so the audit
+   * trail of the original grant is preserved.
+   */
+  async assign(
+    userId: string,
+    roleKey: string,
+    grantedById: string,
+    expiresAt: Date | null = null,
+  ): Promise<UserRoleAssignment> {
     const role = await this.findByKey(roleKey);
     if (!role) throw new Error(`Role ${roleKey} not found`);
     return this.prisma.userRoleAssignment.upsert({
       where: { userId_roleId: { userId, roleId: role.id } },
-      create: { userId, roleId: role.id, grantedById },
-      update: {}, // already assigned — no-op
+      create: { userId, roleId: role.id, grantedById, expiresAt },
+      update: { expiresAt },
     });
   }
 
@@ -211,7 +241,9 @@ export class RoleRepository {
    * their legacy `User.role` enum. Idempotent — safe to run on every boot.
    */
   async backfillFromUserRoleEnum(): Promise<{ assigned: number }> {
-    const users = await this.prisma.user.findMany({ select: { id: true, role: true } });
+    const users = await this.prisma.user.findMany({
+      select: { id: true, role: true },
+    });
     let assigned = 0;
     for (const u of users) {
       const role = await this.findByKey(u.role);
@@ -233,13 +265,21 @@ export class RoleRepository {
 /**
  * Resolve the effective permission key set for a user — the union across
  * every role they've been assigned. Used by the requirePermission middleware.
+ *
+ * Assignments with `expiresAt` in the past are filtered out: the row
+ * stays in the DB (for audit), but no longer contributes to the user's
+ * effective permission set. NULL expiresAt is treated as perpetual.
  */
 export async function resolveUserPermissions(
   prisma: PrismaClient,
   userId: string,
 ): Promise<Set<string>> {
+  const now = new Date();
   const rows = await prisma.userRoleAssignment.findMany({
-    where: { userId },
+    where: {
+      userId,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
     include: {
       role: { include: { permissions: { include: { permission: true } } } },
     },

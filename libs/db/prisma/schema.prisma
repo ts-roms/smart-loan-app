@@ -1457,14 +1457,22 @@ model RolePermission {
 model UserRoleAssignment {
   userId      String
   roleId      String
-  grantedAt   DateTime @default(now())
+  grantedAt   DateTime  @default(now())
   grantedById String?
+  // Optional expiry. NULL = perpetual; otherwise the assignment stops
+  // granting permissions once `expiresAt < now()`. The permission
+  // resolver filters on this; the row itself is left in place for
+  // auditability. A future cron may sweep expired rows but isn't
+  // required — read-time filtering is sufficient for correctness.
+  expiresAt   DateTime?
 
   user User @relation("UserRoleAssignedTo", fields: [userId], references: [id], onDelete: Cascade)
   role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
   @@index([userId])
+  // Index on expiresAt so any "expiring soon" query doesn't full-scan.
+  @@index([expiresAt])
 }
 
 // ─── Delegation (proxy authority with date range + scoped permissions) ───────

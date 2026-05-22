@@ -121,12 +121,24 @@ export function useCreateUser() {
   });
 }
 
+/**
+ * Assign a role to a user. `expiresAt` is optional — pass an ISO-8601
+ * timestamp to make the grant temporary (the permission resolver
+ * stops including the role's perms after that instant). Re-assigning
+ * the same role with a new `expiresAt` updates the expiry in place —
+ * the standard "extend my grant" workflow.
+ */
 export function useAssignRole() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { userId: string; roleKey: string }) =>
+    mutationFn: (input: {
+      userId: string;
+      roleKey: string;
+      expiresAt?: string | null;
+    }) =>
       getApiClient().post(`/admin/users/${input.userId}/roles`, {
         roleKey: input.roleKey,
+        ...(input.expiresAt !== undefined && { expiresAt: input.expiresAt }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: rbacKeys.users }),
   });

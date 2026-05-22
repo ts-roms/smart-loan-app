@@ -67,7 +67,7 @@ export type CreateUserResult =
 
 export type AssignRoleResult =
   | { ok: true; assignment: Awaited<ReturnType<RoleRepository["assign"]>> }
-  | { ok: false; kind: "RepoError"; message: string };
+  | { ok: false; kind: "RepoError" | "BadExpiry"; message: string };
 
 export type UnassignRoleResult =
   | { ok: true }
@@ -499,7 +499,8 @@ export class RbacService {
         active: true,
         createdAt: true,
         roleAssignments: {
-          include: {
+          select: {
+            expiresAt: true,
             role: { select: { key: true, name: true, system: true } },
           },
         },
@@ -513,7 +514,16 @@ export class RbacService {
       primaryRole: u.role,
       active: u.active,
       createdAt: u.createdAt,
-      roles: u.roleAssignments.map((a) => a.role),
+      // Flatten + carry expiry. Note expired assignments are still
+      // returned — the resolver filters them out at permission-check
+      // time, but the UI wants to show "expired 3 days ago" for
+      // visibility, not pretend the row doesn't exist.
+      roles: u.roleAssignments.map((a) => ({
+        key: a.role.key,
+        name: a.role.name,
+        system: a.role.system,
+        expiresAt: a.expiresAt?.toISOString() ?? null,
+      })),
     }));
   }
 
@@ -597,18 +607,45 @@ export class RbacService {
     input: AssignRoleInput;
     actorId: string;
   }): Promise<AssignRoleResult> {
+    // Parse + sanity-check the optional expiry. Past dates are
+    // rejected — recording a "born expired" grant has no semantic
+    // value and would make the audit trail confusing.
+    let expiresAt: Date | null = null;
+    if (args.input.expiresAt) {
+      const parsed = new Date(args.input.expiresAt);
+      if (Number.isNaN(parsed.getTime())) {
+        return {
+          ok: false,
+          kind: "BadExpiry",
+          message: "expiresAt must be a valid ISO-8601 timestamp.",
+        };
+      }
+      if (parsed.getTime() <= Date.now()) {
+        return {
+          ok: false,
+          kind: "BadExpiry",
+          message: "expiresAt must be in the future.",
+        };
+      }
+      expiresAt = parsed;
+    }
+
     try {
       const a = await this.roles.assign(
         args.userId,
         args.input.roleKey,
         args.actorId,
+        expiresAt,
       );
       await this.audit.record({
         action: "USER_ROLE_ASSIGN",
         actorId: args.actorId,
         targetType: "User",
         targetId: args.userId,
-        payload: { roleKey: args.input.roleKey },
+        payload: {
+          roleKey: args.input.roleKey,
+          expiresAt: expiresAt?.toISOString() ?? null,
+        },
       });
       // Best-effort email to the user whose access just changed.
       // Failure can't roll back the assignment.
@@ -652,12 +689,17 @@ export class RbacService {
     // org then has only Alice; if her account is later disabled,
     // nobody can rescue it. Refuse pre-emptively.
     if (args.roleKey === "ADMIN") {
+      const now = new Date();
       const remainingActiveAdmins = await this.prisma.userRoleAssignment.count({
         where: {
           role: { key: "ADMIN" },
           user: { active: true },
           // Don't double-count the user about to lose their ADMIN.
           userId: { not: args.userId },
+          // Expired admin grants don't count as "rescue" — they're
+          // already inactive at the resolver level. A row with
+          // expiresAt < now is functionally identical to no row at all.
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
         },
       });
       if (remainingActiveAdmins === 0) {

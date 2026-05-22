@@ -691,7 +691,33 @@ export interface UserWithRoles {
   primaryRole: UserRole;
   active: boolean;
   createdAt: string;
-  roles: Array<{ key: string; name: string; system: boolean }>;
+  /**
+   * `expiresAt` is null for perpetual grants; an ISO-8601 string
+   * otherwise. A date in the past means the assignment row is still on
+   * file (audit) but no longer contributes to effective permissions.
+   */
+  roles: Array<{
+    key: string;
+    name: string;
+    system: boolean;
+    expiresAt: string | null;
+  }>;
+}
+
+/**
+ * Single role assignment row — returned by
+ * `GET /admin/users/:userId/roles`. `expiresAt: null` means perpetual;
+ * a date in the past means the assignment is no longer active (the
+ * resolver filters it out of effective permissions). The row is kept
+ * for audit purposes even after expiry.
+ */
+export interface UserRoleAssignmentRow {
+  userId: string;
+  roleId: string;
+  grantedAt: string;
+  grantedById: string | null;
+  expiresAt: string | null;
+  role: { id: string; key: string; name: string; system: boolean };
 }
 
 export interface MePermissions {

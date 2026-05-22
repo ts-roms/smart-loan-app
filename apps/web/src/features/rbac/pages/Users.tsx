@@ -52,10 +52,18 @@ export function UsersPage() {
   const [assigning, setAssigning] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const onAssign = async (userId: string, roleKey: string) => {
+  const onAssign = async (
+    userId: string,
+    roleKey: string,
+    expiresAt: string | null,
+  ) => {
     try {
-      await assign.mutateAsync({ userId, roleKey });
-      toast.success("Role assigned");
+      await assign.mutateAsync({ userId, roleKey, expiresAt });
+      toast.success(
+        expiresAt
+          ? `Role assigned (expires ${formatDate(expiresAt)})`
+          : "Role assigned",
+      );
       setAssigning(null);
     } catch (err) {
       toast.error((err as Error).message ?? "Failed");
@@ -138,10 +146,30 @@ export function UsersPage() {
                           // the UI honest about it.
                           const isSelfAdmin =
                             r.key === "ADMIN" && u.id === me?.id;
+                          // Three temporal states for an assignment with an
+                          // expiry: still active, expired (row kept for
+                          // audit, no perms), or perpetual. The badge style
+                          // shifts so admins see the difference at a glance.
+                          const expiry = r.expiresAt
+                            ? new Date(r.expiresAt)
+                            : null;
+                          const expired =
+                            expiry !== null && expiry.getTime() <= Date.now();
                           return (
                             <span
                               key={r.key}
-                              className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-xs"
+                              className={
+                                expired
+                                  ? "inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] px-2 py-0.5 text-xs opacity-50 line-through"
+                                  : "inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-xs"
+                              }
+                              title={
+                                expiry
+                                  ? expired
+                                    ? `Expired ${formatDate(r.expiresAt!)} — no longer grants permissions`
+                                    : `Expires ${formatDate(r.expiresAt!)}`
+                                  : undefined
+                              }
                             >
                               <span
                                 className={
@@ -150,6 +178,12 @@ export function UsersPage() {
                               >
                                 {r.name}
                               </span>
+                              {expiry && (
+                                <span className="text-[10px] text-amber-300/90">
+                                  {expired ? "expired" : "until"}{" "}
+                                  {formatDate(r.expiresAt!)}
+                                </span>
+                              )}
                               {canManage && !isSelfAdmin && (
                                 <button
                                   type="button"
@@ -200,41 +234,157 @@ export function UsersPage() {
       </CardContent>
       {creating && <NewUserDialog onClose={() => setCreating(false)} />}
       {assigning && (
-        <Dialog open onOpenChange={(o) => !o && setAssigning(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Assign a role</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {(roles.data ?? []).map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => onAssign(assigning, r.key)}
-                  className="w-full text-left rounded-md border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] px-3 py-2 text-sm"
-                >
-                  <div className="flex items-center justify-between">
-                    <span>{r.name}</span>
-                    <Badge variant={r.system ? "muted" : "success"}>
-                      {r.system ? "System" : "Custom"}
-                    </Badge>
-                  </div>
-                  {r.description && (
-                    <div className="text-xs text-white/45 mt-0.5">
-                      {r.description}
-                    </div>
-                  )}
-                  <div className="text-xs text-white/35 mt-0.5">
-                    {r.permissions.length} permission
-                    {r.permissions.length === 1 ? "" : "s"}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </DialogContent>
-        </Dialog>
+        <AssignRoleDialog
+          userId={assigning}
+          roles={(roles.data ?? []).map((r) => ({
+            id: r.id,
+            key: r.key,
+            name: r.name,
+            description: r.description,
+            system: r.system,
+            permissionCount: r.permissions.length,
+          }))}
+          onClose={() => setAssigning(null)}
+          onPick={onAssign}
+        />
       )}
     </Card>
+  );
+}
+
+interface RoleOption {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  system: boolean;
+  permissionCount: number;
+}
+
+/**
+ * Assign-a-role dialog. Two parts:
+ *
+ *   1. an optional "Temporary grant" checkbox + datetime field at the
+ *      top. When unchecked, picking a role creates a perpetual grant
+ *      (the historical behaviour). When checked + a future date is
+ *      picked, the grant carries `expiresAt` and stops conferring
+ *      permissions automatically after that instant.
+ *   2. the role list. Click a row to commit the grant with the
+ *      currently-configured expiry.
+ *
+ * The expiry is intentionally a single field shared across role
+ * choices — temporary grants are almost always "X is acting role for
+ * the next 2 weeks" and forcing per-role re-entry would be busywork.
+ */
+function AssignRoleDialog({
+  userId,
+  roles,
+  onClose,
+  onPick,
+}: {
+  userId: string;
+  roles: RoleOption[];
+  onClose: () => void;
+  onPick: (
+    userId: string,
+    roleKey: string,
+    expiresAt: string | null,
+  ) => void | Promise<void>;
+}) {
+  const [temporary, setTemporary] = useState(false);
+  // datetime-local picker speaks "YYYY-MM-DDTHH:mm" in local time.
+  // We translate to an ISO-8601 string at submit time. Default to
+  // "two weeks from now" so the field doesn't sit empty — the most
+  // common temporary grant duration is 1-2 weeks (acting role coverage).
+  const defaultExpiry = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    d.setHours(17, 0, 0, 0);
+    // Convert to the local-naive format expected by datetime-local.
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  })();
+  const [expiry, setExpiry] = useState(defaultExpiry);
+
+  const expiresAtIso = (() => {
+    if (!temporary) return null;
+    const parsed = new Date(expiry);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
+  })();
+
+  const expiryInPast =
+    temporary &&
+    expiresAtIso !== null &&
+    new Date(expiresAtIso).getTime() <= Date.now();
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Assign a role</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="rounded-md border border-white/10 bg-white/[0.02] p-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={temporary}
+                onChange={(e) => setTemporary(e.target.checked)}
+              />
+              Temporary grant — expires at a set time
+            </label>
+            {temporary && (
+              <div className="space-y-1">
+                <Label className="text-xs">Expires at</Label>
+                <Input
+                  type="datetime-local"
+                  value={expiry}
+                  onChange={(e) => setExpiry(e.target.value)}
+                />
+                <p className="text-[10px] text-white/45">
+                  After this instant the role stops conferring permissions. The
+                  assignment row stays in place for audit; you can re-assign to
+                  extend.
+                </p>
+                {expiryInPast && (
+                  <p className="text-[10px] text-rose-300">
+                    Expiry must be in the future.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {roles.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                disabled={temporary && (expiresAtIso === null || expiryInPast)}
+                onClick={() => onPick(userId, r.key, expiresAtIso)}
+                className="w-full text-left rounded-md border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] disabled:opacity-40 disabled:cursor-not-allowed px-3 py-2 text-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <span>{r.name}</span>
+                  <Badge variant={r.system ? "muted" : "success"}>
+                    {r.system ? "System" : "Custom"}
+                  </Badge>
+                </div>
+                {r.description && (
+                  <div className="text-xs text-white/45 mt-0.5">
+                    {r.description}
+                  </div>
+                )}
+                <div className="text-xs text-white/35 mt-0.5">
+                  {r.permissionCount} permission
+                  {r.permissionCount === 1 ? "" : "s"}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

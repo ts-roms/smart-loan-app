@@ -32,6 +32,14 @@ export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
 
 export const assignSchema = z.object({
   roleKey: z.string().min(1),
+  /**
+   * Optional ISO-8601 timestamp at which this assignment stops granting
+   * permissions. Omitting (or sending null) means perpetual — the
+   * historical default. Past dates are accepted at the wire level but
+   * the service rejects them so the API never silently records a
+   * "born expired" grant.
+   */
+  expiresAt: z.string().datetime().nullable().optional(),
 });
 export type AssignRoleInput = z.infer<typeof assignSchema>;
 
