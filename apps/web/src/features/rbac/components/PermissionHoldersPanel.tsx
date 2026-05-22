@@ -45,7 +45,7 @@ export function PermissionHoldersPanel() {
   }, [permissions.data, query]);
 
   return (
-    <Card>
+    <Card data-tour="permission-holders-panel">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldQuestion className="h-4 w-4 text-sky-300" />

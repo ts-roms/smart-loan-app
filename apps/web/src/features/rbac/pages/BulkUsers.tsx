@@ -19,6 +19,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../../../providers/auth";
+import { findArticle, TourButton } from "../../help";
 
 /**
  * Bulk staff onboarding. CSV-driven: each row spawns one User row plus
@@ -120,7 +121,7 @@ export function BulkUsersPage() {
   };
 
   return (
-    <Card>
+    <Card data-tour="bulk-users-panel">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle className="flex items-center gap-2">
@@ -134,6 +135,10 @@ export function BulkUsersPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <TourButton
+            tourId="bulk-users"
+            steps={findArticle("bulk-users")?.tour ?? []}
+          />
           <Button variant="outline" size="sm" onClick={downloadTemplate}>
             <FileSpreadsheet className="h-3 w-3" />
             Template
@@ -298,7 +303,7 @@ export function BulkUsersPage() {
           </details>
         )}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-tour="bulk-users-actions">
           <Button
             variant="outline"
             onClick={() => runImport(true)}

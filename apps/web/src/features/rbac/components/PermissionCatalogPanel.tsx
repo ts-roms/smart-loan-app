@@ -95,7 +95,7 @@ export function PermissionCatalogPanel() {
   };
 
   return (
-    <Card>
+    <Card data-tour="permission-catalog-panel">
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle className="flex items-center gap-2">
           <ListChecks className="h-4 w-4 text-sky-300" />

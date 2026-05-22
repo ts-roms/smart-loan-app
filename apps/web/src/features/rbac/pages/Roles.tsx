@@ -32,6 +32,7 @@ import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
 import { useAuth } from "../../../providers/auth";
+import { findArticle, TourButton } from "../../help";
 import { PermissionCatalogPanel } from "../components/PermissionCatalogPanel";
 import { PermissionHoldersPanel } from "../components/PermissionHoldersPanel";
 
@@ -86,12 +87,15 @@ export function RolesPage() {
             <ShieldCheck className="h-4 w-4 text-sky-300" />
             Roles & permissions
           </CardTitle>
-          {isAdmin && (
-            <Button onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" />
-              New role
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <TourButton tourId="rbac" steps={findArticle("rbac")?.tour ?? []} />
+            {isAdmin && (
+              <Button onClick={() => setCreating(true)}>
+                <Plus className="h-4 w-4" />
+                New role
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-xs text-white/55 mb-3">

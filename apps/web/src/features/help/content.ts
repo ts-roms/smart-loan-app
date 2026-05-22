@@ -443,14 +443,89 @@ export const HELP_ARTICLES: HelpArticle[] = [
   // ── Admin ─────────────────────────────────────────────────────────
   {
     id: "rbac",
-    title: "Roles & users",
+    title: "Roles & permissions",
     category: "Admin",
-    summary: "Assign roles, edit permissions, delegate authority.",
+    summary:
+      "Roles, permissions, inheritance, staging, and the safety guards that keep the org from locking itself out.",
+    route: "/roles",
+    body:
+      "Roles are sets of permissions. The four canonical roles (ADMIN, LOAN_OFFICER, ACCOUNTANT, CUSTOMER) ship as system roles — editable but never deletable. Custom roles can be created at any time and freely deleted when no users hold them.\n\n" +
+      "The /roles page stacks three admin panels above the role list:\n\n" +
+      '  • "Who has permission…?" — reverse lookup. Pick a permission key and the panel shows every role + every active delegation currently granting it, plus a deduped count of unique users. Answers questions like "if I remove loans.decide from LOAN_OFFICER, who actually loses access?".\n' +
+      "  • Permission catalog — every permission with a lifecycle status pill (DRAFT / ACTIVE / DEPRECATED). Search, filter by status, and (admin-only) click → ACTIVE / → DRAFT / → DEPRECATED to flip a permission's state. DRAFT is the staging state: the perm exists in the catalog and can be assigned to roles, but the resolver doesn't actually grant it. Useful for wiring role membership ahead of a feature launch. DEPRECATED still grants at runtime (so in-flight flows don't break) but is flagged for planned removal.\n" +
+      "  • Roles table — name, permission count, user count, system/custom badge. Click the pencil to edit.\n\n" +
+      "Role editor (the dialog):\n\n" +
+      '  • "Inherits from" — pick zero or more parent roles. The effective permission set of this role becomes the union of its own perms plus every parent\'s (transitively). Cycles are rejected on save with the offending path in the error message.\n' +
+      "  • Permission matrix — checkbox grid grouped by category. Tick what this role grants directly.\n" +
+      '  • Edit-impact safety net — when you press Save on an existing role, the system computes "who would lose what" before writing. If any active user would lose a permission because of YOUR change (i.e. this role was their sole grant), you get a confirmation dialog listing each removed permission and the user count it affects. No surprise lockouts.\n\n' +
+      "Last-admin guard — the system refuses to remove ADMIN from the only remaining active admin. Returns 409 Conflict with a message telling you to promote someone else first. Self-lockout guard (you can't remove your own ADMIN) is the simpler cousin of this.\n\n" +
+      "Bulk operations:\n\n" +
+      "  • One user at a time — /users page → New user.\n" +
+      "  • Many users at once — /users/bulk (admin-only). Drop a CSV, dry-run validates without writing, then commit. Per-row partial success — fix and resubmit just the failed rows.\n\n" +
+      "Notifications: every role assignment + removal sends a best-effort USER_ROLE_CHANGED email to the affected user (when they have an email on file). Best-effort means: dispatch failure doesn't roll back the role change — the change still happens, the email just doesn't go out, and a warning lands in the api log.",
+    tour: [
+      t(
+        '[data-tour="permission-holders-panel"]',
+        "Who has permission X?",
+        "Reverse lookup. Pick a permission to see every role + active delegation that currently grants it. Useful before removing a perm from a role.",
+      ),
+      t(
+        '[data-tour="permission-catalog-panel"]',
+        "Permission catalog",
+        "Every permission with its lifecycle status. DRAFT permissions don't grant at resolve time even when assigned to a role — useful for wiring up before feature launch.",
+      ),
+    ],
+  },
+  {
+    id: "bulk-users",
+    title: "Bulk user onboarding",
+    category: "Admin",
+    summary:
+      "Drop a CSV to create staff accounts in one go. Dry-run validates without committing.",
+    route: "/users/bulk",
+    body:
+      "Admin-only. Each row creates one User and (optionally) assigns extra roles on top of the primary role. Up to 500 rows per batch.\n\n" +
+      "Required columns: email, name, password, role. Optional: customerId (only when role is CUSTOMER — must be an existing customer UUID with no user linked), extraRoles (comma-separated additional role keys to assign post-create).\n\n" +
+      "Flow:\n\n" +
+      "  1. Click Template to download a starter CSV with the column headers.\n" +
+      "  2. Drop your filled CSV on the dropzone OR paste it into the textarea.\n" +
+      '  3. Click "Dry run" — every row is validated (zod + email collision + customer-link invariants) without touching the DB. The results table shows which rows would succeed and which would fail.\n' +
+      "  4. Fix any failures (re-edit the CSV — comments and blank lines are skipped), then click Import.\n\n" +
+      'Partial success is the default — one bad row doesn\'t block the others. Toggle "Stop on first error" if you want the opposite. The response is 207 Multi-Status with a per-row breakdown: ok / failed + error message.\n\n' +
+      "Each successful row writes a USER_CREATE audit entry; the batch itself writes one summary BULK_USER_IMPORT entry with the counts. The Users page invalidates and reloads once at least one user actually committed (dry-runs don't trigger a refetch).\n\n" +
+      "Common mistakes:\n" +
+      "  • Reusing an email — collides with an existing user.\n" +
+      "  • CUSTOMER without a customerId — creates a standalone account, no portal access until linked.\n" +
+      "  • extraRoles containing a typo — the user is still created, but the specific bad role doesn't attach (row marked as partial-fail with the role name in the error).",
+    tour: [
+      t(
+        '[data-tour="bulk-users-panel"]',
+        "Bulk user import",
+        "Drop a CSV here or paste below. Each row spawns one User plus optional secondary roles.",
+      ),
+      t(
+        '[data-tour="bulk-users-actions"]',
+        "Dry run first",
+        "Always click Dry run before Import. It validates every row against the schema + checks email collisions + customer-link invariants without writing anything.",
+        "top",
+      ),
+    ],
+  },
+  {
+    id: "users-page",
+    title: "Users + temporary role grants",
+    category: "Admin",
+    summary:
+      "Per-user role management. Includes temporary grants (auto-expire) for acting-role coverage.",
     route: "/users",
     body:
-      "Roles are sets of permissions. The four canonical roles (ADMIN, LOAN_OFFICER, ACCOUNTANT, CUSTOMER) cannot be deleted but their permission sets are editable from /roles.\n\n" +
-      "Delegations let one user temporarily inherit another's permissions for a bounded time window — useful when an officer is on leave. The active-delegation banner reminds the delegate they're acting on someone else's behalf.\n\n" +
-      'Click "New user" on this page to create a staff or borrower account. Pick the primary role (ADMIN / LOAN_OFFICER / ACCOUNTANT / CUSTOMER). For CUSTOMER, you can optionally link the login to an existing Customer row by ID — leave blank to link later.',
+      "The /users page is the per-user view of the same RBAC world that /roles administers. Each row shows the user's primary role (from the legacy User.role enum), every additional role they're assigned, status, and creation date.\n\n" +
+      'Click "Assign" on any row to open the assign-role dialog. The dialog has two parts:\n\n' +
+      '  • "Temporary grant" toggle at the top + a datetime picker. When checked, the grant carries an expiresAt — the permission resolver stops including the role\'s perms after that instant, automatically. No cron, no cleanup script needed; the assignment row stays in the DB for the audit trail but goes inert.\n' +
+      "  • Role list below. Click any role to commit the assignment with whatever temporary/perpetual config is set above.\n\n" +
+      'On the user\'s row, temporary grants get a badge suffix like "until 2026-06-12" so admins can see at-a-glance which assignments are time-bounded. Expired grants are shown with strike-through so you know the row is still on file but no longer effective.\n\n' +
+      'Re-assigning the same role with a new expiresAt is the "extend" path — it updates expiry in place without disturbing the original grantedById/grantedAt. Pass an empty/null expiresAt to promote a temporary grant to perpetual.\n\n' +
+      "Past-dated expiries are rejected at the API as BadExpiry — recording a born-expired grant has no semantic value and would confuse the audit trail.",
   },
   {
     id: "delegations",
@@ -465,8 +540,10 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "Common workflows:\n" +
       '  • Branch coverage — open the wizard, pick the user, click "Delegate as LOAN_OFFICER" (or any role with permissions). The role template pre-fills the permission list with that role\'s permissions. Edit afterward to fine-tune.\n' +
       '  • Need more time — on an active delegation, click "+ 7d" to push the end date by a week. No revoke-and-recreate needed.\n' +
-      '  • Pulling it back early — click "Revoke" with an optional reason. The delegate loses the permissions immediately and the reason lands in the audit log.\n\n' +
-      "Safety notes: you can only delegate permissions you actually hold; downgrading the delegator (e.g. removing a role from them) instantly tightens what their delegate inherits. Every create / extend / revoke writes an audit row.",
+      '  • Pulling it back early — click "Revoke" with an optional reason. The delegate loses the permissions immediately and the reason lands in the audit log.\n' +
+      "  • \"What does this actually grant me?\" — click Preview on any delegation row. The dialog shows the resolved permission set the delegate would receive RIGHT NOW (after re-checking the delegator's current permissions) plus any explicit keys that have been DROPPED because the delegator no longer holds them. Empty droppedPermissions means the delegation is still fully effective; non-empty means something changed on the delegator's side and the delegate has silently lost coverage of those keys.\n\n" +
+      "Safety notes: you can only delegate permissions you actually hold; downgrading the delegator (e.g. removing a role from them) instantly tightens what their delegate inherits — that's the silent-drop case the Preview catches. Every create / extend / revoke writes an audit row.\n\n" +
+      "Notifications: revoking a delegation triggers a best-effort DELEGATION_REVOKED email to the delegate (and they also see the change immediately the next time they hit a permission-gated route).",
     tour: [
       t(
         '[data-tour="delegations-new"]',
@@ -672,5 +749,35 @@ export const FAQ: Array<{ q: string; a: string }> = [
   {
     q: "I'm offline. Can I still work on loans?",
     a: "Briefly, yes. The PWA service worker caches the app shell so you can navigate around already-loaded pages. But financial actions (decide, disburse, payment, etc.) need a live API call — we deliberately don't serve stale balances or audit data. If the network drops mid-action, you'll see a \"you're offline\" page until connection returns.",
+  },
+
+  // ── RBAC / delegations ──────────────────────────────────────────────
+  {
+    q: "How do I bulk-onboard a batch of staff users?",
+    a: 'Admin only. Go to /users/bulk (or "Bulk users" in the sidebar). Drop a CSV with columns email, name, password, role (required) and optionally customerId + extraRoles. Click "Dry run" first to validate every row without writing; if everything\'s green, click "Import". Up to 500 rows per batch, partial-success by default — bad rows don\'t block the others. Each successful user gets their own USER_CREATE audit row plus a single BULK_USER_IMPORT summary row for the batch.',
+  },
+  {
+    q: "How do I grant someone a role temporarily — e.g. for two-week acting coverage?",
+    a: 'On /users, click "Assign" on the user\'s row. In the dialog, tick "Temporary grant — expires at a set time" at the top, pick a future date/time (defaults to 14 days at 5pm), then click whichever role you want to grant. Their badge will show "until {date}". After that instant, the resolver stops including that role\'s perms automatically — no cleanup needed. To extend, re-assign the same role with a new expiry; to make it permanent, re-assign with the toggle off.',
+  },
+  {
+    q: 'A permission is showing "DRAFT" — what does that mean?',
+    a: "DRAFT is a staging state in the permission lifecycle. The permission exists in the catalog and can be added to roles, but the resolver does NOT actually grant it at permission-check time. The use case: wire up role membership BEFORE flipping a new feature on — when you're ready to go live, an admin clicks → ACTIVE in the /roles permission catalog and the perm starts firing for everyone holding it. DEPRECATED is the opposite end: still effective so in-flight flows don't break, but flagged for planned removal.",
+  },
+  {
+    q: "Can one role inherit permissions from another?",
+    a: "Yes. On /roles, click the pencil to edit any role. The \"Inherits from\" section is a checklist of every other role in the system — tick the ones whose permissions this role should pick up. Inheritance is transitive (parent of parent counts), and cycles are rejected on save with the offending path. The role's effective permission set at resolve time = its own direct perms ∪ every ancestor's perms. Self isn't selectable.",
+  },
+  {
+    q: 'How do I find out "who currently has permission X" before I remove it?',
+    a: 'On /roles, the top panel is "Who has permission…?". Pick a permission from the searchable list and the panel shows every role granting it (with the count of users holding that role) PLUS every active delegation passing it through, with the total deduped user count. That\'s the audit answer to "if I remove this perm, who loses what?". The separate edit-impact dialog that pops up on Save covers the role-side of the same question — it shows users for whom THIS role was the sole grant.',
+  },
+  {
+    q: "The system refused to remove ADMIN from someone — why?",
+    a: "Two guards stack here. (1) Self-lockout: you can't remove your own ADMIN — strip your own admin and you'd lose admin.users on the very next request. Ask another admin to do it. (2) Last-admin guard: even removing someone ELSE'S ADMIN is refused if they're the only remaining active admin on the org. The error is 409 Conflict with a message telling you to promote another user to ADMIN first. Both guards count only ACTIVE assignments (user.active = true) and exclude expired temporary grants.",
+  },
+  {
+    q: 'I revoked a delegation but the delegate is still showing as "has the perms" on the preview. Why?',
+    a: "Most likely caching. The /delegations page invalidates on revoke, but if the delegate has the page open they'll see stale data until their next refetch (default ~30s). The actual permission check is live — they're not granted the perms in any new API request. If you want them locked out immediately, the revoke already did that server-side. If you want to verify, open the delegation Preview dialog: the isActiveNow field is the source of truth.",
   },
 ];
