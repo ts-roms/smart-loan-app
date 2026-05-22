@@ -1,10 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type {
-  AuctionOutcome,
-  CaseResult,
-  RepossessionService,
-} from "./repossession.service";
+import type { AuctionOutcome, CaseResult } from "./repossession.service";
 import {
   approvalSchema,
   assignSchema,
@@ -19,10 +15,11 @@ import {
  * HTTP adapter for repossession. All 4xx mapping lives here so the
  * service can stay framework-free. The repo errors (invalid transitions,
  * etc.) come through as 400s; not-found is 404; everything else 201/200.
+ *
+ * Phase 2: stateless. Reads `req.repossessionServices!.repossession`
+ * per call — built per-request from the tenant-scoped Prisma client.
  */
 export class RepossessionController {
-  constructor(private readonly service: RepossessionService) {}
-
   list = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = listQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -30,14 +27,16 @@ export class RepossessionController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.list(parsed.data);
+    return req.repossessionServices!.repossession.list(parsed.data);
   };
 
   findById = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) => {
-    const c = await this.service.findById(req.params.id);
+    const c = await req.repossessionServices!.repossession.findById(
+      req.params.id,
+    );
     if (!c) return reply.code(404).send({ error: "NotFound" });
     return c;
   };
@@ -46,7 +45,9 @@ export class RepossessionController {
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) => {
-    const result = await this.service.outstanding(req.params.id);
+    const result = await req.repossessionServices!.repossession.outstanding(
+      req.params.id,
+    );
     if (!result.ok) return reply.code(404).send({ error: "NotFound" });
     return {
       outstandingPrincipal: result.outstandingPrincipal,
@@ -62,7 +63,7 @@ export class RepossessionController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.openCase({
+    const result = await req.repossessionServices!.repossession.openCase({
       input: parsed.data,
       actorId: req.user.sub,
     });
@@ -93,7 +94,7 @@ export class RepossessionController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.assignAgent({
+    const result = await req.repossessionServices!.repossession.assignAgent({
       caseId: req.params.id,
       input: parsed.data,
       actorId: req.user.sub,
@@ -112,7 +113,7 @@ export class RepossessionController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.recover({
+    const result = await req.repossessionServices!.repossession.recover({
       caseId: req.params.id,
       input: parsed.data,
       actorId: req.user.sub,
@@ -131,7 +132,7 @@ export class RepossessionController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const outcome = await this.service.auction({
+    const outcome = await req.repossessionServices!.repossession.auction({
       caseId: req.params.id,
       input: parsed.data,
       actorId: req.user.sub,
@@ -150,7 +151,7 @@ export class RepossessionController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.cancel({
+    const result = await req.repossessionServices!.repossession.cancel({
       caseId: req.params.id,
       input: parsed.data,
       actorId: req.user.sub,
@@ -172,7 +173,7 @@ export class RepossessionController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service[method]({
+    const result = await req.repossessionServices!.repossession[method]({
       caseId: req.params.id,
       input: parsed.data,
       actorId: req.user.sub,

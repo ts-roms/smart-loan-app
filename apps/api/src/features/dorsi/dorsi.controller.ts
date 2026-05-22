@@ -1,6 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { DorsiService } from "./dorsi.service";
 import {
   boardApprovalSchema,
   checkSchema,
@@ -11,25 +10,23 @@ import {
 } from "./schemas";
 
 /**
- * HTTP adapter for the DORSI compliance surface. Each method maps a
- * single route's HTTP contract onto a service call:
+ * HTTP adapter for the DORSI compliance surface.
  *
- *   - 4xx mapping on validation failures + service errors
- *   - 404 for missing-customer / missing-record lookups
- *   - Pull `req.user.sub` for the audit actorId argument
+ * Phase 2: stateless. Reads `req.dorsiServices!.dorsi` per call —
+ * built per-request from the tenant-scoped Prisma client.
  */
 export class DorsiController {
-  constructor(private readonly service: DorsiService) {}
+  list = (req: FastifyRequest) => req.dorsiServices!.dorsi.listActive();
 
-  list = () => this.service.listActive();
-
-  utilization = () => this.service.utilization();
+  utilization = (req: FastifyRequest) => req.dorsiServices!.dorsi.utilization();
 
   showForCustomer = async (
     req: FastifyRequest<{ Params: { customerId: string } }>,
     reply: FastifyReply,
   ) => {
-    const r = await this.service.findForCustomer(req.params.customerId);
+    const r = await req.dorsiServices!.dorsi.findForCustomer(
+      req.params.customerId,
+    );
     if (!r) return reply.code(404).send({ error: "NotFound" });
     return r;
   };
@@ -42,7 +39,10 @@ export class DorsiController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     try {
-      const created = await this.service.tag(parsed.data, req.user.sub);
+      const created = await req.dorsiServices!.dorsi.tag(
+        parsed.data,
+        req.user.sub,
+      );
       return reply.code(201).send(created);
     } catch (err) {
       return reply
@@ -62,7 +62,7 @@ export class DorsiController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     try {
-      return await this.service.deactivate(
+      return await req.dorsiServices!.dorsi.deactivate(
         req.params.id,
         parsed.data,
         req.user.sub,
@@ -79,7 +79,10 @@ export class DorsiController {
     reply: FastifyReply,
   ) => {
     try {
-      return await this.service.markReviewed(req.params.id, req.user.sub);
+      return await req.dorsiServices!.dorsi.markReviewed(
+        req.params.id,
+        req.user.sub,
+      );
     } catch (err) {
       return reply
         .code(400)
@@ -94,7 +97,7 @@ export class DorsiController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.checkLoan(parsed.data);
+    return req.dorsiServices!.dorsi.checkLoan(parsed.data);
   };
 
   /**
@@ -109,7 +112,7 @@ export class DorsiController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.screenByName(parsed.data.name);
+    return req.dorsiServices!.dorsi.screenByName(parsed.data.name);
   };
 
   recordBoardApproval = async (req: FastifyRequest, reply: FastifyReply) => {
@@ -120,7 +123,7 @@ export class DorsiController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     try {
-      const approval = await this.service.recordBoardApproval(
+      const approval = await req.dorsiServices!.dorsi.recordBoardApproval(
         parsed.data,
         req.user.sub,
       );
@@ -134,10 +137,10 @@ export class DorsiController {
 
   findBoardApprovalForLoan = async (
     req: FastifyRequest<{ Params: { loanId: string } }>,
-  ) => this.service.findBoardApprovalForLoan(req.params.loanId);
+  ) => req.dorsiServices!.dorsi.findBoardApprovalForLoan(req.params.loanId);
 
-  getConfig = async () => {
-    const cfg = await this.service.systemConfig();
+  getConfig = async (req: FastifyRequest) => {
+    const cfg = await req.dorsiServices!.dorsi.systemConfig();
     return {
       companyTotalEquity: Number(cfg.companyTotalEquity),
       updatedAt: cfg.updatedAt,
@@ -153,7 +156,7 @@ export class DorsiController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     try {
-      return await this.service.updateCompanyTotalEquity(
+      return await req.dorsiServices!.dorsi.updateCompanyTotalEquity(
         parsed.data.companyTotalEquity,
         req.user.sub,
       );

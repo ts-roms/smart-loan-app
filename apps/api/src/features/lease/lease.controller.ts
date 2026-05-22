@@ -1,6 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { LeaseService } from "./lease.service";
 import {
   buyoutSchema,
   closeSchema,
@@ -12,12 +11,11 @@ import {
  * HTTP layer for lease-to-Own routes. Each handler is a small body-parse
  * + service call + result mapping. The service returns discriminated
  * unions so all 4xx mapping lives here — handlers never throw for flow
- * control. Methods are arrow-field bound so Fastify's route registration
- * can use them directly without `.bind(this)` plumbing.
+ * control.
+ *
+ * Phase 2: stateless. Reads `req.leaseServices!.lease` per call.
  */
 export class LeaseController {
-  constructor(private readonly service: LeaseService) {}
-
   list = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = listQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -25,14 +23,14 @@ export class LeaseController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.list(parsed.data);
+    return req.leaseServices!.lease.list(parsed.data);
   };
 
   findForLoan = async (
     req: FastifyRequest<{ Params: { loanId: string } }>,
     reply: FastifyReply,
   ) => {
-    const a = await this.service.findForLoan(req.params.loanId);
+    const a = await req.leaseServices!.lease.findForLoan(req.params.loanId);
     if (!a) return reply.code(404).send({ error: "NotFound" });
     return a;
   };
@@ -47,7 +45,7 @@ export class LeaseController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.completeBuyout({
+    const result = await req.leaseServices!.lease.completeBuyout({
       loanId: req.params.loanId,
       input: parsed.data,
       actorId: req.user.sub,
@@ -73,7 +71,7 @@ export class LeaseController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.pullOut({
+    const result = await req.leaseServices!.lease.pullOut({
       loanId: req.params.loanId,
       input: parsed.data,
       actorId: req.user.sub,
@@ -96,7 +94,7 @@ export class LeaseController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.closeAsReturned({
+    const result = await req.leaseServices!.lease.closeAsReturned({
       loanId: req.params.loanId,
       input: parsed.data,
       actorId: req.user.sub,
@@ -119,7 +117,7 @@ export class LeaseController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.closeAsExtended({
+    const result = await req.leaseServices!.lease.closeAsExtended({
       loanId: req.params.loanId,
       input: parsed.data,
       actorId: req.user.sub,

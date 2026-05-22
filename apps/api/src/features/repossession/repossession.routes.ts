@@ -19,6 +19,8 @@
  *
  * Layered: routes → controller → service → repo + audit + journal
  * (the auction transition posts a settlement entry).
+ *
+ * Phase 2: per-request service wiring via `req.repossessionServices`.
  */
 
 import {
@@ -26,23 +28,35 @@ import {
   LoanRepository,
   RepossessionRepository,
 } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { RepossessionController } from "./repossession.controller";
 import { RepossessionService } from "./repossession.service";
 
-export async function repossessionRoutes(app: FastifyInstance) {
-  const service = new RepossessionService(
-    app.prisma,
-    new RepossessionRepository(app.prisma),
-    new LoanRepository(app.prisma),
-    new AuditLogRepository(app.prisma),
-  );
-  const ctrl = new RepossessionController(service);
+declare module "fastify" {
+  interface FastifyRequest {
+    repossessionServices?: { repossession: RepossessionService };
+  }
+}
 
+export async function repossessionRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
   // Repossession workflow is a PROFESSIONAL-tier feature.
   app.addHook("preHandler", app.requireFeature("servicing.repossession"));
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.repossessionServices = {
+      repossession: new RepossessionService(
+        prisma,
+        new RepossessionRepository(prisma),
+        new LoanRepository(prisma),
+        new AuditLogRepository(prisma),
+      ),
+    };
+  });
+
+  const ctrl = new RepossessionController();
 
   app.get("/", { preHandler: app.requirePermission("loans.read") }, ctrl.list);
 

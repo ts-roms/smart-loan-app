@@ -14,24 +14,38 @@
  *
  * Layered: routes → controller → service → repo + audit. The service
  * couples each state transition to an audit-log record on success.
+ *
+ * Phase 2: per-request service wiring via `req.leaseServices`.
  */
 
 import { AuditLogRepository, LeaseRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { LeaseController } from "./lease.controller";
 import { LeaseService } from "./lease.service";
 
-export async function leaseRoutes(app: FastifyInstance) {
-  const service = new LeaseService(
-    new LeaseRepository(app.prisma),
-    new AuditLogRepository(app.prisma),
-  );
-  const ctrl = new LeaseController(service);
+declare module "fastify" {
+  interface FastifyRequest {
+    leaseServices?: { lease: LeaseService };
+  }
+}
 
+export async function leaseRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
   // Lease-to-Own is a PROFESSIONAL-tier feature.
   app.addHook("preHandler", app.requireFeature("servicing.lease"));
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.leaseServices = {
+      lease: new LeaseService(
+        new LeaseRepository(prisma),
+        new AuditLogRepository(prisma),
+      ),
+    };
+  });
+
+  const ctrl = new LeaseController();
 
   app.get("/", { preHandler: app.requirePermission("lease.read") }, ctrl.list);
 
