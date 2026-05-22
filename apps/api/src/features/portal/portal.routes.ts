@@ -22,31 +22,48 @@ import {
   PaymentIntentRepository,
 } from "@loan/db";
 import { MockProvider } from "@loan/payments";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { config } from "../../config";
 import { PortalController } from "./portal.controller";
 import { PortalService } from "./portal.service";
+
+declare module "fastify" {
+  interface FastifyRequest {
+    portalServices?: { portal: PortalService };
+  }
+}
 
 export async function portalRoutes(app: FastifyInstance) {
   const baseUrl =
     process.env.PUBLIC_API_URL ??
     `http://localhost:${process.env.PORT ?? 3001}`;
   const provider = new MockProvider({ baseUrl });
-  const intentWebhookUrl = `${baseUrl}/api/v1/payments/webhook/${provider.name.toLowerCase()}`;
-
-  const service = new PortalService(
-    app.prisma,
-    new LoanRepository(app.prisma),
-    new CreditScoreRepository(app.prisma),
-    new KycRepository(app.prisma),
-    new CooperativeRepository(app.prisma),
-    new CustomerLedgerRepository(app.prisma),
-    new PaymentIntentRepository(app.prisma, provider),
-    intentWebhookUrl,
-  );
-  const ctrl = new PortalController(service);
 
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    // Webhook URL embeds the tenant slug in multi-tenant mode (mirrors
+    // features/payments) so the provider callback reaches the right schema.
+    const intentWebhookUrl = config.multiTenant
+      ? `${baseUrl}/api/v1/payments/webhook/${provider.name.toLowerCase()}/${req.tenantCtx.slug}`
+      : `${baseUrl}/api/v1/payments/webhook/${provider.name.toLowerCase()}`;
+    req.portalServices = {
+      portal: new PortalService(
+        prisma,
+        new LoanRepository(prisma),
+        new CreditScoreRepository(prisma),
+        new KycRepository(prisma),
+        new CooperativeRepository(prisma),
+        new CustomerLedgerRepository(prisma),
+        new PaymentIntentRepository(prisma, provider),
+        intentWebhookUrl,
+      ),
+    };
+  });
+
+  const ctrl = new PortalController();
 
   // ─── /me ──────────────────────────────────────────────────────────
   app.get("/me", ctrl.me);

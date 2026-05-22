@@ -1,7 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { clientIp, parseScope, toCsv, type LedgerScope } from "./helpers";
-import type { PortalService } from "./portal.service";
 import {
   applySchema,
   intentSchema,
@@ -12,24 +11,16 @@ import {
 } from "./schemas";
 
 /**
- * HTTP adapter for the borrower portal. Every endpoint follows the
- * same opening move: resolve the calling user → customerId; if that
- * fails, return 403. Then dispatch to the service with the resolved
- * customerId so ownership scoping is a typed argument.
- *
- * The format-dispatch endpoints (`/me/ledger`, `/contributions`,
- * `/savings`) handle JSON vs CSV here because the Content-Type +
- * Content-Disposition header writes are HTTP concerns.
+ * HTTP adapter for the borrower portal. Phase 2: stateless. Reads
+ * `req.portalServices.portal` per call.
  */
 export class PortalController {
-  constructor(private readonly service: PortalService) {}
-
   // ─── /me ──────────────────────────────────────────────────────────
 
   me = async (req: FastifyRequest, reply: FastifyReply) => {
     const auth = await this.guard(req, reply);
     if (!auth) return;
-    const result = await this.service.getMe(auth);
+    const result = await req.portalServices!.portal.getMe(auth);
     if (!result.ok) {
       return reply
         .code(404)
@@ -47,7 +38,7 @@ export class PortalController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return this.service.updateProfile(auth, parsed.data);
+    return req.portalServices!.portal.updateProfile(auth, parsed.data);
   };
 
   // ─── loans ────────────────────────────────────────────────────────
@@ -55,7 +46,7 @@ export class PortalController {
   listLoans = async (req: FastifyRequest, reply: FastifyReply) => {
     const auth = await this.guard(req, reply);
     if (!auth) return;
-    return this.service.listLoans(auth);
+    return req.portalServices!.portal.listLoans(auth);
   };
 
   getLoan = async (
@@ -64,7 +55,10 @@ export class PortalController {
   ) => {
     const auth = await this.guard(req, reply);
     if (!auth) return;
-    const result = await this.service.getLoan(auth, req.params.id);
+    const result = await req.portalServices!.portal.getLoan(
+      auth,
+      req.params.id,
+    );
     if (!result.ok) return reply.code(404).send({ error: "NotFound" });
     return result.value;
   };
@@ -82,7 +76,7 @@ export class PortalController {
         .send({ error: "BadRequest", message: "signatureUrl required" });
     }
     const ip = clientIp(req.headers as Record<string, unknown>, req.ip);
-    const result = await this.service.signBorrower({
+    const result = await req.portalServices!.portal.signBorrower({
       customerId: auth,
       loanId: req.params.id,
       signatureUrl: parsed.data.signatureUrl,
@@ -101,7 +95,7 @@ export class PortalController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.applyLoan({
+    const result = await req.portalServices!.portal.applyLoan({
       customerId: auth,
       userId: req.user.sub,
       input: parsed.data,
@@ -121,7 +115,7 @@ export class PortalController {
   listKyc = async (req: FastifyRequest, reply: FastifyReply) => {
     const auth = await this.guard(req, reply);
     if (!auth) return;
-    return this.service.listKyc(auth);
+    return req.portalServices!.portal.listKyc(auth);
   };
 
   submitKyc = async (req: FastifyRequest, reply: FastifyReply) => {
@@ -134,7 +128,7 @@ export class PortalController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     return reply.code(201).send(
-      await this.service.submitKyc({
+      await req.portalServices!.portal.submitKyc({
         customerId: auth,
         userId: req.user.sub,
         input: parsed.data,
@@ -153,7 +147,7 @@ export class PortalController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.createIntent({
+    const result = await req.portalServices!.portal.createIntent({
       customerId: auth,
       userId: req.user.sub,
       input: parsed.data,
@@ -168,7 +162,10 @@ export class PortalController {
   ) => {
     const auth = await this.guard(req, reply);
     if (!auth) return;
-    const result = await this.service.getIntent(auth, req.params.id);
+    const result = await req.portalServices!.portal.getIntent(
+      auth,
+      req.params.id,
+    );
     if (!result.ok) return reply.code(404).send({ error: "NotFound" });
     return result.value;
   };
@@ -178,7 +175,7 @@ export class PortalController {
   memberLedger = async (req: FastifyRequest, reply: FastifyReply) => {
     const auth = await this.guard(req, reply);
     if (!auth) return;
-    const result = await this.service.memberLedger(auth);
+    const result = await req.portalServices!.portal.memberLedger(auth);
     if (!result.ok) return reply.code(404).send({ error: "NotFound" });
     return result.value;
   };
@@ -193,7 +190,11 @@ export class PortalController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     const { from, to, scope } = this.ledgerOpts(parsed.data);
-    const data = await this.service.customerLedger(auth, { from, to, scope });
+    const data = await req.portalServices!.portal.customerLedger(auth, {
+      from,
+      to,
+      scope,
+    });
     if (parsed.data.format === "csv") {
       // Reuses the same CSV shape as the staff `/customers/:id/ledger`
       // endpoint. Inlined because lifting the helper into @loan/db just
@@ -239,7 +240,7 @@ export class PortalController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const buf = await this.service.customerLedgerPdf(
+    const buf = await req.portalServices!.portal.customerLedgerPdf(
       auth,
       this.ledgerOpts(parsed.data),
     );
@@ -258,7 +259,7 @@ export class PortalController {
     if (!auth) return;
     const format =
       (req.query as { format?: string } | undefined)?.format ?? "json";
-    const rows = await this.service.listContributions(auth);
+    const rows = await req.portalServices!.portal.listContributions(auth);
     if (format === "csv") {
       const csv = toCsv(
         [
@@ -291,7 +292,7 @@ export class PortalController {
     if (!auth) return;
     const format =
       (req.query as { format?: string } | undefined)?.format ?? "json";
-    const rows = await this.service.listSavings(auth);
+    const rows = await req.portalServices!.portal.listSavings(auth);
     if (format === "csv") {
       const csv = toCsv(
         ["Date", "Kind", "Amount", "Notes"],
@@ -324,7 +325,9 @@ export class PortalController {
     req: FastifyRequest,
     reply: FastifyReply,
   ): Promise<string | null> {
-    const result = await this.service.resolveCustomerId(req.user.sub);
+    const result = await req.portalServices!.portal.resolveCustomerId(
+      req.user.sub,
+    );
     if (!result.ok) {
       reply.code(403).send({ error: "Forbidden", message: result.message });
       return null;

@@ -2,45 +2,41 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import type {
   CreateResult,
-  DelegationService,
   ExtendResult,
   RevokeResult,
 } from "./delegations.service";
 import { createSchema, extendSchema, revokeSchema } from "./schemas";
 
 /**
- * HTTP adapter for delegations. Caller permissions are resolved here
- * (off the request) and handed to the service — keeps the service from
- * having to know about `req.permissions` or its fallback path.
+ * HTTP adapter for delegations. Phase 2: stateless.
+ * Reads `req.delegationServices.{delegations, resolveCallerPerms}` per call.
  */
 export class DelegationController {
-  constructor(
-    private readonly service: DelegationService,
-    private readonly resolveCallerPerms: (
-      req: FastifyRequest,
-    ) => Promise<Set<string>>,
-  ) {}
-
-  userDirectory = async () => this.service.userDirectory();
+  userDirectory = async (req: FastifyRequest) =>
+    req.delegationServices!.delegations.userDirectory();
 
   listMine = async (req: FastifyRequest) =>
-    this.service.listForCaller(req.user.sub);
+    req.delegationServices!.delegations.listForCaller(req.user.sub);
 
-  listAll = async () => this.service.listAll();
+  listAll = async (req: FastifyRequest) =>
+    req.delegationServices!.delegations.listAll();
 
   listActive = async (req: FastifyRequest) =>
-    this.service.listActiveFor(req.user.sub);
+    req.delegationServices!.delegations.listActiveFor(req.user.sub);
 
   preview = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) => {
-    const callerPerms = await this.resolveCallerPerms(req);
-    const result = await this.service.previewResolvedPermissions({
-      id: req.params.id,
-      callerId: req.user.sub,
-      callerPerms,
-    });
+    const callerPerms = await req.delegationServices!.resolveCallerPerms(
+      req.user.sub,
+    );
+    const result =
+      await req.delegationServices!.delegations.previewResolvedPermissions({
+        id: req.params.id,
+        callerId: req.user.sub,
+        callerPerms,
+      });
     if (!result.ok) {
       if (result.kind === "NotFound") {
         return reply.code(404).send({ error: "NotFound" });
@@ -59,8 +55,10 @@ export class DelegationController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const callerPerms = await this.resolveCallerPerms(req);
-    const result = await this.service.create({
+    const callerPerms = await req.delegationServices!.resolveCallerPerms(
+      req.user.sub,
+    );
+    const result = await req.delegationServices!.delegations.create({
       callerId: req.user.sub,
       callerPerms,
       input: parsed.data,
@@ -79,8 +77,10 @@ export class DelegationController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const callerPerms = await this.resolveCallerPerms(req);
-    const result = await this.service.revoke({
+    const callerPerms = await req.delegationServices!.resolveCallerPerms(
+      req.user.sub,
+    );
+    const result = await req.delegationServices!.delegations.revoke({
       id: req.params.id,
       callerId: req.user.sub,
       callerPerms,
@@ -100,8 +100,10 @@ export class DelegationController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const callerPerms = await this.resolveCallerPerms(req);
-    const result = await this.service.extend({
+    const callerPerms = await req.delegationServices!.resolveCallerPerms(
+      req.user.sub,
+    );
+    const result = await req.delegationServices!.delegations.extend({
       id: req.params.id,
       callerId: req.user.sub,
       callerPerms,

@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { CreateUserResult, RbacService, RoleResult } from "./rbac.service";
+import type { CreateUserResult, RoleResult } from "./rbac.service";
 import {
   assignSchema,
   createRoleSchema,
@@ -10,18 +10,12 @@ import {
   updateRoleSchema,
   userBulkImportSchema,
 } from "./schemas";
-import type { UsersBulkImportService } from "./users-bulk-import.service";
 
 /**
- * HTTP adapter for RBAC admin routes. Body parsing + service-result
- * → status mapping; the service holds the rules.
+ * HTTP adapter for RBAC admin routes. Phase 2: stateless. Reads
+ * `req.rbacServices.{rbac, bulkImport}` per call.
  */
 export class RbacController {
-  constructor(
-    private readonly service: RbacService,
-    private readonly bulkImport: UsersBulkImportService,
-  ) {}
-
   bulkImportUsers = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = userBulkImportSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -29,18 +23,18 @@ export class RbacController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.bulkImport.run({
+    const result = await req.rbacServices!.bulkImport.run({
       input: parsed.data,
       actorId: req.user.sub,
     });
-    // 207 Multi-Status — partial success is the expected mode for
-    // bulk imports, not the exception.
     return reply.code(207).send(result);
   };
 
-  sync = async (req: FastifyRequest) => this.service.sync(req.user.sub);
+  sync = async (req: FastifyRequest) =>
+    req.rbacServices!.rbac.sync(req.user.sub);
 
-  listPermissions = async () => this.service.listPermissions();
+  listPermissions = async (req: FastifyRequest) =>
+    req.rbacServices!.rbac.listPermissions();
 
   patchPermission = async (
     req: FastifyRequest<{ Params: { key: string } }>,
@@ -52,7 +46,7 @@ export class RbacController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.setPermissionStatus({
+    const result = await req.rbacServices!.rbac.setPermissionStatus({
       key: req.params.key,
       status: parsed.data.status,
       actorId: req.user.sub,
@@ -76,7 +70,7 @@ export class RbacController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.computeRoleEditImpact({
+    const result = await req.rbacServices!.rbac.computeRoleEditImpact({
       roleKey: req.params.key,
       newPermissionKeys: parsed.data.permissions,
     });
@@ -90,7 +84,9 @@ export class RbacController {
     req: FastifyRequest<{ Params: { key: string } }>,
     reply: FastifyReply,
   ) => {
-    const result = await this.service.listPermissionHolders(req.params.key);
+    const result = await req.rbacServices!.rbac.listPermissionHolders(
+      req.params.key,
+    );
     if (!result.ok) {
       return reply.code(404).send({
         error: "NotFound",
@@ -100,13 +96,13 @@ export class RbacController {
     return result.payload;
   };
 
-  listRoles = async () => this.service.listRoles();
+  listRoles = async (req: FastifyRequest) => req.rbacServices!.rbac.listRoles();
 
   findRole = async (
     req: FastifyRequest<{ Params: { key: string } }>,
     reply: FastifyReply,
   ) => {
-    const r = await this.service.findRole(req.params.key);
+    const r = await req.rbacServices!.rbac.findRole(req.params.key);
     if (!r) return reply.code(404).send({ error: "NotFound" });
     return r;
   };
@@ -118,7 +114,7 @@ export class RbacController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.createRole({
+    const result = await req.rbacServices!.rbac.createRole({
       input: parsed.data,
       actorId: req.user.sub,
     });
@@ -136,7 +132,7 @@ export class RbacController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.updateRole({
+    const result = await req.rbacServices!.rbac.updateRole({
       key: req.params.key,
       input: parsed.data,
       actorId: req.user.sub,
@@ -149,7 +145,7 @@ export class RbacController {
     req: FastifyRequest<{ Params: { key: string } }>,
     reply: FastifyReply,
   ) => {
-    const result = await this.service.deleteRole({
+    const result = await req.rbacServices!.rbac.deleteRole({
       key: req.params.key,
       actorId: req.user.sub,
     });
@@ -161,10 +157,10 @@ export class RbacController {
     return result.role;
   };
 
-  listUsers = async () => this.service.listUsers();
+  listUsers = async (req: FastifyRequest) => req.rbacServices!.rbac.listUsers();
 
   listUserRoles = async (req: FastifyRequest<{ Params: { userId: string } }>) =>
-    this.service.listUserRoles(req.params.userId);
+    req.rbacServices!.rbac.listUserRoles(req.params.userId);
 
   createUser = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = createUserSchema.safeParse(req.body);
@@ -173,7 +169,7 @@ export class RbacController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.createUser({
+    const result = await req.rbacServices!.rbac.createUser({
       input: parsed.data,
       actorId: req.user.sub,
     });
@@ -191,7 +187,7 @@ export class RbacController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.assignRole({
+    const result = await req.rbacServices!.rbac.assignRole({
       userId: req.params.userId,
       input: parsed.data,
       actorId: req.user.sub,
@@ -208,24 +204,17 @@ export class RbacController {
     req: FastifyRequest<{ Params: { userId: string; roleKey: string } }>,
     reply: FastifyReply,
   ) => {
-    const result = await this.service.unassignRole({
+    const result = await req.rbacServices!.rbac.unassignRole({
       userId: req.params.userId,
       roleKey: req.params.roleKey,
       actorId: req.user.sub,
     });
     if (!result.ok) {
       if (result.kind === "LastAdmin") {
-        // Server-state conflict (org would have zero admins) — 409
-        // lets the UI distinguish "you typed something wrong" from
-        // "you'd lock everyone out of admin".
         return reply
           .code(409)
           .send({ error: "Conflict", message: result.message });
       }
-      // SelfLockout retains its pre-existing 400 + BadRequest shape
-      // for parity with the unrefactored route. Both errors are
-      // "would lock you/the org out", but the wire format stays
-      // unchanged.
       return reply
         .code(400)
         .send({ error: "BadRequest", message: result.message });
@@ -245,9 +234,6 @@ export class RbacController {
         .send({ error: "Conflict", message: result.message });
     }
     if (result.kind === "Cycle") {
-      // Cycle is a client error — they sent a parent set that would
-      // create a loop. 400 with the cycle path in the message lets the
-      // UI render it directly.
       return reply
         .code(400)
         .send({ error: "InheritanceCycle", message: result.message });

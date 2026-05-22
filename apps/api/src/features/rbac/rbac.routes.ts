@@ -15,27 +15,42 @@ import {
   PermissionRepository,
   RoleRepository,
 } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { RbacController } from "./rbac.controller";
 import { RbacService } from "./rbac.service";
 import { UsersBulkImportService } from "./users-bulk-import.service";
 
-export async function rbacRoutes(app: FastifyInstance) {
-  const roles = new RoleRepository(app.prisma);
-  const audit = new AuditLogRepository(app.prisma);
-  const service = new RbacService(
-    app.prisma,
-    new PermissionRepository(app.prisma),
-    roles,
-    audit,
-    app.notifications,
-    app.log,
-  );
-  const bulkImport = new UsersBulkImportService(app.prisma, roles, audit);
-  const ctrl = new RbacController(service, bulkImport);
+declare module "fastify" {
+  interface FastifyRequest {
+    rbacServices?: {
+      rbac: RbacService;
+      bulkImport: UsersBulkImportService;
+    };
+  }
+}
 
+export async function rbacRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    const roles = new RoleRepository(prisma);
+    const audit = new AuditLogRepository(prisma);
+    req.rbacServices = {
+      rbac: new RbacService(
+        prisma,
+        new PermissionRepository(prisma),
+        roles,
+        audit,
+        app.notifications,
+        app.log,
+      ),
+      bulkImport: new UsersBulkImportService(prisma, roles, audit),
+    };
+  });
+
+  const ctrl = new RbacController();
 
   // ─── catalog sync ─────────────────────────────────────────────────
 

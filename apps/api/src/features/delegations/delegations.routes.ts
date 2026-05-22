@@ -24,25 +24,34 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { DelegationController } from "./delegations.controller";
 import { DelegationService } from "./delegations.service";
 
+declare module "fastify" {
+  interface FastifyRequest {
+    delegationServices?: {
+      delegations: DelegationService;
+      resolveCallerPerms: (userId: string) => Promise<Set<string>>;
+    };
+  }
+}
+
 export async function delegationRoutes(app: FastifyInstance) {
-  const service = new DelegationService(
-    app.prisma,
-    new DelegationRepository(app.prisma),
-    new AuditLogRepository(app.prisma),
-    (userId) => app.resolvePermissions(userId),
-    app.notifications,
-    app.log,
-  );
-
-  // Caller permissions live on the request after the auth hooks run.
-  // The controller stays Fastify-aware only at the request edge — the
-  // service never sees a FastifyRequest.
-  const resolveCallerPerms = async (req: FastifyRequest) =>
-    req.permissions ?? (await app.resolvePermissions(req.user.sub));
-
-  const ctrl = new DelegationController(service, resolveCallerPerms);
-
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.delegationServices = {
+      delegations: new DelegationService(
+        prisma,
+        new DelegationRepository(prisma),
+        new AuditLogRepository(prisma),
+        (userId) => app.resolvePermissions(userId),
+        app.notifications,
+        app.log,
+      ),
+      resolveCallerPerms: (userId: string) => app.resolvePermissions(userId),
+    };
+  });
+
+  const ctrl = new DelegationController();
 
   app.get("/users/directory", ctrl.userDirectory);
   app.get("/", ctrl.listMine);
