@@ -1,6 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { ReportsService } from "./reports.service";
 import { querySchema, reportTypeSchema } from "./schemas";
 
 /**
@@ -11,10 +10,10 @@ import { querySchema, reportTypeSchema } from "./schemas";
  *     don't)
  *   - serializing to either JSON (default) or CSV with the right
  *     Content-Disposition header so the browser triggers a download
+ *
+ * Phase 2: stateless. Reads `req.reportsServices!.reports` per call.
  */
 export class ReportsController {
-  constructor(private readonly service: ReportsService) {}
-
   generate = async (
     req: FastifyRequest<{ Params: { type: string } }>,
     reply: FastifyReply,
@@ -37,7 +36,10 @@ export class ReportsController {
       ? new Date(parsedQuery.data.from)
       : undefined;
     const to = parsedQuery.data.to ? new Date(parsedQuery.data.to) : undefined;
-    const bundle = await this.service.generate(parsedType.data, { from, to });
+    const bundle = await req.reportsServices!.reports.generate(
+      parsedType.data,
+      { from, to },
+    );
 
     if (parsedQuery.data.format === "csv") {
       reply.header("Content-Type", "text/csv; charset=utf-8");

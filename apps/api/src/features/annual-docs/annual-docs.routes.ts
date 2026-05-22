@@ -7,26 +7,38 @@
  *   GET  /annual-docs/expiring?days=30      loans.read
  *
  * Status is recomputed nightly by the scheduled job (see jobs.ts —
- * annual_doc_status_refresh) so dashboards can filter cheaply. The same
- * job also enqueues reminder notifications for docs entering the
- * EXPIRING_SOON window and at-expiry escalations.
+ * annual_doc_status_refresh). Phase 2: per-request repo wiring against
+ * `req.tenantCtx.prisma`.
  */
 
 import { AnnualDocumentRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { createSchema, listExpiringQuerySchema } from "./schemas";
 
+declare module "fastify" {
+  interface FastifyRequest {
+    annualDocsRepo?: AnnualDocumentRepository;
+  }
+}
+
+function attachAnnualDocsRepo() {
+  return async (req: FastifyRequest) => {
+    req.annualDocsRepo = new AnnualDocumentRepository(req.tenantCtx.prisma);
+  };
+}
+
 export async function annualDocsLoanRoutes(app: FastifyInstance) {
-  const repo = new AnnualDocumentRepository(app.prisma);
   app.addHook("preHandler", app.authenticate);
   // Annual / renewable docs are a PROFESSIONAL-tier feature.
   app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", attachAnnualDocsRepo());
 
   app.get<{ Params: { loanId: string } }>(
     "/:loanId/annual-docs",
     { preHandler: app.requirePermission("loans.read") },
-    async (req) => repo.listForLoan(req.params.loanId),
+    async (req) => req.annualDocsRepo!.listForLoan(req.params.loanId),
   );
 
   app.post<{ Params: { loanId: string } }>(
@@ -40,7 +52,7 @@ export async function annualDocsLoanRoutes(app: FastifyInstance) {
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
       try {
-        const created = await repo.create({
+        const created = await req.annualDocsRepo!.create({
           loanId: req.params.loanId,
           type: parsed.data.type,
           name: parsed.data.name,
@@ -63,9 +75,10 @@ export async function annualDocsLoanRoutes(app: FastifyInstance) {
 
 /** Cross-loan endpoints — separate prefix so the route shapes stay clean. */
 export async function annualDocsRoutes(app: FastifyInstance) {
-  const repo = new AnnualDocumentRepository(app.prisma);
   app.addHook("preHandler", app.authenticate);
   app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", attachAnnualDocsRepo());
 
   app.get(
     "/expiring",
@@ -77,7 +90,7 @@ export async function annualDocsRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      return repo.listExpiring(parsed.data.days ?? 30);
+      return req.annualDocsRepo!.listExpiring(parsed.data.days ?? 30);
     },
   );
 
@@ -86,7 +99,7 @@ export async function annualDocsRoutes(app: FastifyInstance) {
     { preHandler: app.requirePermission("loans.docs_renew") },
     async (req, reply) => {
       try {
-        await repo.remove(req.params.id);
+        await req.annualDocsRepo!.remove(req.params.id);
         return reply.code(204).send();
       } catch (err) {
         return reply.code(400).send({
@@ -104,6 +117,6 @@ export async function annualDocsRoutes(app: FastifyInstance) {
   app.post(
     "/jobs/refresh-statuses",
     { preHandler: app.requirePermission("loans.docs_renew") },
-    async () => repo.refreshStatuses(),
+    async (req) => req.annualDocsRepo!.refreshStatuses(),
   );
 }

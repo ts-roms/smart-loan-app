@@ -1,42 +1,50 @@
 /**
  * Bank reconciliation routes.
  *
- *   POST /reconciliation/statements         — create a new statement + lines
- *   GET  /reconciliation/statements         — list statements
- *   GET  /reconciliation/statements/:id     — statement + lines
- *   POST /reconciliation/statements/:id/auto-match — run the auto-matcher
- *   GET  /reconciliation/statements/:id/summary    — counts + amounts
- *   POST /reconciliation/lines/:id/match    — manual match a single line
- *   POST /reconciliation/lines/:id/unmatch  — undo a match
- *
  * All routes require `accounting.read` to view and `accounting.post_journal`
  * to mutate — reconciliation is essentially journal-adjacent work.
+ *
+ * Phase 2: per-request repo wiring against `req.tenantCtx.prisma`.
  */
 
 import { AuditLogRepository, BankReconciliationRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { manualMatchSchema, statementSchema } from "./schemas";
 
-export async function reconciliationRoutes(app: FastifyInstance) {
-  const repo = new BankReconciliationRepository(app.prisma);
-  const audit = new AuditLogRepository(app.prisma);
+declare module "fastify" {
+  interface FastifyRequest {
+    reconciliationCtx?: {
+      repo: BankReconciliationRepository;
+      audit: AuditLogRepository;
+    };
+  }
+}
 
+export async function reconciliationRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
   // Bank reconciliation is a PROFESSIONAL-tier feature.
   app.addHook("preHandler", app.requireFeature("accounting.reconciliation"));
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.reconciliationCtx = {
+      repo: new BankReconciliationRepository(prisma),
+      audit: new AuditLogRepository(prisma),
+    };
+  });
 
   app.get(
     "/statements",
     { preHandler: app.requirePermission("accounting.read") },
-    async () => repo.list(),
+    async (req) => req.reconciliationCtx!.repo.list(),
   );
 
   app.get<{ Params: { id: string } }>(
     "/statements/:id",
     { preHandler: app.requirePermission("accounting.read") },
     async (req, reply) => {
-      const s = await repo.findById(req.params.id);
+      const s = await req.reconciliationCtx!.repo.findById(req.params.id);
       if (!s) return reply.code(404).send({ error: "NotFound" });
       return s;
     },
@@ -45,13 +53,14 @@ export async function reconciliationRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>(
     "/statements/:id/summary",
     { preHandler: app.requirePermission("accounting.read") },
-    async (req) => repo.summary(req.params.id),
+    async (req) => req.reconciliationCtx!.repo.summary(req.params.id),
   );
 
   app.post(
     "/statements",
     { preHandler: app.requirePermission("accounting.post_journal") },
     async (req, reply) => {
+      const { repo, audit } = req.reconciliationCtx!;
       const parsed = statementSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply
@@ -94,6 +103,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
     "/statements/:id/auto-match",
     { preHandler: app.requirePermission("accounting.post_journal") },
     async (req) => {
+      const { repo, audit } = req.reconciliationCtx!;
       const result = await repo.autoMatch(req.params.id);
       await audit.record({
         action: "BANK_STATEMENT_AUTO_MATCH",
@@ -116,7 +126,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      return repo.manualMatch(req.params.id, {
+      return req.reconciliationCtx!.repo.manualMatch(req.params.id, {
         ...parsed.data,
         userId: req.user.sub,
       });
@@ -126,7 +136,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>(
     "/lines/:id/unmatch",
     { preHandler: app.requirePermission("accounting.post_journal") },
-    async (req) => repo.unmatch(req.params.id),
+    async (req) => req.reconciliationCtx!.repo.unmatch(req.params.id),
   );
 
   /**
@@ -136,6 +146,6 @@ export async function reconciliationRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>(
     "/lines/:id/candidates",
     { preHandler: app.requirePermission("accounting.read") },
-    async (req) => repo.candidatesFor(req.params.id, 10),
+    async (req) => req.reconciliationCtx!.repo.candidatesFor(req.params.id, 10),
   );
 }

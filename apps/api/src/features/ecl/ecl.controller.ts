@@ -1,12 +1,12 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { EclService } from "./ecl.service";
 import { runSchema } from "./schemas";
 
+/**
+ * Phase 2: stateless. Reads `req.eclServices!.ecl` per call.
+ */
 export class EclController {
-  constructor(private readonly service: EclService) {}
-
-  list = async () => this.service.list();
+  list = async (req: FastifyRequest) => req.eclServices!.ecl.list();
 
   run = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = runSchema.safeParse(req.body ?? {});
@@ -15,7 +15,7 @@ export class EclController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.run({
+    const result = await req.eclServices!.ecl.run({
       input: parsed.data,
       actorId: req.user.sub,
     });

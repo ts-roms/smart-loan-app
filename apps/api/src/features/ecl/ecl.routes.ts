@@ -4,32 +4,37 @@
  *   GET  /ecl/runs              accounting.read     — history (last 60)
  *   POST /ecl/runs              accounting.accrue   — recompute
  *
- * Recomputation is gated on `accounting.accrue` since it touches the
- * portfolio's provision state. The journal posting (DR Impairment
- * Expense, CR Allowance for Loan Losses) happens inside the repo's
- * `run` method.
- *
- * Layered: routes → controller → service → repo + audit.
+ * Phase 2: per-request service wiring via `req.eclServices`.
  */
 
 import { AuditLogRepository, EclRepository } from "@loan/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { EclController } from "./ecl.controller";
 import { EclService } from "./ecl.service";
 
+declare module "fastify" {
+  interface FastifyRequest {
+    eclServices?: { ecl: EclService };
+  }
+}
+
 export async function eclRoutes(app: FastifyInstance) {
-  const ctrl = new EclController(
-    new EclService(
-      new EclRepository(app.prisma),
-      new AuditLogRepository(app.prisma),
-    ),
-  );
   app.addHook("preHandler", app.authenticate);
-  // ECL provisioning is an ENTERPRISE-tier feature. The gate runs
-  // before any route in this plugin, returning 402 FeatureLocked if
-  // the active license doesn't include `accounting.ecl`.
+  // ECL provisioning is an ENTERPRISE-tier feature.
   app.addHook("preHandler", app.requireFeature("accounting.ecl"));
+  app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", async (req: FastifyRequest) => {
+    const prisma = req.tenantCtx.prisma;
+    req.eclServices = {
+      ecl: new EclService(
+        new EclRepository(prisma),
+        new AuditLogRepository(prisma),
+      ),
+    };
+  });
+
+  const ctrl = new EclController();
 
   app.get(
     "/runs",
