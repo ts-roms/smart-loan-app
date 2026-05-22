@@ -34,6 +34,13 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   const loans = new LoanRepository(app.prisma);
   const audit = new AuditLogRepository(app.prisma);
 
+  // AI assistant is an ENTERPRISE-tier feature. License gate applies
+  // to every assistant route — including /ping, which the UI uses to
+  // decide whether to render the panel. A locked panel will render
+  // a "Configure Ollama" hint OR an "Upgrade to ENTERPRISE" hint
+  // depending on the 402 kind.
+  app.addHook("preHandler", app.requireFeature("intel.ai_assistant"));
+
   /**
    * Backend health for the UI. The web app calls this once when the
    * AssistantPanel mounts so it can show "model loaded" vs "configure

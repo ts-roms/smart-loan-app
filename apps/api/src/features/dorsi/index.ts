@@ -18,6 +18,9 @@ export async function dorsiRoutes(app: FastifyInstance): Promise<void> {
   const controller = new DorsiController(service);
 
   app.addHook("preHandler", app.authenticate);
+  // DORSI is an ENTERPRISE-tier compliance module. Gate the entire
+  // /dorsi/* prefix.
+  app.addHook("preHandler", app.requireFeature("compliance.dorsi"));
 
   registerDorsiHttp(app, controller);
 }

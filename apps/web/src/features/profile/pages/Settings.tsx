@@ -24,6 +24,7 @@ import { useState } from "react";
 
 import { SignaturePad } from "../../../components/SignaturePad";
 import { useAuth } from "../../../providers/auth";
+import { LicensePanel } from "../../settings/components/LicensePanel";
 import { BrandingPanel } from "../components/BrandingPanel";
 import { SessionTimeoutPanel } from "../components/SessionTimeoutPanel";
 import { TwoFactorPanel } from "../components/TwoFactorPanel";
@@ -74,6 +75,7 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-4">
+      <LicensePanel />
       <BrandingPanel />
       <SessionTimeoutPanel />
       <TwoFactorPanel />

@@ -25,3 +25,4 @@ export * from "./hooks/use-assistant";
 export * from "./hooks/use-system";
 export * from "./hooks/use-loan-approvals";
 export * from "./hooks/use-customer-ledger";
+export * from "./hooks/use-license";

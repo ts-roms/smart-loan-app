@@ -46,6 +46,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/auth";
 import { ActiveDelegationBanner } from "../features/delegations";
+import { LicenseBanner } from "../features/settings";
 import { AuditLogTrigger } from "../features/audit";
 import { HelpTrigger } from "../features/help";
 import { NotificationBell } from "../features/notifications";
@@ -518,6 +519,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           The sidebar + header already give visual structure, so we
           don't need an inner column cap.
         */}
+        <LicenseBanner />
         <div className="p-6 space-y-4">
           <ActiveDelegationBanner />
           {children}

@@ -1,3 +1,95 @@
+// Licensing
+/**
+ * License lifecycle status the API returns from GET /license/status.
+ *
+ *   - ACTIVE     — current license verifies; the app is fully unlocked
+ *                  according to its feature list.
+ *   - EXPIRED    — there's a license row but its `exp` has passed. The
+ *                  UI nudges to renew; premium endpoints return 402.
+ *   - TAMPERED   — there's a license row but its signature no longer
+ *                  verifies (post-key-rotation, or someone edited the
+ *                  row by hand). Re-paste a fresh token to fix.
+ *   - NONE       — no license has been activated yet. Premium endpoints
+ *                  return 402; core endpoints still work.
+ *   - NO_KEY     — LICENSE_PUBLIC_KEY_* isn't configured on this deploy.
+ *                  Operator action required (set env, restart).
+ */
+export type LicenseStatusKind =
+  | "ACTIVE"
+  | "EXPIRED"
+  | "TAMPERED"
+  | "NONE"
+  | "NO_KEY";
+
+export type LicenseTier = "BASIC" | "PROFESSIONAL" | "ENTERPRISE";
+
+/**
+ * Feature flag keys are stable across releases — the resolver, the
+ * 402 response, and the catalog UI all read from the same string set.
+ * See libs/licensing/src/types.ts for the canonical list.
+ */
+export type LicenseFeatureFlag =
+  | "core.customers"
+  | "core.loans"
+  | "core.kyc"
+  | "core.scoring"
+  | "servicing.collections"
+  | "servicing.demand_letters"
+  | "servicing.repossession"
+  | "servicing.lease"
+  | "accounting.gl"
+  | "accounting.periods"
+  | "accounting.ecl"
+  | "accounting.reconciliation"
+  | "cooperative.contributions"
+  | "cooperative.savings"
+  | "cooperative.funds"
+  | "compliance.dorsi"
+  | "compliance.annual_docs"
+  | "compliance.reports"
+  | "intel.ai_assistant"
+  | "intel.id_ocr"
+  | "intel.face_match"
+  | "intel.anomaly_flags"
+  | "bulk.customers"
+  | "bulk.users"
+  | "bulk.payments";
+
+export interface LicenseStatusPayload {
+  status: LicenseStatusKind;
+  tenant?: string;
+  tier?: LicenseTier;
+  features?: LicenseFeatureFlag[];
+  seats?: number;
+  issuedAt?: string;
+  notBefore?: string;
+  expiresAt?: string;
+  notes?: string;
+  /** Days remaining until expiry. Negative when already past. */
+  daysUntilExpiry?: number;
+  /** Human-readable reason when status !== ACTIVE. */
+  message?: string;
+}
+
+/**
+ * 402 Payment Required body shape. The api-client treats this status
+ * code as a "feature locked" condition and surfaces the `kind` so the
+ * UI can route to the right hint (configure key vs. renew vs. upgrade).
+ */
+export interface FeatureLockedError {
+  error: "FeatureLocked";
+  kind:
+    | "NoneActive"
+    | "Expired"
+    | "Tampered"
+    | "NoKeyConfigured"
+    | "FeatureMissing";
+  message: string;
+  requiredFeatures: LicenseFeatureFlag[];
+  /** Present only when kind === FeatureMissing — the current tier. */
+  tier?: LicenseTier;
+}
+
 // User + auth
 /**
  * Canonical user roles. The string union is the single source of truth —

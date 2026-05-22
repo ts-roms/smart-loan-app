@@ -26,6 +26,10 @@ export async function eclRoutes(app: FastifyInstance) {
     ),
   );
   app.addHook("preHandler", app.authenticate);
+  // ECL provisioning is an ENTERPRISE-tier feature. The gate runs
+  // before any route in this plugin, returning 402 FeatureLocked if
+  // the active license doesn't include `accounting.ecl`.
+  app.addHook("preHandler", app.requireFeature("accounting.ecl"));
 
   app.get(
     "/runs",
