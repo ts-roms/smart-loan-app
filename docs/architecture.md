@@ -1,8 +1,11 @@
 # Architecture — SmartLoan API
 
-The canonical contract for adding or restructuring API features. The
-customers, kyc, and dorsi features are the live reference implementation;
-this doc is the why + when behind that shape.
+The canonical contract for adding or restructuring API features. Every
+feature in `apps/api/src/features/` follows this shape (except a handful
+of framework-infrastructure plugins listed at the end). `customers/` is
+the most fully-fleshed-out example; `lease/` is the slimmer minimum;
+`auth/` is the security-critical heavyweight. This doc is the why + when
+behind the shape.
 
 ## Layering
 
@@ -53,8 +56,20 @@ features/customers/
 └── index.ts                                   # wires all three triads
 ```
 
-Each `*.routes.ts` exports a `register<Name>Http(app, controller)` function;
-`index.ts` instantiates the wiring and calls each register function in turn.
+Two equivalent shapes exist for the route file's public function:
+
+- **Plugin form** (default for single-surface features): `<feature>.routes.ts`
+  exports `<feature>Routes(app)` — a full Fastify plugin that instantiates
+  its own service + controller inside the closure and registers routes.
+  `index.ts` just re-exports it.
+- **Register-fn form** (used when a feature has 2+ sub-surfaces sharing
+  composition): `*.routes.ts` exports `register<Name>Http(app, controller)`
+  and `index.ts` is the composition root that builds the controllers
+  once and calls each register function in turn. Customers is the
+  worked example.
+
+Both patterns route through the same layered chain; pick whichever
+fits the feature's sub-surface count.
 
 ## Layer responsibilities in detail
 
@@ -256,33 +271,43 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
 That `customerRoutes` function is what the central registrar in
 `apps/api/src/routes/index.ts` imports and mounts.
 
-## When each layer is optional
+## Layer composition
 
 ```
 routes.ts  →  always
 index.ts   →  always
-schemas.ts →  ≥ 2 zod schemas, OR one schema > 30 lines
-controller →  ≥ 1 handler does meaningful request shaping
-              (rejecting on validation, mapping a custom error,
-              shaping the response — not just plumbing)
-service    →  ≥ 1 path orchestrates beyond a single repo call
-              (combines repos, calls audit/notifications/screening,
-              has side effects, runs business validation)
+schemas.ts →  whenever the feature has zod input shapes (≈ all of them)
+controller →  always — even for pass-through features, it's the seam
+              future orchestration drops into without a feature-shape
+              rewrite
+service    →  always — even when its methods are one-line repo calls,
+              it's the seam future orchestration drops into; the
+              audit-coupling + discriminated-union return contracts
+              earned the layer
 helpers    →  ≥ 2 files in the feature share a pure util
 types.ts   →  zod inference can't express the shape you need
 ```
 
-A pure CRUD wrapper around one repo with no orchestration legitimately
-doesn't need a controller or service. Don't add layers for symmetry —
-add them when they earn their keep. Today, of the 28 features:
+The earlier convention was "earn its keep — don't add layers for
+symmetry." That gated whether the layers existed. The current rule
+keeps the layers uniformly so a contributor sees the same layout in
+every feature folder, but still applies "earn its keep" to **how much
+logic each layer holds** — a thin service is fine; a missing service
+breaks the convention.
 
-- 12 features benefit from full layering (customers, kyc, dorsi, loans,
-  loan-products, payments, accounting, cooperative, repossession, lease,
-  demand-letters, reports, auth, portal, rbac, delegations — give or
-  take).
-- 10 need only schemas extracted.
-- 6 can stay as single-file routes (health, scoring, uploads,
-  notifications-factory, screening-factory, jobs-factory).
+The four exceptions are not feature routers and stay as single-file
+plugins:
+
+- **health** — liveness/readiness probe, no body, no auth, no
+  orchestration imaginable
+- **jobs**, **notifications**, **screening** — factory plugins that
+  decorate `app.jobs`/`app.notifications`/`app.screening` for
+  consumption by other features
+- **uploads** — multipart streaming where `@fastify/multipart` owns the
+  orchestration
+
+`apps/api/src/features/README.md` carries the running registry of which
+features have which optional internal files (helpers, types).
 
 ## Dependency injection via plugin closures
 
@@ -343,23 +368,54 @@ imports inside `apps/api` should switch from `../lib/branding.js` to
 
 ## How to add a new feature
 
-1. Create `apps/api/src/features/<name>/` and decide which layers you
-   need (always `routes` + `index`; usually `schemas`; sometimes
-   `controller` + `service`).
-2. Wire DI in `index.ts` exporting `<name>Routes(app)`.
-3. Import in `apps/api/src/routes/index.ts` and add an `app.register`
+1. Create `apps/api/src/features/<name>/` with the four core files:
+   `schemas.ts`, `<name>.service.ts`, `<name>.controller.ts`,
+   `<name>.routes.ts`. Add `helpers.ts` only if a pure util is shared
+   across ≥ 2 files in the feature.
+2. Service exposes plain class methods returning discriminated unions
+   (`{ ok: true, ... } | { ok: false, kind: ..., message }`) so the
+   controller's status-code mapping is type-checked.
+3. Controller is a class of arrow-method fields (so `this` stays bound
+   when passed as a Fastify callback). Each method: `safeParse` →
+   call service → map the result kind to a status code.
+4. `<name>.routes.ts` exports `<name>Routes(app)` as a Fastify plugin:
+   instantiate the service + controller inside the closure, declare
+   routes against `ctrl.method`.
+5. `index.ts` re-exports the plugin: `export { <name>Routes } from
+"./<name>.routes.js";` plus any constants/types feature consumers
+   need to share.
+6. Import in `apps/api/src/routes/index.ts` and add an `app.register`
    line with the URL prefix.
-4. Add permissions to `libs/auth/src/permissions.ts` if introducing new
+7. Add permissions to `libs/auth/src/permissions.ts` if introducing new
    gates. Update the seed roles if any of those should default-on.
-5. Add Prisma models + migration if storage is new. Generated client +
+8. Add Prisma models + migration if storage is new. Generated client +
    types flow out via `@loan/db` re-exports.
+9. Write a service-level vitest covering the security-critical paths
+   (any authority gate, any cross-row check, any
+   segregation-of-duties rule). See "How to test" below.
 
 ## How to test
 
-Pure logic (services without DB) → vitest in the feature folder or in
-the lib it depends on. See `libs/kyc/src/validate.test.ts`,
-`libs/accounting/src/posting.test.ts`, `libs/db/src/lib/dorsi-helpers.test.ts`
-for the live examples.
+Service-level vitest in the feature folder, mocking the repo deps with
+`vi.fn()` and exercising the discriminated-union return contract.
+Three live examples worth copying:
+
+- `apps/api/src/features/rbac/rbac.service.test.ts` — `unassignRole`'s
+  ADMIN self-lockout guard
+- `apps/api/src/features/delegations/delegations.service.test.ts` —
+  `create`'s delegator-authority + permission-not-held checks (mocks
+  the `resolveUserPermissions` module function)
+- `apps/api/src/features/demand-letters/demand-letters.service.test.ts`
+  — `approve`'s stage-gated permission + segregation-of-duties
+
+The pattern: duck-typed deps cast as the real type
+(`{ record: vi.fn() } as unknown as AuditLogRepository`), no Prisma
+client needed. Test coverage focuses on **authority gates** and
+**state-machine invariants** — the kind of regressions that compile,
+pass smoke tests, and slip through code review.
+
+Pure-logic libs (kyc, accounting, loans, dorsi) have their own
+vitest suites under `libs/<lib>/src/*.test.ts`.
 
 HTTP integration (handler → service → repo → DB) → deferred until a
 Playwright suite is set up. The smoke-test checklist at
