@@ -6,7 +6,7 @@
  * Keeping these pure lets us unit-test the math without touching a DB.
  */
 
-import type { AccountTypeCode, NormalBalanceCode } from './chart.js';
+import type { AccountTypeCode, NormalBalanceCode } from "./chart";
 
 export interface LedgerLineInput {
   accountId: string;
@@ -102,27 +102,36 @@ export function buildIncomeStatement(
   from: Date,
   to: Date,
 ): IncomeStatementReport {
-  const byAccount = new Map<string, { code: string; name: string; type: AccountTypeCode; amount: number }>();
+  const byAccount = new Map<
+    string,
+    { code: string; name: string; type: AccountTypeCode; amount: number }
+  >();
   for (const l of lines) {
-    if (l.accountType !== 'INCOME' && l.accountType !== 'EXPENSE') continue;
+    if (l.accountType !== "INCOME" && l.accountType !== "EXPENSE") continue;
     const key = l.accountId;
     let row = byAccount.get(key);
     if (!row) {
-      row = { code: l.accountCode, name: l.accountName, type: l.accountType, amount: 0 };
+      row = {
+        code: l.accountCode,
+        name: l.accountName,
+        type: l.accountType,
+        amount: 0,
+      };
       byAccount.set(key, row);
     }
     // For income (CREDIT-normal): credit increases, debit decreases.
     // For expense (DEBIT-normal): debit increases, credit decreases.
-    const delta = l.accountType === 'INCOME' ? l.credit - l.debit : l.debit - l.credit;
+    const delta =
+      l.accountType === "INCOME" ? l.credit - l.debit : l.debit - l.credit;
     row.amount = round2(row.amount + delta);
   }
 
   const incomeRows = [...byAccount.values()]
-    .filter((r) => r.type === 'INCOME')
+    .filter((r) => r.type === "INCOME")
     .map((r) => ({ code: r.code, name: r.name, amount: r.amount }))
     .sort((a, b) => a.code.localeCompare(b.code));
   const expenseRows = [...byAccount.values()]
-    .filter((r) => r.type === 'EXPENSE')
+    .filter((r) => r.type === "EXPENSE")
     .map((r) => ({ code: r.code, name: r.name, amount: r.amount }))
     .sort((a, b) => a.code.localeCompare(b.code));
 
@@ -159,26 +168,36 @@ export function buildBalanceSheet(
   lines: LedgerLineInput[],
   asOf: Date,
 ): BalanceSheetReport {
-  type Acc = { code: string; name: string; type: AccountTypeCode; amount: number };
+  type Acc = {
+    code: string;
+    name: string;
+    type: AccountTypeCode;
+    amount: number;
+  };
   const byAccount = new Map<string, Acc>();
   let retainedEarnings = 0;
 
   for (const l of lines) {
-    if (l.accountType === 'INCOME') {
+    if (l.accountType === "INCOME") {
       retainedEarnings = round2(retainedEarnings + (l.credit - l.debit));
       continue;
     }
-    if (l.accountType === 'EXPENSE') {
+    if (l.accountType === "EXPENSE") {
       retainedEarnings = round2(retainedEarnings - (l.debit - l.credit));
       continue;
     }
     let row = byAccount.get(l.accountId);
     if (!row) {
-      row = { code: l.accountCode, name: l.accountName, type: l.accountType, amount: 0 };
+      row = {
+        code: l.accountCode,
+        name: l.accountName,
+        type: l.accountType,
+        amount: 0,
+      };
       byAccount.set(l.accountId, row);
     }
     const delta =
-      l.accountType === 'ASSET' || l.normalBalance === 'DEBIT'
+      l.accountType === "ASSET" || l.normalBalance === "DEBIT"
         ? l.debit - l.credit
         : l.credit - l.debit;
     row.amount = round2(row.amount + delta);
@@ -192,9 +211,9 @@ export function buildBalanceSheet(
     return { rows, total: round2(rows.reduce((s, r) => s + r.amount, 0)) };
   };
 
-  const assets = collect('ASSET');
-  const liabilities = collect('LIABILITY');
-  const equity = collect('EQUITY');
+  const assets = collect("ASSET");
+  const liabilities = collect("LIABILITY");
+  const equity = collect("EQUITY");
   const totalLiabilitiesAndEquity = round2(
     liabilities.total + equity.total + retainedEarnings,
   );
@@ -222,7 +241,12 @@ export interface ScheduleRowForAging {
   paidInFullAt: Date | null;
 }
 
-export type AgingBucket = 'CURRENT' | 'D_1_30' | 'D_31_60' | 'D_61_90' | 'D_90_PLUS';
+export type AgingBucket =
+  | "CURRENT"
+  | "D_1_30"
+  | "D_31_60"
+  | "D_61_90"
+  | "D_90_PLUS";
 
 export interface AgingRow {
   loanId: string;
@@ -247,11 +271,11 @@ export interface AgingReport {
 const DAY_MS = 86_400_000;
 
 function bucketFor(daysOverdue: number): AgingBucket {
-  if (daysOverdue <= 0) return 'CURRENT';
-  if (daysOverdue <= 30) return 'D_1_30';
-  if (daysOverdue <= 60) return 'D_31_60';
-  if (daysOverdue <= 90) return 'D_61_90';
-  return 'D_90_PLUS';
+  if (daysOverdue <= 0) return "CURRENT";
+  if (daysOverdue <= 30) return "D_1_30";
+  if (daysOverdue <= 60) return "D_31_60";
+  if (daysOverdue <= 90) return "D_61_90";
+  return "D_90_PLUS";
 }
 
 export function buildAgingReport(
@@ -294,7 +318,10 @@ export function buildAgingReport(
 
   const out: AgingRow[] = [...byLoan.values()].map((acc) => {
     const daysOverdue = acc.earliestOverdue
-      ? Math.max(0, Math.floor((asOf.getTime() - acc.earliestOverdue.getTime()) / DAY_MS))
+      ? Math.max(
+          0,
+          Math.floor((asOf.getTime() - acc.earliestOverdue.getTime()) / DAY_MS),
+        )
       : 0;
     return {
       loanId: acc.loanId,
@@ -314,9 +341,13 @@ export function buildAgingReport(
     D_61_90: 0,
     D_90_PLUS: 0,
   };
-  for (const r of out) totals[r.bucket] = round2(totals[r.bucket] + r.outstandingBalance);
+  for (const r of out)
+    totals[r.bucket] = round2(totals[r.bucket] + r.outstandingBalance);
 
-  out.sort((a, b) => b.daysOverdue - a.daysOverdue || a.loanNumber.localeCompare(b.loanNumber));
+  out.sort(
+    (a, b) =>
+      b.daysOverdue - a.daysOverdue || a.loanNumber.localeCompare(b.loanNumber),
+  );
   return {
     asOf: asOf.toISOString(),
     rows: out,

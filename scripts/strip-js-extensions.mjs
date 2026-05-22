@@ -18,7 +18,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 
-const FROM_RE = /from\s+"((?:\.\.?\/)[^"]+)\.js"/g;
+// Matches both single- and double-quoted relative imports. The
+// capture wraps the path and the quote separately so the rewrite
+// preserves whichever style the source file used.
+const FROM_RE = /from\s+(["'])((?:\.\.?\/)[^"']+)\.js\1/g;
 
 // `git ls-files` gives us only tracked .ts/.tsx files, so generated
 // artifacts and node_modules are excluded by construction. Quote with
@@ -36,9 +39,9 @@ let replacements = 0;
 for (const file of files) {
   const src = readFileSync(file, "utf8");
   let count = 0;
-  const next = src.replace(FROM_RE, (_, path) => {
+  const next = src.replace(FROM_RE, (_, quote, path) => {
     count += 1;
-    return `from "${path}"`;
+    return `from ${quote}${path}${quote}`;
   });
   if (count > 0) {
     writeFileSync(file, next);

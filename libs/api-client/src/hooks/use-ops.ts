@@ -12,28 +12,28 @@ import type {
   PortfolioSummary,
   ScheduledJob,
   VintageCohort,
-} from '@loan/shared-types';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+} from "@loan/shared-types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from '../client.js';
+import { getApiClient } from "../client";
 
 // ─── Jobs ──────────────────────────────────────────────────────────
 
 export const jobKeys = {
-  all: ['jobs'] as const,
-  runs: (name: string) => ['jobs', 'runs', name] as const,
+  all: ["jobs"] as const,
+  runs: (name: string) => ["jobs", "runs", name] as const,
 };
 
 export function useJobs() {
   return useQuery({
     queryKey: jobKeys.all,
-    queryFn: () => getApiClient().get<ScheduledJob[]>('/jobs'),
+    queryFn: () => getApiClient().get<ScheduledJob[]>("/jobs"),
   });
 }
 
 export function useJobRuns(name: string | null) {
   return useQuery({
-    queryKey: jobKeys.runs(name ?? ''),
+    queryKey: jobKeys.runs(name ?? ""),
     queryFn: () => getApiClient().get<JobRun[]>(`/jobs/${name}/runs`),
     enabled: Boolean(name),
   });
@@ -56,7 +56,7 @@ export function useSetJobEnabled() {
   return useMutation({
     mutationFn: (input: { name: string; enabled: boolean }) =>
       getApiClient().request<ScheduledJob>(`/jobs/${input.name}/enabled`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify({ enabled: input.enabled }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: jobKeys.all }),
@@ -68,7 +68,7 @@ export function useUpdateJobCron() {
   return useMutation({
     mutationFn: (input: { name: string; cron: string }) =>
       getApiClient().request<ScheduledJob>(`/jobs/${input.name}/cron`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify({ cron: input.cron }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: jobKeys.all }),
@@ -77,23 +77,30 @@ export function useUpdateJobCron() {
 
 // ─── Notifications ──────────────────────────────────────────────────
 
-export function useNotifications(params?: { customerId?: string; status?: string }) {
+export function useNotifications(params?: {
+  customerId?: string;
+  status?: string;
+}) {
   const qs = new URLSearchParams();
-  if (params?.customerId) qs.set('customerId', params.customerId);
-  if (params?.status) qs.set('status', params.status);
+  if (params?.customerId) qs.set("customerId", params.customerId);
+  if (params?.status) qs.set("status", params.status);
   const s = qs.toString();
   return useQuery({
-    queryKey: ['notifications', params ?? {}],
-    queryFn: () => getApiClient().get<Notification[]>(`/notifications${s ? `?${s}` : ''}`),
+    queryKey: ["notifications", params ?? {}],
+    queryFn: () =>
+      getApiClient().get<Notification[]>(`/notifications${s ? `?${s}` : ""}`),
   });
 }
 
 export function useSendTestNotification() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { channel: NotificationChannel; recipient: string; note?: string }) =>
-      getApiClient().post<Notification>('/notifications/test', input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    mutationFn: (input: {
+      channel: NotificationChannel;
+      recipient: string;
+      note?: string;
+    }) => getApiClient().post<Notification>("/notifications/test", input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 }
 
@@ -101,7 +108,7 @@ export function useSendTestNotification() {
 
 export function useCustomerScreenings(customerId: string | null) {
   return useQuery({
-    queryKey: ['screening', 'customer', customerId ?? ''],
+    queryKey: ["screening", "customer", customerId ?? ""],
     queryFn: () =>
       getApiClient().get<AmlScreening[]>(`/screening/customers/${customerId}`),
     enabled: Boolean(customerId),
@@ -110,7 +117,7 @@ export function useCustomerScreenings(customerId: string | null) {
 
 export function useLatestScreening(customerId: string | null) {
   return useQuery({
-    queryKey: ['screening', 'customer', customerId ?? '', 'latest'],
+    queryKey: ["screening", "customer", customerId ?? "", "latest"],
     queryFn: () =>
       getApiClient().get<AmlScreening | null>(
         `/screening/customers/${customerId}/latest`,
@@ -123,9 +130,12 @@ export function useRunScreening() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (customerId: string) =>
-      getApiClient().post<AmlScreening>(`/screening/customers/${customerId}/run`, {}),
+      getApiClient().post<AmlScreening>(
+        `/screening/customers/${customerId}/run`,
+        {},
+      ),
     onSuccess: (_d, customerId) => {
-      qc.invalidateQueries({ queryKey: ['screening', 'customer', customerId] });
+      qc.invalidateQueries({ queryKey: ["screening", "customer", customerId] });
     },
   });
 }
@@ -139,23 +149,31 @@ export function useOverrideScreening() {
         { note: input.note },
       ),
     onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: ['screening', 'customer', vars.customerId] }),
+      qc.invalidateQueries({
+        queryKey: ["screening", "customer", vars.customerId],
+      }),
   });
 }
 
 export function useWatchlist() {
   return useQuery({
-    queryKey: ['screening', 'watchlist'],
-    queryFn: () => getApiClient().get<AmlWatchlistEntry[]>('/screening/watchlist'),
+    queryKey: ["screening", "watchlist"],
+    queryFn: () =>
+      getApiClient().get<AmlWatchlistEntry[]>("/screening/watchlist"),
   });
 }
 
 export function useAddWatchlistEntry() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { list: string; fullName: string; aliases?: string[]; reason?: string }) =>
-      getApiClient().post<AmlWatchlistEntry>('/screening/watchlist', input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['screening', 'watchlist'] }),
+    mutationFn: (input: {
+      list: string;
+      fullName: string;
+      aliases?: string[];
+      reason?: string;
+    }) => getApiClient().post<AmlWatchlistEntry>("/screening/watchlist", input),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["screening", "watchlist"] }),
   });
 }
 
@@ -164,36 +182,41 @@ export function useDeleteWatchlistEntry() {
   return useMutation({
     mutationFn: (id: string) =>
       getApiClient().request<AmlWatchlistEntry>(`/screening/watchlist/${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['screening', 'watchlist'] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["screening", "watchlist"] }),
   });
 }
 
 // ─── Analytics ──────────────────────────────────────────────────────
 
 export function usePortfolioSummary(asOf?: string) {
-  const qs = asOf ? `?asOf=${encodeURIComponent(asOf)}` : '';
+  const qs = asOf ? `?asOf=${encodeURIComponent(asOf)}` : "";
   return useQuery({
-    queryKey: ['analytics', 'portfolio-summary', asOf ?? ''],
+    queryKey: ["analytics", "portfolio-summary", asOf ?? ""],
     queryFn: () =>
-      getApiClient().get<PortfolioSummary>(`/accounting/reports/portfolio-summary${qs}`),
+      getApiClient().get<PortfolioSummary>(
+        `/accounting/reports/portfolio-summary${qs}`,
+      ),
   });
 }
 
 export function useOriginations() {
   return useQuery({
-    queryKey: ['analytics', 'originations'],
+    queryKey: ["analytics", "originations"],
     queryFn: () =>
-      getApiClient().get<OriginationMonth[]>('/accounting/reports/originations'),
+      getApiClient().get<OriginationMonth[]>(
+        "/accounting/reports/originations",
+      ),
   });
 }
 
 export function useVintageCohorts() {
   return useQuery({
-    queryKey: ['analytics', 'vintage'],
+    queryKey: ["analytics", "vintage"],
     queryFn: () =>
-      getApiClient().get<VintageCohort[]>('/accounting/reports/vintage'),
+      getApiClient().get<VintageCohort[]>("/accounting/reports/vintage"),
   });
 }
 
@@ -221,12 +244,15 @@ export interface EclRunResult {
   id: string;
   totalEad: number;
   totalEcl: number;
-  byStage: Record<'STAGE_1' | 'STAGE_2' | 'STAGE_3', { count: number; ecl: number }>;
+  byStage: Record<
+    "STAGE_1" | "STAGE_2" | "STAGE_3",
+    { count: number; ecl: number }
+  >;
   perLoan: Array<{
     loanId: string;
     number: string;
     dpd: number;
-    stage: 'STAGE_1' | 'STAGE_2' | 'STAGE_3';
+    stage: "STAGE_1" | "STAGE_2" | "STAGE_3";
     ead: number;
     ecl: number;
   }>;
@@ -235,21 +261,24 @@ export interface EclRunResult {
 }
 
 export const eclKeys = {
-  runs: ['ecl', 'runs'] as const,
+  runs: ["ecl", "runs"] as const,
 };
 
 export function useEclRuns() {
   return useQuery({
     queryKey: eclKeys.runs,
-    queryFn: () => getApiClient().get<EclRun[]>('/ecl/runs'),
+    queryFn: () => getApiClient().get<EclRun[]>("/ecl/runs"),
   });
 }
 
 export function useRunEcl() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input?: { periodStart?: string; periodEnd?: string; notes?: string }) =>
-      getApiClient().post<EclRunResult>('/ecl/runs', input ?? {}),
+    mutationFn: (input?: {
+      periodStart?: string;
+      periodEnd?: string;
+      notes?: string;
+    }) => getApiClient().post<EclRunResult>("/ecl/runs", input ?? {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: eclKeys.runs }),
   });
 }
@@ -266,7 +295,7 @@ export interface BankStatement {
   closingBalance: string | number;
   importedById: string | null;
   importedAt: string;
-  status: 'IMPORTED' | 'RECONCILED' | 'ARCHIVED';
+  status: "IMPORTED" | "RECONCILED" | "ARCHIVED";
 }
 
 export interface BankStatementLine {
@@ -313,31 +342,38 @@ export interface BankStatementCreateInput {
 }
 
 export const reconciliationKeys = {
-  statements: ['reconciliation', 'statements'] as const,
-  statement: (id: string) => ['reconciliation', 'statements', id] as const,
-  summary: (id: string) => ['reconciliation', 'statements', id, 'summary'] as const,
+  statements: ["reconciliation", "statements"] as const,
+  statement: (id: string) => ["reconciliation", "statements", id] as const,
+  summary: (id: string) =>
+    ["reconciliation", "statements", id, "summary"] as const,
 };
 
 export function useBankStatements() {
   return useQuery({
     queryKey: reconciliationKeys.statements,
-    queryFn: () => getApiClient().get<BankStatement[]>('/reconciliation/statements'),
+    queryFn: () =>
+      getApiClient().get<BankStatement[]>("/reconciliation/statements"),
   });
 }
 
 export function useBankStatement(id: string | null) {
   return useQuery({
-    queryKey: reconciliationKeys.statement(id ?? ''),
-    queryFn: () => getApiClient().get<BankStatementDetail>(`/reconciliation/statements/${id}`),
+    queryKey: reconciliationKeys.statement(id ?? ""),
+    queryFn: () =>
+      getApiClient().get<BankStatementDetail>(
+        `/reconciliation/statements/${id}`,
+      ),
     enabled: Boolean(id),
   });
 }
 
 export function useBankStatementSummary(id: string | null) {
   return useQuery({
-    queryKey: reconciliationKeys.summary(id ?? ''),
+    queryKey: reconciliationKeys.summary(id ?? ""),
     queryFn: () =>
-      getApiClient().get<BankStatementSummary>(`/reconciliation/statements/${id}/summary`),
+      getApiClient().get<BankStatementSummary>(
+        `/reconciliation/statements/${id}/summary`,
+      ),
     enabled: Boolean(id),
   });
 }
@@ -346,8 +382,9 @@ export function useImportBankStatement() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: BankStatementCreateInput) =>
-      getApiClient().post<BankStatement>('/reconciliation/statements', input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: reconciliationKeys.statements }),
+      getApiClient().post<BankStatement>("/reconciliation/statements", input),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: reconciliationKeys.statements }),
   });
 }
 
@@ -376,20 +413,27 @@ export function useMatchLine() {
       refId?: string;
       note?: string;
     }) =>
-      getApiClient().post<BankStatementLine>(`/reconciliation/lines/${input.lineId}/match`, {
-        type: input.type,
-        refId: input.refId,
-        note: input.note,
-      }),
+      getApiClient().post<BankStatementLine>(
+        `/reconciliation/lines/${input.lineId}/match`,
+        {
+          type: input.type,
+          refId: input.refId,
+          note: input.note,
+        },
+      ),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: reconciliationKeys.statement(vars.statementId) });
-      qc.invalidateQueries({ queryKey: reconciliationKeys.summary(vars.statementId) });
+      qc.invalidateQueries({
+        queryKey: reconciliationKeys.statement(vars.statementId),
+      });
+      qc.invalidateQueries({
+        queryKey: reconciliationKeys.summary(vars.statementId),
+      });
     },
   });
 }
 
 export interface BankLineCandidate {
-  type: 'LoanPayment' | 'LoanDisbursement';
+  type: "LoanPayment" | "LoanDisbursement";
   refId: string;
   score: number;
   label: string;
@@ -398,9 +442,11 @@ export interface BankLineCandidate {
 
 export function useBankLineCandidates(lineId: string | null) {
   return useQuery({
-    queryKey: ['reconciliation', 'candidates', lineId ?? ''],
+    queryKey: ["reconciliation", "candidates", lineId ?? ""],
     queryFn: () =>
-      getApiClient().get<BankLineCandidate[]>(`/reconciliation/lines/${lineId}/candidates`),
+      getApiClient().get<BankLineCandidate[]>(
+        `/reconciliation/lines/${lineId}/candidates`,
+      ),
     enabled: Boolean(lineId),
     staleTime: 30_000,
   });
@@ -415,8 +461,12 @@ export function useUnmatchLine() {
         {},
       ),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: reconciliationKeys.statement(vars.statementId) });
-      qc.invalidateQueries({ queryKey: reconciliationKeys.summary(vars.statementId) });
+      qc.invalidateQueries({
+        queryKey: reconciliationKeys.statement(vars.statementId),
+      });
+      qc.invalidateQueries({
+        queryKey: reconciliationKeys.summary(vars.statementId),
+      });
     },
   });
 }
@@ -427,20 +477,21 @@ export interface LoanMessage {
   id: string;
   loanId: string;
   authorId: string;
-  authorRole: 'OFFICER' | 'BORROWER';
+  authorRole: "OFFICER" | "BORROWER";
   body: string;
   readAt: string | null;
   createdAt: string;
 }
 
 export const loanMessageKeys = {
-  thread: (loanId: string) => ['loan-messages', loanId] as const,
+  thread: (loanId: string) => ["loan-messages", loanId] as const,
 };
 
 export function useLoanMessages(loanId: string | null) {
   return useQuery({
-    queryKey: loanMessageKeys.thread(loanId ?? ''),
-    queryFn: () => getApiClient().get<LoanMessage[]>(`/loans/${loanId}/messages`),
+    queryKey: loanMessageKeys.thread(loanId ?? ""),
+    queryFn: () =>
+      getApiClient().get<LoanMessage[]>(`/loans/${loanId}/messages`),
     enabled: Boolean(loanId),
     refetchInterval: 15_000,
   });
@@ -450,7 +501,9 @@ export function useSendLoanMessage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: { loanId: string; body: string }) =>
-      getApiClient().post<LoanMessage>(`/loans/${input.loanId}/messages`, { body: input.body }),
+      getApiClient().post<LoanMessage>(`/loans/${input.loanId}/messages`, {
+        body: input.body,
+      }),
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: loanMessageKeys.thread(vars.loanId) }),
   });

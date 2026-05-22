@@ -15,7 +15,7 @@ import {
   startDoc,
   table,
   type PersonnelSignature,
-} from './chrome.js';
+} from "./chrome";
 
 export interface PaymentReceiptInput {
   companyName: string;
@@ -47,71 +47,77 @@ export interface PaymentReceiptInput {
   personnelSignature?: PersonnelSignature | null;
 }
 
-export function renderPaymentReceipt(input: PaymentReceiptInput): Promise<Buffer> {
+export function renderPaymentReceipt(
+  input: PaymentReceiptInput,
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       const doc = startDoc({
         companyName: input.companyName,
-        title: 'Official Receipt',
+        title: "Official Receipt",
         documentNumber: `OR-${input.payment.id.slice(0, 8).toUpperCase()}`,
       });
       const chunks: Buffer[] = [];
-      doc.on('data', (c: Buffer) => chunks.push(c));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
+      doc.on("data", (c: Buffer) => chunks.push(c));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
 
-      const fullName = [input.customer.firstName, input.customer.middleName, input.customer.lastName]
+      const fullName = [
+        input.customer.firstName,
+        input.customer.middleName,
+        input.customer.lastName,
+      ]
         .filter(Boolean)
-        .join(' ');
+        .join(" ");
 
-      section(doc, 'Received from');
-      kv(doc, 'Name', fullName);
-      kv(doc, 'Loan number', input.loan.number);
-      kv(doc, 'Product', input.loan.productCode);
+      section(doc, "Received from");
+      kv(doc, "Name", fullName);
+      kv(doc, "Loan number", input.loan.number);
+      kv(doc, "Product", input.loan.productCode);
 
-      section(doc, 'Payment details');
-      kv(doc, 'Amount received', moneyPHP(input.payment.amount));
-      kv(doc, 'Paid on', fmtDate(input.payment.paidOn));
-      kv(doc, 'Lender reference', input.payment.id.slice(0, 8).toUpperCase());
+      section(doc, "Payment details");
+      kv(doc, "Amount received", moneyPHP(input.payment.amount));
+      kv(doc, "Paid on", fmtDate(input.payment.paidOn));
+      kv(doc, "Lender reference", input.payment.id.slice(0, 8).toUpperCase());
       if (input.payment.reference) {
-        kv(doc, 'Customer reference', input.payment.reference);
+        kv(doc, "Customer reference", input.payment.reference);
       }
 
       if (input.allocation) {
-        section(doc, 'Allocation');
+        section(doc, "Allocation");
         table(
           doc,
           [
-            ['Interest', moneyPHP(input.allocation.interest)],
-            ['Principal', moneyPHP(input.allocation.principal)],
+            ["Interest", moneyPHP(input.allocation.interest)],
+            ["Principal", moneyPHP(input.allocation.principal)],
           ],
           {
-            header: ['Component', 'Amount'],
+            header: ["Component", "Amount"],
             columnWidths: [CONTENT_WIDTH * 0.6, CONTENT_WIDTH * 0.4],
-            alignments: ['left', 'right'],
+            alignments: ["left", "right"],
           },
         );
       }
 
       if (input.remainingOutstanding != null) {
-        section(doc, 'Outstanding balance after payment');
-        kv(doc, 'Remaining balance', moneyPHP(input.remainingOutstanding));
+        section(doc, "Outstanding balance after payment");
+        kv(doc, "Remaining balance", moneyPHP(input.remainingOutstanding));
       }
 
       doc.moveDown(2);
       doc
-        .font('Helvetica')
+        .font("Helvetica")
         .fontSize(9)
-        .fillColor('#475569')
+        .fillColor("#475569")
         .text(
-          'This receipt is a confirmation that the above payment was received and posted to the loan ' +
-            'account. Please retain it for your records.',
+          "This receipt is a confirmation that the above payment was received and posted to the loan " +
+            "account. Please retain it for your records.",
           { width: CONTENT_WIDTH },
         );
 
       if (input.personnelSignature) {
         personnelStamp(doc, {
-          label: 'Issued by',
+          label: "Issued by",
           ...input.personnelSignature,
         });
       }

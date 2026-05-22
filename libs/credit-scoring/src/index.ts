@@ -1,3 +1,3 @@
-export * from './factors.js';
-export * from './compute.js';
-export * from './tier.js';
+export * from "./factors";
+export * from "./compute";
+export * from "./tier";

@@ -8,7 +8,7 @@
  * No DB access in this package — persistence lives in @loan/db.
  */
 
-export * from './chart.js';
-export * from './posting.js';
-export * from './reports.js';
-export * from './periods.js';
+export * from "./chart";
+export * from "./posting";
+export * from "./reports";
+export * from "./periods";

@@ -1,10 +1,10 @@
-import jwt from '@fastify/jwt';
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import fp from 'fastify-plugin';
+import jwt from "@fastify/jwt";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import fp from "fastify-plugin";
 
-import type { JwtPayload, UserRole } from './types.js';
+import type { JwtPayload, UserRole } from "./types";
 
-declare module 'fastify' {
+declare module "fastify" {
   interface FastifyInstance {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireRole: (
@@ -43,25 +43,32 @@ interface Options {
 export const fastifyAuth = fp<Options>(async (app: FastifyInstance, opts) => {
   await app.register(jwt, { secret: opts.secret });
 
-  app.decorate('resolvePermissions', opts.resolvePermissions);
+  app.decorate("resolvePermissions", opts.resolvePermissions);
 
-  app.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      await req.jwtVerify();
-    } catch {
-      return reply.code(401).send({ error: 'Unauthorized', message: 'Invalid or missing token' });
-    }
-  });
+  app.decorate(
+    "authenticate",
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await req.jwtVerify();
+      } catch {
+        return reply
+          .code(401)
+          .send({ error: "Unauthorized", message: "Invalid or missing token" });
+      }
+    },
+  );
 
   /**
    * Coarse role gate. Kept for backward compat — checks `User.role` from
    * the JWT against the allowed list. New code should prefer `requirePermission`.
    */
-  app.decorate('requireRole', (...roles: UserRole[]) => {
+  app.decorate("requireRole", (...roles: UserRole[]) => {
     return async (req: FastifyRequest, reply: FastifyReply) => {
       const payload = req.user as JwtPayload | undefined;
       if (!payload || !roles.includes(payload.role)) {
-        return reply.code(403).send({ error: 'Forbidden', message: 'Insufficient role' });
+        return reply
+          .code(403)
+          .send({ error: "Forbidden", message: "Insufficient role" });
       }
     };
   });
@@ -72,11 +79,11 @@ export const fastifyAuth = fp<Options>(async (app: FastifyInstance, opts) => {
    * special-cased — set up the ADMIN role's permission set to include
    * everything if you want that.
    */
-  app.decorate('requirePermission', (...keys: string[]) => {
+  app.decorate("requirePermission", (...keys: string[]) => {
     return async (req: FastifyRequest, reply: FastifyReply) => {
       const payload = req.user as JwtPayload | undefined;
       if (!payload) {
-        return reply.code(401).send({ error: 'Unauthorized' });
+        return reply.code(401).send({ error: "Unauthorized" });
       }
       if (!req.permissions) {
         req.permissions = await opts.resolvePermissions(payload.sub);
@@ -84,8 +91,8 @@ export const fastifyAuth = fp<Options>(async (app: FastifyInstance, opts) => {
       const ok = keys.some((k) => req.permissions!.has(k));
       if (!ok) {
         return reply.code(403).send({
-          error: 'Forbidden',
-          message: `Missing required permission: ${keys.join(' or ')}`,
+          error: "Forbidden",
+          message: `Missing required permission: ${keys.join(" or ")}`,
         });
       }
     };

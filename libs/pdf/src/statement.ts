@@ -18,7 +18,7 @@ import {
   startDoc,
   table,
   type PersonnelSignature,
-} from './chrome.js';
+} from "./chrome";
 
 export interface StatementInput {
   companyName: string;
@@ -66,47 +66,57 @@ export interface StatementInput {
   personnelSignature?: PersonnelSignature | null;
 }
 
-export function renderStatementOfAccount(input: StatementInput): Promise<Buffer> {
+export function renderStatementOfAccount(
+  input: StatementInput,
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       const doc = startDoc({
         companyName: input.companyName,
-        title: 'Statement of Account',
+        title: "Statement of Account",
         documentNumber: `${input.loan.number} · as of ${fmtDate(input.asOf)}`,
       });
       const chunks: Buffer[] = [];
-      doc.on('data', (c: Buffer) => chunks.push(c));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
+      doc.on("data", (c: Buffer) => chunks.push(c));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
 
-      const fullName = [input.customer.firstName, input.customer.middleName, input.customer.lastName]
+      const fullName = [
+        input.customer.firstName,
+        input.customer.middleName,
+        input.customer.lastName,
+      ]
         .filter(Boolean)
-        .join(' ');
+        .join(" ");
       const totalPaid = input.payments.reduce((s, p) => s + p.amount, 0);
       const remainingPrincipal = input.schedule
         .filter((s) => !s.paidInFullAt)
         .reduce((s, x) => s + (x.principalDue - x.principalPaid), 0);
 
-      section(doc, 'Loan summary');
-      kv(doc, 'Loan number', input.loan.number);
-      kv(doc, 'Product', input.loan.productName ?? input.loan.productCode);
-      kv(doc, 'Borrower', fullName);
+      section(doc, "Loan summary");
+      kv(doc, "Loan number", input.loan.number);
+      kv(doc, "Product", input.loan.productName ?? input.loan.productCode);
+      kv(doc, "Borrower", fullName);
       if (input.customer.address) {
-        kv(doc, 'Address', `${input.customer.address}, ${input.customer.city ?? ''}`);
+        kv(
+          doc,
+          "Address",
+          `${input.customer.address}, ${input.customer.city ?? ""}`,
+        );
       }
-      kv(doc, 'Principal', moneyPHP(input.loan.principal));
-      kv(doc, 'Annual rate', pct(input.loan.annualInterestRate));
-      kv(doc, 'Term', `${input.loan.termMonths} months`);
-      kv(doc, 'Status', input.loan.status);
-      kv(doc, 'Submitted', fmtDate(input.loan.submittedAt));
-      kv(doc, 'Disbursed', fmtDate(input.loan.disbursedAt));
-      if (input.loan.closedAt) kv(doc, 'Closed', fmtDate(input.loan.closedAt));
+      kv(doc, "Principal", moneyPHP(input.loan.principal));
+      kv(doc, "Annual rate", pct(input.loan.annualInterestRate));
+      kv(doc, "Term", `${input.loan.termMonths} months`);
+      kv(doc, "Status", input.loan.status);
+      kv(doc, "Submitted", fmtDate(input.loan.submittedAt));
+      kv(doc, "Disbursed", fmtDate(input.loan.disbursedAt));
+      if (input.loan.closedAt) kv(doc, "Closed", fmtDate(input.loan.closedAt));
 
-      section(doc, 'Position as of ' + fmtDate(input.asOf));
-      kv(doc, 'Total payments received', moneyPHP(totalPaid));
-      kv(doc, 'Remaining principal', moneyPHP(remainingPrincipal));
+      section(doc, "Position as of " + fmtDate(input.asOf));
+      kv(doc, "Total payments received", moneyPHP(totalPaid));
+      kv(doc, "Remaining principal", moneyPHP(remainingPrincipal));
 
-      section(doc, 'Amortization schedule');
+      section(doc, "Amortization schedule");
       table(
         doc,
         input.schedule.map((s) => [
@@ -115,10 +125,10 @@ export function renderStatementOfAccount(input: StatementInput): Promise<Buffer>
           moneyPHP(s.principalDue),
           moneyPHP(s.interestDue),
           moneyPHP(s.totalDue),
-          s.paidInFullAt ? `Paid ${fmtDate(s.paidInFullAt)}` : 'Unpaid',
+          s.paidInFullAt ? `Paid ${fmtDate(s.paidInFullAt)}` : "Unpaid",
         ]),
         {
-          header: ['#', 'Due date', 'Principal', 'Interest', 'Total', 'Status'],
+          header: ["#", "Due date", "Principal", "Interest", "Total", "Status"],
           columnWidths: [
             CONTENT_WIDTH * 0.06,
             CONTENT_WIDTH * 0.16,
@@ -127,42 +137,42 @@ export function renderStatementOfAccount(input: StatementInput): Promise<Buffer>
             CONTENT_WIDTH * 0.18,
             CONTENT_WIDTH * 0.26,
           ],
-          alignments: ['left', 'left', 'right', 'right', 'right', 'left'],
+          alignments: ["left", "left", "right", "right", "right", "left"],
         },
       );
 
-      section(doc, 'Payment history');
+      section(doc, "Payment history");
       if (input.payments.length === 0) {
         doc
-          .font('Helvetica')
+          .font("Helvetica")
           .fontSize(9)
-          .fillColor('#64748b')
-          .text('No payments recorded.', { width: CONTENT_WIDTH });
+          .fillColor("#64748b")
+          .text("No payments recorded.", { width: CONTENT_WIDTH });
       } else {
         table(
           doc,
           input.payments.map((p) => [
             fmtDate(p.paidOn),
             p.id.slice(0, 8).toUpperCase(),
-            p.reference ?? '—',
+            p.reference ?? "—",
             moneyPHP(p.amount),
           ]),
           {
-            header: ['Paid on', 'OR #', 'Reference', 'Amount'],
+            header: ["Paid on", "OR #", "Reference", "Amount"],
             columnWidths: [
               CONTENT_WIDTH * 0.22,
               CONTENT_WIDTH * 0.18,
               CONTENT_WIDTH * 0.4,
               CONTENT_WIDTH * 0.2,
             ],
-            alignments: ['left', 'left', 'left', 'right'],
+            alignments: ["left", "left", "left", "right"],
           },
         );
       }
 
       if (input.personnelSignature) {
         personnelStamp(doc, {
-          label: 'Prepared by',
+          label: "Prepared by",
           ...input.personnelSignature,
         });
       }

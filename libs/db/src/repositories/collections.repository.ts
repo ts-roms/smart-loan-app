@@ -13,8 +13,8 @@ import {
   type LateFeePolicy,
   lateFeeFor,
   policyFromProduct,
-} from '@loan/loans';
-import { keyOf, lateFeeAccrualEntry, periodFor } from '@loan/accounting';
+} from "@loan/loans";
+import { keyOf, lateFeeAccrualEntry, periodFor } from "@loan/accounting";
 import type {
   CollectionNote,
   CollectionNoteType,
@@ -22,9 +22,9 @@ import type {
   PrismaClient,
   PromiseStatus,
   PromiseToPay,
-} from '@prisma/client';
+} from "@prisma/client";
 
-import { AccountingRepository } from './accounting.repository.js';
+import { AccountingRepository } from "./accounting.repository";
 
 export interface NoteCreateInput {
   type: CollectionNoteType;
@@ -51,7 +51,7 @@ export class CollectionsRepository {
   listNotes(loanId: string): Promise<CollectionNote[]> {
     return this.prisma.collectionNote.findMany({
       where: { loanId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 100,
     });
   }
@@ -67,7 +67,7 @@ export class CollectionsRepository {
   listPromises(loanId: string): Promise<PromiseToPay[]> {
     return this.prisma.promiseToPay.findMany({
       where: { loanId },
-      orderBy: { promisedDate: 'desc' },
+      orderBy: { promisedDate: "desc" },
     });
   }
 
@@ -96,9 +96,7 @@ export class CollectionsRepository {
    * Loans with at least one unpaid installment past its due date.
    * Returns the loan + a denormalized summary for the queue table.
    */
-  async overdueQueue(
-    asOf: Date = new Date(),
-  ): Promise<
+  async overdueQueue(asOf: Date = new Date()): Promise<
     Array<
       LoanApplication & {
         customerName: string;
@@ -110,14 +108,14 @@ export class CollectionsRepository {
   > {
     const rows = await this.prisma.loanApplication.findMany({
       where: {
-        status: { in: ['ACTIVE', 'DISBURSED', 'DEFAULTED'] },
+        status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] },
         schedule: { some: { paidInFullAt: null, dueDate: { lt: asOf } } },
       },
       include: {
         customer: { select: { firstName: true, lastName: true } },
         schedule: {
           where: { paidInFullAt: null },
-          orderBy: { dueDate: 'asc' },
+          orderBy: { dueDate: "asc" },
         },
       },
     });
@@ -169,23 +167,25 @@ export class CollectionsRepository {
       where: {
         paidInFullAt: null,
         dueDate: { lt: asOf },
-        loan: { status: { in: ['ACTIVE', 'DISBURSED'] } },
+        loan: { status: { in: ["ACTIVE", "DISBURSED"] } },
       },
       include: { loan: { include: { product: true } } },
     });
 
-    const dayKey = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, '0')}-${String(asOf.getDate()).padStart(2, '0')}`;
+    const dayKey = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, "0")}-${String(asOf.getDate()).padStart(2, "0")}`;
     let posted = 0;
     let skipped = 0;
 
     for (const inst of installments) {
       const totalDue = Number(inst.totalDue);
       // Prefer per-product policy when present; fall back to caller-passed.
-      const productPolicy = inst.loan.product ? policyFromProduct({
-        lateFeeDailyRate: Number(inst.loan.product.lateFeeDailyRate),
-        lateFeeCapFraction: Number(inst.loan.product.lateFeeCapFraction),
-        lateFeeGraceDays: inst.loan.product.lateFeeGraceDays,
-      }) : policy;
+      const productPolicy = inst.loan.product
+        ? policyFromProduct({
+            lateFeeDailyRate: Number(inst.loan.product.lateFeeDailyRate),
+            lateFeeCapFraction: Number(inst.loan.product.lateFeeCapFraction),
+            lateFeeGraceDays: inst.loan.product.lateFeeGraceDays,
+          })
+        : policy;
       const targetFee = lateFeeFor(
         { dueDate: inst.dueDate, totalDue, paidInFullAt: inst.paidInFullAt },
         asOf,
@@ -198,11 +198,15 @@ export class CollectionsRepository {
 
       // Compute fee already on the books for this installment.
       const existing = await this.prisma.journalEntry.findMany({
-        where: { source: 'LATE_FEE_ACCRUAL', sourceRefType: 'LoanScheduleLateFee', sourceRefId: { startsWith: `${inst.id}:` } },
+        where: {
+          source: "LATE_FEE_ACCRUAL",
+          sourceRefType: "LoanScheduleLateFee",
+          sourceRefId: { startsWith: `${inst.id}:` },
+        },
         include: { lines: { include: { account: true } } },
       });
       const accrued = existing.reduce((sum, e) => {
-        const feeLine = e.lines.find((l) => l.account.code === '4100'); // Fee Income
+        const feeLine = e.lines.find((l) => l.account.code === "4100"); // Fee Income
         return sum + (feeLine ? Number(feeLine.credit) : 0);
       }, 0);
       const delta = round2(targetFee - accrued);

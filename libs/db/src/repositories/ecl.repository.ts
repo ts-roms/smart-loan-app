@@ -19,11 +19,11 @@
  * with: stay in Stage 3 unless DPD has been 0 for 6+ months.
  */
 
-import type { LoanProduct, PrismaClient, Prisma } from '@prisma/client';
+import type { LoanProduct, PrismaClient, Prisma } from "@prisma/client";
 
-import { eclProvisionEntry } from '@loan/accounting';
+import { eclProvisionEntry } from "@loan/accounting";
 
-import { AccountingRepository } from './accounting.repository.js';
+import { AccountingRepository } from "./accounting.repository";
 
 export interface EclRunInput {
   periodStart: Date;
@@ -37,12 +37,15 @@ export interface EclRunResult {
   id: string;
   totalEad: number;
   totalEcl: number;
-  byStage: Record<'STAGE_1' | 'STAGE_2' | 'STAGE_3', { count: number; ecl: number }>;
+  byStage: Record<
+    "STAGE_1" | "STAGE_2" | "STAGE_3",
+    { count: number; ecl: number }
+  >;
   perLoan: Array<{
     loanId: string;
     number: string;
     dpd: number;
-    stage: 'STAGE_1' | 'STAGE_2' | 'STAGE_3';
+    stage: "STAGE_1" | "STAGE_2" | "STAGE_3";
     ead: number;
     ecl: number;
   }>;
@@ -52,19 +55,22 @@ export interface EclRunResult {
   journalEntryId: string | null;
 }
 
-type Stage = 'STAGE_1' | 'STAGE_2' | 'STAGE_3';
+type Stage = "STAGE_1" | "STAGE_2" | "STAGE_3";
 
 function stageFromDpd(dpd: number): Stage {
-  if (dpd >= 90) return 'STAGE_3';
-  if (dpd >= 30) return 'STAGE_2';
-  return 'STAGE_1';
+  if (dpd >= 90) return "STAGE_3";
+  if (dpd >= 30) return "STAGE_2";
+  return "STAGE_1";
 }
 
 export class EclRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   list() {
-    return this.prisma.eclRun.findMany({ orderBy: { periodEnd: 'desc' }, take: 60 });
+    return this.prisma.eclRun.findMany({
+      orderBy: { periodEnd: "desc" },
+      take: 60,
+    });
   }
 
   /**
@@ -81,14 +87,18 @@ export class EclRepository {
     // (CLOSED, REJECTED, CANCELLED, RESTRUCTURED, WRITTEN_OFF). DEFAULTED
     // stays in scope because Stage 3 ECL is exactly the right number for
     // those — that's why we want them computed.
-    const activeStatuses = ['DISBURSED', 'ACTIVE', 'DEFAULTED'] as const;
+    const activeStatuses = ["DISBURSED", "ACTIVE", "DEFAULTED"] as const;
     const loans = await this.prisma.loanApplication.findMany({
-      where: { status: { in: activeStatuses as unknown as Prisma.EnumLoanStatusFilter['in'] } },
+      where: {
+        status: {
+          in: activeStatuses as unknown as Prisma.EnumLoanStatusFilter["in"],
+        },
+      },
       include: { product: true, schedule: true },
     });
 
-    const perLoan: EclRunResult['perLoan'] = [];
-    const byStage: EclRunResult['byStage'] = {
+    const perLoan: EclRunResult["perLoan"] = [];
+    const byStage: EclRunResult["byStage"] = {
       STAGE_1: { count: 0, ecl: 0 },
       STAGE_2: { count: 0, ecl: 0 },
       STAGE_3: { count: 0, ecl: 0 },
@@ -109,13 +119,18 @@ export class EclRepository {
       const stage = stageFromDpd(dpd);
       const product = loan.product as LoanProduct;
       const pd =
-        stage === 'STAGE_1' ? Number(product.eclPd12m) : Number(product.eclPdLifetime);
+        stage === "STAGE_1"
+          ? Number(product.eclPd12m)
+          : Number(product.eclPdLifetime);
       const lgd = Number(product.eclLgd);
 
       // EAD = remaining principal across unpaid installments.
       const ead = loan.schedule
         .filter((s) => !s.paidInFullAt)
-        .reduce((sum, s) => sum + (Number(s.principalDue) - Number(s.principalPaid)), 0);
+        .reduce(
+          (sum, s) => sum + (Number(s.principalDue) - Number(s.principalPaid)),
+          0,
+        );
       const ecl = +(ead * pd * lgd).toFixed(2);
 
       perLoan.push({
@@ -146,7 +161,7 @@ export class EclRepository {
     // post just the period-on-period change.
     const previous = await this.prisma.eclRun.findFirst({
       where: { periodEnd: { lt: input.periodEnd } },
-      orderBy: { periodEnd: 'desc' },
+      orderBy: { periodEnd: "desc" },
     });
     const previousEcl = previous ? Number(previous.totalEcl) : 0;
     const delta = +(totalEcl - previousEcl).toFixed(2);

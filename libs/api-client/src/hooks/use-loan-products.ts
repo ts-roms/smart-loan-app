@@ -2,26 +2,26 @@ import type {
   LoanProduct,
   LoanProductCreateInput,
   LoanProductUpdateInput,
-} from '@loan/shared-types';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+} from "@loan/shared-types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from '../client.js';
+import { getApiClient } from "../client";
 
 export const loanProductKeys = {
-  all: ['loan-products'] as const,
-  byCode: (code: string) => ['loan-products', code] as const,
+  all: ["loan-products"] as const,
+  byCode: (code: string) => ["loan-products", code] as const,
 };
 
 export function useLoanProducts() {
   return useQuery({
     queryKey: loanProductKeys.all,
-    queryFn: () => getApiClient().get<LoanProduct[]>('/loan-products'),
+    queryFn: () => getApiClient().get<LoanProduct[]>("/loan-products"),
   });
 }
 
 export function useLoanProduct(code: string | null) {
   return useQuery({
-    queryKey: loanProductKeys.byCode(code ?? ''),
+    queryKey: loanProductKeys.byCode(code ?? ""),
     queryFn: () => getApiClient().get<LoanProduct>(`/loan-products/${code}`),
     enabled: Boolean(code),
   });
@@ -31,7 +31,7 @@ export function useCreateLoanProduct() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: LoanProductCreateInput) =>
-      getApiClient().post<LoanProduct>('/loan-products', input),
+      getApiClient().post<LoanProduct>("/loan-products", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: loanProductKeys.all }),
   });
 }
@@ -42,7 +42,7 @@ export function useUpdateLoanProduct() {
     mutationFn: (input: { code: string } & LoanProductUpdateInput) => {
       const { code, ...rest } = input;
       return getApiClient().request<LoanProduct>(`/loan-products/${code}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify(rest),
       });
     },
@@ -55,7 +55,7 @@ export function useDeleteLoanProduct() {
   return useMutation({
     mutationFn: (code: string) =>
       getApiClient().request<LoanProduct>(`/loan-products/${code}`, {
-        method: 'DELETE',
+        method: "DELETE",
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: loanProductKeys.all }),
   });
@@ -66,7 +66,7 @@ export function useSeedLoanProducts() {
   return useMutation({
     mutationFn: () =>
       getApiClient().post<{ created: number; existing: number }>(
-        '/loan-products/seed',
+        "/loan-products/seed",
         {},
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: loanProductKeys.all }),

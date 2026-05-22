@@ -2,22 +2,23 @@ import type {
   CreditScore,
   CreditScoreResult,
   SurveyQuestion,
-} from '@loan/shared-types';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+} from "@loan/shared-types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiClient } from '../client.js';
+import { getApiClient } from "../client";
 
 export function useSurveyQuestions() {
   return useQuery({
-    queryKey: ['scoring', 'survey-questions'],
-    queryFn: () => getApiClient().get<SurveyQuestion[]>('/scoring/survey/questions'),
+    queryKey: ["scoring", "survey-questions"],
+    queryFn: () =>
+      getApiClient().get<SurveyQuestion[]>("/scoring/survey/questions"),
     staleTime: 60 * 60 * 1000, // questions rarely change
   });
 }
 
 export function useCustomerScore(customerId: string | null) {
   return useQuery({
-    queryKey: ['scoring', 'customer', customerId],
+    queryKey: ["scoring", "customer", customerId],
     queryFn: () =>
       getApiClient().get<CreditScore>(`/scoring/customers/${customerId}/score`),
     enabled: Boolean(customerId),
@@ -33,11 +34,13 @@ export function useSubmitSurvey() {
       answers: Record<string, string | number | boolean>;
     }) =>
       getApiClient().post<CreditScoreResult & { surveyId: string }>(
-        '/scoring/survey/submit',
+        "/scoring/survey/submit",
         input,
       ),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['scoring', 'customer', vars.customerId] });
+      qc.invalidateQueries({
+        queryKey: ["scoring", "customer", vars.customerId],
+      });
     },
   });
 }

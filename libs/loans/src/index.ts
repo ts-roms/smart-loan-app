@@ -16,8 +16,8 @@
  * to a per-period rate before computing.
  */
 
-export type InterestMethod = 'DECLINING' | 'FLAT';
-export type PaymentFrequency = 'MONTHLY' | 'BIWEEKLY' | 'WEEKLY';
+export type InterestMethod = "DECLINING" | "FLAT";
+export type PaymentFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY";
 
 export interface AmortizationOptions {
   /** Defaults to DECLINING for backward compat with the previous API. */
@@ -41,18 +41,26 @@ export interface AmortizationRow {
 /** Number of payment periods per year for each frequency. */
 export function periodsPerYear(frequency: PaymentFrequency): number {
   switch (frequency) {
-    case 'MONTHLY': return 12;
-    case 'BIWEEKLY': return 26;
-    case 'WEEKLY': return 52;
+    case "MONTHLY":
+      return 12;
+    case "BIWEEKLY":
+      return 26;
+    case "WEEKLY":
+      return 52;
   }
 }
 
 /** Days between installments for date scheduling. Approximate for monthly (use date math instead). */
-export function daysBetweenInstallments(frequency: PaymentFrequency): number | 'MONTH' {
+export function daysBetweenInstallments(
+  frequency: PaymentFrequency,
+): number | "MONTH" {
   switch (frequency) {
-    case 'MONTHLY': return 'MONTH';
-    case 'BIWEEKLY': return 14;
-    case 'WEEKLY': return 7;
+    case "MONTHLY":
+      return "MONTH";
+    case "BIWEEKLY":
+      return 14;
+    case "WEEKLY":
+      return 7;
   }
 }
 
@@ -63,10 +71,10 @@ export function daysBetweenInstallments(frequency: PaymentFrequency): number | '
  */
 export function installmentCount(
   termMonths: number,
-  frequency: PaymentFrequency = 'MONTHLY',
+  frequency: PaymentFrequency = "MONTHLY",
 ): number {
-  if (frequency === 'MONTHLY') return termMonths;
-  if (frequency === 'BIWEEKLY') return Math.round((termMonths * 26) / 12);
+  if (frequency === "MONTHLY") return termMonths;
+  if (frequency === "BIWEEKLY") return Math.round((termMonths * 26) / 12);
   return Math.round((termMonths * 52) / 12);
 }
 
@@ -97,8 +105,9 @@ export function computeAmortization(
   periodCount: number,
   opts: AmortizationOptions = {},
 ): AmortizationRow[] {
-  const method = opts.method ?? 'DECLINING';
-  if (method === 'FLAT') return flatSchedule(principal, periodRate, periodCount);
+  const method = opts.method ?? "DECLINING";
+  if (method === "FLAT")
+    return flatSchedule(principal, periodRate, periodCount);
   return decliningSchedule(principal, periodRate, periodCount);
 }
 
@@ -109,7 +118,7 @@ export function computeAmortizationFor(
   termMonths: number,
   opts: AmortizationOptions = {},
 ): AmortizationRow[] {
-  const frequency = opts.frequency ?? 'MONTHLY';
+  const frequency = opts.frequency ?? "MONTHLY";
   const n = installmentCount(termMonths, frequency);
   const periodRate = annualRate / periodsPerYear(frequency);
   return computeAmortization(principal, periodRate, n, opts);
@@ -183,5 +192,5 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-export * from './products.js';
-export * from './late-fees.js';
+export * from "./products";
+export * from "./late-fees";
