@@ -17,6 +17,8 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { config } from "./config";
+import { platformRoutes } from "./features/platform/index";
+import { publicRoutes } from "./features/public/index";
 import { registerRoutes } from "./routes/index";
 
 /**
@@ -153,6 +155,23 @@ export async function buildApp() {
   await app.register(swaggerUi, { routePrefix: "/docs" });
 
   await app.register(registerRoutes, { prefix: "/api/v1" });
+
+  // Out-of-band surfaces — NOT under /api/v1 because they aren't part
+  // of the tenant API contract.
+  //
+  //   /platform/* — vendor control plane (apps/platform console).
+  //                 Requires a platform: true JWT claim. Tenant tokens
+  //                 are rejected.
+  //   /public/*   — anonymous endpoints used by apps/marketing
+  //                 (lead capture, eventually self-service signup).
+  //                 No auth, tight per-route rate limits.
+  //
+  // Keeping these separate means dev proxies (apps/platform/vite.config,
+  // apps/marketing/vite.config) can forward /platform and /public
+  // directly without path rewriting, and the OpenAPI spec for the
+  // tenant API stays uncluttered.
+  await app.register(platformRoutes, { prefix: "/platform" });
+  await app.register(publicRoutes, { prefix: "/public" });
 
   return app;
 }

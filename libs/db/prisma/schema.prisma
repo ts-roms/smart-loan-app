@@ -2516,6 +2516,53 @@ model PlatformAuditLog {
   @@index([tenantSlug])
 }
 
+// ─── Marketing / lead capture ──────────────────────────────────────────────
+//
+// Anonymous lead captures from the marketing site (apps/marketing).
+// Lives in `public` schema — leads exist before a Tenant does, and
+// they're sales territory not tenant data. The platform console will
+// surface this table in a future commit so vendor staff can triage
+// leads + convert them into provisioned tenants.
+
+model Lead {
+  id            String   @id @default(uuid())
+  name          String
+  email         String
+  cooperative   String
+  /// Optional — helps sales recommend a tier without asking.
+  memberCount   Int?
+  deploymentInterest LeadDeploymentInterest @default(ONPREM)
+  message       String?  @db.Text
+  /// Where the form was submitted from. Lets sales tell if a lead came
+  /// from the contact page, the pricing page, the install page, etc.
+  source        String?
+  /// Sales workflow state. Defaults to NEW; vendor staff move it
+  /// through the funnel manually.
+  status        LeadStatus @default(NEW)
+  /// PlatformUser id of whoever is handling the lead. Null = unassigned.
+  assignedToId  String?
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+}
+
+enum LeadDeploymentInterest {
+  ONPREM   // wants to self-host
+  HOSTED   // wants the SaaS option
+  BOTH     // undecided / wants both pitches
+}
+
+enum LeadStatus {
+  NEW         // just submitted
+  CONTACTED   // sales has reached out
+  QUALIFIED   // real opportunity
+  CONVERTED   // became a Tenant
+  REJECTED    // not a fit (spam, wrong product, etc.)
+}
+
 // ─── Licensing ──────────────────────────────────────────────────────────────
 //
 // Persisted record of every license activation on this instance. The

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartLoan — Loan management software your cooperative owns</title>
+    <meta
+      name="description"
+      content="Lending and savings software built for Philippine cooperatives. Install on your own server with a perpetual license, or use the hosted option. Your data, your hardware, your control."
+    />
+    <meta name="theme-color" content="#0a0f1e" />
+
+    <!-- Open Graph / social previews -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SmartLoan — Loan management you own" />
+    <meta
+      property="og:description"
+      content="Lending software for cooperatives. On-prem first, hosted optional."
+    />
+    <meta property="og:locale" content="en_PH" />
+
+    <!-- Static styles. The marketing site is deliberately small —
+         the rest of the styling lives inline so the bundle has no
+         CSS file to fetch before first paint. -->
+    <style>
+      :root {
+        --bg: #0a0f1e;
+        --bg-elev: #0e1525;
+        --border: #1e293b;
+        --text: #e2e8f0;
+        --text-dim: #94a3b8;
+        --text-muted: #64748b;
+        --accent: #60a5fa;
+        --accent-strong: #3b82f6;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        font-size: 16px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      button {
+        font-family: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
