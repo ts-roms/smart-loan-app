@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, Link, useLocation } from "react-router-dom";
 
 import { useAuth } from "./AuthProvider";
+import { Audit } from "./pages/Audit";
 import { IssueLicense } from "./pages/IssueLicense";
 import { Login } from "./pages/Login";
 import { TenantDetail } from "./pages/TenantDetail";
@@ -34,6 +35,7 @@ export function App() {
         <Route path="/tenants" element={<TenantsList />} />
         <Route path="/tenants/:slug" element={<TenantDetail />} />
         <Route path="/licenses/issue" element={<IssueLicense />} />
+        <Route path="/audit" element={<Audit />} />
         <Route path="*" element={<Navigate to="/tenants" replace />} />
       </Routes>
     </Shell>
@@ -62,6 +64,11 @@ function Shell({ children }: { children: React.ReactNode }) {
           <NavLink to="/licenses/issue" active={isActive("/licenses")}>
             Issue license
           </NavLink>
+          {user?.role === "PLATFORM_ADMIN" && (
+            <NavLink to="/audit" active={isActive("/audit")}>
+              Audit log
+            </NavLink>
+          )}
         </nav>
         <div
           style={{

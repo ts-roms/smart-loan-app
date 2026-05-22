@@ -13,11 +13,27 @@ interface Tenant {
   updatedAt: string;
   lastSeenAt: string | null;
   licenseSnapshot: {
+    jti?: string;
     tier?: string;
     exp?: number;
     features?: string[];
     seats?: number;
   } | null;
+}
+
+interface IssuedLicense {
+  id: string;
+  jti: string;
+  tenantSlug: string;
+  tenantName: string;
+  tier: string;
+  issuedAt: string;
+  expiresAt: string;
+  seats: number;
+  notes: string | null;
+  issuedByEmail: string;
+  revokedAt: string | null;
+  revokedReason: string | null;
 }
 
 export function TenantDetail() {
@@ -33,11 +49,32 @@ export function TenantDetail() {
     enabled: Boolean(slug),
   });
 
+  const licenses = useQuery({
+    queryKey: ["platform", "tenant", slug, "licenses"],
+    queryFn: () => api<IssuedLicense[]>(`/platform/tenants/${slug}/licenses`),
+    enabled: Boolean(slug),
+  });
+
   const action = useMutation({
     mutationFn: (op: "suspend" | "restore" | "archive") =>
       api(`/platform/tenants/${slug}/${op}`, { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["platform", "tenant", slug] });
+      qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
+    },
+  });
+
+  const revoke = useMutation({
+    mutationFn: ({ jti, reason }: { jti: string; reason?: string }) =>
+      api(`/platform/licenses/${jti}/revoke`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform", "tenant", slug] });
+      qc.invalidateQueries({
+        queryKey: ["platform", "tenant", slug, "licenses"],
+      });
       qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
     },
   });
@@ -100,6 +137,55 @@ export function TenantDetail() {
         >
           Issue a license for this tenant →
         </Link>
+      </section>
+
+      <section style={card}>
+        <h2 style={h2}>License history</h2>
+        <p style={{ fontSize: 12, color: "#64748b", marginTop: 0 }}>
+          Every license issued for this tenant. Revoke is platform-side only —
+          the signed token still validates on tenant instances until its expiry.
+          In practice: revoke, then issue a fresh token with new terms.
+        </p>
+        {licenses.isLoading && (
+          <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading…</p>
+        )}
+        {licenses.data && licenses.data.length === 0 && (
+          <p style={{ fontSize: 13, color: "#94a3b8" }}>
+            No licenses have been issued yet.
+          </p>
+        )}
+        {licenses.data && licenses.data.length > 0 && (
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: 13,
+            }}
+          >
+            <thead>
+              <tr style={{ textAlign: "left", color: "#94a3b8", fontSize: 11 }}>
+                <th style={th}>Issued</th>
+                <th style={th}>Tier</th>
+                <th style={th}>Expires</th>
+                <th style={th}>Status</th>
+                <th style={th}>By</th>
+                <th style={th}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {licenses.data.map((lic) => (
+                <LicenseRow
+                  key={lic.id}
+                  lic={lic}
+                  isCurrent={data.licenseSnapshot?.jti === lic.jti}
+                  canRevoke={isAdmin}
+                  pending={revoke.isPending}
+                  onRevoke={(reason) => revoke.mutate({ jti: lic.jti, reason })}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       {isAdmin && (
@@ -167,8 +253,122 @@ export function TenantDetail() {
               : "Never"
           }
         />
+        {isAdmin && (
+          <div style={{ marginTop: 12 }}>
+            <Link
+              to={`/audit?tenantSlug=${data.slug}`}
+              style={{ color: "#60a5fa", fontSize: 13 }}
+            >
+              View audit log for this tenant →
+            </Link>
+          </div>
+        )}
       </section>
     </div>
+  );
+}
+
+function LicenseRow({
+  lic,
+  isCurrent,
+  canRevoke,
+  pending,
+  onRevoke,
+}: {
+  lic: IssuedLicense;
+  isCurrent: boolean;
+  canRevoke: boolean;
+  pending: boolean;
+  onRevoke: (reason: string | undefined) => void;
+}) {
+  const now = Date.now();
+  const expired = Date.parse(lic.expiresAt) < now;
+  const status: { label: string; color: string } = lic.revokedAt
+    ? { label: "REVOKED", color: "#ef4444" }
+    : expired
+      ? { label: "EXPIRED", color: "#64748b" }
+      : isCurrent
+        ? { label: "ACTIVE", color: "#10b981" }
+        : { label: "SUPERSEDED", color: "#94a3b8" };
+
+  // Prefill the IssueLicense form for renewal with the same tenant +
+  // tier + seats + notes. Expiry stays at the default (1 year forward)
+  // since the whole point of renewing is a new expiry.
+  const renewHref = new URLSearchParams({
+    tenant: lic.tenantSlug,
+    tenantName: lic.tenantName,
+    tier: lic.tier,
+    seats: String(lic.seats),
+    ...(lic.notes ? { notes: lic.notes } : {}),
+  }).toString();
+
+  return (
+    <tr
+      style={{
+        borderTop: "1px solid #1e293b",
+        opacity: lic.revokedAt || expired ? 0.7 : 1,
+      }}
+    >
+      <td style={td}>
+        {new Date(lic.issuedAt).toLocaleDateString()}{" "}
+        <span style={{ color: "#475569", fontSize: 11 }}>
+          {new Date(lic.issuedAt).toLocaleTimeString()}
+        </span>
+      </td>
+      <td style={td}>{lic.tier}</td>
+      <td style={{ ...td, whiteSpace: "nowrap" }}>
+        {new Date(lic.expiresAt).toLocaleDateString()}
+      </td>
+      <td style={td}>
+        <span
+          style={{
+            display: "inline-block",
+            padding: "2px 6px",
+            borderRadius: 4,
+            fontSize: 10,
+            background: `${status.color}20`,
+            color: status.color,
+            border: `1px solid ${status.color}40`,
+          }}
+        >
+          {status.label}
+        </span>
+      </td>
+      <td style={{ ...td, color: "#94a3b8", fontSize: 11 }}>
+        {lic.issuedByEmail}
+      </td>
+      <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
+        <Link
+          to={`/licenses/issue?${renewHref}`}
+          style={{ color: "#60a5fa", fontSize: 11, marginRight: 12 }}
+        >
+          Renew
+        </Link>
+        {canRevoke && !lic.revokedAt && (
+          <button
+            onClick={() => {
+              const reason = prompt(
+                "Reason for revocation? (Optional but recorded in the audit log.)",
+              );
+              if (reason === null) return; // user cancelled
+              onRevoke(reason || undefined);
+            }}
+            disabled={pending}
+            style={{
+              background: "transparent",
+              color: "#fca5a5",
+              border: "1px solid #7f1d1d",
+              borderRadius: 4,
+              padding: "2px 8px",
+              fontSize: 11,
+              cursor: "pointer",
+            }}
+          >
+            Revoke
+          </button>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -189,3 +389,13 @@ const card: React.CSSProperties = {
   marginBottom: 16,
 };
 const h2: React.CSSProperties = { fontSize: 14, margin: "0 0 12px" };
+const th: React.CSSProperties = {
+  padding: "8px 12px",
+  fontWeight: 500,
+  textTransform: "uppercase",
+  letterSpacing: 0.5,
+};
+const td: React.CSSProperties = {
+  padding: "10px 12px",
+  fontSize: 13,
+};

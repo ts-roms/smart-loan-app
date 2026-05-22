@@ -12,8 +12,11 @@
  *   POST   /platform/tenants/:slug/archive  PLATFORM_ADMIN
  *
  *   POST   /platform/licenses          PLATFORM_SALES+ (issue)
+ *   GET    /platform/tenants/:slug/licenses  PLATFORM_SALES+ (history)
+ *   POST   /platform/licenses/:jti/revoke    PLATFORM_ADMIN
  *
  *   GET    /platform/audit             PLATFORM_ADMIN
+ *                                       (?tenantSlug=&action=&limit=)
  *
  * Auth: a dedicated preHandler that requires the JWT carry
  * `platform: true`. Tenant-side JWTs are rejected (and vice-versa
@@ -133,8 +136,23 @@ export async function platformRoutes(app: FastifyInstance) {
       ctrl.issueLicense,
     );
 
+    // Per-tenant license history. SALES can view (it informs the
+    // "should I renew?" conversation with the tenant); revoke is
+    // ADMIN-only since it has downstream effects on the tenant.
+    scoped.get<{ Params: { slug: string } }>(
+      "/tenants/:slug/licenses",
+      ctrl.listTenantLicenses,
+    );
+    scoped.post<{ Params: { jti: string } }>(
+      "/licenses/:jti/revoke",
+      { preHandler: requirePlatformRole("PLATFORM_ADMIN") },
+      ctrl.revokeLicense,
+    );
+
     // ─── audit ───────────────────────────────────────────────────────
-    scoped.get<{ Querystring: { limit?: string } }>(
+    scoped.get<{
+      Querystring: { limit?: string; tenantSlug?: string; action?: string };
+    }>(
       "/audit",
       { preHandler: requirePlatformRole("PLATFORM_ADMIN") },
       ctrl.listAudit,

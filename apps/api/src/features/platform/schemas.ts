@@ -29,6 +29,13 @@ export const provisionTenantSchema = z.object({
 });
 export type ProvisionTenantInput = z.infer<typeof provisionTenantSchema>;
 
+/** Body for POST /platform/licenses/:jti/revoke. */
+export const revokeLicenseSchema = z.object({
+  /** Free-form reason recorded in the audit log + on the issued row. */
+  reason: z.string().min(1).max(500).optional(),
+});
+export type RevokeLicenseInput = z.infer<typeof revokeLicenseSchema>;
+
 /** Body for POST /platform/licenses — issue a new license token. */
 export const issueLicenseSchema = z.object({
   /** Slug of the tenant this license is for. Embedded as `tenant` in

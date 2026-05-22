@@ -74,6 +74,10 @@ export type IssueLicenseResult =
       message: string;
     };
 
+export type RevokeLicenseResult =
+  | { ok: true; jti: string; clearedSnapshot: boolean }
+  | { ok: false; kind: "NotFound" | "AlreadyRevoked"; message: string };
+
 export class PlatformService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -281,6 +285,27 @@ export class PlatformService {
     try {
       const token = signLicense(payload, privatePem);
 
+      // Persist the issued license so the console can show full
+      // history per tenant (with revoke / re-send actions) without
+      // scraping audit log payloads.
+      await this.prisma.platformIssuedLicense.create({
+        data: {
+          jti: payload.jti,
+          tenantSlug: args.input.tenantSlug,
+          tenantName: args.input.tenantName ?? args.input.tenantSlug,
+          tier,
+          token,
+          payload: payload as unknown as object,
+          issuedAt: new Date(payload.iat),
+          notBefore: nbf ? new Date(nbf) : null,
+          expiresAt: new Date(exp),
+          seats,
+          notes: args.input.notes,
+          issuedById: args.actor.id,
+          issuedByEmail: args.actor.email,
+        },
+      });
+
       // Refresh the licenseSnapshot on the Tenant row so the
       // platform console's tenants list reflects the latest issuance
       // without waiting for the tenant API to phone home. The tenant
@@ -309,12 +334,106 @@ export class PlatformService {
     }
   }
 
+  /** History of issued licenses for a tenant, newest first. */
+  async listIssuedLicenses(tenantSlug: string) {
+    return this.prisma.platformIssuedLicense.findMany({
+      where: { tenantSlug },
+      orderBy: { issuedAt: "desc" },
+    });
+  }
+
+  /**
+   * Mark an issued license as revoked on the platform side. Important
+   * caveat: this does NOT invalidate the signed token on tenant
+   * instances. Until a CRL endpoint ships, revocation is bookkeeping
+   * for the vendor + a trigger to clear the tenant's licenseSnapshot
+   * so the platform console stops treating it as the current license.
+   *
+   * In practice, the workflow is: revoke → issue a fresh token with
+   * tighter terms (or none) → ask the tenant to re-paste. The original
+   * token's `exp` is the hard backstop.
+   */
+  async revokeIssuedLicense(args: {
+    jti: string;
+    reason?: string;
+    actor: { id: string; email: string };
+  }): Promise<RevokeLicenseResult> {
+    const row = await this.prisma.platformIssuedLicense.findUnique({
+      where: { jti: args.jti },
+    });
+    if (!row) {
+      return {
+        ok: false,
+        kind: "NotFound",
+        message: `No license with jti=${args.jti}`,
+      };
+    }
+    if (row.revokedAt) {
+      return {
+        ok: false,
+        kind: "AlreadyRevoked",
+        message: `License revoked at ${row.revokedAt.toISOString()}`,
+      };
+    }
+
+    await this.prisma.platformIssuedLicense.update({
+      where: { id: row.id },
+      data: {
+        revokedAt: new Date(),
+        revokedById: args.actor.id,
+        revokedReason: args.reason,
+      },
+    });
+
+    // If the revoked license is the one the Tenant row is currently
+    // advertising (most recent issuance), clear the snapshot. The
+    // tenants list will then show "no active license" and prompt the
+    // operator to issue a fresh one.
+    let clearedSnapshot = false;
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: row.tenantSlug },
+    });
+    if (tenant?.licenseSnapshot) {
+      const snapshot = tenant.licenseSnapshot as { jti?: string };
+      if (snapshot.jti === args.jti) {
+        await this.prisma.tenant.update({
+          where: { id: tenant.id },
+          data: { licenseSnapshot: null as never },
+        });
+        clearedSnapshot = true;
+      }
+    }
+
+    await this.audit({
+      action: "PLATFORM_LICENSE_REVOKE",
+      actor: args.actor,
+      tenantSlug: row.tenantSlug,
+      payload: {
+        jti: args.jti,
+        reason: args.reason ?? null,
+        clearedSnapshot,
+      },
+    });
+
+    return { ok: true, jti: args.jti, clearedSnapshot };
+  }
+
   // ─── audit ─────────────────────────────────────────────────────────
 
-  async listAudit(limit = 100) {
+  async listAudit(
+    args: {
+      limit?: number;
+      tenantSlug?: string;
+      action?: string;
+    } = {},
+  ) {
     return this.prisma.platformAuditLog.findMany({
+      where: {
+        ...(args.tenantSlug ? { tenantSlug: args.tenantSlug } : {}),
+        ...(args.action ? { action: args.action } : {}),
+      },
       orderBy: { createdAt: "desc" },
-      take: Math.min(limit, 500),
+      take: Math.min(args.limit ?? 100, 500),
     });
   }
 

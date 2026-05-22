@@ -14,14 +14,23 @@ export function IssueLicense() {
   const { token } = useAuth();
   const api = makeApi(token);
   const [params] = useSearchParams();
+  // Renew flow deep-links here with `tenant`, `tenantName`, `tier`,
+  // `seats`, and `notes` prefilled from a previous license. Expiry is
+  // intentionally NOT carried over — the whole point of renewal is a
+  // fresh one — so it defaults to one year out.
   const [tenantSlug, setTenantSlug] = useState(params.get("tenant") ?? "");
-  const [tenantName, setTenantName] = useState("");
+  const [tenantName, setTenantName] = useState(params.get("tenantName") ?? "");
+  const initialTier = params.get("tier");
   const [tier, setTier] = useState<"BASIC" | "PROFESSIONAL" | "ENTERPRISE">(
-    "PROFESSIONAL",
+    initialTier === "BASIC" ||
+      initialTier === "PROFESSIONAL" ||
+      initialTier === "ENTERPRISE"
+      ? initialTier
+      : "PROFESSIONAL",
   );
   const [expiresAt, setExpiresAt] = useState(defaultExpiry());
-  const [seats, setSeats] = useState("");
-  const [notes, setNotes] = useState("");
+  const [seats, setSeats] = useState(params.get("seats") ?? "");
+  const [notes, setNotes] = useState(params.get("notes") ?? "");
 
   const [issued, setIssued] = useState<{
     token: string;

@@ -5,6 +5,7 @@ import {
   issueLicenseSchema,
   platformLoginSchema,
   provisionTenantSchema,
+  revokeLicenseSchema,
 } from "./schemas";
 
 /**
@@ -135,11 +136,47 @@ export class PlatformController {
     });
   };
 
-  listAudit = async (
-    req: FastifyRequest<{ Querystring: { limit?: string } }>,
+  listTenantLicenses = async (
+    req: FastifyRequest<{ Params: { slug: string } }>,
   ) => {
-    const limit = req.query.limit ? Number(req.query.limit) : 100;
-    return this.service.listAudit(limit);
+    return this.service.listIssuedLicenses(req.params.slug);
+  };
+
+  revokeLicense = async (
+    req: FastifyRequest<{ Params: { jti: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = revokeLicenseSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await this.service.revokeIssuedLicense({
+      jti: req.params.jti,
+      reason: parsed.data.reason,
+      actor: platformActor(req),
+    });
+    if (!result.ok) {
+      const code = result.kind === "NotFound" ? 404 : 409;
+      return reply.code(code).send({
+        error: result.kind,
+        message: result.message,
+      });
+    }
+    return result;
+  };
+
+  listAudit = async (
+    req: FastifyRequest<{
+      Querystring: { limit?: string; tenantSlug?: string; action?: string };
+    }>,
+  ) => {
+    return this.service.listAudit({
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+      tenantSlug: req.query.tenantSlug,
+      action: req.query.action,
+    });
   };
 }
 

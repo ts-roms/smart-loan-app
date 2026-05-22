@@ -2442,6 +2442,61 @@ enum PlatformRole {
   PLATFORM_SALES  // view + issue licenses, no destructive ops
 }
 
+// Platform-side record of every license issued. Mirror of the
+// tenant-side License model — that one tracks *activations* on the
+// tenant instance, this one tracks *issuances* on the vendor's
+// control plane. The two never share rows; the JTI is the only link.
+//
+// We keep the full token here because (a) re-sending it to the
+// tenant admin is the most common follow-up after issuance, and (b)
+// the platform private key isn't always available in this process,
+// so we can't re-mint it.
+//
+// Revocation is platform-side-only for now — the signed token still
+// verifies on the tenant instance until its `exp` field. A future
+// CRL endpoint (GET /platform/crl, signed list of revoked JTIs)
+// would close the gap, but isn't needed for v1 since revocation in
+// practice means "don't renew + manually suspend the tenant".
+model PlatformIssuedLicense {
+  id            String   @id @default(uuid())
+  /// JWT id from the signed payload. Unique per issued license.
+  jti           String   @unique
+  /// Slug of the tenant the license was issued for. Denormalized so
+  /// "list licenses for tenant X" is a plain index scan, no joins.
+  tenantSlug    String
+  /// Display name embedded in the token at issuance time.
+  tenantName    String
+  /// Tier string ("BASIC" | "PROFESSIONAL" | "ENTERPRISE") — kept as
+  /// text so the platform schema doesn't depend on the licensing lib's
+  /// enum.
+  tier          String
+  /// Full wire-format token. Stored so the operator can re-send it
+  /// to the tenant admin without re-issuing (which would mint a new
+  /// JTI).
+  token         String
+  /// Verified payload at issuance. JSONB for cheap "tier=ENTERPRISE
+  /// AND active" queries without re-parsing.
+  payload       Json
+  issuedAt      DateTime @default(now())
+  notBefore     DateTime?
+  expiresAt     DateTime
+  seats         Int      @default(0)
+  notes         String?
+  /// PlatformUser id of whoever issued it. No FK — same denormalized
+  /// pattern as PlatformAuditLog.
+  issuedById    String
+  issuedByEmail String
+  /// When the issuance was revoked on the platform side. Null = the
+  /// license is still considered active (subject to its `expiresAt`).
+  revokedAt     DateTime?
+  revokedById   String?
+  revokedReason String?
+
+  @@index([tenantSlug, issuedAt(sort: Desc)])
+  @@index([revokedAt])
+  @@index([expiresAt])
+}
+
 // Append-only platform-action audit. Separate from per-tenant AuditLog
 // so cross-tenant queries are cheap and so tenant admins can't see the
 // vendor's internal actions.
