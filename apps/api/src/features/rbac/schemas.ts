@@ -46,6 +46,47 @@ export const editImpactSchema = z.object({
 export type EditImpactInput = z.infer<typeof editImpactSchema>;
 
 /**
+ * Bulk user import. CSV-ish: an array of opaque row objects + flags.
+ * Mirrors the customers bulk-import shape so the UI can reuse the
+ * existing CSV-parsing utilities. Per-row zod validation runs in
+ * the service against `bulkUserRowSchema` (below).
+ */
+export const userBulkImportSchema = z.object({
+  rows: z.array(z.record(z.unknown())).min(1).max(500),
+  stopOnError: z.boolean().optional().default(false),
+  dryRun: z.boolean().optional().default(false),
+});
+export type UserBulkImportInput = z.infer<typeof userBulkImportSchema>;
+
+/**
+ * Per-row schema applied to each entry inside `userBulkImportSchema.rows`.
+ * Same fields as `createUserSchema` plus an optional comma-or-array
+ * list of secondary role keys to assign post-create. Operators
+ * commonly want to set the primary role + add 1-2 extras in one go.
+ */
+export const bulkUserRowSchema = z.object({
+  email: z.string().email().max(120),
+  name: z.string().min(1).max(120),
+  password: z.string().min(8).max(200),
+  role: z.enum(["ADMIN", "LOAN_OFFICER", "ACCOUNTANT", "CUSTOMER"]),
+  customerId: z.string().uuid().optional(),
+  /**
+   * Optional secondary role keys. Accepts either a comma-separated
+   * string (typical CSV cell) or an explicit array. Filtered + trimmed
+   * before assignment.
+   */
+  extraRoles: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) => {
+      if (!v) return [] as string[];
+      const list = Array.isArray(v) ? v : v.split(",");
+      return list.map((s) => s.trim()).filter((s) => s.length > 0);
+    }),
+});
+export type BulkUserRowInput = z.infer<typeof bulkUserRowSchema>;
+
+/**
  * Admin-side user creation. The public /auth/register endpoint creates
  * CUSTOMER-only users and is rate-limited; this lets an ADMIN onboard
  * any primary role (including another ADMIN).

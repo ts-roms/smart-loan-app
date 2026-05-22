@@ -11,14 +11,35 @@ import {
   createUserSchema,
   editImpactSchema,
   updateRoleSchema,
+  userBulkImportSchema,
 } from "./schemas.js";
+import type { UsersBulkImportService } from "./users-bulk-import.service.js";
 
 /**
  * HTTP adapter for RBAC admin routes. Body parsing + service-result
  * → status mapping; the service holds the rules.
  */
 export class RbacController {
-  constructor(private readonly service: RbacService) {}
+  constructor(
+    private readonly service: RbacService,
+    private readonly bulkImport: UsersBulkImportService,
+  ) {}
+
+  bulkImportUsers = async (req: FastifyRequest, reply: FastifyReply) => {
+    const parsed = userBulkImportSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await this.bulkImport.run({
+      input: parsed.data,
+      actorId: req.user.sub,
+    });
+    // 207 Multi-Status — partial success is the expected mode for
+    // bulk imports, not the exception.
+    return reply.code(207).send(result);
+  };
 
   sync = async (req: FastifyRequest) => this.service.sync(req.user.sub);
 

@@ -1,4 +1,6 @@
 import type {
+  BulkUserImportInput,
+  BulkUserImportResponse,
   MePermissions,
   Permission,
   PermissionHoldersPayload,
@@ -127,6 +129,28 @@ export function useAssignRole() {
         roleKey: input.roleKey,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: rbacKeys.users }),
+  });
+}
+
+/**
+ * Bulk user onboarding via CSV. Returns a 207 Multi-Status payload
+ * even on partial failures — the page renders both `succeeded` and
+ * `failed` rows. Only invalidates the user list when at least one row
+ * actually committed (dry-run + all-failed runs don't change DB state).
+ */
+export function useBulkImportUsers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BulkUserImportInput) =>
+      getApiClient().post<BulkUserImportResponse>(
+        "/admin/users/bulk-import",
+        input,
+      ),
+    onSuccess: (data) => {
+      if (!data.dryRun && data.succeeded > 0) {
+        qc.invalidateQueries({ queryKey: rbacKeys.users });
+      }
+    },
   });
 }
 

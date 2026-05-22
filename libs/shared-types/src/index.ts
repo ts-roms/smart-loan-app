@@ -751,6 +751,42 @@ export interface RoleEditImpact {
   addedKeys: string[];
 }
 
+/**
+ * One row of the response of `POST /admin/users/bulk-import`. Each row
+ * corresponds to one input row (index matches input order). On success
+ * `id` is the new user UUID; on failure `error` is a human-readable
+ * reason ("email already in use", "extra role 'FOO' not found", etc.).
+ *
+ * `dryRun` runs pass through the same validation but skip the actual
+ * insert; the result still echoes `index` + `email` + `ok` so the UI
+ * can render a preview table.
+ */
+export type BulkUserRowResult =
+  | { index: number; ok: true; id?: string; email: string }
+  | { index: number; ok: false; error: string };
+
+export interface BulkUserImportResponse {
+  results: BulkUserRowResult[];
+  succeeded: number;
+  failed: number;
+  dryRun: boolean;
+}
+
+export interface BulkUserImportInput {
+  rows: Array<{
+    email: string;
+    name: string;
+    password: string;
+    role: UserRole;
+    customerId?: string;
+    extraRoles?: string | string[];
+  }>;
+  /** Halt at the first failure. Default: continue + return 207 multi-status. */
+  stopOnError?: boolean;
+  /** Validate only — no inserts. Useful for the UI preview step. */
+  dryRun?: boolean;
+}
+
 // Delegation — time-bounded proxy authority
 export interface Delegation {
   id: string;

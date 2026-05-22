@@ -19,17 +19,21 @@ import type { FastifyInstance } from "fastify";
 
 import { RbacController } from "./rbac.controller.js";
 import { RbacService } from "./rbac.service.js";
+import { UsersBulkImportService } from "./users-bulk-import.service.js";
 
 export async function rbacRoutes(app: FastifyInstance) {
+  const roles = new RoleRepository(app.prisma);
+  const audit = new AuditLogRepository(app.prisma);
   const service = new RbacService(
     app.prisma,
     new PermissionRepository(app.prisma),
-    new RoleRepository(app.prisma),
-    new AuditLogRepository(app.prisma),
+    roles,
+    audit,
     app.notifications,
     app.log,
   );
-  const ctrl = new RbacController(service);
+  const bulkImport = new UsersBulkImportService(app.prisma, roles, audit);
+  const ctrl = new RbacController(service, bulkImport);
 
   app.addHook("preHandler", app.authenticate);
 
@@ -113,6 +117,14 @@ export async function rbacRoutes(app: FastifyInstance) {
     "/users",
     { preHandler: app.requirePermission("admin.users") },
     ctrl.createUser,
+  );
+
+  // Bulk onboarding (CSV → many users). 207 Multi-Status partial
+  // success is the default expectation.
+  app.post(
+    "/users/bulk-import",
+    { preHandler: app.requirePermission("admin.users") },
+    ctrl.bulkImportUsers,
   );
 
   // ─── user role assignments ────────────────────────────────────────

@@ -160,6 +160,10 @@ const NotificationsPage = lazyNamed(
 const JobsPage = lazyNamed(() => import("./features/jobs"), "JobsPage");
 const RolesPage = lazyNamed(() => import("./features/rbac"), "RolesPage");
 const UsersPage = lazyNamed(() => import("./features/rbac"), "UsersPage");
+const BulkUsersPage = lazyNamed(
+  () => import("./features/rbac"),
+  "BulkUsersPage",
+);
 const DelegationsPage = lazyNamed(
   () => import("./features/delegations"),
   "DelegationsPage",
@@ -280,6 +284,8 @@ export function App() {
           <Route path="/decision-rules" element={<DecisionRulesPage />} />
           <Route path="/roles" element={<RolesPage />} />
           <Route path="/users" element={<UsersPage />} />
+          {/* Bulk import comes after the static segment so it doesn't shadow */}
+          <Route path="/users/bulk" element={<BulkUsersPage />} />
           <Route path="/delegations" element={<DelegationsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />

@@ -217,6 +217,12 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Administration",
     items: [
       { to: "/users", label: "Users", icon: UserCog, roles: ["ADMIN"] },
+      {
+        to: "/users/bulk",
+        label: "Bulk users",
+        icon: FileSpreadsheet,
+        roles: ["ADMIN"],
+      },
       { to: "/roles", label: "Roles", icon: KeyRound, roles: ["ADMIN"] },
       {
         to: "/delegations",
