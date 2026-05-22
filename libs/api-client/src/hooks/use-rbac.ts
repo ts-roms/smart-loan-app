@@ -4,6 +4,7 @@ import type {
   MePermissions,
   Permission,
   PermissionHoldersPayload,
+  PermissionStatus,
   Role,
   RoleCreateInput,
   RoleEditImpact,
@@ -29,6 +30,32 @@ export function usePermissions() {
   return useQuery({
     queryKey: rbacKeys.permissions,
     queryFn: () => getApiClient().get<Permission[]>("/admin/permissions"),
+  });
+}
+
+/**
+ * Flip the lifecycle status of a permission. Invalidates both the
+ * catalog (so badges update) and the holders cache (DRAFT means the
+ * resolver no longer grants the key — anyone who held it via a role
+ * no longer effectively holds it).
+ */
+export function useSetPermissionStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { key: string; status: PermissionStatus }) =>
+      getApiClient().request<Permission>(`/admin/permissions/${input.key}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: input.status }),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: rbacKeys.permissions });
+      qc.invalidateQueries({
+        queryKey: rbacKeys.permissionHolders(vars.key),
+      });
+      // Effective permission set for the current user may also have
+      // shifted (esp. if they're an admin flipping their own grant).
+      qc.invalidateQueries({ queryKey: rbacKeys.mePermissions });
+    },
   });
 }
 

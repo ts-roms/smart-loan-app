@@ -32,6 +32,7 @@ import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
 import { useAuth } from "../../../providers/auth";
+import { PermissionCatalogPanel } from "../components/PermissionCatalogPanel";
 import { PermissionHoldersPanel } from "../components/PermissionHoldersPanel";
 
 /**
@@ -78,6 +79,7 @@ export function RolesPage() {
   return (
     <div className="space-y-4">
       <PermissionHoldersPanel />
+      <PermissionCatalogPanel />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">

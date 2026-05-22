@@ -1422,11 +1422,27 @@ model Permission {
   category    String
   /// System permissions can't be deleted (code references them).
   system      Boolean  @default(true)
+  /// Lifecycle gate:
+  ///   - ACTIVE     — fully effective (the historical default)
+  ///   - DRAFT      — present in the catalog but the resolver does not
+  ///                  grant it; lets admins wire role membership before
+  ///                  flipping the perm on
+  ///   - DEPRECATED — still effective (so we don't break in-flight
+  ///                  flows), but flagged in the UI so admins can plan
+  ///                  removal from role permission sets
+  status      PermissionStatus @default(ACTIVE)
   createdAt   DateTime @default(now())
 
   roles RolePermission[]
 
   @@index([category])
+  @@index([status])
+}
+
+enum PermissionStatus {
+  DRAFT
+  ACTIVE
+  DEPRECATED
 }
 
 model Role {

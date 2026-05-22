@@ -26,6 +26,21 @@ export class PermissionRepository {
     });
   }
 
+  /**
+   * Update the lifecycle status of a permission. The status is the only
+   * field this method touches; labels/category come from the code seed
+   * and stay authoritative there.
+   */
+  setStatus(
+    key: string,
+    status: "DRAFT" | "ACTIVE" | "DEPRECATED",
+  ): Promise<Permission> {
+    return this.prisma.permission.update({
+      where: { key },
+      data: { status },
+    });
+  }
+
   /** Idempotent: upsert one row per code-defined permission. */
   async seed(): Promise<{ created: number; existing: number }> {
     let created = 0;
@@ -266,9 +281,14 @@ export class RoleRepository {
  * Resolve the effective permission key set for a user — the union across
  * every role they've been assigned. Used by the requirePermission middleware.
  *
- * Assignments with `expiresAt` in the past are filtered out: the row
- * stays in the DB (for audit), but no longer contributes to the user's
- * effective permission set. NULL expiresAt is treated as perpetual.
+ * Two filters layer on top of the role union:
+ *
+ *   - role assignments with `expiresAt` in the past are dropped (the
+ *     row stays in the DB for audit but no longer contributes)
+ *   - permissions whose `status` is `DRAFT` are dropped — DRAFT lets an
+ *     admin wire role membership in advance, then flip the perm on by
+ *     setting status=ACTIVE. DEPRECATED perms still grant at runtime so
+ *     in-flight workflows don't break.
  */
 export async function resolveUserPermissions(
   prisma: PrismaClient,
@@ -287,6 +307,9 @@ export async function resolveUserPermissions(
   const keys = new Set<string>();
   for (const a of rows) {
     for (const rp of a.role.permissions) {
+      // DRAFT perms exist in the catalog but don't grant. DEPRECATED
+      // still grants so we don't break callers mid-rollout.
+      if (rp.permission.status === "DRAFT") continue;
       keys.add(rp.permission.key);
     }
   }

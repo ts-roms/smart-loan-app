@@ -53,6 +53,15 @@ export async function rbacRoutes(app: FastifyInstance) {
     ctrl.listPermissions,
   );
 
+  // Permission staging — flip a perm's lifecycle status. Gated on
+  // admin.roles since the change affects which keys the resolver
+  // hands out to role members.
+  app.patch<{ Params: { key: string } }>(
+    "/permissions/:key",
+    { preHandler: app.requirePermission("admin.roles") },
+    ctrl.patchPermission,
+  );
+
   // Reverse lookup: "who currently holds permission X?". Permission-
   // gated on either admin.roles or admin.audit_log so security auditors
   // can answer attribution questions without admin.users.

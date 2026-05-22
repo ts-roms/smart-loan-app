@@ -226,6 +226,46 @@ export class RbacService {
   }
 
   /**
+   * Flip a permission's lifecycle status. Audit-coupled — the actor +
+   * the from/to states are recorded. Service swallows the repo
+   * not-found error and returns a typed result.
+   *
+   *   - DRAFT      → resolver stops granting (effective lockout)
+   *   - ACTIVE     → resolver grants normally
+   *   - DEPRECATED → resolver still grants but UI flags it for cleanup
+   */
+  async setPermissionStatus(args: {
+    key: string;
+    status: "DRAFT" | "ACTIVE" | "DEPRECATED";
+    actorId: string;
+  }): Promise<
+    | {
+        ok: true;
+        permission: Awaited<ReturnType<PermissionRepository["setStatus"]>>;
+      }
+    | { ok: false; kind: "NotFound" }
+  > {
+    const existing = await this.prisma.permission.findUnique({
+      where: { key: args.key },
+      select: { status: true },
+    });
+    if (!existing) return { ok: false, kind: "NotFound" };
+    const permission = await this.permissions.setStatus(args.key, args.status);
+    await this.audit.record({
+      action: "PERMISSION_STATUS_CHANGE",
+      actorId: args.actorId,
+      targetType: "Permission",
+      targetId: permission.id,
+      payload: {
+        key: args.key,
+        from: existing.status,
+        to: args.status,
+      },
+    });
+    return { ok: true, permission };
+  }
+
+  /**
    * Reverse lookup: "who currently holds permission X?". Returns the
    * two grant paths separately:
    *

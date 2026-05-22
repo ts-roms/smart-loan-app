@@ -54,6 +54,16 @@ export const editImpactSchema = z.object({
 export type EditImpactInput = z.infer<typeof editImpactSchema>;
 
 /**
+ * Body for PATCH /admin/permissions/:key — currently only the status
+ * field is mutable from this endpoint. Labels + descriptions are
+ * authoritative in code seed and not editable here.
+ */
+export const permissionPatchSchema = z.object({
+  status: z.enum(["DRAFT", "ACTIVE", "DEPRECATED"]),
+});
+export type PermissionPatchInput = z.infer<typeof permissionPatchSchema>;
+
+/**
  * Bulk user import. CSV-ish: an array of opaque row objects + flags.
  * Mirrors the customers bulk-import shape so the UI can reuse the
  * existing CSV-parsing utilities. Per-row zod validation runs in

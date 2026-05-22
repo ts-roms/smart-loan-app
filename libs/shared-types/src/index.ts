@@ -646,6 +646,15 @@ export interface DecisionRuleInput {
 }
 
 // RBAC
+/**
+ * Lifecycle gate on each permission row. `DRAFT` keeps a permission
+ * present in the catalog but suppresses it at resolve time, so admins
+ * can wire role membership before the perm goes live. `DEPRECATED`
+ * still grants at runtime (so in-flight flows don't break) but is
+ * flagged in the UI for planned removal.
+ */
+export type PermissionStatus = "DRAFT" | "ACTIVE" | "DEPRECATED";
+
 export interface Permission {
   id: string;
   key: string;
@@ -653,6 +662,7 @@ export interface Permission {
   description: string | null;
   category: string;
   system: boolean;
+  status: PermissionStatus;
   createdAt: string;
 }
 
