@@ -117,6 +117,11 @@ export {
   type SeedTenantResult,
 } from "./lib/seed-tenant";
 export {
+  adoptExistingAsTenant,
+  type AdoptExistingOptions,
+  type AdoptExistingResult,
+} from "./lib/adopt-existing";
+export {
   isUuid,
   idOrNumberWhere,
   nextCustomerNumber,
