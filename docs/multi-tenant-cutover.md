@@ -37,17 +37,8 @@ in the target environment:
 
 2. **At least one tenant exists in `public.Tenant` with status `ACTIVE`.**
    Without one, every authenticated request 401s with `MissingTenantClaim`.
-   For an existing single-tenant deploy, run the "adopt-existing"
-   migration (manual, one-time):
-
-   ```sql
-   INSERT INTO public."Tenant"
-     (slug, name, status, "createdAt", "updatedAt")
-     VALUES ('default', 'Legacy', 'ACTIVE', NOW(), NOW());
-   ```
-
-   Then move the legacy `public` data into `tenant_default` via the
-   schema-rename script (see `docs/multi-tenant-implementation.md §7`).
+   For an existing single-tenant deploy, run the one-shot adoption
+   script — see §2.B below for the full walkthrough.
 
 3. **The platform console (`/platform/*`) is reachable** and at least
    one `PlatformUser` exists. Without it you can't provision new
@@ -58,6 +49,70 @@ in the target environment:
    50 tenants × 3 = 150 max. Set `connection_limit` lower (via the
    `MultiTenantPluginOptions.perTenantConnectionLimit`) if your DB
    instance is sized smaller.
+
+## §2.B — Adopting an existing single-tenant deploy
+
+If you're flipping the flag on a database that already has real data
+in `public` (i.e. the deploy has been running as single-tenant), you
+need to move that data into a `tenant_<slug>` schema first. The
+`adopt-existing-as-tenant` CLI does this atomically.
+
+```bash
+pnpm --filter @loan/db adopt-existing-as-tenant \
+  --slug acme-coop \
+  --name "Acme Cooperative" \
+  --platform-admin-email ops@vendor.com \
+  --platform-admin-name "Vendor Ops" \
+  --confirm-slug acme-coop
+```
+
+What it does, in order:
+
+1. **Pre-flight checks** — target schema doesn't already exist; public
+   has data; `public.Tenant` is still empty (i.e. multi-tenant hasn't
+   started). If any of those fail, the script refuses to run.
+2. **`pg_dump` backup** to `./backups/<timestamp>-pre-adopt-<slug>.sql`.
+   The path is printed in the output — archive it before continuing.
+   Pass `--skip-backup` to skip if you have an external pipeline.
+3. **Schema rename**: `ALTER SCHEMA public RENAME TO tenant_<slug>` +
+   `CREATE SCHEMA public`, in a single transaction.
+4. **`prisma migrate deploy`** against the fresh `public` schema —
+   recreates the platform tables and the (empty) tenant tables. The
+   empty tenant tables in `public` are dead-weight in multi-tenant
+   mode; the same asymmetry exists in every tenant schema from the
+   other direction (each tenant schema also has dead-weight Tenant /
+   PlatformUser tables that the system never reads from).
+5. **`prisma migrate deploy`** against `tenant_<slug>` too — idempotent;
+   catches the case where the previous deploy hadn't pulled the newest
+   migrations.
+6. **Bootstrap rows**: inserts the `Tenant` row for the adopted slug
+   and a `PlatformUser` (PLATFORM_ADMIN) with the email + name you
+   supplied. A temp password is generated and printed to the CLI
+   **once** — copy it somewhere safe immediately.
+
+After the script succeeds:
+
+- Set `MULTI_TENANT=true` in `.env` and restart the API.
+- Log into the platform console at `/platform/login` with the
+  `platform-admin-email` + temp password; change the password right
+  away.
+- Existing tenant users keep their credentials but now sign in via
+  `/login?tenant=<slug>` (the tenant-scoped login flow added in P2.3).
+- Verify by logging in as one of those tenant users and confirming
+  their data is intact.
+
+Recovery: if anything goes wrong after step 3 (rename committed but
+prisma migrate failed), restore from the backup file printed by the
+script:
+
+```bash
+psql $DATABASE_URL -c 'DROP SCHEMA tenant_acme-coop CASCADE; CREATE SCHEMA public;'
+psql $DATABASE_URL < ./backups/<timestamp>-pre-adopt-acme-coop.sql
+```
+
+The unit tests in `libs/db/src/lib/adopt-existing.test.ts` cover the
+pre-flight gates; the rename + migrate happens against live Postgres
+so end-to-end testing of those steps lives in the smoke below.
 
 ## §3 — Manual cross-tenant isolation smoke
 
@@ -144,17 +199,58 @@ FROM pg_stat_activity GROUP BY 1,2;` — should show each tenant slug
   `register()` failed at first tick — most often because the tenant
   schema isn't fully migrated.
 
-## §6 — Carry-overs not in scope of P2.11
+## §6 — Operational tooling shipped after P2.11
 
-- **Provider singletons (Twilio, SendGrid, AML clients) are shared
-  across tenants.** Sending SMS for tenant A still goes through the
-  one Twilio account configured in `.env`. Per-tenant provider
-  credentials is a separate enhancement (P3.x).
-- **The platform's own `JobRun` table is unused now.** All job runs
-  are recorded per-tenant. A future cleanup can drop `public.JobRun` /
-  `public.ScheduledJob` since they no longer get written to.
-- **Cross-tenant search / admin views.** The platform console can list
-  tenants (uses `public.Tenant`) but can't drill into a tenant's
-  customers without logging in as that tenant's admin. A
-  "platform-impersonate-tenant" feature would change that — also
-  outside Phase 2 scope.
+Three operational features land alongside the cutover:
+
+- **`adopt-existing-as-tenant` CLI** — §2.B. Moves a single-tenant
+  deploy's existing data into a `tenant_<slug>` schema atomically,
+  with a `pg_dump` backup taken before the rename. Source:
+  `libs/db/src/lib/adopt-existing.ts`.
+- **`POST /platform/tenants/:slug/impersonate`** — vendor support
+  staff (PLATFORM_ADMIN only) can mint a short-lived tenant-side JWT
+  to log into a customer's installation without asking for
+  credentials. Token TTL is capped at 60 minutes; every issuance is
+  audit-logged on both platform and tenant sides. Payload carries the
+  `impersonatedBy` claim so downstream audit code can attribute
+  actions to both the tenant user and the vendor staff. Source:
+  `apps/api/src/features/platform/platform.service.ts` →
+  `impersonateTenant`.
+- **`TenantScheduler`** (P2.11) — per-tenant fan-out of background
+  jobs. Source: `libs/db/src/tenant-scheduler.ts`.
+
+## §7 — Carry-overs not in scope
+
+These are honest about what would still need work, not just hand-waves:
+
+- **Per-tenant provider credentials.** Provider singletons (Twilio,
+  SendGrid, AML clients) are shared across tenants. Sending SMS for
+  tenant A still goes through the one Twilio account configured in
+  `.env`. Reworking this would require either per-tenant credential
+  storage in `SystemConfig` (each tenant's own keys, decrypted at
+  request time) or a vendor-owned upstream account billed back to
+  the tenant. Pricing decision before code decision.
+
+- **`public.JobRun` / `public.ScheduledJob` tables in multi-tenant
+  mode.** All job activity writes to `tenant_<slug>` schemas. The
+  copies in `public` are dead-weight. They cannot be dropped without
+  Prisma's `multiSchema` preview feature (a single Prisma schema
+  can't say "this model only lives in tenant schemas, not public").
+  Operators concerned about cleanliness can `DROP TABLE` them
+  manually, but `prisma migrate deploy` will recreate them empty on
+  next deploy. Documented quirk, not a leak.
+
+- **`impersonatedBy` audit propagation.** The platform mints a token
+  with the claim; the tenant side records `PLATFORM_IMPERSONATION_STARTED`
+  once. But every subsequent audited action during the impersonated
+  session is attributed only to the tenant user (`actorId = target.id`).
+  Threading `req.user.impersonatedBy` into every `audit.record()`
+  call so the trail says "X did Y (impersonated by VENDOR_OPS)"
+  is a follow-up sweep across all feature services.
+
+- **Cross-tenant platform views.** The platform console can list
+  tenants (from `public.Tenant`) and per-tenant licenses, but can't
+  drill into a tenant's customers / loans without using impersonate.
+  Cross-tenant reporting (e.g. "total AUM across all tenants") would
+  need a read-only platform-side aggregator that fans out across
+  tenant schemas. Out of P2 scope.
