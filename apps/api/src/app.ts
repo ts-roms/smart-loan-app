@@ -85,6 +85,32 @@ export async function buildApp() {
           // been resolved (e.g. 404s before routing).
           scope.setTag("route", req.routeOptions?.url ?? req.url);
           scope.setTag("method", req.method);
+          // Tenant context. When `resolveTenant` has run, the request
+          // already knows which schema it was about to query. Tagging
+          // every Sentry event with the tenant slug lets the vendor
+          // filter the error stream per customer — critical for SaaS
+          // support ("we're seeing 500s; which tenant?"). In single-
+          // tenant mode the value is "default", which is also useful
+          // — distinguishes errors during the cutover window.
+          const tenantSlug = (req as { tenantCtx?: { slug?: string } })
+            .tenantCtx?.slug;
+          if (tenantSlug) scope.setTag("tenant", tenantSlug);
+          // Surface impersonation explicitly. If a vendor support
+          // session caused the error, the alert email shouldn't read
+          // "ADMIN_USER triggered a 500" — it should read "VENDOR_OPS
+          // (impersonating ADMIN_USER) triggered a 500".
+          const impersonator = (
+            req.user as
+              | { impersonatedBy?: { platformUserEmail?: string } }
+              | undefined
+          )?.impersonatedBy;
+          if (impersonator) {
+            scope.setTag("impersonated", "true");
+            scope.setTag(
+              "impersonator",
+              impersonator.platformUserEmail ?? "unknown",
+            );
+          }
           const sub = (req.user as { sub?: string } | undefined)?.sub;
           if (sub) scope.setUser({ id: sub });
           return scope;
