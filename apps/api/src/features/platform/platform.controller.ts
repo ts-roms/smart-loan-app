@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import type { PlatformJwtPayload, PlatformService } from "./platform.service";
 import {
+  impersonateTenantSchema,
   issueLicenseSchema,
   platformLoginSchema,
   provisionTenantSchema,
@@ -208,6 +209,42 @@ export class PlatformController {
       });
     }
     return result;
+  };
+
+  impersonateTenant = async (
+    req: FastifyRequest<{ Params: { slug: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = impersonateTenantSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await this.service.impersonateTenant({
+      slug: req.params.slug,
+      input: parsed.data,
+      actor: platformActor(req),
+    });
+    if (!result.ok) {
+      const code =
+        result.kind === "TenantNotFound" || result.kind === "TargetUserNotFound"
+          ? 404
+          : result.kind === "TargetUserIsCustomer"
+            ? 400
+            : result.kind === "NoStaffUser"
+              ? 409
+              : 409; // TenantNotActive
+      return reply.code(code).send({
+        error: result.kind,
+        message: result.message,
+      });
+    }
+    return {
+      token: result.token,
+      expiresAt: result.expiresAt,
+      user: result.user,
+    };
   };
 
   listAudit = async (

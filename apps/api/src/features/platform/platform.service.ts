@@ -1,5 +1,6 @@
 import { hashPassword, verifyPassword } from "@loan/auth";
 import {
+  AuditLogRepository,
   createTenantSchema,
   migrateTenantSchema,
   seedTenant,
@@ -18,6 +19,7 @@ import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 
 import type {
+  ImpersonateTenantInput,
   IssueLicenseInput,
   PlatformLoginInput,
   ProvisionTenantInput,
@@ -97,6 +99,24 @@ export type IssueLicenseResult =
 export type RevokeLicenseResult =
   | { ok: true; jti: string; clearedSnapshot: boolean }
   | { ok: false; kind: "NotFound" | "AlreadyRevoked"; message: string };
+
+export type ImpersonateResult =
+  | {
+      ok: true;
+      token: string;
+      expiresAt: string;
+      user: { id: string; email: string; name: string; role: string };
+    }
+  | {
+      ok: false;
+      kind:
+        | "TenantNotFound"
+        | "TenantNotActive"
+        | "NoStaffUser"
+        | "TargetUserNotFound"
+        | "TargetUserIsCustomer";
+      message: string;
+    };
 
 /**
  * Whether this installation is configured to actually provision per-
@@ -650,6 +670,187 @@ export class PlatformService {
     });
 
     return { ok: true, jti: args.jti, clearedSnapshot };
+  }
+
+  // ─── support: impersonate a tenant ────────────────────────────────
+
+  /**
+   * Mint a short-lived tenant-side JWT so vendor support staff can
+   * debug a tenant installation without asking for credentials.
+   *
+   * Flow:
+   *   1. Verify tenant exists + is ACTIVE.
+   *   2. Resolve the tenant's prisma (TenantPrismaCache in multi-
+   *      tenant mode, `app.prisma` in single-tenant mode).
+   *   3. Pick a staff target — either the explicit
+   *      `targetUserEmail` if supplied (must be staff, not CUSTOMER)
+   *      or the first ADMIN user found in the tenant.
+   *   4. Sign a tenant JWT (`@fastify/jwt`) with the user's id +
+   *      role + tenant claim + a new `impersonatedBy` claim that
+   *      carries the platform user id + email + the support
+   *      `purpose` string.
+   *   5. Audit on BOTH sides:
+   *      - Platform: `PLATFORM_TENANT_IMPERSONATE` with payload
+   *        `{ targetUserId, targetEmail, purpose, ttlMinutes }`
+   *      - Tenant:   `PLATFORM_IMPERSONATION_STARTED` against the
+   *        target user, payload includes the platform user id +
+   *        email so the tenant admin can see exactly who logged
+   *        in under this user.
+   *
+   * The token TTL is capped at 60 minutes — short enough that even
+   * a leaked token has limited blast radius, long enough for a
+   * realistic support session. No refresh: if you need more time,
+   * mint another token (which gets its own audit row).
+   */
+  async impersonateTenant(args: {
+    slug: string;
+    input: ImpersonateTenantInput;
+    actor: { id: string; email: string };
+  }): Promise<ImpersonateResult> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { slug: args.slug },
+    });
+    if (!tenant) {
+      return {
+        ok: false,
+        kind: "TenantNotFound",
+        message: `Tenant ${args.slug} not found.`,
+      };
+    }
+    if (tenant.status !== "ACTIVE") {
+      return {
+        ok: false,
+        kind: "TenantNotActive",
+        message: `Tenant ${args.slug} is ${tenant.status}; only ACTIVE tenants can be impersonated.`,
+      };
+    }
+
+    // Resolve which prisma reads the tenant's User table. In single-
+    // tenant mode there's no tenant cache (it lazy-builds the same
+    // app.prisma), so we just point at app.prisma directly. In
+    // multi-tenant mode the cache returns a client bound to
+    // `tenant_<slug>`.
+    const tenantPrisma = isMultiTenantMode()
+      ? this.app.tenantPrisma.get(args.slug)
+      : this.prisma;
+
+    // Pick the user we're impersonating. Two paths:
+    //   - targetUserEmail supplied → that user (must be staff)
+    //   - otherwise → first ADMIN found (oldest by createdAt for
+    //     determinism across repeated calls)
+    let target;
+    if (args.input.targetUserEmail) {
+      target = await tenantPrisma.user.findUnique({
+        where: { email: args.input.targetUserEmail.toLowerCase() },
+        select: { id: true, email: true, name: true, role: true },
+      });
+      if (!target) {
+        return {
+          ok: false,
+          kind: "TargetUserNotFound",
+          message: `No user ${args.input.targetUserEmail} in tenant ${args.slug}.`,
+        };
+      }
+      if (target.role === "CUSTOMER") {
+        return {
+          ok: false,
+          kind: "TargetUserIsCustomer",
+          message:
+            "Borrower impersonation is not supported. Choose an ADMIN, LOAN_OFFICER, or ACCOUNTANT email.",
+        };
+      }
+    } else {
+      target = await tenantPrisma.user.findFirst({
+        where: { role: "ADMIN" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, email: true, name: true, role: true },
+      });
+      if (!target) {
+        return {
+          ok: false,
+          kind: "NoStaffUser",
+          message: `Tenant ${args.slug} has no ADMIN user to impersonate.`,
+        };
+      }
+    }
+
+    const ttlMinutes = args.input.expiresInMin ?? 15;
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
+
+    // Mint the tenant token. Same shape as a normal /auth/login,
+    // plus the `impersonatedBy` claim. The discriminator from a
+    // platform token (`platform: true`) is NOT set here — this is a
+    // tenant-side token that happens to have been issued by the
+    // vendor's control plane.
+    const token = this.app.jwt.sign(
+      {
+        sub: target.id,
+        email: target.email,
+        role: target.role,
+        tenant: args.slug,
+        impersonatedBy: {
+          platformUserId: args.actor.id,
+          platformUserEmail: args.actor.email,
+          purpose: args.input.purpose,
+        },
+      } as unknown as Parameters<typeof this.app.jwt.sign>[0],
+      { expiresIn: `${ttlMinutes}m` },
+    );
+
+    // Audit on the platform side. Carries enough metadata for the
+    // vendor's compliance team to reconstruct the session: who
+    // logged in as whom, against which tenant, for what reason,
+    // with what TTL.
+    await this.audit({
+      action: "PLATFORM_TENANT_IMPERSONATE",
+      actor: args.actor,
+      tenantSlug: args.slug,
+      payload: {
+        targetUserId: target.id,
+        targetEmail: target.email,
+        targetRole: target.role,
+        purpose: args.input.purpose,
+        ttlMinutes,
+        expiresAt: expiresAt.toISOString(),
+      },
+    });
+
+    // Audit on the tenant side too. The tenant's own admin needs
+    // visibility into vendor access — otherwise impersonation
+    // becomes a stealth backdoor. Failures here are non-fatal (the
+    // repo already swallows + console.errors) so a tenant audit
+    // outage doesn't block a support session.
+    const tenantAudit = new AuditLogRepository(tenantPrisma);
+    await tenantAudit.record({
+      action: "PLATFORM_IMPERSONATION_STARTED",
+      actorId: target.id,
+      targetType: "User",
+      targetId: target.id,
+      payload: {
+        platformUserId: args.actor.id,
+        platformUserEmail: args.actor.email,
+        purpose: args.input.purpose,
+        ttlMinutes,
+        expiresAt: expiresAt.toISOString(),
+      },
+    });
+
+    this.log.warn(
+      {
+        slug: args.slug,
+        platformUser: args.actor.email,
+        targetUser: target.email,
+        ttlMinutes,
+      },
+      "platform impersonation token minted",
+    );
+
+    return {
+      ok: true,
+      token,
+      expiresAt: expiresAt.toISOString(),
+      user: target,
+    };
   }
 
   // ─── audit ─────────────────────────────────────────────────────────

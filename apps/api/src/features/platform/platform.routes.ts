@@ -137,6 +137,16 @@ export async function platformRoutes(app: FastifyInstance) {
       ctrl.retryProvisioning,
     );
 
+    // ─── support: impersonate-tenant ─────────────────────────────────
+    // Vendor-side support tooling. PLATFORM_ADMIN only — destructive
+    // surface area + JWT mint is too sensitive for SALES. Each call
+    // mints a short-lived tenant JWT and audit-logs on both sides.
+    scoped.post<{ Params: { slug: string } }>(
+      "/tenants/:slug/impersonate",
+      { preHandler: requirePlatformRole("PLATFORM_ADMIN") },
+      ctrl.impersonateTenant,
+    );
+
     // ─── licenses ────────────────────────────────────────────────────
     // SALES can issue (that's their primary tool). ADMIN inherits.
     scoped.post(

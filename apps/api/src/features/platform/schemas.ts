@@ -45,6 +45,31 @@ export const revokeLicenseSchema = z.object({
 });
 export type RevokeLicenseInput = z.infer<typeof revokeLicenseSchema>;
 
+/**
+ * Body for POST /platform/tenants/:slug/impersonate — mint a short-
+ * lived tenant-side JWT so support staff can debug a tenant
+ * installation without asking for credentials.
+ *
+ * `purpose` is required (not optional). The audit trail is the whole
+ * point of this endpoint; we don't let people skip explaining why.
+ */
+export const impersonateTenantSchema = z.object({
+  /** Free-form audit note. Stored on both platform and tenant audit
+   * logs. Required — impersonation is sensitive enough that the
+   * justification must be on the record. */
+  purpose: z.string().min(8).max(500),
+  /** Token TTL in minutes. Default 15, max 60. Short on purpose —
+   * support sessions are short-lived; if you need longer, mint
+   * another token. */
+  expiresInMin: z.number().int().min(1).max(60).optional(),
+  /** Optional: impersonate a specific staff user (by email). If
+   * omitted, the first ADMIN user found in the tenant is used.
+   * Borrower (CUSTOMER) impersonation is intentionally not
+   * supported here. */
+  targetUserEmail: z.string().email().max(180).optional(),
+});
+export type ImpersonateTenantInput = z.infer<typeof impersonateTenantSchema>;
+
 /** Body for POST /platform/licenses — issue a new license token. */
 export const issueLicenseSchema = z.object({
   /** Slug of the tenant this license is for. Embedded as `tenant` in
