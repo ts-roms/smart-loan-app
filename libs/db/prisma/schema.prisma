@@ -2334,6 +2334,21 @@ model SystemConfig {
   /// JobRun retention. Default 90 days; pure telemetry.
   jobRunRetentionDays       Int @default(90)
 
+  // ── Per-tenant notification providers ──────────────────────────────
+  // Each tenant can bring its own Twilio + SendGrid credentials. When
+  // any field below is null, the channel falls back to the platform's
+  // shared provider. Stored as plaintext columns; tenant DB isolation
+  // is the boundary. Swap to AES-256-GCM at-rest when a customer's
+  // security review demands it (the column shape doesn't change).
+  twilioAccountSid  String?
+  twilioAuthToken   String?
+  /// E.164 number or alphanumeric sender id ("ACME-COOP")
+  twilioFromNumber  String?
+  sendgridApiKey    String?
+  /// Must be a verified sender on the SendGrid account
+  sendgridFromEmail String?
+  sendgridFromName  String?
+
   updatedAt   DateTime @updatedAt
   updatedById String?
   updatedBy   User?    @relation("SystemConfigUpdatedBy", fields: [updatedById], references: [id])

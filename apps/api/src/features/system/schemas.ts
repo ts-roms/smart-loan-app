@@ -43,3 +43,30 @@ export const brandingUpdateSchema = z.object({
 });
 
 export type BrandingUpdateInput = z.infer<typeof brandingUpdateSchema>;
+
+/**
+ * Per-tenant notification-provider credentials. Each field nullable
+ * (null = "clear it; fall back to the platform provider"). The
+ * tenantId-scoped admin pastes credentials from their Twilio /
+ * SendGrid dashboards; the platform itself never touches them.
+ *
+ * On read, secrets are masked (see system.routes.ts → maskSecret).
+ * The PUT accepts the secret in plaintext; subsequent GETs return
+ * the masked form so the operator can verify "yes, that's the key
+ * I pasted" without re-exposing it.
+ */
+export const notificationProvidersUpdateSchema = z.object({
+  twilioAccountSid: z.string().min(20).max(80).nullable().optional(),
+  twilioAuthToken: z.string().min(20).max(80).nullable().optional(),
+  /** E.164 ("+15551234567") or alphanumeric sender id (3–11 chars). */
+  twilioFromNumber: z.string().min(3).max(20).nullable().optional(),
+  /** SendGrid keys start with "SG." — minimum length is the prefix
+   *  plus the body (varies; ~60 chars typical). */
+  sendgridApiKey: z.string().min(10).max(200).nullable().optional(),
+  sendgridFromEmail: z.string().email().max(180).nullable().optional(),
+  sendgridFromName: z.string().min(1).max(80).nullable().optional(),
+});
+
+export type NotificationProvidersUpdateInput = z.infer<
+  typeof notificationProvidersUpdateSchema
+>;

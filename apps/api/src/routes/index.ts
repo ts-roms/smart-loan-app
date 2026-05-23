@@ -8,6 +8,7 @@ import {
 } from "@loan/db";
 
 import { config } from "../config";
+import { TenantAwareNotificationProvider } from "../features/system/notification-providers";
 import { createAmlProvider, createNotificationProvider } from "../providers";
 
 // Every route plugin lives under apps/api/src/features/<feature>/ now.
@@ -90,10 +91,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Factory decorators. Callers invoke as `app.notifications(prisma)` /
   // `app.screening(prisma)` from a per-request preHandler with
   // `req.tenantCtx.prisma`.
+  //
+  // The notifications factory wraps the platform-shared provider in a
+  // `TenantAwareNotificationProvider` that reads `SystemConfig` on
+  // each dispatch — when a tenant has their own Twilio/SendGrid
+  // creds, the right channel routes through their provider instead.
+  // See features/system/notification-providers.ts for the resolution
+  // logic.
   app.decorate(
     "notifications",
     (prisma: PrismaClient) =>
-      new NotificationRepository(prisma, notificationProvider),
+      new NotificationRepository(
+        prisma,
+        new TenantAwareNotificationProvider(prisma, notificationProvider),
+      ),
   );
   app.decorate(
     "screening",
