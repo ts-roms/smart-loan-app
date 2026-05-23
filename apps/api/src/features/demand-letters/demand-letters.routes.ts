@@ -48,7 +48,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
         new DemandLetterRepository(prisma),
         new LoanRepository(prisma),
         app.notifications(prisma),
-        new AuditLogRepository(prisma),
+        new AuditLogRepository(prisma, req.user?.impersonatedBy),
         app.log,
       ),
       resolveCallerPerms: (userId: string) => app.resolvePermissions(userId),

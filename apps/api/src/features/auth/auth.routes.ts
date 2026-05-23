@@ -174,7 +174,7 @@ function resolveTenantFromBody(app: FastifyInstance) {
 function buildAuthService(app: FastifyInstance) {
   return async (req: FastifyRequest): Promise<void> => {
     const prisma: PrismaClient = req.tenantCtx.prisma;
-    const audit = new AuditLogRepository(prisma);
+    const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
     const service = new AuthService(
       prisma,
       audit,

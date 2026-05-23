@@ -28,7 +28,10 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
-    req.systemAuditRepo = new AuditLogRepository(req.tenantCtx.prisma);
+    req.systemAuditRepo = new AuditLogRepository(
+      req.tenantCtx.prisma,
+      req.user?.impersonatedBy,
+    );
   });
 
   // ── Idle-then-logout policy ────────────────────────────────────────

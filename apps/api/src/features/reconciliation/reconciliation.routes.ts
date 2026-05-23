@@ -30,7 +30,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
     const prisma = req.tenantCtx.prisma;
     req.reconciliationCtx = {
       repo: new BankReconciliationRepository(prisma),
-      audit: new AuditLogRepository(prisma),
+      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
     };
   });
 

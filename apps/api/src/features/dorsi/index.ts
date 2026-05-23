@@ -28,7 +28,7 @@ export async function dorsiRoutes(app: FastifyInstance): Promise<void> {
     req.dorsiServices = {
       dorsi: new DorsiService(
         new DorsiRepository(prisma),
-        new AuditLogRepository(prisma),
+        new AuditLogRepository(prisma, req.user?.impersonatedBy),
       ),
     };
   });

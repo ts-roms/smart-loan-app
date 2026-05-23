@@ -1134,6 +1134,13 @@ model AuditEvent {
   /// Free-form context — reason, before/after snapshot, payload, etc.
   payload    Json?
   createdAt  DateTime @default(now())
+  /// Set when the action was performed during a platform-impersonated
+  /// session (vendor support staff logged in as `actorId` via
+  /// `/platform/tenants/:slug/impersonate`). Two columns over a JSON
+  /// blob because compliance queries them by id + email constantly.
+  /// Null on every non-impersonated audit row (the common case).
+  impersonatedById    String?
+  impersonatedByEmail String?
 
   actor User @relation("AuditActor", fields: [actorId], references: [id])
 
@@ -1141,6 +1148,9 @@ model AuditEvent {
   @@index([actorId, createdAt(sort: Desc)])
   @@index([targetType, targetId])
   @@index([action])
+  // Partial index: filter "audit rows from a support session." Skinny
+  // because the typical row has impersonatedById = null.
+  @@index([impersonatedById])
 }
 
 // ─── Background jobs (scheduler) ─────────────────────────────────────────────

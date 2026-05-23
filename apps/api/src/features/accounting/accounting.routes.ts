@@ -53,7 +53,7 @@ export async function accountingRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     const accounting = new AccountingRepository(prisma);
-    const audit = new AuditLogRepository(prisma);
+    const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
     req.accountingCtx = {
       accounting,
       journal: new JournalService(accounting, audit),

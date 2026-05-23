@@ -753,7 +753,7 @@ function buildLoanCtx(app: FastifyInstance) {
     const kyc = new KycRepository(prisma);
     const coMakers = new CoMakerRepository(prisma);
     const rules = new DecisionRuleRepository(prisma);
-    const audit = new AuditLogRepository(prisma);
+    const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
     const delegations = new DelegationRepository(prisma);
     const drafts = new LoanDraftRepository(prisma);
     const notifications = app.notifications(prisma);

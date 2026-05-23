@@ -40,7 +40,7 @@ export async function leaseRoutes(app: FastifyInstance) {
     req.leaseServices = {
       lease: new LeaseService(
         new LeaseRepository(prisma),
-        new AuditLogRepository(prisma),
+        new AuditLogRepository(prisma, req.user?.impersonatedBy),
       ),
     };
   });

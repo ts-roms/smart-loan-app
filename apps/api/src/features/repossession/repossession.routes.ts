@@ -51,7 +51,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
         prisma,
         new RepossessionRepository(prisma),
         new LoanRepository(prisma),
-        new AuditLogRepository(prisma),
+        new AuditLogRepository(prisma, req.user?.impersonatedBy),
       ),
     };
   });

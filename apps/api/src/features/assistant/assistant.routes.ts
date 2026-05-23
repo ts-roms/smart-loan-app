@@ -52,7 +52,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
     const prisma = req.tenantCtx.prisma;
     req.assistantCtx = {
       loans: new LoanRepository(prisma),
-      audit: new AuditLogRepository(prisma),
+      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
     };
   });
 

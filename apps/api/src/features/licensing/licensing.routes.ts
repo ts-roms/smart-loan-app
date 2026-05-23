@@ -74,7 +74,7 @@ export async function licensingRoutes(app: FastifyInstance) {
         const prisma = req.tenantCtx.prisma;
         const svc = new LicensingService(
           prisma,
-          new AuditLogRepository(prisma),
+          new AuditLogRepository(prisma, req.user?.impersonatedBy),
           req.log,
           publicKey,
         );
@@ -115,7 +115,7 @@ export async function licensingRoutes(app: FastifyInstance) {
     req.licensingServices = {
       licensing: new LicensingService(
         prisma,
-        new AuditLogRepository(prisma),
+        new AuditLogRepository(prisma, req.user?.impersonatedBy),
         req.log,
         publicKey,
       ),

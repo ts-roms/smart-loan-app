@@ -173,7 +173,7 @@ function buildApprovalCtx() {
     req.approvalCtx = {
       loans: new LoanRepository(prisma),
       approvals: new LoanApprovalRepository(prisma),
-      audit: new AuditLogRepository(prisma),
+      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
     };
   };
 }

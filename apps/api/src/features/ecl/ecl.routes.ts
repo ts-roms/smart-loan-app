@@ -29,7 +29,7 @@ export async function eclRoutes(app: FastifyInstance) {
     req.eclServices = {
       ecl: new EclService(
         new EclRepository(prisma),
-        new AuditLogRepository(prisma),
+        new AuditLogRepository(prisma, req.user?.impersonatedBy),
       ),
     };
   });

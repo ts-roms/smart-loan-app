@@ -36,7 +36,7 @@ export async function rbacRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     const roles = new RoleRepository(prisma);
-    const audit = new AuditLogRepository(prisma);
+    const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
     req.rbacServices = {
       rbac: new RbacService(
         prisma,

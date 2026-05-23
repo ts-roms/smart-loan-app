@@ -40,7 +40,7 @@ export async function loanApprovalChainRoutes(
     const prisma = req.tenantCtx.prisma;
     req.approvalChainCtx = {
       approvals: new LoanApprovalRepository(prisma),
-      audit: new AuditLogRepository(prisma),
+      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
     };
   });
 
