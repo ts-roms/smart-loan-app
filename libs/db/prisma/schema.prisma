@@ -2321,6 +2321,19 @@ model SystemConfig {
   /// Marketing site URL for letterhead footer.
   companyWebsite String?
 
+  // ── Retention policy ───────────────────────────────────────────────
+  // Drives the nightly `data-retention-purge` job. Each value is in
+  // DAYS; 0 means "never purge". Defaults track AMLA §9 / BSP 706
+  // (5y for transactional + audit records) for the audit knob and
+  // operational-only for the others.
+  /// Audit-event retention. Default 1825 days (5 years — AMLA floor).
+  /// Lowering below 1825 surfaces a warning in the settings UI.
+  auditRetentionDays        Int @default(1825)
+  /// Notification retention. Default 365 days; ops-history only.
+  notificationRetentionDays Int @default(365)
+  /// JobRun retention. Default 90 days; pure telemetry.
+  jobRunRetentionDays       Int @default(90)
+
   updatedAt   DateTime @updatedAt
   updatedById String?
   updatedBy   User?    @relation("SystemConfigUpdatedBy", fields: [updatedById], references: [id])

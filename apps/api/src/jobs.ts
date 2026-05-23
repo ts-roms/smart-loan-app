@@ -12,6 +12,7 @@
 import {
   AccountingRepository,
   AnnualDocumentRepository,
+  AuditLogRepository,
   CollectionsRepository,
   LeaseRepository,
   NotificationRepository,
@@ -19,6 +20,8 @@ import {
   type PrismaClient,
 } from "@loan/db";
 import type { JobDefinition } from "@loan/jobs";
+
+import { RetentionService } from "./features/compliance/retention.service";
 
 export function buildJobDefinitions(
   prisma: PrismaClient,
@@ -103,6 +106,26 @@ export function buildJobDefinitions(
         "FRD §3.5.4 — when a non-employee lease has missed-payment streak >= threshold-1, fire a pre-pull-out warning so they can cure before the next missed payment triggers vehicle recovery.",
       defaultCron: "0 13 * * *", // 13:00 every day
       fn: async () => sendLeasePullOutWarnings(prisma, notifications, leases),
+    },
+    {
+      name: "data-retention-purge",
+      description:
+        "Compliance / Data Privacy Act §11(b). Delete audit-event, notification, and job-run rows older than the per-tenant retention policy. Defaults: 5y / 1y / 90d. Set to 0 in /compliance/retention-policy to opt-out per table.",
+      // 03:30 every day — well after any midnight accruals + before
+      // operators start their morning. Run inside the maintenance
+      // window so the deleteMany scans don't compete with user
+      // traffic.
+      defaultCron: "30 3 * * *",
+      fn: async () => {
+        // System actor — same sentinel used by the other automated
+        // jobs. The audit row attributes the purge to "scheduled
+        // tick" rather than any human.
+        const retention = new RetentionService(
+          prisma,
+          new AuditLogRepository(prisma),
+        );
+        return retention.runPurge({ actorId: systemUserId() });
+      },
     },
   ];
 }

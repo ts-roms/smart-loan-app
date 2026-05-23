@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
+import { retentionPolicyUpdateSchema } from "./retention.schemas";
 import { eraseRequestSchema, exportRequestSchema } from "./schemas";
 
 /**
@@ -88,5 +89,38 @@ export class ComplianceController {
         .send({ error: result.kind, message: result.message });
     }
     return result;
+  };
+
+  // ─── retention policy ───────────────────────────────────────────────
+
+  /** GET — admin-readable; surfaces the AMLA-floor warning flag too. */
+  getRetentionPolicy = async (req: FastifyRequest) => {
+    return req.complianceServices!.retention.getPolicy();
+  };
+
+  /** PUT — admin updates the days-per-table knobs. Audited. */
+  updateRetentionPolicy = async (req: FastifyRequest, reply: FastifyReply) => {
+    const parsed = retentionPolicyUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    return req.complianceServices!.retention.updatePolicy({
+      input: parsed.data,
+      actorId: req.user.sub,
+    });
+  };
+
+  /**
+   * Manual "run now" trigger. Useful right after lowering the
+   * retention values — the scheduled tick only fires nightly, and an
+   * operator who just slashed the audit window from 5y to 2y usually
+   * wants the deletes to land immediately.
+   */
+  runRetentionPurge = async (req: FastifyRequest) => {
+    return req.complianceServices!.retention.runPurge({
+      actorId: req.user.sub,
+    });
   };
 }
