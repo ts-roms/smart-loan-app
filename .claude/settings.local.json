@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(docker compose *)",
-      "Bash(pnpm --filter @loan/db exec prisma generate)"
+      "Bash(pnpm --filter @loan/db exec prisma generate)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
