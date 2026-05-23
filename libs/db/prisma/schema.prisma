@@ -240,6 +240,19 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// GDPR / Data Privacy Act marker. Non-null = this row has had its
+  /// PII fields overwritten with deterministic placeholders by the
+  /// compliance service. Foreign keys to financial records (loans,
+  /// journal entries) still resolve to this id, but the human-readable
+  /// fields are gone. Set only by the compliance service; once
+  /// non-null, must never revert to null without a court order +
+  /// manual ops procedure.
+  erasedAt   DateTime?
+  /// User id of whoever ran the erasure. NOT a foreign key — the
+  /// referenced operator may themselves leave the org while erased
+  /// rows remain on file (typical retention is 5–10 years).
+  erasedById String?
+
   user             User?             @relation("CustomerLogin")
   kycSubmissions   KycSubmission[]
   loanApplications LoanApplication[]
@@ -258,6 +271,7 @@ model Customer {
 
   @@index([phone])
   @@index([governmentIdType, governmentIdNumber])
+  @@index([erasedAt])
 }
 
 // ─── KYC document submissions ────────────────────────────────────────────────

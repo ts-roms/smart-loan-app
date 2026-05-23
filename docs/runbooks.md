@@ -223,6 +223,87 @@ are the usual culprit. Check for missing `await`s or queries without
 
 ---
 
+## R7 — Data Subject Access Request (DSAR) — export or erase a borrower
+
+**What you'd see.** A borrower (or their lawyer) emails the cooperative
+asking either (a) "send me everything you have on me" — Data Privacy
+Act §16(c) right of access, or (b) "delete everything you have on me"
+— §16(e) right of erasure / blocking. PH cooperatives have 15 days
+to respond.
+
+**First check.** Verify the requester is who they claim to be:
+
+1. Ask for a copy of a government-issued ID (front + back) sent from
+   the email on file or from a verified phone number.
+2. Match it against `Customer.governmentIdNumber` + `Customer.email`.
+3. If the borrower no longer has access to the email of record,
+   require an in-person visit with the ID.
+
+This isn't paranoia — handing one person's data to someone else is
+itself a privacy violation. The audit log will show who you released
+the data to.
+
+**For an export (right to access):**
+
+```bash
+# `id` is the Customer UUID from the URL; not the human-readable number.
+curl -X POST $API/api/v1/compliance/customers/<id>/export \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"reason":"DSAR ticket #1234 — borrower SMS request 2026-05-20"}' \
+  -o dsar-<id>-$(date +%Y%m%d).json
+```
+
+The response is a JSON file with every row across:
+Customer, KycSubmission, LoanApplication, LoanSchedule, LoanPayment,
+AuditEvent (actor=customer OR target=customer), Contribution,
+SavingsTransaction, AmlScreening, SurveyResponse, CreditScore,
+Notification.
+
+Send the file via the same channel the request came in on (email
+attachment, encrypted ZIP for sensitive cases). The export is
+audit-logged automatically with the operator's id + the reason.
+
+**For an erasure (right to erasure):**
+
+```bash
+curl -X POST $API/api/v1/compliance/customers/<id>/erase \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "DSAR ticket #1234 — borrower withdrew consent",
+    "acknowledgesRetention": true
+  }'
+```
+
+What stays and what goes:
+
+| Category                             | Action      | Reason                                       |
+| ------------------------------------ | ----------- | -------------------------------------------- |
+| Customer.firstName / lastName        | overwrite   | PII                                          |
+| Customer.phone / email / address     | overwrite   | PII                                          |
+| Customer.governmentIdNumber          | overwrite   | PII                                          |
+| Customer.dateOfBirth                 | **kept**    | Required on retained financial records       |
+| Customer.monthlyIncome               | **kept**    | Required for loan-decision history           |
+| LoanApplication / Schedule / Payment | **kept**    | AMLA §9 — 5y retention                       |
+| JournalEntry / JournalLine           | **kept**    | Accounting integrity                         |
+| AuditEvent                           | **kept**    | Compliance trail is itself non-erasable      |
+| User (portal login)                  | deactivated | `active=false`; password hash kept for audit |
+
+The Customer row gets `erasedAt` + `erasedById` set. The row stays —
+foreign keys still resolve to it.
+
+**Idempotency.** Re-running erase on an already-erased customer
+returns 409 `AlreadyErased`. The original `erasedAt` is preserved.
+
+**Postmortem.** If the borrower returns and asks why their data
+"reappeared," walk them through the retention table above. PH AMLA
+§9 + BSP Circular 706 require the financial records — that's not
+a system choice, it's a regulatory floor. Show them the
+`CUSTOMER_ERASE` audit row as proof the erasure was performed.
+
+---
+
 ## R6 — Vendor support session ("can you check tenant X for me?")
 
 The internal flow when a tenant asks for live debugging help:

@@ -275,6 +275,15 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
     category: "Admin",
   },
   {
+    // GDPR / PH Data Privacy Act §16(c)+(e). Distinct from admin.users
+    // and admin.audit_log so the DSAR responder can be granted exactly
+    // this scope without also gaining role management or audit-read
+    // privileges.
+    key: "admin.compliance",
+    label: "Respond to data-subject access requests (export + erase)",
+    category: "Admin",
+  },
+  {
     key: "reports.read",
     label: "View / export compliance reports",
     category: "Admin",

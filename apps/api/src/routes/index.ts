@@ -23,6 +23,7 @@ import { assistantRoutes } from "../features/assistant/index";
 import { auditRoutes } from "../features/audit/index";
 import { authRoutes } from "../features/auth/index";
 import { collectionsRoutes } from "../features/collections/index";
+import { complianceRoutes } from "../features/compliance/index";
 import { cooperativeRoutes } from "../features/cooperative/index";
 import { customerRoutes } from "../features/customers/index";
 import { decisionRuleRoutes } from "../features/decision-rules/index";
@@ -160,6 +161,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(documentRoutes);
   await app.register(portalDocumentRoutes, { prefix: "/portal" });
   await app.register(rbacRoutes, { prefix: "/admin" });
+  // GDPR / PH Data Privacy Act §16(c)+(e). Mounted under /compliance
+  // (sibling to /admin) so the DSAR responder doesn't need admin.users
+  // — the permission is gated separately as admin.compliance.
+  await app.register(complianceRoutes, { prefix: "/compliance" });
   await app.register(delegationRoutes, { prefix: "/delegations" });
   await app.register(reconciliationRoutes, { prefix: "/reconciliation" });
   await app.register(eclRoutes, { prefix: "/ecl" });
