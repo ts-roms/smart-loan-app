@@ -1,0 +1,53 @@
+# Docker build context excludes. The compose build context is the repo
+# root (deploy/docker/docker-compose.yml uses `context: ../..`), and the
+# Dockerfiles `COPY apps ./apps` / `COPY libs ./libs` wholesale — so
+# anything not excluded here lands in the build context and gets baked
+# into a layer. Two reasons this file matters:
+#
+#   1. Size. The root node_modules + every nested apps/*/node_modules and
+#      libs/*/node_modules is hundreds of MB of context for nothing — the
+#      image runs its own `pnpm install --frozen-lockfile`.
+#   2. Correctness. pnpm's nested node_modules are symlinks into the host
+#      pnpm store. Copied into the container they're dangling links that
+#      can shadow / conflict with the clean install. Keep them out.
+
+# Dependencies — reinstalled inside the image
+**/node_modules
+.pnpm-store
+
+# Build outputs — rebuilt inside the image
+**/dist
+**/build
+apps/web/dist
+
+# Nx / tooling caches
+.nx
+.cache
+.turbo
+coverage
+
+# VCS + CI
+.git
+.github
+.husky
+
+# Local env — secrets are injected at runtime via compose, never baked in
+.env
+.env.local
+.env.*.local
+deploy/docker/.env
+
+# Editor / OS cruft
+.DS_Store
+*.log
+.vscode
+.idea
+
+# Docs & deploy material not needed to build the app
+docs
+deploy/bare-metal
+deploy/backup
+*.md
+
+# Local Claude config
+.claude

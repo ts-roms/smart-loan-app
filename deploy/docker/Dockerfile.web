@@ -44,8 +44,12 @@ COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 
 EXPOSE 80
 
+# Use 127.0.0.1, not "localhost": the alpine image's /etc/hosts resolves
+# localhost to ::1 (IPv6) first, but nginx's `listen 80;` binds IPv4
+# only, so a localhost probe is refused and the container is wrongly
+# marked unhealthy. 127.0.0.1 forces the IPv4 loopback nginx listens on.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -q -O /dev/null http://localhost/health.txt || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1/health.txt || exit 1
 
 # nginx-alpine's default ENTRYPOINT + CMD start nginx in the foreground;
 # we don't override.

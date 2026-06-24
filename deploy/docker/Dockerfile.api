@@ -26,12 +26,18 @@
 ARG NODE_VERSION=20.18.0
 FROM node:${NODE_VERSION}-bookworm-slim AS base
 
-# pnpm installed via corepack (built into Node 20). Pinned to keep
-# rebuilds deterministic — different pnpm versions resolve workspaces
-# slightly differently.
+# pnpm installed globally via npm. Pinned to keep rebuilds deterministic
+# — different pnpm versions resolve workspaces slightly differently.
+#
+# We deliberately DON'T use corepack here. The runtime stage runs as the
+# non-root `node` user, whose corepack cache is empty, so corepack tries
+# to fetch pnpm from npm at boot — and the corepack bundled with Node
+# 20.18.0 fails registry signature verification ("Cannot find matching
+# keyid"). A global npm install lands in /usr/local and is usable by any
+# user with no network fetch or signature check at runtime.
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+RUN npm install -g pnpm@9.15.0
 
 # OpenSSL is required for Prisma's query engine. The slim base doesn't
 # include it; the missing-OpenSSL error is opaque so we install it
@@ -49,8 +55,10 @@ FROM base AS deps
 # Copy ONLY the manifest files first so Docker can cache the install
 # layer when source changes but deps don't. `pnpm-lock.yaml` is the
 # integrity boundary; the .npmrc carries shamefully-hoist + similar
-# workspace settings.
-COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc* package.json ./
+# workspace settings. tsconfig.base.json carries the @loan/* path
+# aliases that tsx resolves at runtime, so it must be present in the
+# image (the runtime stage copies it back out of here).
+COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc* package.json tsconfig.base.json ./
 
 # Copy every workspace package's manifest. Using a glob like
 # `apps/*/package.json` doesn't work with COPY directly, so we copy the
