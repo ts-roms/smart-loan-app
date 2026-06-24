@@ -15,6 +15,7 @@
     "db:generate": "pnpm --filter @loan/db prisma:generate",
     "db:seed": "pnpm --filter @loan/db prisma:seed",
     "db:studio": "pnpm --filter @loan/db prisma:studio",
+    "dev:license": "pnpm --filter @loan/db run dev:license",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
     "prepare": "husky || true"
   },

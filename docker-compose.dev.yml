@@ -1,0 +1,46 @@
+# Local development database for `pnpm run dev`.
+#
+# `pnpm run dev` runs the web (Vite :5173) and api (tsx :3001) on the
+# HOST — they aren't containerized for dev. The only thing they need from
+# Docker is a Postgres to talk to. This compose provides exactly that, on
+# the host port + credentials the root .env already points at:
+#
+#   DATABASE_URL=postgres://loan:loan@localhost:5433/smart_loan
+#
+# This is intentionally SEPARATE from deploy/docker/ — that stack is the
+# full production on-prem image build (strong password, no host port). This
+# one is a throwaway dev DB with trivial credentials, bound to 127.0.0.1
+# only so it never listens on a public interface.
+#
+# First-time setup:
+#   docker compose -f docker-compose.dev.yml up -d
+#   pnpm db:generate                 # generate the Prisma client
+#   pnpm --filter @loan/db exec dotenv -e ../../.env -- prisma migrate deploy
+#   pnpm db:seed                     # optional: seed dev data
+#   pnpm run dev
+#
+# Port 5433 (not the default 5432) matches the root .env and avoids
+# clashing with any other Postgres already running on 5432.
+
+name: smartloan-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smart_loan
+      POSTGRES_USER: loan
+      POSTGRES_PASSWORD: loan
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - smartloan-dev-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loan -d smart_loan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  smartloan-dev-db:

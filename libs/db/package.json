@@ -16,6 +16,7 @@
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "prisma:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "dev:license": "dotenv -e ../../.env -- tsx ../../scripts/dev-license.mjs",
     "prisma:studio": "dotenv -e ../../.env -- prisma studio",
     "migrate-tenants": "dotenv -e ../../.env -- tsx scripts/migrate-tenants.mjs",
     "adopt-existing-as-tenant": "dotenv -e ../../.env -- tsx scripts/adopt-existing-as-tenant.mjs"
