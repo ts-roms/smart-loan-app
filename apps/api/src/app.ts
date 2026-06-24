@@ -17,6 +17,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { config } from "./config";
+import { decorateFeatureGate } from "./features/licensing/feature-gate.plugin";
 import { platformRoutes } from "./features/platform/index";
 import { publicRoutes } from "./features/public/index";
 import { registerRoutes } from "./routes/index";
@@ -163,6 +164,13 @@ export async function buildApp() {
       return permissions;
     },
   });
+  // Feature-gate decorator (`app.requireFeature`). Decorated on the root
+  // instance — after auth + tenant resolution (the gate reads the
+  // caller's tenant license via req.tenantCtx.prisma at request time)
+  // and before the feature routes that consume it in registerRoutes
+  // below. Direct decoration (not app.register) keeps it on the root so
+  // every child route plugin inherits it.
+  decorateFeatureGate(app);
 
   // Static uploads: KYC documents, customer ID scans, etc.
   const uploadsDir = config.uploadsDir || join(process.cwd(), "uploads");

@@ -21,9 +21,10 @@ declare module "fastify" {
 
 export async function eclRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
-  // ECL provisioning is an ENTERPRISE-tier feature.
-  app.addHook("preHandler", app.requireFeature("accounting.ecl"));
   app.addHook("preHandler", app.resolveTenant);
+  // ECL provisioning is an ENTERPRISE-tier feature. The gate reads the
+  // caller's license via req.tenantCtx, so resolveTenant must run first.
+  app.addHook("preHandler", app.requireFeature("accounting.ecl"));
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     req.eclServices = {

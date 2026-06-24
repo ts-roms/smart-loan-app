@@ -37,9 +37,10 @@ declare module "fastify" {
 
 export async function demandLetterRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
-  // Demand letters are a PROFESSIONAL-tier feature.
-  app.addHook("preHandler", app.requireFeature("servicing.demand_letters"));
   app.addHook("preHandler", app.resolveTenant);
+  // Demand letters are a PROFESSIONAL-tier feature. The gate reads
+  // req.tenantCtx, so resolveTenant must run before it.
+  app.addHook("preHandler", app.requireFeature("servicing.demand_letters"));
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     req.demandLetterServices = {

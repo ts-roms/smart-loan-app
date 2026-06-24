@@ -37,9 +37,11 @@ declare module "fastify" {
 
 export async function cooperativeRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
   // Cooperative module is ENTERPRISE-tier. Any of the three cooperative
   // flags unlocks the whole prefix; the platform CLI ships all three
-  // together when a tenant gets ENTERPRISE.
+  // together when a tenant gets ENTERPRISE. The gate reads req.tenantCtx,
+  // so resolveTenant must run before it.
   app.addHook(
     "preHandler",
     app.requireFeature(
@@ -48,7 +50,6 @@ export async function cooperativeRoutes(app: FastifyInstance) {
       "cooperative.funds",
     ),
   );
-  app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     req.cooperativeServices = {
       coop: new CooperativeService(

@@ -19,10 +19,11 @@ declare module "fastify" {
  */
 export async function dorsiRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", app.authenticate);
-  // DORSI is an ENTERPRISE-tier compliance module. Gate the entire
-  // /dorsi/* prefix.
-  app.addHook("preHandler", app.requireFeature("compliance.dorsi"));
   app.addHook("preHandler", app.resolveTenant);
+  // DORSI is an ENTERPRISE-tier compliance module. Gate the entire
+  // /dorsi/* prefix. The gate reads req.tenantCtx, so resolveTenant
+  // must run before it.
+  app.addHook("preHandler", app.requireFeature("compliance.dorsi"));
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     req.dorsiServices = {

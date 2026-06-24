@@ -30,9 +30,10 @@ function attachAnnualDocsRepo() {
 
 export async function annualDocsLoanRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
-  // Annual / renewable docs are a PROFESSIONAL-tier feature.
-  app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
   app.addHook("preHandler", app.resolveTenant);
+  // Annual / renewable docs are a PROFESSIONAL-tier feature. The gate
+  // reads req.tenantCtx, so resolveTenant must run before it.
+  app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
   app.addHook("preHandler", attachAnnualDocsRepo());
 
   app.get<{ Params: { loanId: string } }>(
@@ -76,8 +77,8 @@ export async function annualDocsLoanRoutes(app: FastifyInstance) {
 /** Cross-loan endpoints — separate prefix so the route shapes stay clean. */
 export async function annualDocsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
-  app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
   app.addHook("preHandler", app.resolveTenant);
+  app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
   app.addHook("preHandler", attachAnnualDocsRepo());
 
   app.get(

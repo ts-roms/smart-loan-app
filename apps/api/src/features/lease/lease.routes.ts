@@ -32,9 +32,10 @@ declare module "fastify" {
 
 export async function leaseRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
-  // Lease-to-Own is a PROFESSIONAL-tier feature.
-  app.addHook("preHandler", app.requireFeature("servicing.lease"));
   app.addHook("preHandler", app.resolveTenant);
+  // Lease-to-Own is a PROFESSIONAL-tier feature. The gate reads
+  // req.tenantCtx, so resolveTenant must run before it.
+  app.addHook("preHandler", app.requireFeature("servicing.lease"));
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     req.leaseServices = {

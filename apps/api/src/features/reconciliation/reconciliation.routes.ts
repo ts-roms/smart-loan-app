@@ -23,9 +23,10 @@ declare module "fastify" {
 
 export async function reconciliationRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
-  // Bank reconciliation is a PROFESSIONAL-tier feature.
-  app.addHook("preHandler", app.requireFeature("accounting.reconciliation"));
   app.addHook("preHandler", app.resolveTenant);
+  // Bank reconciliation is a PROFESSIONAL-tier feature. The gate reads
+  // req.tenantCtx, so resolveTenant must run before it.
+  app.addHook("preHandler", app.requireFeature("accounting.reconciliation"));
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     req.reconciliationCtx = {

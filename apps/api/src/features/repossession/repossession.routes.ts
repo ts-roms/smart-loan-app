@@ -41,9 +41,10 @@ declare module "fastify" {
 
 export async function repossessionRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.authenticate);
-  // Repossession workflow is a PROFESSIONAL-tier feature.
-  app.addHook("preHandler", app.requireFeature("servicing.repossession"));
   app.addHook("preHandler", app.resolveTenant);
+  // Repossession workflow is a PROFESSIONAL-tier feature. The gate reads
+  // req.tenantCtx, so resolveTenant must run before it.
+  app.addHook("preHandler", app.requireFeature("servicing.repossession"));
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     req.repossessionServices = {
