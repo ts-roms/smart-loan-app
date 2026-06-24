@@ -23,10 +23,10 @@ ALTER TABLE "SystemConfig"
   -- ── Twilio (SMS) ─────────────────────────────────────────────────
   ADD COLUMN "twilioAccountSid" TEXT,
   ADD COLUMN "twilioAuthToken"  TEXT,
-  /// E.164 number or alphanumeric sender id ("ACME-COOP")
+  -- E.164 number or alphanumeric sender id ("ACME-COOP")
   ADD COLUMN "twilioFromNumber" TEXT,
   -- ── SendGrid (EMAIL) ─────────────────────────────────────────────
   ADD COLUMN "sendgridApiKey"    TEXT,
-  /// Must be a verified sender on the SendGrid account
+  -- Must be a verified sender on the SendGrid account
   ADD COLUMN "sendgridFromEmail" TEXT,
   ADD COLUMN "sendgridFromName"  TEXT;
