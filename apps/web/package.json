@@ -22,13 +22,13 @@
     "@vladmandic/face-api": "^1.7.13",
     "lucide-react": "^0.469.0",
     "tesseract.js": "^5.1.1",
-    "react": "^18.3.1",
+    "react": "^19.2.7",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.1.1",
     "workbox-window": "^7.3.0"
   },
   "devDependencies": {
-    "@types/react": "^18.3.18",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
