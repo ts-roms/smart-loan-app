@@ -186,13 +186,8 @@ export async function loanRoutes(app: FastifyInstance) {
           where: { code: productCode },
         })
       : null;
-    const method = (product?.interestMethod ?? "DECLINING") as
-      | "DECLINING"
-      | "FLAT";
-    const frequency = (product?.paymentFrequency ?? "MONTHLY") as
-      | "MONTHLY"
-      | "BIWEEKLY"
-      | "WEEKLY";
+    const method = product?.interestMethod ?? "DECLINING";
+    const frequency = product?.paymentFrequency ?? "MONTHLY";
     const schedule = computeAmortizationFor(
       principal,
       annualInterestRate,
@@ -675,7 +670,7 @@ export async function loanRoutes(app: FastifyInstance) {
               "Delegation is not active or does not grant loans.sign_officer.",
           });
         }
-        delegationId = d!.id;
+        delegationId = d.id;
       }
 
       const loan = await req.tenantCtx.prisma.loanApplication.update({
