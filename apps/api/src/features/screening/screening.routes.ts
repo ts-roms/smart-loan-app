@@ -33,16 +33,24 @@ export async function screeningRoutes(app: FastifyInstance) {
     };
   });
 
+  // AML screening results name the customer and the list they matched
+  // against — sanctions/PEP hits are among the most sensitive rows in
+  // the schema. `screening.read` (LOAN_OFFICER + ADMIN) on every read;
+  // run / override / watchlist keep their own narrower keys below.
+  const read = { preHandler: app.requirePermission("screening.read") };
+
   // ─── Per-customer screening ────────────────────────────────────
 
   app.get<{ Params: { customerId: string } }>(
     "/customers/:customerId",
+    read,
     async (req) =>
       req.screeningCtx!.repo.listForCustomer(req.params.customerId),
   );
 
   app.get<{ Params: { customerId: string } }>(
     "/customers/:customerId/latest",
+    read,
     async (req) =>
       req.screeningCtx!.repo.latestForCustomer(req.params.customerId),
   );
@@ -73,7 +81,9 @@ export async function screeningRoutes(app: FastifyInstance) {
 
   // ─── Watchlist (mock provider's data source) ───────────────────
 
-  app.get("/watchlist", async (req) => req.screeningCtx!.repo.listWatchlist());
+  app.get("/watchlist", read, async (req) =>
+    req.screeningCtx!.repo.listWatchlist(),
+  );
 
   app.post(
     "/watchlist",

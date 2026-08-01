@@ -11,18 +11,50 @@ import type { CustomerController } from "./customers.controller";
  * URL convention: `:id` accepts either the UUID or the human
  * "CUST-2026-..." reference number. The frontend navigates via the
  * number; UUIDs still resolve for back-compat with old links.
+ *
+ * Authorization: every route here is staff-only. The rows behind them
+ * carry full PII (name, DOB, government ID number, phone, address,
+ * monthly income) and `monthlyIncome` feeds credit scoring and
+ * affordability, so the write paths are a decisioning input, not just
+ * a record edit. Borrowers reach their own record through
+ * `/api/v1/portal/me`, which derives the customer id from the JWT
+ * subject — nothing here is customer-reachable.
+ *
+ *   customers.read   — LOAN_OFFICER, ACCOUNTANT, ADMIN
+ *   customers.write  — LOAN_OFFICER, ADMIN
  */
 export function registerCustomerHttp(
   app: FastifyInstance,
   controller: CustomerController,
 ): void {
-  app.get("/", controller.list);
-  app.get<{ Params: { id: string } }>("/:id", controller.show);
-  app.post("/", controller.create);
-  app.get<{ Params: { id: string } }>("/:id/summary", controller.summary);
+  app.get(
+    "/",
+    { preHandler: app.requirePermission("customers.read") },
+    controller.list,
+  );
+  app.get<{ Params: { id: string } }>(
+    "/:id",
+    { preHandler: app.requirePermission("customers.read") },
+    controller.show,
+  );
+  app.post(
+    "/",
+    { preHandler: app.requirePermission("customers.write") },
+    controller.create,
+  );
+  app.get<{ Params: { id: string } }>(
+    "/:id/summary",
+    { preHandler: app.requirePermission("customers.read") },
+    controller.summary,
+  );
   app.get<{ Params: { id: string } }>(
     "/:id/repeat-eligibility",
+    { preHandler: app.requirePermission("customers.read") },
     controller.repeatEligibility,
   );
-  app.patch<{ Params: { id: string } }>("/:id", controller.update);
+  app.patch<{ Params: { id: string } }>(
+    "/:id",
+    { preHandler: app.requirePermission("customers.write") },
+    controller.update,
+  );
 }

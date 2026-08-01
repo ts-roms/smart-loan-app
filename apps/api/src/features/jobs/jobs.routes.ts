@@ -43,9 +43,14 @@ export function jobRoutes(
       req.jobsCtx = buildCtx(req);
     });
 
-    app.get("/", async (req) => req.jobsCtx!.repo.list());
+    // `jobs.read` (ACCOUNTANT + ADMIN) on the read surface — the run
+    // log exposes the tenant's operational schedule and failure
+    // history. The configure / run routes below keep their own keys.
+    const read = { preHandler: app.requirePermission("jobs.read") };
 
-    app.get<{ Params: { name: string } }>("/:name/runs", async (req) => {
+    app.get("/", read, async (req) => req.jobsCtx!.repo.list());
+
+    app.get<{ Params: { name: string } }>("/:name/runs", read, async (req) => {
       const { repo } = req.jobsCtx!;
       const job = await repo.findByName(req.params.name);
       if (!job) return [];

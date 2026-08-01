@@ -4,6 +4,31 @@
  * Phase 2: per-request service wiring via `req.documentsServices`.
  * Both the officer surface and the portal mirror share the same
  * preHandler factory.
+ *
+ * ## Two surfaces, two authorization models
+ *
+ * The officer routes take a loan identifier straight off the path and
+ * `DocumentsService` performs NO ownership check on them — `actorId` is
+ * used only to resolve the optional `?sign=1` personnel signature. Loan
+ * numbers are sequential ("LN-2026-000123"), so the identifier space is
+ * trivially enumerable: without a gate, any authenticated account could
+ * walk the range and pull every borrower's signed agreement (which
+ * prints the government ID block) and statement of account.
+ *
+ * The gate is `documents.download`, held by LOAN_OFFICER, ACCOUNTANT
+ * and ADMIN — i.e. exactly the staff whose job is to pull a document
+ * for a borrower they're servicing. That is the "or require
+ * documents.download" half of the scope contract; there is no
+ * per-officer loan assignment model in the schema to scope against
+ * (no `LoanApplication.assignedOfficerId`), so a narrower ownership
+ * check isn't expressible here today.
+ *
+ * The portal mirror stays ungated by permission on purpose: it runs
+ * `resolveCustomer` (JWT sub → User.customerId, CUSTOMER role only)
+ * and every `portal*` service method re-checks
+ * `loan.customerId === customerId` before rendering a byte. Ownership
+ * IS the authorization there, so `portal.self` would be redundant
+ * ceremony on top of a check that already can't be bypassed.
  */
 
 import { LoanRepository } from "@loan/db";
@@ -33,19 +58,23 @@ export async function documentRoutes(app: FastifyInstance) {
   app.addHook("preHandler", buildDocsCtx());
 
   const ctrl = new DocumentsController();
+  const download = { preHandler: app.requirePermission("documents.download") };
 
   app.get<{ Params: { id: string } }>(
     "/loans/:id/agreement.pdf",
+    download,
     ctrl.agreement,
   );
 
   app.get<{ Params: { id: string } }>(
     "/loans/:id/statement.pdf",
+    download,
     ctrl.statement,
   );
 
   app.get<{ Params: { loanId: string; paymentId: string } }>(
     "/loans/:loanId/payments/:paymentId/receipt.pdf",
+    download,
     ctrl.receipt,
   );
 }

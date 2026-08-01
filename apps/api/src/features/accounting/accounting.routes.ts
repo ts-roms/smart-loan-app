@@ -44,6 +44,13 @@ declare module "fastify" {
  * Phase 2: per-request wiring via `req.accountingCtx`. Inline handlers
  * read from req.accountingCtx!.accounting; the JournalController is
  * stateless and reads req.accountingCtx!.journal directly.
+ *
+ * Authorization: every read is `accounting.read` (LOAN_OFFICER,
+ * ACCOUNTANT, ADMIN) and every write keeps its narrower key
+ * (accounting.accounts / post_journal / reverse / close_period /
+ * accrue, ACCOUNTANT + ADMIN). Nothing in this feature is
+ * customer-reachable — the trial balance, balance sheet and general
+ * ledger are the firm's whole book of business.
  */
 export async function accountingRoutes(app: FastifyInstance) {
   const journal = new JournalController();
@@ -60,9 +67,14 @@ export async function accountingRoutes(app: FastifyInstance) {
     };
   });
 
+  // Shared route options for the read surface. Hoisted because eleven
+  // endpoints repeat it; `requirePermission` returns a fresh closure
+  // per call, so building it once is also one less allocation.
+  const read = { preHandler: app.requirePermission("accounting.read") };
+
   // ─── Chart of accounts ─────────────────────────────────────────────
 
-  app.get("/accounts", async (req) =>
+  app.get("/accounts", read, async (req) =>
     req.accountingCtx!.accounting.listAccounts(),
   );
 
@@ -92,6 +104,7 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { from?: string; to?: string; source?: string } }>(
     "/journal",
+    read,
     async (req) =>
       req.accountingCtx!.accounting.listEntries({
         from: req.query.from ? new Date(req.query.from) : undefined,
@@ -101,13 +114,17 @@ export async function accountingRoutes(app: FastifyInstance) {
   );
 
   // GET /accounting/journal/:idOrNumber — accept either form.
-  app.get<{ Params: { id: string } }>("/journal/:id", async (req, reply) => {
-    const e = await req.accountingCtx!.accounting.findEntryByIdOrNumber(
-      req.params.id,
-    );
-    if (!e) return reply.code(404).send({ error: "NotFound" });
-    return e;
-  });
+  app.get<{ Params: { id: string } }>(
+    "/journal/:id",
+    read,
+    async (req, reply) => {
+      const e = await req.accountingCtx!.accounting.findEntryByIdOrNumber(
+        req.params.id,
+      );
+      if (!e) return reply.code(404).send({ error: "NotFound" });
+      return e;
+    },
+  );
 
   // Journal write paths — delegated to JournalController.
   app.post(
@@ -131,7 +148,7 @@ export async function accountingRoutes(app: FastifyInstance) {
   app.get<{
     Params: { accountId: string };
     Querystring: { from?: string; to?: string };
-  }>("/ledger/:accountId", async (req) =>
+  }>("/ledger/:accountId", read, async (req) =>
     req.accountingCtx!.accounting.ledgerFor(
       req.params.accountId,
       req.query.from ? new Date(req.query.from) : undefined,
@@ -143,12 +160,14 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/trial-balance",
+    read,
     async (req) =>
       req.accountingCtx!.accounting.trialBalance(parseAsOf(req.query.asOf)),
   );
 
   app.get<{ Querystring: { from?: string; to?: string } }>(
     "/reports/income-statement",
+    read,
     async (req, reply) => {
       const to = parseAsOf(req.query.to);
       const from = req.query.from
@@ -165,12 +184,14 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/balance-sheet",
+    read,
     async (req) =>
       req.accountingCtx!.accounting.balanceSheet(parseAsOf(req.query.asOf)),
   );
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/loan-portfolio",
+    read,
     async (req) =>
       req.accountingCtx!.accounting.loanPortfolioAging(
         parseAsOf(req.query.asOf),
@@ -179,12 +200,14 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/portfolio-summary",
+    read,
     async (req) =>
       req.accountingCtx!.accounting.portfolioSummary(parseAsOf(req.query.asOf)),
   );
 
   app.get<{ Querystring: { from?: string; to?: string } }>(
     "/reports/originations",
+    read,
     async (req) => {
       const to = parseAsOf(req.query.to);
       const from = req.query.from
@@ -194,13 +217,13 @@ export async function accountingRoutes(app: FastifyInstance) {
     },
   );
 
-  app.get("/reports/vintage", async (req) =>
+  app.get("/reports/vintage", read, async (req) =>
     req.accountingCtx!.accounting.vintageCohorts(),
   );
 
   // ─── Periods ────────────────────────────────────────────────────────
 
-  app.get("/periods", async (req) =>
+  app.get("/periods", read, async (req) =>
     req.accountingCtx!.accounting.listPeriods(),
   );
 

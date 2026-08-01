@@ -14,9 +14,10 @@ import {
   KycRepository,
   LoanDraftRepository,
   LoanRepository,
+  idOrNumberWhere,
 } from "@loan/db";
 import { validateKyc } from "@loan/kyc";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { LoanWorkflowController } from "./loans.controller";
 import { LoanWorkflowService } from "./loans.service";
@@ -76,6 +77,27 @@ declare module "fastify" {
  *
  * Cost: ~10 µs of object allocation per request for the 8 repos +
  * service. Negligible against the DB roundtrip cost of any query.
+ *
+ * ## Authorization
+ *
+ * Everything here is the officer-facing surface; borrowers use
+ * `/api/v1/portal/*`, which derives the customer id from the JWT
+ * subject. Reads take `loans.read`, application assembly takes
+ * `loans.apply`, and each workflow transition takes its own key
+ * (loans.decide / disburse / restructure / write_off / …). Recording a
+ * payment is `payments.record` — it creates a LoanPayment *and* posts
+ * a journal entry to the general ledger, so it belongs to the
+ * accountant's key set, not to whoever can read the loan.
+ *
+ * Two deliberate exceptions, both reachable by a CUSTOMER token:
+ *
+ *   • `POST /quote` — a pure amortization calculator over
+ *     caller-supplied numbers plus the public product parameters. The
+ *     borrower portal's apply wizard calls it on every keystroke.
+ *   • `/:id/messages*` — the officer↔borrower thread, shared by
+ *     LoanDetailPage and PortalLoanDetail. Gated by
+ *     `requireLoanThreadAccess` below: staff need `loans.read`, a
+ *     borrower needs to own the loan.
  */
 export async function loanRoutes(app: FastifyInstance) {
   const workflow = new LoanWorkflowController();
@@ -84,23 +106,71 @@ export async function loanRoutes(app: FastifyInstance) {
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", buildLoanCtx(app));
 
-  app.get<{ Params: { id: string } }>("/:id/kyc-status", async (req, reply) => {
-    const { loans, kyc } = req.loanCtx!;
-    const loan = await loans.findByIdOrNumber(req.params.id);
-    if (!loan) return reply.code(404).send({ error: "NotFound" });
-    const docs = await kyc.listForCustomer(loan.customerId);
-    // Pull product-specific extras straight from the catalog row so brand-new
-    // product codes (created at runtime) gate on their configured docs.
-    const extras = (loan.product?.requiredKycDocs ?? []) as Parameters<
-      typeof validateKyc
-    >[1];
-    return validateKyc(docs, extras);
-  });
+  const canRead = { preHandler: app.requirePermission("loans.read") };
+
+  /**
+   * Gate for the in-loan message thread, which is genuinely two-sided:
+   * the officer opens it from LoanDetailPage, the borrower from
+   * PortalLoanDetail, and both hit these same routes.
+   *
+   * Staff pass on `loans.read`. Anyone else has to prove ownership —
+   * we resolve the caller's linked `Customer` from the JWT subject
+   * (same derivation the portal uses; the path is never trusted) and
+   * require the loan to belong to it. That closes the enumeration hole
+   * without forking the endpoint in two.
+   */
+  const requireLoanThreadAccess = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const prisma = req.tenantCtx.prisma;
+    req.permissions ??= await app.resolvePermissions(req.user.sub, prisma);
+    if (req.permissions.has("loans.read")) return;
+
+    const me = await prisma.user.findUnique({
+      where: { id: req.user.sub },
+      select: { customerId: true },
+    });
+    const loan = me?.customerId
+      ? await prisma.loanApplication.findFirst({
+          where: idOrNumberWhere(req.params.id),
+          select: { customerId: true },
+        })
+      : null;
+    if (!loan || loan.customerId !== me!.customerId) {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "You do not have access to this loan.",
+      });
+    }
+  };
+  const canMessage = { preHandler: requireLoanThreadAccess };
+
+  app.get<{ Params: { id: string } }>(
+    "/:id/kyc-status",
+    canRead,
+    async (req, reply) => {
+      const { loans, kyc } = req.loanCtx!;
+      const loan = await loans.findByIdOrNumber(req.params.id);
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
+      const docs = await kyc.listForCustomer(loan.customerId);
+      // Pull product-specific extras straight from the catalog row so brand-new
+      // product codes (created at runtime) gate on their configured docs.
+      const extras = (loan.product?.requiredKycDocs ?? []) as Parameters<
+        typeof validateKyc
+      >[1];
+      return validateKyc(docs, extras);
+    },
+  );
 
   /**
    * Quote — preview the schedule + fees for a candidate application.
    * If `productCode` is given, uses that product's interest method, payment
    * frequency, and fees. Otherwise falls back to declining monthly with no fees.
+   *
+   * Intentionally open to any authenticated caller, borrowers included:
+   * it reads nothing but the caller's own inputs and the public
+   * LoanProduct parameters, and the portal apply wizard depends on it.
    */
   app.post("/quote", async (req, reply) => {
     const parsed = quoteSchema.safeParse(req.body);
@@ -154,12 +224,12 @@ export async function loanRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/", async (req) => req.loanCtx!.loans.list());
+  app.get("/", canRead, async (req) => req.loanCtx!.loans.list());
 
   // GET /loans/:idOrNumber — accept either the UUID or the human "LN-..."
   // number. The number form is what the new frontend uses on URLs; UUIDs
   // are still resolved so old bookmarks / API consumers keep working.
-  app.get<{ Params: { id: string } }>("/:id", async (req, reply) => {
+  app.get<{ Params: { id: string } }>("/:id", canRead, async (req, reply) => {
     const l = await req.loanCtx!.loans.findByIdOrNumber(req.params.id);
     if (!l) return reply.code(404).send({ error: "NotFound" });
     return l;
@@ -212,7 +282,15 @@ export async function loanRoutes(app: FastifyInstance) {
   // Delegated to LoanWorkflowController — see ./loans.service.ts for
   // the full orchestration (AML gate, decisioning, audit, anomaly,
   // approval-chain notifications).
-  app.post("/apply", workflow.apply);
+  //
+  // Borrowers submit through POST /portal/loans/apply, which forces
+  // customerId to their own row; this is the officer-mediated path and
+  // takes any customerId in the body, so it needs `loans.apply`.
+  app.post(
+    "/apply",
+    { preHandler: app.requirePermission("loans.apply") },
+    workflow.apply,
+  );
 
   /**
    * Pre-decisioning preview. Mirrors the rule-evaluation slice of POST
@@ -228,8 +306,14 @@ export async function loanRoutes(app: FastifyInstance) {
    * match, KYC incomplete) so the UI can render them as distinct
    * pre-flight checks.
    */
-  // Delegated to LoanWorkflowController.
-  app.post("/dry-run", workflow.dryRun);
+  // Delegated to LoanWorkflowController. Same gate as /apply — it's the
+  // preview of that call and echoes back the decisioning rule that
+  // would fire, which is internal underwriting policy.
+  app.post(
+    "/dry-run",
+    { preHandler: app.requirePermission("loans.apply") },
+    workflow.dryRun,
+  );
 
   /*
    * ─── Wizard drafts ───────────────────────────────────────────────
@@ -321,25 +405,46 @@ export async function loanRoutes(app: FastifyInstance) {
   );
 
   // Delegated to LoanWorkflowController.
-  app.post<{ Params: { id: string } }>("/:id/decide", workflow.decide);
-  app.post<{ Params: { id: string } }>("/:id/disburse", workflow.disburse);
+  app.post<{ Params: { id: string } }>(
+    "/:id/decide",
+    { preHandler: app.requirePermission("loans.decide") },
+    workflow.decide,
+  );
+  app.post<{ Params: { id: string } }>(
+    "/:id/disburse",
+    { preHandler: app.requirePermission("loans.disburse") },
+    workflow.disburse,
+  );
 
-  app.post<{ Params: { id: string } }>("/:id/payments", async (req, reply) => {
-    const parsed = paymentSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply
-        .code(400)
-        .send({ error: "ValidationError", issues: parsed.error.issues });
-    }
-    return reply.code(201).send(
-      await req.loanCtx!.loans.recordPayment(req.params.id, {
-        amount: parsed.data.amount,
-        paidOn: parsed.data.paidOn ? new Date(parsed.data.paidOn) : new Date(),
-        reference: parsed.data.reference,
-        recordedById: req.user.sub,
-      }),
-    );
-  });
+  /**
+   * Record a single payment against a loan. `payments.record`, not
+   * `loans.*`: recordPayment settles schedule rows AND posts the
+   * corresponding journal entry to the general ledger, so it's a
+   * bookkeeping write. Mirrors POST /payments/bulk, which already
+   * gates on `payments.bulk`.
+   */
+  app.post<{ Params: { id: string } }>(
+    "/:id/payments",
+    { preHandler: app.requirePermission("payments.record") },
+    async (req, reply) => {
+      const parsed = paymentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
+      }
+      return reply.code(201).send(
+        await req.loanCtx!.loans.recordPayment(req.params.id, {
+          amount: parsed.data.amount,
+          paidOn: parsed.data.paidOn
+            ? new Date(parsed.data.paidOn)
+            : new Date(),
+          reference: parsed.data.reference,
+          recordedById: req.user.sub,
+        }),
+      );
+    },
+  );
 
   /**
    * Bulk-record payments. Accepts up to 500 rows in one shot. Each row
@@ -535,7 +640,8 @@ export async function loanRoutes(app: FastifyInstance) {
       // effective-permissions resolver to have already unioned delegated
       // permissions onto req.permissions.
       const callerPerms =
-        req.permissions ?? (await app.resolvePermissions(req.user.sub));
+        req.permissions ??
+        (await app.resolvePermissions(req.user.sub, req.tenantCtx.prisma));
       if (!callerPerms.has("loans.sign_officer")) {
         return reply.code(403).send({
           error: "Forbidden",
@@ -640,21 +746,29 @@ export async function loanRoutes(app: FastifyInstance) {
 
   // ─── Co-makers ─────────────────────────────────────────────────────
 
-  app.get<{ Params: { id: string } }>("/:id/co-makers", async (req) =>
+  app.get<{ Params: { id: string } }>("/:id/co-makers", canRead, async (req) =>
     req.loanCtx!.coMakers.listForLoan(req.params.id),
   );
 
-  app.post<{ Params: { id: string } }>("/:id/co-makers", async (req, reply) => {
-    const parsed = coMakerSchema.safeParse(req.body);
-    if (!parsed.success) {
+  // Adding a co-maker is part of assembling the application file, so it
+  // rides `loans.apply`. (The DELETE below predates this pass and keeps
+  // `loans.decide`; both keys belong to LOAN_OFFICER + ADMIN, so the
+  // difference is one of intent, not of reach.)
+  app.post<{ Params: { id: string } }>(
+    "/:id/co-makers",
+    { preHandler: app.requirePermission("loans.apply") },
+    async (req, reply) => {
+      const parsed = coMakerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
+      }
       return reply
-        .code(400)
-        .send({ error: "ValidationError", issues: parsed.error.issues });
-    }
-    return reply
-      .code(201)
-      .send(await req.loanCtx!.coMakers.create(req.params.id, parsed.data));
-  });
+        .code(201)
+        .send(await req.loanCtx!.coMakers.create(req.params.id, parsed.data));
+    },
+  );
 
   app.delete<{ Params: { coMakerId: string } }>(
     "/co-makers/:coMakerId",
@@ -664,15 +778,19 @@ export async function loanRoutes(app: FastifyInstance) {
 
   // ─── In-app messaging (officer ↔ borrower) ─────────────────────────
 
-  app.get<{ Params: { id: string } }>("/:id/messages", async (req) =>
-    req.tenantCtx.prisma.loanMessage.findMany({
-      where: { loanId: req.params.id },
-      orderBy: { createdAt: "asc" },
-    }),
+  app.get<{ Params: { id: string } }>(
+    "/:id/messages",
+    canMessage,
+    async (req) =>
+      req.tenantCtx.prisma.loanMessage.findMany({
+        where: { loanId: req.params.id },
+        orderBy: { createdAt: "asc" },
+      }),
   );
 
   app.post<{ Params: { id: string }; Body: { body: string } }>(
     "/:id/messages",
+    canMessage,
     async (req, reply) => {
       const body = (req.body?.body ?? "").trim();
       if (!body || body.length > 2000) {
@@ -702,11 +820,20 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string; messageId: string } }>(
     "/:id/messages/:messageId/read",
-    async (req) =>
-      req.tenantCtx.prisma.loanMessage.update({
-        where: { id: req.params.messageId },
+    canMessage,
+    async (req, reply) => {
+      // Scope the update by loanId as well as messageId: `canMessage`
+      // authorized the caller for `:id`, so the row being marked read
+      // has to actually belong to that loan.
+      const { count } = await req.tenantCtx.prisma.loanMessage.updateMany({
+        where: { id: req.params.messageId, loanId: req.params.id },
         data: { readAt: new Date() },
-      }),
+      });
+      if (count === 0) return reply.code(404).send({ error: "NotFound" });
+      return req.tenantCtx.prisma.loanMessage.findUnique({
+        where: { id: req.params.messageId },
+      });
+    },
   );
 
   /** Settle the loan early with the product's pre-termination fee. */

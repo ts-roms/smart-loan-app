@@ -28,14 +28,23 @@ export async function notificationRoutes(app: FastifyInstance) {
     };
   });
 
+  /**
+   * Dispatch log across the whole tenant — recipients, message bodies,
+   * delivery status. `?customerId=` filters but does not scope, so this
+   * needs `notifications.read` (LOAN_OFFICER, ACCOUNTANT, ADMIN). The
+   * borrower's own bell state lives on /auth/me/notifications/state.
+   */
   app.get<{
     Querystring: { customerId?: string; status?: string; event?: string };
-  }>("/", async (req) =>
-    req.notificationsCtx!.repo.list({
-      customerId: req.query.customerId,
-      status: req.query.status as never,
-      event: req.query.event as never,
-    }),
+  }>(
+    "/",
+    { preHandler: app.requirePermission("notifications.read") },
+    async (req) =>
+      req.notificationsCtx!.repo.list({
+        customerId: req.query.customerId,
+        status: req.query.status as never,
+        event: req.query.event as never,
+      }),
   );
 
   /** Admin-only: fire a TEST notification through the active provider. */
