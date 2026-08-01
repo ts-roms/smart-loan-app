@@ -96,7 +96,11 @@ export class CustomerService {
       include: {
         schedule: {
           where: { paidInFullAt: null },
-          select: { totalDue: true, principalPaid: true },
+          select: {
+            totalDue: true,
+            principalPaid: true,
+            interestPaid: true,
+          },
         },
       },
     });
@@ -104,7 +108,11 @@ export class CustomerService {
     let outstanding = 0;
     for (const l of loans) {
       for (const s of l.schedule) {
-        outstanding += Number(s.totalDue) - Number(s.principalPaid);
+        // An open installment can be partly settled on both legs — subtract
+        // interest collected as well as principal, or partial payments show
+        // up as if nothing had been paid.
+        outstanding +=
+          Number(s.totalDue) - Number(s.principalPaid) - Number(s.interestPaid);
       }
     }
 

@@ -178,9 +178,15 @@ export function preTerminationFeeEntry(args: {
 /**
  * Loan payment. Allocation arrives split into interest + principal portions
  * (the loan repository computes this from the schedule).
- *   Dr Cash               total
- *     Cr Interest Income  interestPortion
- *     Cr Loans Receivable principalPortion
+ *   Dr Cash                    total
+ *     Cr Interest Income       interestPortion
+ *     Cr Loans Receivable      principalPortion
+ *     Cr Customer Advances     advancePortion
+ *
+ * `advancePortion` is the slice of the payment that exceeded everything the
+ * loan still owed. It must NOT be folded into `principalPortion` — doing so
+ * drives Loans Receivable below zero for that loan. It's money we hold on
+ * the borrower's behalf, so it belongs on the liability side.
  */
 export function loanPaymentEntry(args: {
   loanId: string;
@@ -189,6 +195,8 @@ export function loanPaymentEntry(args: {
   amount: number;
   interestPortion: number;
   principalPortion: number;
+  /** Excess over the full remaining balance. Booked as a liability. */
+  advancePortion?: number;
   paidOn: Date;
 }): JournalEntryInput {
   const lines: JournalLineInput[] = [
@@ -213,6 +221,14 @@ export function loanPaymentEntry(args: {
       debit: 0,
       credit: args.principalPortion,
       memo: `Principal on ${args.loanNumber}`,
+    });
+  }
+  if ((args.advancePortion ?? 0) > 0) {
+    lines.push({
+      accountCode: ACCOUNT_CODES.CUSTOMER_ADVANCES,
+      debit: 0,
+      credit: args.advancePortion!,
+      memo: `Advance / overpayment on ${args.loanNumber}`,
     });
   }
   return buildEntry({
@@ -540,33 +556,99 @@ export function eclProvisionEntry(args: {
   });
 }
 
+export interface InstallmentDue {
+  interestDue: number;
+  principalDue: number;
+  /**
+   * Interest already collected on this installment by earlier payments.
+   * Defaults to 0. Callers holding persisted payment progress MUST pass
+   * this — otherwise a second partial payment re-allocates against interest
+   * that has already been recognized as income.
+   */
+  interestPaid?: number;
+  /** Principal already collected on this installment. Defaults to 0. */
+  principalPaid?: number;
+}
+
+export interface InstallmentAllocation {
+  /** Index into the `installments` array this slice was applied to. */
+  index: number;
+  interest: number;
+  principal: number;
+}
+
+export interface PaymentAllocation {
+  /** Total interest applied across all installments. */
+  interest: number;
+  /** Total principal applied across all installments. */
+  principal: number;
+  /** Amount left over after every installment is fully settled. */
+  overpayment: number;
+  /** Per-installment slices, in the order the installments were passed. */
+  perInstallment: InstallmentAllocation[];
+}
+
 /**
- * Split a flat payment amount between interest and principal using the
- * remaining installments in order. Interest comes first within each
- * installment (standard amortization).
+ * Split a flat payment amount between interest and principal across the
+ * open installments in order. Interest comes first within each installment
+ * (standard amortization).
  *
- * Returns the portions actually applied; the caller can detect "overpayment"
- * if `interest + principal < amount`.
+ * Allocation runs against each installment's *remaining* due — i.e.
+ * `interestDue - interestPaid`, then `principalDue - principalPaid`. That
+ * is what makes repeated partial payments add up correctly: without the
+ * paid-to-date figures a borrower paying one installment in five slices
+ * would have interest recognized five times over.
+ *
+ * `perInstallment` carries the slice applied to each installment so the
+ * caller can persist the progress; installments that received nothing are
+ * omitted. Anything left after every installment is settled comes back as
+ * `overpayment` — the caller books that as a customer advance, not principal.
  */
 export function allocatePayment(
   amount: number,
-  installments: Array<{ interestDue: number; principalDue: number }>,
-): { interest: number; principal: number; overpayment: number } {
+  installments: InstallmentDue[],
+): PaymentAllocation {
   let remaining = round2(amount);
   let interest = 0;
   let principal = 0;
-  for (const inst of installments) {
-    if (remaining <= 0) break;
-    const interestPart = Math.min(remaining, round2(inst.interestDue));
-    remaining = round2(remaining - interestPart);
-    interest = round2(interest + interestPart);
+  const perInstallment: InstallmentAllocation[] = [];
 
+  for (let index = 0; index < installments.length; index++) {
     if (remaining <= 0) break;
-    const principalPart = Math.min(remaining, round2(inst.principalDue));
+    const inst = installments[index]!;
+
+    // Clamp at 0: an over-credited row (repair scripts, manual edits) must
+    // not hand back negative headroom and silently inflate the next slice.
+    const interestOpen = Math.max(
+      0,
+      round2(inst.interestDue - (inst.interestPaid ?? 0)),
+    );
+    const principalOpen = Math.max(
+      0,
+      round2(inst.principalDue - (inst.principalPaid ?? 0)),
+    );
+
+    const interestPart = Math.min(remaining, interestOpen);
+    remaining = round2(remaining - interestPart);
+    const principalPart = Math.min(remaining, principalOpen);
     remaining = round2(remaining - principalPart);
+
+    if (interestPart <= 0 && principalPart <= 0) continue;
+    interest = round2(interest + interestPart);
     principal = round2(principal + principalPart);
+    perInstallment.push({
+      index,
+      interest: interestPart,
+      principal: principalPart,
+    });
   }
-  return { interest, principal, overpayment: round2(remaining) };
+
+  return {
+    interest,
+    principal,
+    overpayment: round2(remaining),
+    perInstallment,
+  };
 }
 
 // ─── Cooperative posting helpers ─────────────────────────────────────────

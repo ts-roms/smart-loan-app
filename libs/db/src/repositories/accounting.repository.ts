@@ -413,7 +413,11 @@ export class AccountingRepository {
     const loanOutstanding = new Map<string, number>();
     const loanMaxOverdueDays = new Map<string, number>();
     for (const s of open) {
-      const remaining = Number(s.totalDue) - Number(s.principalPaid);
+      // Both paid-to-date columns come off: an open installment can carry
+      // partial interest as well as partial principal now that payments
+      // persist their allocation per installment.
+      const remaining =
+        Number(s.totalDue) - Number(s.principalPaid) - Number(s.interestPaid);
       loanOutstanding.set(
         s.loan.id,
         (loanOutstanding.get(s.loan.id) ?? 0) + remaining,
@@ -702,7 +706,8 @@ export class AccountingRepository {
         customerName: `${r.loan.customer.firstName} ${r.loan.customer.lastName}`,
         installmentNo: r.installmentNo,
         dueDate: r.dueDate,
-        totalDue: Number(r.totalDue) - Number(r.principalPaid),
+        totalDue:
+          Number(r.totalDue) - Number(r.principalPaid) - Number(r.interestPaid),
         paidInFullAt: r.paidInFullAt,
       })),
       asOf,

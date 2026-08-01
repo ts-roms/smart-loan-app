@@ -138,8 +138,12 @@ function CollectionsCaseInspector({ id }: { id: string }) {
 
   const l = loan.data;
   const openSchedule = (l.schedule ?? []).filter((s) => !s.paidInFullAt);
+  // Net off both paid-to-date legs: an open installment can carry partial
+  // interest as well as partial principal.
   const outstanding = openSchedule.reduce(
-    (sum, s) => sum + (Number(s.totalDue) - Number(s.principalPaid)),
+    (sum, s) =>
+      sum +
+      (Number(s.totalDue) - Number(s.principalPaid) - Number(s.interestPaid)),
     0,
   );
   const now = new Date();

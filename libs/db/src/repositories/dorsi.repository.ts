@@ -257,8 +257,10 @@ export class DorsiRepository {
   /**
    * Snapshot DORSI utilization right now. Computes aggregate + per-borrower
    * exposure across all loans whose customer is currently DORSI-tagged
-   * (active). Outstanding = sum of (principalDue - principalPaid) on open
-   * schedule rows; consistent with how we compute outstanding elsewhere.
+   * (active). Outstanding = sum of (totalDue - principalPaid - interestPaid)
+   * on open schedule rows — the whole remaining obligation, principal and
+   * interest alike, net of whatever partial payments have already covered.
+   * Consistent with how we compute outstanding elsewhere.
    */
   async utilization(): Promise<DorsiUtilization> {
     const config = await this.systemConfig();
@@ -280,7 +282,11 @@ export class DorsiRepository {
               include: {
                 schedule: {
                   where: { paidInFullAt: null },
-                  select: { totalDue: true, principalPaid: true },
+                  select: {
+                    totalDue: true,
+                    principalPaid: true,
+                    interestPaid: true,
+                  },
                 },
               },
             },
@@ -293,7 +299,10 @@ export class DorsiRepository {
       let outstanding = 0;
       for (const l of r.customer.loanApplications) {
         for (const s of l.schedule) {
-          outstanding += Number(s.totalDue) - Number(s.principalPaid);
+          outstanding +=
+            Number(s.totalDue) -
+            Number(s.principalPaid) -
+            Number(s.interestPaid);
         }
       }
       outstanding = round2(outstanding);

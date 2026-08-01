@@ -219,6 +219,7 @@ export class RepossessionRepository {
           data: {
             paidInFullAt: new Date(),
             principalPaid: inst.principalDue,
+            interestPaid: inst.interestDue,
           },
         });
       }

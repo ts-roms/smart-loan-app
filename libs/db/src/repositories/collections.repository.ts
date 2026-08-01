@@ -131,7 +131,11 @@ export class CollectionsRepository {
           )
         : 0;
       const outstanding = l.schedule.reduce(
-        (s, x) => s + (Number(x.totalDue) - Number(x.principalPaid)),
+        (s, x) =>
+          s +
+          (Number(x.totalDue) -
+            Number(x.principalPaid) -
+            Number(x.interestPaid)),
         0,
       );
       const overdueCount = l.schedule.filter((s) => s.dueDate < asOf).length;

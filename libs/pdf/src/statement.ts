@@ -53,6 +53,9 @@ export interface StatementInput {
     totalDue: number;
     paidInFullAt: Date | null;
     principalPaid: number;
+    /** Interest collected on this installment so far. Optional for callers
+     * that predate per-installment progress tracking. */
+    interestPaid?: number;
   }>;
 
   payments: Array<{
@@ -125,7 +128,7 @@ export function renderStatementOfAccount(
           moneyPHP(s.principalDue),
           moneyPHP(s.interestDue),
           moneyPHP(s.totalDue),
-          s.paidInFullAt ? `Paid ${fmtDate(s.paidInFullAt)}` : "Unpaid",
+          scheduleStatus(s),
         ]),
         {
           header: ["#", "Due date", "Principal", "Interest", "Total", "Status"],
@@ -183,4 +186,24 @@ export function renderStatementOfAccount(
       reject(err);
     }
   });
+}
+
+/**
+ * Status cell for one schedule row. A row that has taken partial payments
+ * reads "Partial", not "Unpaid" — an installment can now be part-settled
+ * without being closed out, and a borrower who has paid half of one should
+ * not see a statement claiming they paid nothing.
+ */
+function scheduleStatus(row: {
+  paidInFullAt: Date | null;
+  totalDue: number;
+  principalPaid: number;
+  interestPaid?: number;
+}): string {
+  if (row.paidInFullAt) return `Paid ${fmtDate(row.paidInFullAt)}`;
+  const paid = row.principalPaid + (row.interestPaid ?? 0);
+  if (paid > 0.005) {
+    return `Partial — ${moneyPHP(paid)} of ${moneyPHP(row.totalDue)}`;
+  }
+  return "Unpaid";
 }

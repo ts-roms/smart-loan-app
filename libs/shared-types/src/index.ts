@@ -523,6 +523,7 @@ export interface LoanApplication {
     interestDue: string | number;
     totalDue: string | number;
     principalPaid: string | number;
+    interestPaid: string | number;
     paidInFullAt: string | null;
   }>;
   /** Populated by the detail endpoint. */

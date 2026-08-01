@@ -516,8 +516,30 @@ export class LoanRepository {
   }
 
   /**
-   * Record a payment + auto-post journal entry. Allocation: interest portion
-   * of upcoming installments first, then principal.
+   * Record a payment + auto-post journal entry.
+   *
+   * Allocation walks the open installments oldest-first, clearing each one's
+   * *remaining* interest before its remaining principal. "Remaining" is the
+   * key word: every payment persists its slice to `interestPaid` /
+   * `principalPaid`, and the next payment allocates against
+   * `interestDue - interestPaid` / `principalDue - principalPaid`.
+   *
+   * That is what makes partial payments behave. Allocating against the full
+   * dues instead — which is what this did before — recognizes the same
+   * interest once per payment: an installment of 1,000 interest + 4,000
+   * principal paid as five 1,000s booked 5,000 of interest income and zero
+   * principal. Every one of those entries balanced individually, so
+   * `buildEntry` had nothing to complain about.
+   *
+   * An installment is settled once its CUMULATIVE progress covers it, not
+   * when a single payment does. Marking on a single payment's amount left a
+   * borrower paying 5,000 as two 2,500s with the installment still open
+   * forever — the loan never closed and late fees kept accruing, since
+   * `lateFeeFor` charges any row whose `paidInFullAt` is null.
+   *
+   * Anything left after the whole schedule is settled is an overpayment. It
+   * is booked to Customer Advances (a liability), never as extra principal —
+   * crediting Loans Receivable past zero would misstate the asset.
    */
   async recordPayment(
     loanId: string,
@@ -545,22 +567,33 @@ export class LoanRepository {
       });
 
       const allocation = allocatePayment(
-        input.amount,
+        Number(input.amount),
         open.map((o) => ({
           interestDue: Number(o.interestDue),
           principalDue: Number(o.principalDue),
+          interestPaid: Number(o.interestPaid),
+          principalPaid: Number(o.principalPaid),
         })),
       );
 
-      let remaining = input.amount;
-      for (const inst of open) {
-        if (remaining + 0.005 < Number(inst.totalDue)) break;
-        remaining -= Number(inst.totalDue);
+      // Persist the per-installment progress. `perInstallment[].index` maps
+      // back into `open`, and only installments that actually received money
+      // are present.
+      for (const slice of allocation.perInstallment) {
+        const inst = open[slice.index]!;
+        const interestPaid = round2(Number(inst.interestPaid) + slice.interest);
+        const principalPaid = round2(
+          Number(inst.principalPaid) + slice.principal,
+        );
+        const settled =
+          interestPaid + 0.005 >= Number(inst.interestDue) &&
+          principalPaid + 0.005 >= Number(inst.principalDue);
         await tx.loanSchedule.update({
           where: { id: inst.id },
           data: {
-            paidInFullAt: input.paidOn,
-            principalPaid: inst.principalDue,
+            interestPaid,
+            principalPaid,
+            paidInFullAt: settled ? input.paidOn : null,
           },
         });
       }
@@ -572,7 +605,8 @@ export class LoanRepository {
           paymentId: payment.id,
           amount: Number(input.amount),
           interestPortion: allocation.interest,
-          principalPortion: allocation.principal + allocation.overpayment,
+          principalPortion: allocation.principal,
+          advancePortion: allocation.overpayment,
           paidOn: input.paidOn,
         }),
         { postedById: input.recordedById, tx },
@@ -581,7 +615,10 @@ export class LoanRepository {
       const stillOpen = await tx.loanSchedule.count({
         where: { loanId, paidInFullAt: null },
       });
-      if (stillOpen === 0) {
+      // Guard on the current status too: a stray payment against an already
+      // closed loan is all overpayment, and re-stamping `closedAt` would
+      // rewrite the real closure date.
+      if (stillOpen === 0 && loan.status !== "CLOSED") {
         await tx.loanApplication.update({
           where: { id: loanId },
           data: { status: "CLOSED", closedAt: new Date() },
@@ -696,11 +733,17 @@ export class LoanRepository {
         },
       });
 
-      // Mark every open installment paid.
+      // Mark every open installment paid. `interestPaid` moves with
+      // `principalPaid` so a settled row reads as having nothing remaining;
+      // recognized income is the journal entries' business, not this column's.
       for (const inst of loan.schedule) {
         await tx.loanSchedule.update({
           where: { id: inst.id },
-          data: { paidInFullAt: new Date(), principalPaid: inst.principalDue },
+          data: {
+            paidInFullAt: new Date(),
+            principalPaid: inst.principalDue,
+            interestPaid: inst.interestDue,
+          },
         });
       }
 
@@ -794,6 +837,7 @@ export class LoanRepository {
           data: {
             paidInFullAt: new Date(),
             principalPaid: inst.principalDue,
+            interestPaid: inst.interestDue,
           },
         });
       }
@@ -912,6 +956,7 @@ export class LoanRepository {
           data: {
             paidInFullAt: new Date(),
             principalPaid: inst.principalDue,
+            interestPaid: inst.interestDue,
           },
         });
       }
