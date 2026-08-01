@@ -3,7 +3,7 @@ import {
   useEnableTwoFactor,
   useStartTwoFactorSetup,
   useTwoFactorStatus,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -21,9 +21,9 @@ import {
   SkeletonCard,
   useConfirm,
   useToast,
-} from '@loan/ui';
-import { Copy, Lock, ShieldCheck, ShieldOff } from 'lucide-react';
-import { useState } from 'react';
+} from "@loan/ui";
+import { Copy, Lock, ShieldCheck, ShieldOff } from "lucide-react";
+import { useState } from "react";
 
 /**
  * Two-factor authentication panel. Three states:
@@ -45,17 +45,20 @@ export function TwoFactorPanel() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const [setupData, setSetupData] = useState<{ secret: string; otpauth: string } | null>(null);
-  const [enableCode, setEnableCode] = useState('');
+  const [setupData, setSetupData] = useState<{
+    secret: string;
+    otpauth: string;
+  } | null>(null);
+  const [enableCode, setEnableCode] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
   const onStart = async () => {
     try {
       const data = await startSetup.mutateAsync();
       setSetupData(data);
-      setEnableCode('');
+      setEnableCode("");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed to start 2FA setup');
+      toast.error((err as Error).message ?? "Failed to start 2FA setup");
     }
   };
 
@@ -64,37 +67,38 @@ export function TwoFactorPanel() {
       const res = await enable.mutateAsync(enableCode);
       setRecoveryCodes(res.recoveryCodes);
       setSetupData(null);
-      toast.success('2FA enabled');
+      toast.success("2FA enabled");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Code did not match');
+      toast.error((err as Error).message ?? "Code did not match");
     }
   };
 
   const onDisable = async () => {
     const ok = await confirm({
-      title: 'Disable 2FA?',
+      title: "Disable 2FA?",
       message:
-        'Your account will be protected by password alone again. Recovery codes will be invalidated.',
-      confirmLabel: 'Disable 2FA',
-      tone: 'destructive',
+        "Your account will be protected by password alone again. Recovery codes will be invalidated.",
+      confirmLabel: "Disable 2FA",
+      tone: "destructive",
     });
     if (!ok) return;
-    const code = window.prompt('Enter your current 6-digit code to confirm:') ?? '';
+    const code =
+      window.prompt("Enter your current 6-digit code to confirm:") ?? "";
     if (!/^\d{6}$/.test(code)) {
-      toast.error('Need a 6-digit code');
+      toast.error("Need a 6-digit code");
       return;
     }
     try {
       await disable.mutateAsync(code);
-      toast.success('2FA disabled');
+      toast.success("2FA disabled");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed to disable');
+      toast.error((err as Error).message ?? "Failed to disable");
     }
   };
 
   const copy = async (text: string) => {
     await navigator.clipboard.writeText(text);
-    toast.info('Copied');
+    toast.info("Copied");
   };
 
   return (
@@ -114,7 +118,7 @@ export function TwoFactorPanel() {
               <Badge variant="success">Enabled</Badge>
               <span className="text-xs text-white/55">
                 {status.data.recoveryCodesRemaining} recovery code
-                {status.data.recoveryCodesRemaining === 1 ? '' : 's'} remaining
+                {status.data.recoveryCodesRemaining === 1 ? "" : "s"} remaining
               </span>
             </div>
             <p className="text-xs text-white/55">
@@ -122,7 +126,12 @@ export function TwoFactorPanel() {
               authenticator app. Lost your device? Use one of your recovery
               codes at login (each is single-use).
             </p>
-            <Button variant="outline" size="sm" onClick={onDisable} disabled={disable.isPending}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onDisable}
+              disabled={disable.isPending}
+            >
               <ShieldOff className="h-3 w-3" />
               Disable 2FA
             </Button>
@@ -130,8 +139,8 @@ export function TwoFactorPanel() {
         ) : (
           <div className="space-y-3">
             <p className="text-xs text-white/55">
-              Add a second factor to your sign-in. After enabling, every
-              login will ask for a 6-digit code from your TOTP app (Google
+              Add a second factor to your sign-in. After enabling, every login
+              will ask for a 6-digit code from your TOTP app (Google
               Authenticator, Authy, 1Password, etc.).
             </p>
             <Button onClick={onStart} disabled={startSetup.isPending}>
@@ -151,9 +160,9 @@ export function TwoFactorPanel() {
             </DialogHeader>
             <div className="space-y-3 text-sm">
               <p className="text-white/65">
-                Scan this URI as a QR code in your authenticator app, or
-                paste the secret directly. Then enter the 6-digit code your
-                app shows to confirm.
+                Scan this URI as a QR code in your authenticator app, or paste
+                the secret directly. Then enter the 6-digit code your app shows
+                to confirm.
               </p>
               <div className="rounded-md border border-white/10 bg-white/[0.03] p-2 space-y-2">
                 <div>
@@ -164,7 +173,11 @@ export function TwoFactorPanel() {
                     <code className="font-mono text-[10px] text-white/70 truncate flex-1">
                       {setupData.otpauth}
                     </code>
-                    <Button size="sm" variant="outline" onClick={() => copy(setupData.otpauth)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => copy(setupData.otpauth)}
+                    >
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>
@@ -174,8 +187,14 @@ export function TwoFactorPanel() {
                     Secret (manual entry)
                   </Label>
                   <div className="flex items-center gap-2">
-                    <code className="font-mono text-xs text-white">{setupData.secret}</code>
-                    <Button size="sm" variant="outline" onClick={() => copy(setupData.secret)}>
+                    <code className="font-mono text-xs text-white">
+                      {setupData.secret}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => copy(setupData.secret)}
+                    >
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>
@@ -188,7 +207,9 @@ export function TwoFactorPanel() {
                   inputMode="numeric"
                   maxLength={6}
                   value={enableCode}
-                  onChange={(e) => setEnableCode(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) =>
+                    setEnableCode(e.target.value.replace(/\D/g, ""))
+                  }
                   placeholder="000000"
                 />
               </div>
@@ -197,8 +218,11 @@ export function TwoFactorPanel() {
               <Button variant="outline" onClick={() => setSetupData(null)}>
                 Cancel
               </Button>
-              <Button onClick={onEnable} disabled={enable.isPending || enableCode.length !== 6}>
-                {enable.isPending ? 'Verifying…' : 'Enable 2FA'}
+              <Button
+                onClick={onEnable}
+                disabled={enable.isPending || enableCode.length !== 6}
+              >
+                {enable.isPending ? "Verifying…" : "Enable 2FA"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -213,8 +237,8 @@ export function TwoFactorPanel() {
               <DialogTitle>Save your recovery codes</DialogTitle>
             </DialogHeader>
             <p className="text-sm text-white/65">
-              These are single-use. Keep them somewhere safe — if you lose
-              your authenticator device, they're how you sign back in.
+              These are single-use. Keep them somewhere safe — if you lose your
+              authenticator device, they're how you sign back in.
               <span className="text-rose-300 block mt-1">
                 We won't show them again.
               </span>
@@ -229,7 +253,7 @@ export function TwoFactorPanel() {
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => copy(recoveryCodes.join('\n'))}
+                onClick={() => copy(recoveryCodes.join("\n"))}
               >
                 <Copy className="h-3 w-3" />
                 Copy all

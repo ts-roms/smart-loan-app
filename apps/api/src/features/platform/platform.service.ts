@@ -13,7 +13,6 @@ import {
   TIER_SEATS,
   type FeatureFlag,
   type LicensePayload,
-  type LicenseTier,
 } from "@loan/licensing";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
@@ -517,7 +516,7 @@ export class PlatformService {
       ? Date.parse(args.input.notBefore)
       : undefined;
 
-    const tier = args.input.tier as LicenseTier;
+    const tier = args.input.tier;
     const features = (args.input.features ??
       defaultFeaturesForTier(tier)) as FeatureFlag[];
     const seats =
@@ -549,6 +548,8 @@ export class PlatformService {
           tenantName: args.input.tenantName ?? args.input.tenantSlug,
           tier,
           token,
+          // Load-bearing cast — see the note in licensing.service.ts.
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
           payload: payload as unknown as object,
           issuedAt: new Date(payload.iat),
           notBefore: nbf ? new Date(nbf) : null,
@@ -567,7 +568,11 @@ export class PlatformService {
       // (that's by design — the platform doesn't auto-deploy tokens).
       await this.prisma.tenant.updateMany({
         where: { slug: args.input.tenantSlug },
-        data: { licenseSnapshot: payload as unknown as object },
+        data: {
+          // Load-bearing cast — see the note in licensing.service.ts.
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+          licenseSnapshot: payload as unknown as object,
+        },
       });
 
       await this.audit({
@@ -793,7 +798,7 @@ export class PlatformService {
           platformUserEmail: args.actor.email,
           purpose: args.input.purpose,
         },
-      } as unknown as Parameters<typeof this.app.jwt.sign>[0],
+      },
       { expiresIn: `${ttlMinutes}m` },
     );
 
@@ -884,7 +889,7 @@ export class PlatformService {
         actorId: args.actor.id,
         actorEmail: args.actor.email,
         tenantSlug: args.tenantSlug,
-        payload: args.payload as unknown as object,
+        payload: args.payload,
       },
     });
   }

@@ -54,8 +54,10 @@ export function useCreateAnnualDoc() {
         },
       ),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: annualDocKeys.forLoan(vars.loanId) });
-      qc.invalidateQueries({ queryKey: ["annual-docs", "expiring"] });
+      void qc.invalidateQueries({
+        queryKey: annualDocKeys.forLoan(vars.loanId),
+      });
+      void qc.invalidateQueries({ queryKey: ["annual-docs", "expiring"] });
     },
   });
 }
@@ -68,8 +70,10 @@ export function useDeleteAnnualDoc() {
         method: "DELETE",
       }),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: annualDocKeys.forLoan(vars.loanId) });
-      qc.invalidateQueries({ queryKey: ["annual-docs", "expiring"] });
+      void qc.invalidateQueries({
+        queryKey: annualDocKeys.forLoan(vars.loanId),
+      });
+      void qc.invalidateQueries({ queryKey: ["annual-docs", "expiring"] });
     },
   });
 }

@@ -64,7 +64,7 @@ export function KycGapWarning({
     const map = new Map<KycDocumentType, DocStatus>();
     for (const s of kyc.data ?? []) {
       if (!map.has(s.documentType)) {
-        map.set(s.documentType, s.status as DocStatus);
+        map.set(s.documentType, s.status);
       }
     }
     return map;
@@ -79,7 +79,7 @@ export function KycGapWarning({
 
   const rows = required.map((docType) => ({
     docType,
-    status: (byType.get(docType) ?? "MISSING") as DocStatus,
+    status: byType.get(docType) ?? "MISSING",
   }));
 
   const missingCount = rows.filter((r) => r.status === "MISSING").length;

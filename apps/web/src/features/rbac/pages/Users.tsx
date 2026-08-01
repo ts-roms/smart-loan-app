@@ -166,8 +166,8 @@ export function UsersPage() {
                               title={
                                 expiry
                                   ? expired
-                                    ? `Expired ${formatDate(r.expiresAt!)} — no longer grants permissions`
-                                    : `Expires ${formatDate(r.expiresAt!)}`
+                                    ? `Expired ${formatDate(r.expiresAt)} — no longer grants permissions`
+                                    : `Expires ${formatDate(r.expiresAt)}`
                                   : undefined
                               }
                             >
@@ -181,7 +181,7 @@ export function UsersPage() {
                               {expiry && (
                                 <span className="text-[10px] text-amber-300/90">
                                   {expired ? "expired" : "until"}{" "}
-                                  {formatDate(r.expiresAt!)}
+                                  {formatDate(r.expiresAt)}
                                 </span>
                               )}
                               {canManage && !isSelfAdmin && (

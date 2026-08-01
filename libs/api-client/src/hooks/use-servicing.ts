@@ -37,8 +37,8 @@ export function useRestructureLoan() {
       );
     },
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ["loans"] });
-      qc.invalidateQueries({ queryKey: ["loans", "detail", vars.id] });
+      void qc.invalidateQueries({ queryKey: ["loans"] });
+      void qc.invalidateQueries({ queryKey: ["loans", "detail", vars.id] });
     },
   });
 }
@@ -52,9 +52,9 @@ export function useWriteOffLoan() {
         { reason: input.reason },
       ),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ["loans"] });
-      qc.invalidateQueries({ queryKey: ["loans", "detail", vars.id] });
-      qc.invalidateQueries({ queryKey: ["accounting"] });
+      void qc.invalidateQueries({ queryKey: ["loans"] });
+      void qc.invalidateQueries({ queryKey: ["loans", "detail", vars.id] });
+      void qc.invalidateQueries({ queryKey: ["accounting"] });
     },
   });
 }
@@ -77,7 +77,7 @@ export function useAddCoMaker() {
       return getApiClient().post<CoMaker>(`/loans/${loanId}/co-makers`, rest);
     },
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ["co-makers", vars.loanId] });
+      void qc.invalidateQueries({ queryKey: ["co-makers", vars.loanId] });
     },
   });
 }
@@ -167,7 +167,7 @@ export function useSignAsOfficer() {
         },
       ),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ["loans", "detail", vars.loanId] });
+      void qc.invalidateQueries({ queryKey: ["loans", "detail", vars.loanId] });
     },
   });
 }
@@ -183,8 +183,8 @@ export function useSignAsBorrower(scope: "officer" | "portal" = "officer") {
         { signatureUrl: input.signatureUrl },
       ),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ["loans", "detail", vars.loanId] });
-      qc.invalidateQueries({ queryKey: ["portal", "loans", vars.loanId] });
+      void qc.invalidateQueries({ queryKey: ["loans", "detail", vars.loanId] });
+      void qc.invalidateQueries({ queryKey: ["portal", "loans", vars.loanId] });
     },
   });
 }

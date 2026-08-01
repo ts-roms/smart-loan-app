@@ -143,13 +143,13 @@ const fromProduct = (p: LoanProduct): ProductDraft => ({
       k,
       v == null ? "" : String(Number(v) * 100),
     ]),
-  ) as Partial<Record<CreditTier, string>>,
+  ),
   ltvByTier: Object.fromEntries(
     Object.entries(p.ltvByTier ?? {}).map(([k, v]) => [
       k,
       v == null ? "" : String(Number(v) * 100),
     ]),
-  ) as Partial<Record<CreditTier, string>>,
+  ),
   useRateByTier: !!p.rateByTier && Object.keys(p.rateByTier).length > 0,
   useLtvByTier: !!p.ltvByTier && Object.keys(p.ltvByTier).length > 0,
   active: p.active,
@@ -435,7 +435,7 @@ function EditProductDialog({
     e.preventDefault();
     try {
       const payload = draftToPayload(draft, false) as Record<string, unknown>;
-      await update.mutateAsync({ code: product.code, ...payload } as never);
+      await update.mutateAsync({ code: product.code, ...payload });
       toast.success("Product saved");
       onClose();
     } catch (err) {

@@ -3,8 +3,8 @@ import {
   useClosePeriod,
   usePeriods,
   useReopenPeriod,
-} from '@loan/api-client';
-import type { AccountingPeriod } from '@loan/shared-types';
+} from "@loan/api-client";
+import type { AccountingPeriod } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -15,12 +15,12 @@ import {
   SkeletonCard,
   useConfirm,
   useToast,
-} from '@loan/ui';
-import { formatDate } from '@loan/shared-utils';
-import { CalendarCheck, Lock, LockOpen, RotateCw } from 'lucide-react';
-import { useMemo } from 'react';
+} from "@loan/ui";
+import { formatDate } from "@loan/shared-utils";
+import { CalendarCheck, Lock, LockOpen, RotateCw } from "lucide-react";
+import { useMemo } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 /**
  * Accounting periods. Each month is a row; once CLOSED no postings can
@@ -38,8 +38,8 @@ export function PeriodsPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { user } = useAuth();
-  const canClose = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
-  const canReopen = user?.role === 'ADMIN';
+  const canClose = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canReopen = user?.role === "ADMIN";
 
   const sorted = useMemo(() => {
     return [...(periods.data ?? [])].sort(
@@ -51,30 +51,30 @@ export function PeriodsPage() {
     const ok = await confirm({
       title: `Close ${labelFor(p)}?`,
       message:
-        'No more postings can hit this period until an admin reopens it. Loan disburse / payment auto-posts dated inside this period will be blocked.',
-      confirmLabel: 'Close period',
+        "No more postings can hit this period until an admin reopens it. Loan disburse / payment auto-posts dated inside this period will be blocked.",
+      confirmLabel: "Close period",
     });
     if (!ok) return;
     try {
       await close.mutateAsync(p);
       toast.success(`${labelFor(p)} closed`);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed to close');
+      toast.error((err as Error).message ?? "Failed to close");
     }
   };
 
   const onReopen = async (p: { year: number; month: number }) => {
     const ok = await confirm({
       title: `Reopen ${labelFor(p)}?`,
-      message: 'New postings will be allowed in this period again.',
-      confirmLabel: 'Reopen',
+      message: "New postings will be allowed in this period again.",
+      confirmLabel: "Reopen",
     });
     if (!ok) return;
     try {
       await reopen.mutateAsync(p);
       toast.success(`${labelFor(p)} reopened`);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed to reopen');
+      toast.error((err as Error).message ?? "Failed to reopen");
     }
   };
 
@@ -83,7 +83,7 @@ export function PeriodsPage() {
       const r = await accrue.mutateAsync({});
       toast.success(`Accrual: ${r.posted} posted, ${r.skipped} skipped`);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Accrual failed');
+      toast.error((err as Error).message ?? "Accrual failed");
     }
   };
 
@@ -95,9 +95,13 @@ export function PeriodsPage() {
           Accounting periods
         </CardTitle>
         {canClose && (
-          <Button variant="outline" onClick={onAccrue} disabled={accrue.isPending}>
+          <Button
+            variant="outline"
+            onClick={onAccrue}
+            disabled={accrue.isPending}
+          >
             <RotateCw className="h-4 w-4" />
-            {accrue.isPending ? 'Accruing…' : 'Accrue this month'}
+            {accrue.isPending ? "Accruing…" : "Accrue this month"}
           </Button>
         )}
       </CardHeader>
@@ -106,7 +110,8 @@ export function PeriodsPage() {
           <SkeletonCard />
         ) : sorted.length === 0 ? (
           <p className="text-sm text-white/55">
-            No periods yet. They auto-create the first time a journal entry hits a new month.
+            No periods yet. They auto-create the first time a journal entry hits
+            a new month.
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -160,22 +165,32 @@ function PeriodRow({
     <tr className="hover:bg-white/[0.03]">
       <td className="py-2 px-2 font-mono">{labelFor(period)}</td>
       <td className="py-2 px-2">
-        <Badge variant={period.status === 'CLOSED' ? 'muted' : 'success'}>
+        <Badge variant={period.status === "CLOSED" ? "muted" : "success"}>
           {period.status}
         </Badge>
       </td>
       <td className="py-2 px-2 text-xs text-white/55">
-        {period.closedAt ? formatDate(period.closedAt) : '—'}
+        {period.closedAt ? formatDate(period.closedAt) : "—"}
       </td>
       <td className="py-2 px-2 text-right">
-        {period.status === 'OPEN' && canClose && (
-          <Button size="sm" variant="outline" onClick={onClose} disabled={closing}>
+        {period.status === "OPEN" && canClose && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onClose}
+            disabled={closing}
+          >
             <Lock className="h-3 w-3" />
             Close
           </Button>
         )}
-        {period.status === 'CLOSED' && canReopen && (
-          <Button size="sm" variant="outline" onClick={onReopen} disabled={reopening}>
+        {period.status === "CLOSED" && canReopen && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onReopen}
+            disabled={reopening}
+          >
             <LockOpen className="h-3 w-3" />
             Reopen
           </Button>
@@ -187,5 +202,5 @@ function PeriodRow({
 
 function labelFor(p: { year: number; month: number }): string {
   const date = new Date(p.year, p.month - 1, 1);
-  return date.toLocaleString('en-PH', { month: 'long', year: 'numeric' });
+  return date.toLocaleString("en-PH", { month: "long", year: "numeric" });
 }

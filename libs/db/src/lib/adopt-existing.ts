@@ -349,9 +349,7 @@ async function runBackup(
     });
     child.on("error", (err) =>
       reject(
-        new Error(
-          `pg_dump failed to start (is it on PATH?): ${(err as Error).message}`,
-        ),
+        new Error(`pg_dump failed to start (is it on PATH?): ${err.message}`),
       ),
     );
     child.on("close", (code) =>
@@ -412,9 +410,11 @@ async function runMigrateAgainstPublic(
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      code === 0
-        ? resolveP()
-        : reject(new Error(`prisma migrate exited with code ${code}`));
+      if (code === 0) {
+        resolveP();
+      } else {
+        reject(new Error(`prisma migrate exited with code ${code}`));
+      }
     });
   });
 }

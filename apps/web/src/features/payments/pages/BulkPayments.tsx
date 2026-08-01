@@ -53,7 +53,9 @@ export function BulkPaymentsPage() {
     const reader = new FileReader();
     reader.onerror = () => toast.error("Failed to read file");
     reader.onload = () => {
-      const text = String(reader.result ?? "");
+      // See BulkCustomers — narrow rather than stringify so an
+      // ArrayBuffer result can't become "[object ArrayBuffer]".
+      const text = typeof reader.result === "string" ? reader.result : "";
       setRaw(text);
       setFileName(f.name);
       setResults(null);

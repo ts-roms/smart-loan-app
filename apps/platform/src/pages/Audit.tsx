@@ -107,9 +107,7 @@ export function Audit() {
 
       {query.isLoading && <p style={{ color: "#94a3b8" }}>Loading…</p>}
       {query.error && (
-        <p style={{ color: "#fca5a5" }}>
-          Failed: {(query.error as Error).message}
-        </p>
+        <p style={{ color: "#fca5a5" }}>Failed: {query.error.message}</p>
       )}
 
       {query.data && query.data.length === 0 && (

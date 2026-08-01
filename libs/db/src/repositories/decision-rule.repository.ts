@@ -7,8 +7,8 @@ import {
   type DecisionRule as RuleData,
   type DecisioningCondition,
   type RuleAction,
-} from '@loan/decisioning';
-import type { DecisionRule, PrismaClient } from '@prisma/client';
+} from "@loan/decisioning";
+import type { DecisionRule, PrismaClient } from "@prisma/client";
 
 export interface DecisionRuleInput {
   name: string;
@@ -24,13 +24,13 @@ export class DecisionRuleRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   list(): Promise<DecisionRule[]> {
-    return this.prisma.decisionRule.findMany({ orderBy: { priority: 'asc' } });
+    return this.prisma.decisionRule.findMany({ orderBy: { priority: "asc" } });
   }
 
   listActive(): Promise<DecisionRule[]> {
     return this.prisma.decisionRule.findMany({
       where: { active: true },
-      orderBy: { priority: 'asc' },
+      orderBy: { priority: "asc" },
     });
   }
 
@@ -61,7 +61,10 @@ export class DecisionRuleRepository {
     if (input.action !== undefined) data.action = input.action;
     if (input.reason !== undefined) data.reason = input.reason;
     if (input.active !== undefined) data.active = input.active;
-    return this.prisma.decisionRule.update({ where: { id }, data: data as never });
+    return this.prisma.decisionRule.update({
+      where: { id },
+      data: data as never,
+    });
   }
 
   delete(id: string): Promise<DecisionRule> {
@@ -91,7 +94,7 @@ export class DecisionRuleRepository {
       name: r.name,
       priority: r.priority,
       conditions: r.conditions as unknown as DecisioningCondition[],
-      action: r.action as RuleAction,
+      action: r.action,
       reason: r.reason ?? undefined,
       active: r.active,
     }));

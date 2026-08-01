@@ -1,4 +1,4 @@
-import { useImportBankStatement } from '@loan/api-client';
+import { useImportBankStatement } from "@loan/api-client";
 import {
   Button,
   DatePicker,
@@ -10,8 +10,8 @@ import {
   Input,
   Label,
   useToast,
-} from '@loan/ui';
-import { useMemo, useState } from 'react';
+} from "@loan/ui";
+import { useMemo, useState } from "react";
 
 /**
  * Import-bank-statement modal. Accepts a tiny inline CSV format:
@@ -29,14 +29,16 @@ import { useMemo, useState } from 'react';
 export function ImportStatementDialog({ onClose }: { onClose: () => void }) {
   const importStmt = useImportBankStatement();
   const toast = useToast();
-  const [label, setLabel] = useState('');
-  const [bankAccount, setBankAccount] = useState('');
-  const [periodStart, setPeriodStart] = useState(() => isoDate(thirtyDaysAgo()));
+  const [label, setLabel] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
+  const [periodStart, setPeriodStart] = useState(() =>
+    isoDate(thirtyDaysAgo()),
+  );
   const [periodEnd, setPeriodEnd] = useState(() => isoDate(new Date()));
   const [openingBalance, setOpeningBalance] = useState(0);
   const [closingBalance, setClosingBalance] = useState(0);
   const [csv, setCsv] = useState(
-    'txnDate,description,amount,reference\n2026-05-01,Inbound transfer,5000,TXN-001\n2026-05-02,Bank fee,-150,\n',
+    "txnDate,description,amount,reference\n2026-05-01,Inbound transfer,5000,TXN-001\n2026-05-02,Bank fee,-150,\n",
   );
 
   // Parse the CSV on every keystroke so the user sees the row count
@@ -49,7 +51,7 @@ export function ImportStatementDialog({ onClose }: { onClose: () => void }) {
       return;
     }
     if (parsed.rows.length === 0) {
-      toast.error('CSV has no data rows');
+      toast.error("CSV has no data rows");
       return;
     }
     try {
@@ -71,7 +73,7 @@ export function ImportStatementDialog({ onClose }: { onClose: () => void }) {
       toast.success(`Statement imported with ${parsed.rows.length} lines`);
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Import failed');
+      toast.error((err as Error).message ?? "Import failed");
     }
   };
 
@@ -107,7 +109,11 @@ export function ImportStatementDialog({ onClose }: { onClose: () => void }) {
             </div>
             <div>
               <Label>Period end</Label>
-              <DatePicker value={periodEnd} onChange={setPeriodEnd} min={periodStart} />
+              <DatePicker
+                value={periodEnd}
+                onChange={setPeriodEnd}
+                min={periodStart}
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -137,7 +143,7 @@ export function ImportStatementDialog({ onClose }: { onClose: () => void }) {
               <span className="text-xs text-white/55">
                 {parsed.rows.length} rows parsed
                 {parsed.errors.length > 0 &&
-                  ` · ${parsed.errors.length} error${parsed.errors.length === 1 ? '' : 's'}`}
+                  ` · ${parsed.errors.length} error${parsed.errors.length === 1 ? "" : "s"}`}
               </span>
             </Label>
             <textarea
@@ -148,7 +154,8 @@ export function ImportStatementDialog({ onClose }: { onClose: () => void }) {
               spellCheck={false}
             />
             <p className="text-[10px] text-white/45 mt-1">
-              Header row required: <code>txnDate,description,amount,reference,runningBalance</code>.
+              Header row required:{" "}
+              <code>txnDate,description,amount,reference,runningBalance</code>.
               Amount positive = credit, negative = debit. Last two columns
               optional.
             </p>
@@ -167,7 +174,9 @@ export function ImportStatementDialog({ onClose }: { onClose: () => void }) {
             onClick={onSubmit}
             disabled={importStmt.isPending || parsed.rows.length === 0}
           >
-            {importStmt.isPending ? 'Importing…' : `Import ${parsed.rows.length} lines`}
+            {importStmt.isPending
+              ? "Importing…"
+              : `Import ${parsed.rows.length} lines`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -209,37 +218,43 @@ function parseCsv(text: string): ParseResult {
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
   if (lines.length === 0) return { rows: [], errors: [] };
-  const header = lines[0]!.split(',').map((c) => c.trim());
+  const header = lines[0]!.split(",").map((c) => c.trim());
   const idx = (name: string) => header.indexOf(name);
-  const required = ['txnDate', 'description', 'amount'] as const;
+  const required = ["txnDate", "description", "amount"] as const;
   for (const r of required) {
-    if (idx(r) < 0) return { rows: [], errors: [`Missing required column: ${r}`] };
+    if (idx(r) < 0)
+      return { rows: [], errors: [`Missing required column: ${r}`] };
   }
   const rows: ParsedRow[] = [];
   const errors: string[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i]!.split(',').map((c) => c.trim());
-    const amount = Number(cols[idx('amount')]);
+    const cols = lines[i]!.split(",").map((c) => c.trim());
+    const amount = Number(cols[idx("amount")]);
     if (!Number.isFinite(amount)) {
-      errors.push(`Row ${i + 1}: amount "${cols[idx('amount')]}" is not a number`);
+      errors.push(
+        `Row ${i + 1}: amount "${cols[idx("amount")]}" is not a number`,
+      );
       continue;
     }
-    const txnDate = cols[idx('txnDate')] ?? '';
+    const txnDate = cols[idx("txnDate")] ?? "";
     if (!txnDate || Number.isNaN(new Date(txnDate).getTime())) {
       errors.push(`Row ${i + 1}: txnDate "${txnDate}" is not a valid date`);
       continue;
     }
-    const refCol = idx('reference');
-    const rbCol = idx('runningBalance');
+    const refCol = idx("reference");
+    const rbCol = idx("runningBalance");
     const reference = refCol >= 0 ? cols[refCol] || undefined : undefined;
-    const rbRaw = rbCol >= 0 ? cols[rbCol] : '';
-    const runningBalance = rbRaw && rbRaw.length > 0 ? Number(rbRaw) : undefined;
+    const rbRaw = rbCol >= 0 ? cols[rbCol] : "";
+    const runningBalance =
+      rbRaw && rbRaw.length > 0 ? Number(rbRaw) : undefined;
     rows.push({
       txnDate,
-      description: cols[idx('description')] ?? '',
+      description: cols[idx("description")] ?? "",
       amount,
       reference,
-      runningBalance: Number.isFinite(runningBalance ?? NaN) ? runningBalance : undefined,
+      runningBalance: Number.isFinite(runningBalance ?? NaN)
+        ? runningBalance
+        : undefined,
     });
   }
   return { rows, errors };

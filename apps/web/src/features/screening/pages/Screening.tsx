@@ -2,7 +2,7 @@ import {
   useAddWatchlistEntry,
   useDeleteWatchlistEntry,
   useWatchlist,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -18,11 +18,11 @@ import {
   SelectValue,
   SkeletonCard,
   useToast,
-} from '@loan/ui';
-import { ShieldAlert, Trash2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+} from "@loan/ui";
+import { ShieldAlert, Trash2 } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 /**
  * AML watchlist admin. Each entry is consulted by the screening provider
@@ -36,12 +36,12 @@ export function ScreeningPage() {
   const remove = useDeleteWatchlistEntry();
   const toast = useToast();
   const { user } = useAuth();
-  const canEdit = user?.role === 'ADMIN';
+  const canEdit = user?.role === "ADMIN";
   const [draft, setDraft] = useState({
-    list: 'INTERNAL',
-    fullName: '',
-    aliases: '',
-    reason: '',
+    list: "INTERNAL",
+    fullName: "",
+    aliases: "",
+    reason: "",
   });
 
   const onAdd = async (e: FormEvent) => {
@@ -52,15 +52,15 @@ export function ScreeningPage() {
         list: draft.list,
         fullName: draft.fullName,
         aliases: draft.aliases
-          .split(',')
+          .split(",")
           .map((s) => s.trim())
           .filter(Boolean),
         reason: draft.reason || undefined,
       });
-      toast.success('Added');
-      setDraft({ list: 'INTERNAL', fullName: '', aliases: '', reason: '' });
+      toast.success("Added");
+      setDraft({ list: "INTERNAL", fullName: "", aliases: "", reason: "" });
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -81,9 +81,17 @@ export function ScreeningPage() {
         </p>
 
         {canEdit && (
-          <form onSubmit={onAdd} className="grid grid-cols-1 md:grid-cols-5 gap-2">
-            <Select value={draft.list} onValueChange={(v) => setDraft({ ...draft, list: v })}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+          <form
+            onSubmit={onAdd}
+            className="grid grid-cols-1 md:grid-cols-5 gap-2"
+          >
+            <Select
+              value={draft.list}
+              onValueChange={(v) => setDraft({ ...draft, list: v })}
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="INTERNAL">INTERNAL</SelectItem>
                 <SelectItem value="PEP">PEP</SelectItem>
@@ -108,8 +116,12 @@ export function ScreeningPage() {
               value={draft.reason}
               onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
             />
-            <Button type="submit" disabled={add.isPending || !draft.fullName.trim()} className="md:col-span-5">
-              {add.isPending ? 'Adding…' : 'Add entry'}
+            <Button
+              type="submit"
+              disabled={add.isPending || !draft.fullName.trim()}
+              className="md:col-span-5"
+            >
+              {add.isPending ? "Adding…" : "Add entry"}
             </Button>
           </form>
         )}
@@ -133,11 +145,19 @@ export function ScreeningPage() {
               {(list.data ?? []).map((w) => (
                 <tr key={w.id} className="hover:bg-white/[0.03]">
                   <td className="py-2 px-2">
-                    <Badge variant={w.list === 'SANCTIONS' ? 'danger' : 'warning'}>{w.list}</Badge>
+                    <Badge
+                      variant={w.list === "SANCTIONS" ? "danger" : "warning"}
+                    >
+                      {w.list}
+                    </Badge>
                   </td>
                   <td className="py-2 px-2">{w.fullName}</td>
-                  <td className="py-2 px-2 text-white/65 text-xs">{w.aliases.join(', ')}</td>
-                  <td className="py-2 px-2 text-white/65 text-xs">{w.reason ?? '—'}</td>
+                  <td className="py-2 px-2 text-white/65 text-xs">
+                    {w.aliases.join(", ")}
+                  </td>
+                  <td className="py-2 px-2 text-white/65 text-xs">
+                    {w.reason ?? "—"}
+                  </td>
                   <td className="py-2 px-2 text-right">
                     {canEdit && (
                       <button

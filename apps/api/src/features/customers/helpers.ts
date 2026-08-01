@@ -35,9 +35,7 @@ export function parseDateOr400(
  */
 export function normalizeScope(raw: string | undefined): LedgerScope {
   const u = (raw ?? "ALL").toUpperCase();
-  return u === "LOANS" || u === "COOP" || u === "ALL"
-    ? (u as LedgerScope)
-    : "ALL";
+  return u === "LOANS" || u === "COOP" || u === "ALL" ? u : "ALL";
 }
 
 /**

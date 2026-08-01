@@ -28,3 +28,6 @@ coverage/
 # datasets. Not tracked because the file is freely re-downloadable and
 # we don't want a 3 MB raw CSV in git history.
 data/
+
+.claude/worktrees
+.claude/settings.local.json

@@ -4,13 +4,12 @@
  * stored as a row (`OVERRIDDEN`) so the audit trail is complete.
  */
 
-import type { AmlProvider, MatchHit, ScreenStatus } from '@loan/screening';
+import type { AmlProvider, MatchHit, ScreenStatus } from "@loan/screening";
 import type {
   AmlScreening,
-  AmlStatus,
   AmlWatchlistEntry,
   PrismaClient,
-} from '@prisma/client';
+} from "@prisma/client";
 
 export class ScreeningRepository {
   constructor(
@@ -23,28 +22,32 @@ export class ScreeningRepository {
   listForCustomer(customerId: string): Promise<AmlScreening[]> {
     return this.prisma.amlScreening.findMany({
       where: { customerId },
-      orderBy: { screenedAt: 'desc' },
+      orderBy: { screenedAt: "desc" },
     });
   }
 
   async latestForCustomer(customerId: string): Promise<AmlScreening | null> {
     return this.prisma.amlScreening.findFirst({
       where: { customerId },
-      orderBy: { screenedAt: 'desc' },
+      orderBy: { screenedAt: "desc" },
     });
   }
 
   async screen(customerId: string): Promise<AmlScreening> {
-    const c = await this.prisma.customer.findUnique({ where: { id: customerId } });
-    if (!c) throw new Error('Customer not found');
+    const c = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+    });
+    if (!c) throw new Error("Customer not found");
     const result = await this.provider.screen({
-      fullName: `${c.firstName} ${c.middleName ?? ''} ${c.lastName}`.replace(/\s+/g, ' ').trim(),
+      fullName: `${c.firstName} ${c.middleName ?? ""} ${c.lastName}`
+        .replace(/\s+/g, " ")
+        .trim(),
       dateOfBirth: c.dateOfBirth.toISOString().slice(0, 10),
     });
     return this.prisma.amlScreening.create({
       data: {
         customerId,
-        status: result.status as AmlStatus,
+        status: result.status,
         provider: this.provider.name,
         providerRef: result.providerRef,
         matches: result.matches as never,
@@ -60,7 +63,7 @@ export class ScreeningRepository {
     return this.prisma.amlScreening.create({
       data: {
         customerId,
-        status: 'OVERRIDDEN' as AmlStatus,
+        status: "OVERRIDDEN",
         provider: this.provider.name,
         notes: note,
         overriddenById,
@@ -72,7 +75,9 @@ export class ScreeningRepository {
   // ─── Watchlist (mock provider's data source) ───────────────────────
 
   listWatchlist(): Promise<AmlWatchlistEntry[]> {
-    return this.prisma.amlWatchlistEntry.findMany({ orderBy: { fullName: 'asc' } });
+    return this.prisma.amlWatchlistEntry.findMany({
+      orderBy: { fullName: "asc" },
+    });
   }
 
   addWatchlistEntry(input: {
@@ -97,7 +102,12 @@ export class ScreeningRepository {
 
   /** Loader the MockAmlProvider uses to fetch the current watchlist. */
   watchlistLoader(): () => Promise<
-    Array<{ list: string; fullName: string; aliases: string[]; reason: string | null }>
+    Array<{
+      list: string;
+      fullName: string;
+      aliases: string[];
+      reason: string | null;
+    }>
   > {
     return async () => {
       const rows = await this.prisma.amlWatchlistEntry.findMany();

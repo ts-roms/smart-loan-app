@@ -20,8 +20,7 @@
 
 import type * as faceapi from "@vladmandic/face-api";
 
-const MODEL_BASE_URL =
-  (import.meta.env.VITE_FACE_API_MODELS as string | undefined) ?? "/models";
+const MODEL_BASE_URL = import.meta.env.VITE_FACE_API_MODELS ?? "/models";
 
 let modulePromise: Promise<typeof faceapi> | null = null;
 let modelsLoaded = false;

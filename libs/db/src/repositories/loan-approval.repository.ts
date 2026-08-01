@@ -238,7 +238,7 @@ export class LoanApprovalRepository {
       include: {
         approver: { select: { id: true, name: true, email: true } },
       },
-    }) as never;
+    });
   }
 
   /**

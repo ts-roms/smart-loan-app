@@ -75,9 +75,7 @@ export function TenantsList() {
       </header>
 
       {isLoading && <p style={{ color: "#94a3b8" }}>Loading…</p>}
-      {error && (
-        <p style={{ color: "#fca5a5" }}>Failed: {(error as Error).message}</p>
-      )}
+      {error && <p style={{ color: "#fca5a5" }}>Failed: {error.message}</p>}
 
       {data && data.length === 0 && (
         <div
@@ -184,7 +182,7 @@ function ProvisionDialog({ onClose }: { onClose: () => void }) {
       }),
     onSuccess: (res) => {
       setResult(res);
-      qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
+      void qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
     },
   });
 
@@ -274,7 +272,7 @@ function ProvisionDialog({ onClose }: { onClose: () => void }) {
                 color: "#fca5a5",
               }}
             >
-              {(provision.error as Error).message}
+              {provision.error.message}
             </div>
           )}
 

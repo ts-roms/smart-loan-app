@@ -1,7 +1,15 @@
-import { useBalanceSheet } from '@loan/api-client';
-import { Badge, Card, CardContent, CardHeader, CardTitle, DatePicker, SkeletonCard } from '@loan/ui';
-import { formatMoney } from '@loan/shared-utils';
-import { useState } from 'react';
+import { useBalanceSheet } from "@loan/api-client";
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  DatePicker,
+  SkeletonCard,
+} from "@loan/ui";
+import { formatMoney } from "@loan/shared-utils";
+import { useState } from "react";
 
 export function BalanceSheetPage() {
   const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
@@ -15,8 +23,8 @@ export function BalanceSheetPage() {
           <label className="text-white/55">As of</label>
           <DatePicker value={asOf} onChange={setAsOf} className="h-9 w-44" />
           {sheet.data && (
-            <Badge variant={sheet.data.inBalance ? 'success' : 'danger'}>
-              {sheet.data.inBalance ? 'In balance' : 'Out of balance'}
+            <Badge variant={sheet.data.inBalance ? "success" : "danger"}>
+              {sheet.data.inBalance ? "In balance" : "Out of balance"}
             </Badge>
           )}
         </div>
@@ -28,16 +36,28 @@ export function BalanceSheetPage() {
           <p className="text-sm text-white/55">No data.</p>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Section title="Assets" rows={sheet.data.assets.rows} total={sheet.data.assets.total} />
+            <Section
+              title="Assets"
+              rows={sheet.data.assets.rows}
+              total={sheet.data.assets.total}
+            />
             <div className="space-y-6">
-              <Section title="Liabilities" rows={sheet.data.liabilities.rows} total={sheet.data.liabilities.total} />
+              <Section
+                title="Liabilities"
+                rows={sheet.data.liabilities.rows}
+                total={sheet.data.liabilities.total}
+              />
               <div>
-                <h3 className="text-xs uppercase tracking-wider text-white/45 mb-2">Equity</h3>
+                <h3 className="text-xs uppercase tracking-wider text-white/45 mb-2">
+                  Equity
+                </h3>
                 <ul className="divide-y divide-white/5 text-sm">
                   {sheet.data.equity.rows.map((r) => (
                     <li key={r.code} className="flex justify-between py-1.5">
                       <span>
-                        <span className="font-mono text-white/55 mr-2">{r.code}</span>
+                        <span className="font-mono text-white/55 mr-2">
+                          {r.code}
+                        </span>
                         {r.name}
                       </span>
                       <span className="font-mono">{formatMoney(r.amount)}</span>
@@ -45,19 +65,25 @@ export function BalanceSheetPage() {
                   ))}
                   <li className="flex justify-between py-1.5">
                     <span>Retained earnings</span>
-                    <span className="font-mono">{formatMoney(sheet.data.retainedEarnings)}</span>
+                    <span className="font-mono">
+                      {formatMoney(sheet.data.retainedEarnings)}
+                    </span>
                   </li>
                   <li className="flex justify-between py-2 border-t border-white/10 font-semibold mt-1">
                     <span>Total equity</span>
                     <span className="font-mono">
-                      {formatMoney(sheet.data.equity.total + sheet.data.retainedEarnings)}
+                      {formatMoney(
+                        sheet.data.equity.total + sheet.data.retainedEarnings,
+                      )}
                     </span>
                   </li>
                 </ul>
               </div>
               <div className="border-t border-white/10 pt-3 flex items-center justify-between font-semibold">
                 <span>Total liabilities + equity</span>
-                <span className="font-mono">{formatMoney(sheet.data.totalLiabilitiesAndEquity)}</span>
+                <span className="font-mono">
+                  {formatMoney(sheet.data.totalLiabilitiesAndEquity)}
+                </span>
               </div>
             </div>
           </div>
@@ -78,9 +104,13 @@ function Section({
 }) {
   return (
     <div>
-      <h3 className="text-xs uppercase tracking-wider text-white/45 mb-2">{title}</h3>
+      <h3 className="text-xs uppercase tracking-wider text-white/45 mb-2">
+        {title}
+      </h3>
       <ul className="divide-y divide-white/5 text-sm">
-        {rows.length === 0 && <li className="py-2 text-white/45">No activity.</li>}
+        {rows.length === 0 && (
+          <li className="py-2 text-white/45">No activity.</li>
+        )}
         {rows.map((r) => (
           <li key={r.code} className="flex justify-between py-1.5">
             <span>

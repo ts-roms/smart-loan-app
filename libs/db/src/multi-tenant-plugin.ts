@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
 import { TenantPrismaCache } from "./tenant-cache";

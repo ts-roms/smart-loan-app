@@ -32,8 +32,7 @@ export interface PdfBundle {
 }
 
 export type RenderResult =
-  | { ok: true; bundle: PdfBundle }
-  | { ok: false; kind: "NotFound" };
+  { ok: true; bundle: PdfBundle } | { ok: false; kind: "NotFound" };
 
 interface PersonnelSignature {
   name: string;
@@ -398,11 +397,8 @@ export class DocumentsService {
       annualInterestRate: Number(loan.annualInterestRate),
       purpose: loan.purpose,
       submittedAt: loan.submittedAt,
-      interestMethod: loan.product.interestMethod as "DECLINING" | "FLAT",
-      paymentFrequency: loan.product.paymentFrequency as
-        | "MONTHLY"
-        | "BIWEEKLY"
-        | "WEEKLY",
+      interestMethod: loan.product.interestMethod,
+      paymentFrequency: loan.product.paymentFrequency,
     };
   }
 

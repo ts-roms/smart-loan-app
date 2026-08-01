@@ -4,12 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { getApiClient } from "../client";
 
 export type UploadSubdir =
-  | "kyc"
-  | "selfies"
-  | "collateral"
-  | "misc"
-  | "signatures"
-  | "branding";
+  "kyc" | "selfies" | "collateral" | "misc" | "signatures" | "branding";
 
 /**
  * Multipart file upload. The server returns a stable `url` (under

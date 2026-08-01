@@ -54,7 +54,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
     enabled: !!user && !idlePolicy.isLoading,
     onLogout: () => {
       handleSignOut();
-      navigate("/login");
+      void navigate("/login");
     },
   });
 

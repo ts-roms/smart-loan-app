@@ -1,5 +1,9 @@
-import { useAuditActions, useAuditEvents, useMyPermissions } from '@loan/api-client';
-import type { AuditEventRow } from '@loan/shared-types';
+import {
+  useAuditActions,
+  useAuditEvents,
+  useMyPermissions,
+} from "@loan/api-client";
+import type { AuditEventRow } from "@loan/shared-types";
 import {
   Avatar,
   Badge,
@@ -18,10 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
   SkeletonLine,
-} from '@loan/ui';
-import { formatDateTime } from '@loan/shared-utils';
-import { ScrollText, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+} from "@loan/ui";
+import { formatDateTime } from "@loan/shared-utils";
+import { ScrollText, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 
 /**
  * Audit log navbar trigger + drawer. Shows the last N privileged actions,
@@ -34,7 +38,7 @@ import { useMemo, useState } from 'react';
  */
 export function AuditLogTrigger() {
   const me = useMyPermissions();
-  const allowed = (me.data?.permissions ?? []).includes('admin.audit_log');
+  const allowed = (me.data?.permissions ?? []).includes("admin.audit_log");
   const [open, setOpen] = useState(false);
 
   if (!allowed) return null;
@@ -58,12 +62,12 @@ export function AuditLogTrigger() {
 }
 
 function AuditLogInspector() {
-  const [actionFilter, setActionFilter] = useState<string>('ALL');
-  const [actorSearch, setActorSearch] = useState('');
+  const [actionFilter, setActionFilter] = useState<string>("ALL");
+  const [actorSearch, setActorSearch] = useState("");
 
   const actions = useAuditActions();
   const events = useAuditEvents({
-    action: actionFilter === 'ALL' ? undefined : actionFilter,
+    action: actionFilter === "ALL" ? undefined : actionFilter,
     take: 100,
   });
 
@@ -86,8 +90,8 @@ function AuditLogInspector() {
           <div className="flex-1 min-w-0">
             <DrawerTitle>Audit log</DrawerTitle>
             <DrawerDescription>
-              Last 100 privileged actions. Append-only — entries can't be
-              edited or deleted.
+              Last 100 privileged actions. Append-only — entries can't be edited
+              or deleted.
             </DrawerDescription>
           </div>
         </div>
@@ -154,19 +158,22 @@ function AuditEventRowView({ event }: { event: AuditEventRow }) {
   const hasPayload =
     event.payload !== null &&
     event.payload !== undefined &&
-    !(typeof event.payload === 'object' && Object.keys(event.payload as object).length === 0);
+    !(
+      typeof event.payload === "object" &&
+      Object.keys(event.payload).length === 0
+    );
 
   return (
     <div className="px-3 py-2 text-xs">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <Avatar name={event.actorName ?? event.actorEmail ?? '—'} size="sm" />
+          <Avatar name={event.actorName ?? event.actorEmail ?? "—"} size="sm" />
           <div className="min-w-0">
             <div className="font-medium truncate">
-              {event.actorName ?? event.actorEmail ?? '—'}
+              {event.actorName ?? event.actorEmail ?? "—"}
             </div>
             <div className="text-[10px] text-white/45 truncate">
-              {event.actorEmail ?? '—'}
+              {event.actorEmail ?? "—"}
             </div>
           </div>
         </div>
@@ -180,7 +187,7 @@ function AuditEventRowView({ event }: { event: AuditEventRow }) {
         {event.targetType && (
           <span className="font-mono truncate">
             {event.targetType}
-            {event.targetId ? `:${event.targetId.slice(0, 8)}…` : ''}
+            {event.targetId ? `:${event.targetId.slice(0, 8)}…` : ""}
           </span>
         )}
       </div>
@@ -191,7 +198,7 @@ function AuditEventRowView({ event }: { event: AuditEventRow }) {
           onClick={() => setExpanded((x) => !x)}
           className="mt-1.5 text-[10px] text-sky-300 hover:text-sky-200"
         >
-          {expanded ? 'Hide payload' : 'Show payload'}
+          {expanded ? "Hide payload" : "Show payload"}
         </button>
       )}
       {expanded && hasPayload && (

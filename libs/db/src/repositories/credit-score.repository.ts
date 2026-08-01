@@ -1,8 +1,4 @@
-import type {
-  CreditScore,
-  CreditTier,
-  PrismaClient,
-} from '@prisma/client';
+import type { CreditScore, CreditTier, PrismaClient } from "@prisma/client";
 
 export interface BehaviorSignal {
   /** Total previous loans (any status). */
@@ -32,7 +28,7 @@ export class CreditScoreRepository {
   latestForCustomer(customerId: string): Promise<CreditScore | null> {
     return this.prisma.creditScore.findFirst({
       where: { customerId },
-      orderBy: { computedAt: 'desc' },
+      orderBy: { computedAt: "desc" },
     });
   }
 
@@ -58,7 +54,7 @@ export class CreditScoreRepository {
       where: { customerId },
       select: { id: true, status: true },
     });
-    const defaults = loans.filter((l) => l.status === 'DEFAULTED').length;
+    const defaults = loans.filter((l) => l.status === "DEFAULTED").length;
 
     // On-time rate: payments whose paidOn <= matching schedule dueDate.
     const schedules = await this.prisma.loanSchedule.findMany({

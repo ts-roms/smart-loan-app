@@ -12,14 +12,14 @@
  * avoids a layer of conversion noise.
  */
 
-import { format, parse } from 'date-fns';
-import { CalendarIcon, X } from 'lucide-react';
-import { useState } from 'react';
-import { Calendar } from './calendar';
-import { Popover, PopoverContent, PopoverTrigger } from './popover';
-import { cn } from '../lib/cn';
+import { format, parse } from "date-fns";
+import { CalendarIcon, X } from "lucide-react";
+import { useState } from "react";
+import { Calendar } from "./calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
+import { cn } from "../lib/cn";
 
-const ISO = 'yyyy-MM-dd';
+const ISO = "yyyy-MM-dd";
 
 function isoToDate(iso: string | undefined): Date | undefined {
   if (!iso) return undefined;
@@ -28,7 +28,7 @@ function isoToDate(iso: string | undefined): Date | undefined {
 }
 
 function dateToIso(d: Date | undefined): string {
-  return d ? format(d, ISO) : '';
+  return d ? format(d, ISO) : "";
 }
 
 export interface DatePickerProps {
@@ -52,11 +52,11 @@ export function DatePicker({
   onChange,
   min,
   max,
-  placeholder = 'Pick a date',
+  placeholder = "Pick a date",
   disabled,
   clearable,
   className,
-  displayFormat = 'PP',
+  displayFormat = "PP",
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const selected = isoToDate(value);
@@ -70,10 +70,10 @@ export function DatePicker({
           type="button"
           disabled={disabled}
           className={cn(
-            'flex h-10 w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-left',
-            'hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            selected ? 'text-white' : 'text-white/45',
+            "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-left",
+            "hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+            selected ? "text-white" : "text-white/45",
             className,
           )}
         >
@@ -90,7 +90,7 @@ export function DatePicker({
                   // clicks the X — handle clear inline and bail.
                   e.preventDefault();
                   e.stopPropagation();
-                  onChange('');
+                  onChange("");
                 }}
                 className="rounded-sm p-0.5 text-white/55 hover:text-white hover:bg-white/[0.08]"
               >

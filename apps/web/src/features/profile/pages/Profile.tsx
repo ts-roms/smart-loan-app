@@ -1,4 +1,4 @@
-import { useMyPermissions, useMyProfile } from '@loan/api-client';
+import { useMyPermissions, useMyProfile } from "@loan/api-client";
 import {
   Avatar,
   Badge,
@@ -8,12 +8,17 @@ import {
   CardHeader,
   CardTitle,
   SkeletonCard,
-} from '@loan/ui';
-import { formatDate } from '@loan/shared-utils';
-import { Mail, Settings as SettingsIcon, ShieldCheck, UserCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+} from "@loan/ui";
+import { formatDate } from "@loan/shared-utils";
+import {
+  Mail,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  UserCircle,
+} from "lucide-react";
+import { Link } from "react-router-dom";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 /**
  * My profile — read-only view of the signed-in user's identity, primary
@@ -90,7 +95,11 @@ export function ProfilePage() {
                     key={r.key}
                     className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-xs"
                   >
-                    <span className={r.system ? 'text-sky-300' : 'text-emerald-300'}>{r.name}</span>
+                    <span
+                      className={r.system ? "text-sky-300" : "text-emerald-300"}
+                    >
+                      {r.name}
+                    </span>
                     {r.system && <Badge variant="muted">System</Badge>}
                   </span>
                 ))}
@@ -102,9 +111,10 @@ export function ProfilePage() {
               Effective permissions
             </div>
             <p className="text-sm">
-              <span className="font-mono">{permCount}</span>{' '}
+              <span className="font-mono">{permCount}</span>{" "}
               <span className="text-white/55">
-                permission{permCount === 1 ? '' : 's'} active (your roles + any held delegations)
+                permission{permCount === 1 ? "" : "s"} active (your roles + any
+                held delegations)
               </span>
             </p>
           </div>

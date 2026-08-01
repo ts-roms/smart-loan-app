@@ -53,11 +53,11 @@ export function useApproveStep(loanIdOrNumber: string) {
         input ?? {},
       ),
     onSuccess: () => {
-      qc.invalidateQueries({
+      void qc.invalidateQueries({
         queryKey: loanApprovalKeys.forLoan(loanIdOrNumber),
       });
       // Loan detail caches everywhere need the updated status + step.
-      qc.invalidateQueries({ queryKey: ["loans"] });
+      void qc.invalidateQueries({ queryKey: ["loans"] });
     },
   });
 }
@@ -75,10 +75,10 @@ export function useRejectStep(loanIdOrNumber: string) {
         input,
       ),
     onSuccess: () => {
-      qc.invalidateQueries({
+      void qc.invalidateQueries({
         queryKey: loanApprovalKeys.forLoan(loanIdOrNumber),
       });
-      qc.invalidateQueries({ queryKey: ["loans"] });
+      void qc.invalidateQueries({ queryKey: ["loans"] });
     },
   });
 }
@@ -107,7 +107,9 @@ export function useUpdateApprovalChain(productCode: string) {
         },
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: loanApprovalKeys.chain(productCode) });
+      void qc.invalidateQueries({
+        queryKey: loanApprovalKeys.chain(productCode),
+      });
     },
   });
 }

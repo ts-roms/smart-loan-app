@@ -42,8 +42,7 @@ export type ResolveResult =
   | { ok: false; kind: "NotLinked"; message: string };
 
 export type LookupResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; kind: "NotFound" };
+  { ok: true; value: T } | { ok: false; kind: "NotFound" };
 
 export type ApplyResult =
   | { ok: true; loan: Awaited<ReturnType<LoanRepository["apply"]>> }

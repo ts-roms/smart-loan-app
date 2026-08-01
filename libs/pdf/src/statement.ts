@@ -183,7 +183,8 @@ export function renderStatementOfAccount(
       footer(doc, `${input.companyName} · Statement for ${input.loan.number}`);
       doc.end();
     } catch (err) {
-      reject(err);
+      // See agreement.ts — normalize so callers always get an Error.
+      reject(err instanceof Error ? err : new Error(String(err)));
     }
   });
 }

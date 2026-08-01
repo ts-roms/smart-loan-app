@@ -67,9 +67,9 @@ export function useCreateDelegation() {
     mutationFn: (input: DelegationCreateInput) =>
       getApiClient().post<Delegation>("/delegations", input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: delegationKeys.mine });
-      qc.invalidateQueries({ queryKey: delegationKeys.all });
-      qc.invalidateQueries({ queryKey: delegationKeys.active });
+      void qc.invalidateQueries({ queryKey: delegationKeys.mine });
+      void qc.invalidateQueries({ queryKey: delegationKeys.all });
+      void qc.invalidateQueries({ queryKey: delegationKeys.active });
     },
   });
 }
@@ -82,9 +82,9 @@ export function useRevokeDelegation() {
         reason: input.reason,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: delegationKeys.mine });
-      qc.invalidateQueries({ queryKey: delegationKeys.all });
-      qc.invalidateQueries({ queryKey: delegationKeys.active });
+      void qc.invalidateQueries({ queryKey: delegationKeys.mine });
+      void qc.invalidateQueries({ queryKey: delegationKeys.all });
+      void qc.invalidateQueries({ queryKey: delegationKeys.active });
     },
   });
 }
@@ -103,9 +103,9 @@ export function useExtendDelegation() {
         endsAt: input.endsAt,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: delegationKeys.mine });
-      qc.invalidateQueries({ queryKey: delegationKeys.all });
-      qc.invalidateQueries({ queryKey: delegationKeys.active });
+      void qc.invalidateQueries({ queryKey: delegationKeys.mine });
+      void qc.invalidateQueries({ queryKey: delegationKeys.all });
+      void qc.invalidateQueries({ queryKey: delegationKeys.active });
     },
   });
 }

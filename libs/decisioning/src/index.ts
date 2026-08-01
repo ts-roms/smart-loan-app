@@ -12,16 +12,10 @@
  */
 
 export type DecisioningOp =
-  | '='
-  | '!='
-  | '<'
-  | '<='
-  | '>'
-  | '>='
-  | 'in'
-  | 'not_in';
+  "=" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not_in";
 
-export type DecisioningValue = string | number | boolean | Array<string | number>;
+export type DecisioningValue =
+  string | number | boolean | Array<string | number>;
 
 export interface DecisioningCondition {
   field: string;
@@ -29,7 +23,7 @@ export interface DecisioningCondition {
   value: DecisioningValue;
 }
 
-export type RuleAction = 'AUTO_APPROVE' | 'AUTO_REJECT' | 'MANUAL_REVIEW';
+export type RuleAction = "AUTO_APPROVE" | "AUTO_REJECT" | "MANUAL_REVIEW";
 
 export interface DecisionRule {
   id: string;
@@ -51,9 +45,9 @@ export interface DecisioningContext {
   principal: number;
   termMonths: number;
   annualInterestRate: number;
-  tierAtApply: 'A' | 'B' | 'C' | 'D' | 'F' | null;
+  tierAtApply: "A" | "B" | "C" | "D" | "F" | null;
   creditScoreAtApply: number | null;
-  amlStatus: 'PENDING' | 'CLEAR' | 'MATCH' | 'REVIEW' | 'OVERRIDDEN' | null;
+  amlStatus: "PENDING" | "CLEAR" | "MATCH" | "REVIEW" | "OVERRIDDEN" | null;
   kycComplete: boolean;
   customerAge: number;
   monthlyIncome: number;
@@ -72,20 +66,24 @@ export interface DecisioningResult {
 /** All fields the DSL recognises. UI uses this to drive the rule editor. */
 export const DECISIONING_FIELDS: ReadonlyArray<{
   field: keyof DecisioningContext;
-  type: 'string' | 'number' | 'boolean';
+  type: "string" | "number" | "boolean";
   values?: ReadonlyArray<string>;
 }> = [
-  { field: 'productCode', type: 'string' },
-  { field: 'principal', type: 'number' },
-  { field: 'termMonths', type: 'number' },
-  { field: 'annualInterestRate', type: 'number' },
-  { field: 'tierAtApply', type: 'string', values: ['A', 'B', 'C', 'D', 'F'] },
-  { field: 'creditScoreAtApply', type: 'number' },
-  { field: 'amlStatus', type: 'string', values: ['CLEAR', 'PENDING', 'MATCH', 'REVIEW', 'OVERRIDDEN'] },
-  { field: 'kycComplete', type: 'boolean' },
-  { field: 'customerAge', type: 'number' },
-  { field: 'monthlyIncome', type: 'number' },
-  { field: 'existingActiveLoans', type: 'number' },
+  { field: "productCode", type: "string" },
+  { field: "principal", type: "number" },
+  { field: "termMonths", type: "number" },
+  { field: "annualInterestRate", type: "number" },
+  { field: "tierAtApply", type: "string", values: ["A", "B", "C", "D", "F"] },
+  { field: "creditScoreAtApply", type: "number" },
+  {
+    field: "amlStatus",
+    type: "string",
+    values: ["CLEAR", "PENDING", "MATCH", "REVIEW", "OVERRIDDEN"],
+  },
+  { field: "kycComplete", type: "boolean" },
+  { field: "customerAge", type: "number" },
+  { field: "monthlyIncome", type: "number" },
+  { field: "existingActiveLoans", type: "number" },
 ];
 
 /**
@@ -109,24 +107,56 @@ export function evaluateRules(
     }
   }
   return {
-    action: 'MANUAL_REVIEW',
+    action: "MANUAL_REVIEW",
     matched: null,
-    reason: 'No rule matched; routed to manual review.',
+    reason: "No rule matched; routed to manual review.",
   };
 }
 
-function matchesCondition(c: DecisioningCondition, ctx: DecisioningContext): boolean {
+function matchesCondition(
+  c: DecisioningCondition,
+  ctx: DecisioningContext,
+): boolean {
   const actual = (ctx as unknown as Record<string, unknown>)[c.field];
   switch (c.op) {
-    case '=':  return actual === c.value;
-    case '!=': return actual !== c.value;
-    case '<':  return typeof actual === 'number' && typeof c.value === 'number' && actual < c.value;
-    case '<=': return typeof actual === 'number' && typeof c.value === 'number' && actual <= c.value;
-    case '>':  return typeof actual === 'number' && typeof c.value === 'number' && actual > c.value;
-    case '>=': return typeof actual === 'number' && typeof c.value === 'number' && actual >= c.value;
-    case 'in':     return Array.isArray(c.value) && (c.value as Array<unknown>).includes(actual as never);
-    case 'not_in': return Array.isArray(c.value) && !(c.value as Array<unknown>).includes(actual as never);
-    default: return false;
+    case "=":
+      return actual === c.value;
+    case "!=":
+      return actual !== c.value;
+    case "<":
+      return (
+        typeof actual === "number" &&
+        typeof c.value === "number" &&
+        actual < c.value
+      );
+    case "<=":
+      return (
+        typeof actual === "number" &&
+        typeof c.value === "number" &&
+        actual <= c.value
+      );
+    case ">":
+      return (
+        typeof actual === "number" &&
+        typeof c.value === "number" &&
+        actual > c.value
+      );
+    case ">=":
+      return (
+        typeof actual === "number" &&
+        typeof c.value === "number" &&
+        actual >= c.value
+      );
+    case "in":
+      return (
+        Array.isArray(c.value) && (c.value as Array<unknown>).includes(actual)
+      );
+    case "not_in":
+      return (
+        Array.isArray(c.value) && !(c.value as Array<unknown>).includes(actual)
+      );
+    default:
+      return false;
   }
 }
 
@@ -142,66 +172,66 @@ function matchesCondition(c: DecisioningCondition, ctx: DecisioningContext): boo
  *   110 · B tier ≤ 100k + clean  AUTO_APPROVE
  *   1000 · catch-all             MANUAL_REVIEW
  */
-export const DEFAULT_RULES: Omit<DecisionRule, 'id'>[] = [
+export const DEFAULT_RULES: Omit<DecisionRule, "id">[] = [
   {
-    name: 'AML hard-block',
+    name: "AML hard-block",
     priority: 10,
-    conditions: [{ field: 'amlStatus', op: '=', value: 'MATCH' }],
-    action: 'AUTO_REJECT',
-    reason: 'Customer has an unresolved AML match.',
+    conditions: [{ field: "amlStatus", op: "=", value: "MATCH" }],
+    action: "AUTO_REJECT",
+    reason: "Customer has an unresolved AML match.",
     active: true,
   },
   {
-    name: 'KYC incomplete → manual',
+    name: "KYC incomplete → manual",
     priority: 20,
-    conditions: [{ field: 'kycComplete', op: '=', value: false }],
-    action: 'MANUAL_REVIEW',
-    reason: 'KYC documents incomplete.',
+    conditions: [{ field: "kycComplete", op: "=", value: false }],
+    action: "MANUAL_REVIEW",
+    reason: "KYC documents incomplete.",
     active: true,
   },
   {
-    name: 'F tier auto-reject',
+    name: "F tier auto-reject",
     priority: 30,
-    conditions: [{ field: 'tierAtApply', op: '=', value: 'F' }],
-    action: 'AUTO_REJECT',
-    reason: 'Credit tier F is below underwriting threshold.',
+    conditions: [{ field: "tierAtApply", op: "=", value: "F" }],
+    action: "AUTO_REJECT",
+    reason: "Credit tier F is below underwriting threshold.",
     active: true,
   },
   {
-    name: 'D tier large amount → manual',
+    name: "D tier large amount → manual",
     priority: 40,
     conditions: [
-      { field: 'tierAtApply', op: '=', value: 'D' },
-      { field: 'principal', op: '>', value: 50_000 },
+      { field: "tierAtApply", op: "=", value: "D" },
+      { field: "principal", op: ">", value: 50_000 },
     ],
-    action: 'MANUAL_REVIEW',
-    reason: 'Tier D applicant requesting > ₱50k — needs officer review.',
+    action: "MANUAL_REVIEW",
+    reason: "Tier D applicant requesting > ₱50k — needs officer review.",
     active: true,
   },
   {
-    name: 'A tier fast-track',
+    name: "A tier fast-track",
     priority: 100,
     conditions: [
-      { field: 'tierAtApply', op: '=', value: 'A' },
-      { field: 'principal', op: '<=', value: 200_000 },
-      { field: 'amlStatus', op: 'in', value: ['CLEAR', 'OVERRIDDEN'] },
-      { field: 'kycComplete', op: '=', value: true },
+      { field: "tierAtApply", op: "=", value: "A" },
+      { field: "principal", op: "<=", value: 200_000 },
+      { field: "amlStatus", op: "in", value: ["CLEAR", "OVERRIDDEN"] },
+      { field: "kycComplete", op: "=", value: true },
     ],
-    action: 'AUTO_APPROVE',
-    reason: 'Tier A applicant, principal ≤ ₱200k, KYC verified, AML clear.',
+    action: "AUTO_APPROVE",
+    reason: "Tier A applicant, principal ≤ ₱200k, KYC verified, AML clear.",
     active: true,
   },
   {
-    name: 'B tier moderate fast-track',
+    name: "B tier moderate fast-track",
     priority: 110,
     conditions: [
-      { field: 'tierAtApply', op: '=', value: 'B' },
-      { field: 'principal', op: '<=', value: 100_000 },
-      { field: 'amlStatus', op: 'in', value: ['CLEAR', 'OVERRIDDEN'] },
-      { field: 'kycComplete', op: '=', value: true },
+      { field: "tierAtApply", op: "=", value: "B" },
+      { field: "principal", op: "<=", value: 100_000 },
+      { field: "amlStatus", op: "in", value: ["CLEAR", "OVERRIDDEN"] },
+      { field: "kycComplete", op: "=", value: true },
     ],
-    action: 'AUTO_APPROVE',
-    reason: 'Tier B applicant, principal ≤ ₱100k, KYC verified, AML clear.',
+    action: "AUTO_APPROVE",
+    reason: "Tier B applicant, principal ≤ ₱100k, KYC verified, AML clear.",
     active: true,
   },
 ];

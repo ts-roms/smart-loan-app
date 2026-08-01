@@ -85,7 +85,7 @@ export class ApiClient {
         parsed &&
         typeof parsed === "object" &&
         "message" in parsed &&
-        typeof (parsed as { message: unknown }).message === "string"
+        typeof parsed.message === "string"
           ? (parsed as { message: string }).message
           : `API ${res.status}`;
       throw new ApiError(res.status, message, parsed);

@@ -101,7 +101,7 @@ export function useUpdateBranding() {
         body: JSON.stringify(input),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: systemKeys.branding });
+      void qc.invalidateQueries({ queryKey: systemKeys.branding });
     },
   });
 }
@@ -116,7 +116,7 @@ export function useUpdateIdlePolicy() {
         body: JSON.stringify(input),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: systemKeys.idlePolicy });
+      void qc.invalidateQueries({ queryKey: systemKeys.idlePolicy });
     },
   });
 }
@@ -143,15 +143,23 @@ export function readUserIdleOverride(): UserIdleOverride {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw);
+    // `JSON.parse` is typed `any`, which silently disables type checking
+    // on everything downstream of it. Land it in `unknown` and narrow —
+    // the runtime guards below were already correct, they just weren't
+    // being type-checked.
+    const parsed: unknown = JSON.parse(raw);
+    const obj: Record<string, unknown> =
+      typeof parsed === "object" && parsed !== null
+        ? (parsed as Record<string, unknown>)
+        : {};
     return {
       idleTimeoutSeconds:
-        typeof parsed?.idleTimeoutSeconds === "number"
-          ? parsed.idleTimeoutSeconds
+        typeof obj.idleTimeoutSeconds === "number"
+          ? obj.idleTimeoutSeconds
           : undefined,
       idleWarningSeconds:
-        typeof parsed?.idleWarningSeconds === "number"
-          ? parsed.idleWarningSeconds
+        typeof obj.idleWarningSeconds === "number"
+          ? obj.idleWarningSeconds
           : undefined,
     };
   } catch {

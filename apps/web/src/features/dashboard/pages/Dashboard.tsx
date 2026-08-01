@@ -515,12 +515,7 @@ function HeroKpi({
 }
 
 type SparklineTone =
-  | "primary"
-  | "success"
-  | "warning"
-  | "danger"
-  | "neutral"
-  | "auto";
+  "primary" | "success" | "warning" | "danger" | "neutral" | "auto";
 
 // ─── Micro KPI (secondary strip) ────────────────────────────────────
 
@@ -1000,7 +995,9 @@ function EmptyState({
 // as authoritative analytics.
 
 function synthCumulative(total: number, points: number): number[] {
-  if (total <= 0) return Array(Math.max(points, 6)).fill(0);
+  // `Array(n)` is `any[]`; the generic form keeps the declared return type
+  // honest instead of laundering `any` through `.fill()`.
+  if (total <= 0) return Array<number>(Math.max(points, 6)).fill(0);
   const n = Math.max(points, 6);
   // Mild S-curve growth ending at `total` — looks more natural than a
   // straight line. Tunes between 0.45 (slow start) and 1.0 (final value).
@@ -1013,7 +1010,7 @@ function synthCumulative(total: number, points: number): number[] {
 
 function approximateNplTrend(current: number, points: number): number[] {
   const n = Math.max(points, 6);
-  if (current === 0) return Array(n).fill(0);
+  if (current === 0) return Array<number>(n).fill(0);
   // Small oscillation around the current value so the sparkline reads as
   // "moving" without claiming a specific historical reading.
   return Array.from({ length: n }, (_, i) => {

@@ -67,8 +67,8 @@ export function TenantDetail() {
     mutationFn: (op: "suspend" | "restore" | "archive") =>
       api(`/platform/tenants/${slug}/${op}`, { method: "POST" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["platform", "tenant", slug] });
-      qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
+      void qc.invalidateQueries({ queryKey: ["platform", "tenant", slug] });
+      void qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
     },
   });
 
@@ -79,11 +79,11 @@ export function TenantDetail() {
         body: JSON.stringify({ reason }),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["platform", "tenant", slug] });
-      qc.invalidateQueries({
+      void qc.invalidateQueries({ queryKey: ["platform", "tenant", slug] });
+      void qc.invalidateQueries({
         queryKey: ["platform", "tenant", slug, "licenses"],
       });
-      qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
+      void qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
     },
   });
 
@@ -97,8 +97,8 @@ export function TenantDetail() {
       ),
     onSuccess: (res) => {
       setRetryResult(res);
-      qc.invalidateQueries({ queryKey: ["platform", "tenant", slug] });
-      qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
+      void qc.invalidateQueries({ queryKey: ["platform", "tenant", slug] });
+      void qc.invalidateQueries({ queryKey: ["platform", "tenants"] });
     },
   });
 
@@ -121,7 +121,7 @@ export function TenantDetail() {
           retryResult={retryResult}
           onRetry={() => retry.mutate()}
           retrying={retry.isPending}
-          retryError={retry.error as Error | null}
+          retryError={retry.error}
           canRetry={isAdmin}
         />
       )}

@@ -2,7 +2,12 @@
  * Co-maker / co-borrower / guarantor persistence. A loan can have many;
  * the API attaches them at apply time and via post-apply endpoints.
  */
-import type { CoMaker, CoMakerRole, GovernmentIdType, PrismaClient } from '@prisma/client';
+import type {
+  CoMaker,
+  CoMakerRole,
+  GovernmentIdType,
+  PrismaClient,
+} from "@prisma/client";
 
 export interface CoMakerInput {
   fullName: string;
@@ -24,7 +29,7 @@ export class CoMakerRepository {
   listForLoan(loanId: string): Promise<CoMaker[]> {
     return this.prisma.coMaker.findMany({
       where: { loanId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: "asc" },
     });
   }
 
@@ -33,7 +38,7 @@ export class CoMakerRepository {
       data: {
         loanId,
         fullName: input.fullName,
-        role: (input.role ?? 'CO_MAKER') as CoMakerRole,
+        role: input.role ?? "CO_MAKER",
         relationship: input.relationship,
         phone: input.phone,
         email: input.email,

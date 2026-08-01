@@ -4,7 +4,7 @@ import {
   useBankStatementSummary,
   useMatchLine,
   useUnmatchLine,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -16,8 +16,8 @@ import {
   useConfirm,
   usePrompt,
   useToast,
-} from '@loan/ui';
-import { formatDate, formatMoney } from '@loan/shared-utils';
+} from "@loan/ui";
+import { formatDate, formatMoney } from "@loan/shared-utils";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -25,10 +25,10 @@ import {
   Link2,
   Sparkles,
   Unlink,
-} from 'lucide-react';
-import { useParams, Link as RouterLink } from 'react-router-dom';
+} from "lucide-react";
+import { useParams, Link as RouterLink } from "react-router-dom";
 
-import { BankLineLink } from '../components/BankLineDrawer';
+import { BankLineLink } from "../components/BankLineDrawer";
 
 /**
  * One bank statement = list of lines + summary + auto/manual match actions.
@@ -36,7 +36,7 @@ import { BankLineLink } from '../components/BankLineDrawer';
  * decision.
  */
 export function StatementDetailPage() {
-  const { id = '' } = useParams<{ id: string }>();
+  const { id = "" } = useParams<{ id: string }>();
   const statement = useBankStatement(id);
   const summary = useBankStatementSummary(id);
   const autoMatch = useAutoMatchStatement();
@@ -47,7 +47,8 @@ export function StatementDetailPage() {
   const askPrompt = usePrompt();
 
   if (statement.isLoading) return <SkeletonCard />;
-  if (!statement.data) return <p className="text-sm text-white/55">Statement not found.</p>;
+  if (!statement.data)
+    return <p className="text-sm text-white/55">Statement not found.</p>;
   const s = statement.data;
 
   const onAutoMatch = async () => {
@@ -55,39 +56,40 @@ export function StatementDetailPage() {
       const result = await autoMatch.mutateAsync(id);
       toast.success(
         result.matchedLines > 0
-          ? `Matched ${result.matchedLines} line${result.matchedLines === 1 ? '' : 's'} (${formatMoney(result.matchedAmount)})`
-          : 'No new matches found — try manual match for the remaining lines.',
+          ? `Matched ${result.matchedLines} line${result.matchedLines === 1 ? "" : "s"} (${formatMoney(result.matchedAmount)})`
+          : "No new matches found — try manual match for the remaining lines.",
       );
     } catch (err) {
-      toast.error((err as Error).message ?? 'Auto-match failed');
+      toast.error((err as Error).message ?? "Auto-match failed");
     }
   };
 
   const onManualMatch = async (lineId: string) => {
     const type = await askPrompt({
-      title: 'Match this line manually',
+      title: "Match this line manually",
       message:
-        'Pick a match type: LoanPayment, LoanDisbursement, MANUAL (for fees, owner draws, etc.). The refId is optional but recommended for the first two.',
-      label: 'Match type',
-      placeholder: 'LoanPayment',
-      defaultValue: 'MANUAL',
-      confirmLabel: 'Next',
+        "Pick a match type: LoanPayment, LoanDisbursement, MANUAL (for fees, owner draws, etc.). The refId is optional but recommended for the first two.",
+      label: "Match type",
+      placeholder: "LoanPayment",
+      defaultValue: "MANUAL",
+      confirmLabel: "Next",
     });
     if (type === null) return;
     const refId = await askPrompt({
-      title: 'Reference id (optional)',
-      message: 'For LoanPayment/LoanDisbursement, paste the loan or payment id. Leave blank for MANUAL.',
-      label: 'refId',
-      placeholder: 'uuid',
-      confirmLabel: 'Next',
+      title: "Reference id (optional)",
+      message:
+        "For LoanPayment/LoanDisbursement, paste the loan or payment id. Leave blank for MANUAL.",
+      label: "refId",
+      placeholder: "uuid",
+      confirmLabel: "Next",
     });
     if (refId === null) return;
     const note = await askPrompt({
-      title: 'Note (optional)',
-      message: 'Free-form context for the audit trail.',
-      label: 'Note',
-      placeholder: 'e.g. monthly bank fee',
-      confirmLabel: 'Match',
+      title: "Note (optional)",
+      message: "Free-form context for the audit trail.",
+      label: "Note",
+      placeholder: "e.g. monthly bank fee",
+      confirmLabel: "Match",
     });
     if (note === null) return;
     try {
@@ -98,25 +100,26 @@ export function StatementDetailPage() {
         refId: refId || undefined,
         note: note || undefined,
       });
-      toast.success('Line matched');
+      toast.success("Line matched");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Match failed');
+      toast.error((err as Error).message ?? "Match failed");
     }
   };
 
   const onUnmatch = async (lineId: string) => {
     const ok = await confirm({
-      title: 'Unmatch this line?',
-      message: 'The line will go back to unreconciled. The original journal entry is unaffected.',
-      confirmLabel: 'Unmatch',
-      tone: 'destructive',
+      title: "Unmatch this line?",
+      message:
+        "The line will go back to unreconciled. The original journal entry is unaffected.",
+      confirmLabel: "Unmatch",
+      tone: "destructive",
     });
     if (!ok) return;
     try {
       await unmatchLine.mutateAsync({ lineId, statementId: id });
-      toast.success('Line unmatched');
+      toast.success("Line unmatched");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Unmatch failed');
+      toast.error((err as Error).message ?? "Unmatch failed");
     }
   };
 
@@ -127,7 +130,8 @@ export function StatementDetailPage() {
           <div>
             <CardTitle>{s.label}</CardTitle>
             <p className="text-xs text-white/55 mt-0.5">
-              {s.bankAccount} · {formatDate(s.periodStart)} → {formatDate(s.periodEnd)}
+              {s.bankAccount} · {formatDate(s.periodStart)} →{" "}
+              {formatDate(s.periodEnd)}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -139,28 +143,44 @@ export function StatementDetailPage() {
             </Button>
             <Button onClick={onAutoMatch} disabled={autoMatch.isPending}>
               <Sparkles className="h-3 w-3" />
-              {autoMatch.isPending ? 'Matching…' : 'Auto-match'}
+              {autoMatch.isPending ? "Matching…" : "Auto-match"}
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-            <Stat label="Opening" value={formatMoney(Number(s.openingBalance))} />
-            <Stat label="Closing" value={formatMoney(Number(s.closingBalance))} />
+            <Stat
+              label="Opening"
+              value={formatMoney(Number(s.openingBalance))}
+            />
+            <Stat
+              label="Closing"
+              value={formatMoney(Number(s.closingBalance))}
+            />
             <Stat
               label="Lines"
-              value={summary.data ? `${summary.data.matched}/${summary.data.totalLines}` : '—'}
+              value={
+                summary.data
+                  ? `${summary.data.matched}/${summary.data.totalLines}`
+                  : "—"
+              }
               sub="matched/total"
             />
             <Stat
               label="Matched ₱"
-              value={summary.data ? formatMoney(summary.data.matchedAmount) : '—'}
+              value={
+                summary.data ? formatMoney(summary.data.matchedAmount) : "—"
+              }
               accent="emerald"
             />
             <Stat
               label="Unmatched ₱"
-              value={summary.data ? formatMoney(summary.data.unmatchedAmount) : '—'}
-              accent={summary.data && summary.data.unmatched > 0 ? 'amber' : undefined}
+              value={
+                summary.data ? formatMoney(summary.data.unmatchedAmount) : "—"
+              }
+              accent={
+                summary.data && summary.data.unmatched > 0 ? "amber" : undefined
+              }
             />
           </div>
         </CardContent>
@@ -188,13 +208,15 @@ export function StatementDetailPage() {
                 const matched = l.matchedAt !== null;
                 return (
                   <tr key={l.id} className="hover:bg-white/[0.03]">
-                    <td className="py-2 px-2 text-xs">{formatDate(l.txnDate)}</td>
+                    <td className="py-2 px-2 text-xs">
+                      {formatDate(l.txnDate)}
+                    </td>
                     <td className="py-2 px-2">{l.description}</td>
                     <td className="py-2 px-2 font-mono text-[10px] text-white/65">
-                      {l.reference ?? '—'}
+                      {l.reference ?? "—"}
                     </td>
                     <td
-                      className={`py-2 px-2 text-right font-mono ${amount < 0 ? 'text-rose-300' : 'text-emerald-300'}`}
+                      className={`py-2 px-2 text-right font-mono ${amount < 0 ? "text-rose-300" : "text-emerald-300"}`}
                     >
                       {formatMoney(amount)}
                     </td>
@@ -204,7 +226,10 @@ export function StatementDetailPage() {
                           <CheckCircle2 className="h-3 w-3 text-emerald-300" />
                           <Badge variant="success">{l.matchedType}</Badge>
                           {l.matchNote && (
-                            <span className="text-white/55 ml-1 truncate max-w-[12rem]" title={l.matchNote}>
+                            <span
+                              className="text-white/55 ml-1 truncate max-w-[12rem]"
+                              title={l.matchNote}
+                            >
                               {l.matchNote}
                             </span>
                           )}
@@ -218,12 +243,20 @@ export function StatementDetailPage() {
                     </td>
                     <td className="py-2 px-2 text-right">
                       {matched ? (
-                        <Button size="sm" variant="outline" onClick={() => onUnmatch(l.id)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onUnmatch(l.id)}
+                        >
                           <Unlink className="h-3 w-3" />
                           Unmatch
                         </Button>
                       ) : (
-                        <Button size="sm" variant="outline" onClick={() => onManualMatch(l.id)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onManualMatch(l.id)}
+                        >
                           <Link2 className="h-3 w-3" />
                           Match
                         </Button>
@@ -249,17 +282,19 @@ function Stat({
   label: string;
   value: string;
   sub?: string;
-  accent?: 'emerald' | 'amber';
+  accent?: "emerald" | "amber";
 }) {
   const color =
-    accent === 'emerald'
-      ? 'text-emerald-300'
-      : accent === 'amber'
-        ? 'text-amber-300'
-        : 'text-white';
+    accent === "emerald"
+      ? "text-emerald-300"
+      : accent === "amber"
+        ? "text-amber-300"
+        : "text-white";
   return (
     <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-[10px] uppercase tracking-wider text-white/55">{label}</div>
+      <div className="text-[10px] uppercase tracking-wider text-white/55">
+        {label}
+      </div>
       <div className={`font-mono text-sm mt-1 ${color}`}>{value}</div>
       {sub && <div className="text-[10px] text-white/45">{sub}</div>}
     </div>

@@ -15,7 +15,7 @@ import type {
   BankStatementLine,
   PrismaClient,
   Prisma,
-} from '@prisma/client';
+} from "@prisma/client";
 
 export interface BankStatementCreateInput {
   label: string;
@@ -52,14 +52,16 @@ export class BankReconciliationRepository {
 
   list(): Promise<BankStatement[]> {
     return this.prisma.bankStatement.findMany({
-      orderBy: { periodStart: 'desc' },
+      orderBy: { periodStart: "desc" },
     });
   }
 
-  findById(id: string): Promise<(BankStatement & { lines: BankStatementLine[] }) | null> {
+  findById(
+    id: string,
+  ): Promise<(BankStatement & { lines: BankStatementLine[] }) | null> {
     return this.prisma.bankStatement.findUnique({
       where: { id },
-      include: { lines: { orderBy: { txnDate: 'asc' } } },
+      include: { lines: { orderBy: { txnDate: "asc" } } },
     });
   }
 
@@ -79,7 +81,8 @@ export class BankReconciliationRepository {
               description: l.description,
               amount: l.amount as unknown as Prisma.Decimal,
               reference: l.reference ?? null,
-              runningBalance: (l.runningBalance ?? null) as unknown as Prisma.Decimal | null,
+              runningBalance: (l.runningBalance ??
+                null) as unknown as Prisma.Decimal | null,
             })),
           },
         },
@@ -97,7 +100,7 @@ export class BankReconciliationRepository {
     const lines = await this.prisma.bankStatementLine.findMany({
       where: { statementId, matchedAt: null },
     });
-    const details: AutoMatchResult['details'] = [];
+    const details: AutoMatchResult["details"] = [];
     let matchedLines = 0;
     let matchedAmount = 0;
 
@@ -119,7 +122,7 @@ export class BankReconciliationRepository {
           },
           take: 5,
         });
-        let match: typeof candidates[number] | undefined;
+        let match: (typeof candidates)[number] | undefined;
         if (line.reference) {
           match = candidates.find((p) => p.reference === line.reference);
         }
@@ -128,14 +131,18 @@ export class BankReconciliationRepository {
           await this.prisma.bankStatementLine.update({
             where: { id: line.id },
             data: {
-              matchedType: 'LoanPayment',
+              matchedType: "LoanPayment",
               matchedRefId: match.id,
               matchedAt: new Date(),
             },
           });
           matchedLines++;
           matchedAmount += amount;
-          details.push({ lineId: line.id, matchedType: 'LoanPayment', matchedRefId: match.id });
+          details.push({
+            lineId: line.id,
+            matchedType: "LoanPayment",
+            matchedRefId: match.id,
+          });
           continue;
         }
       } else {
@@ -152,7 +159,7 @@ export class BankReconciliationRepository {
           await this.prisma.bankStatementLine.update({
             where: { id: line.id },
             data: {
-              matchedType: 'LoanDisbursement',
+              matchedType: "LoanDisbursement",
               matchedRefId: candidates[0]!.id,
               matchedAt: new Date(),
             },
@@ -161,7 +168,7 @@ export class BankReconciliationRepository {
           matchedAmount += Math.abs(amount);
           details.push({
             lineId: line.id,
-            matchedType: 'LoanDisbursement',
+            matchedType: "LoanDisbursement",
             matchedRefId: candidates[0]!.id,
           });
           continue;
@@ -202,14 +209,16 @@ export class BankReconciliationRepository {
     take = 5,
   ): Promise<
     Array<{
-      type: 'LoanPayment' | 'LoanDisbursement';
+      type: "LoanPayment" | "LoanDisbursement";
       refId: string;
       score: number;
       label: string;
       detail: string;
     }>
   > {
-    const line = await this.prisma.bankStatementLine.findUnique({ where: { id: lineId } });
+    const line = await this.prisma.bankStatementLine.findUnique({
+      where: { id: lineId },
+    });
     if (!line) return [];
     const amount = Number(line.amount);
     const isCredit = amount > 0;
@@ -232,11 +241,11 @@ export class BankReconciliationRepository {
         const sole = candidates.length === 1;
         const score = exactRef ? 1.0 : sole ? 0.85 : 0.7;
         return {
-          type: 'LoanPayment' as const,
+          type: "LoanPayment" as const,
           refId: p.id,
           score,
           label: `Payment on ${p.loan.number}`,
-          detail: `${p.paidOn.toISOString().slice(0, 10)} · ref ${p.reference ?? '—'}`,
+          detail: `${p.paidOn.toISOString().slice(0, 10)} · ref ${p.reference ?? "—"}`,
         };
       });
     } else {
@@ -252,11 +261,11 @@ export class BankReconciliationRepository {
         const sole = candidates.length === 1;
         const score = sole ? 0.85 : 0.7;
         return {
-          type: 'LoanDisbursement' as const,
+          type: "LoanDisbursement" as const,
           refId: l.id,
           score,
           label: `Disbursement ${l.number}`,
-          detail: `${l.disbursedAt?.toISOString().slice(0, 10) ?? '—'} · principal ${absAmount.toFixed(2)}`,
+          detail: `${l.disbursedAt?.toISOString().slice(0, 10) ?? "—"} · principal ${absAmount.toFixed(2)}`,
         };
       });
     }

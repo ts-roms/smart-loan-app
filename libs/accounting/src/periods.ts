@@ -21,7 +21,10 @@ export function currentPeriod(): PeriodKey {
 }
 
 /** Inclusive-exclusive boundary dates for a period. */
-export function periodBounds(p: PeriodKey): { start: Date; endExclusive: Date } {
+export function periodBounds(p: PeriodKey): {
+  start: Date;
+  endExclusive: Date;
+} {
   const start = new Date(p.year, p.month - 1, 1);
   const endExclusive = new Date(p.year, p.month, 1);
   return { start, endExclusive };
@@ -29,7 +32,7 @@ export function periodBounds(p: PeriodKey): { start: Date; endExclusive: Date } 
 
 /** "2026-05" — stable, sortable. */
 export function keyOf(p: PeriodKey): string {
-  return `${p.year}-${String(p.month).padStart(2, '0')}`;
+  return `${p.year}-${String(p.month).padStart(2, "0")}`;
 }
 
 export function compare(a: PeriodKey, b: PeriodKey): number {

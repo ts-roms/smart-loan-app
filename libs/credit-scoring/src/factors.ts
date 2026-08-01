@@ -22,7 +22,7 @@ export interface SurveyOption {
 
 export type SurveyQuestion =
   | {
-      kind: 'choice';
+      kind: "choice";
       id: string;
       label: string;
       help?: string;
@@ -30,7 +30,7 @@ export type SurveyQuestion =
       factorId: string;
     }
   | {
-      kind: 'number';
+      kind: "number";
       id: string;
       label: string;
       help?: string;
@@ -43,7 +43,7 @@ export type SurveyQuestion =
       inverted?: boolean;
     }
   | {
-      kind: 'boolean';
+      kind: "boolean";
       id: string;
       label: string;
       help?: string;
@@ -65,15 +65,15 @@ export interface FactorDef {
  * 50 — total raw score range 0–150, then scaled to 300–850.
  */
 export const FACTORS: FactorDef[] = [
-  { id: 'income',     label: 'Monthly income',          maxPoints: 25 },
-  { id: 'employment', label: 'Employment stability',    maxPoints: 20 },
-  { id: 'debt',       label: 'Existing debt burden',    maxPoints: 20 },
-  { id: 'housing',    label: 'Housing situation',       maxPoints: 10 },
-  { id: 'dependents', label: 'Number of dependents',    maxPoints: 10 },
-  { id: 'education',  label: 'Education',               maxPoints: 5  },
-  { id: 'savings',    label: 'Savings habit',           maxPoints: 10 },
-  { id: 'on_time',    label: 'On-time payment history', maxPoints: 30 },
-  { id: 'defaults',   label: 'Default history',         maxPoints: 20 },
+  { id: "income", label: "Monthly income", maxPoints: 25 },
+  { id: "employment", label: "Employment stability", maxPoints: 20 },
+  { id: "debt", label: "Existing debt burden", maxPoints: 20 },
+  { id: "housing", label: "Housing situation", maxPoints: 10 },
+  { id: "dependents", label: "Number of dependents", maxPoints: 10 },
+  { id: "education", label: "Education", maxPoints: 5 },
+  { id: "savings", label: "Savings habit", maxPoints: 10 },
+  { id: "on_time", label: "On-time payment history", maxPoints: 30 },
+  { id: "defaults", label: "Default history", maxPoints: 20 },
 ];
 
 export const MAX_RAW_SCORE = FACTORS.reduce((s, f) => s + f.maxPoints, 0);
@@ -81,79 +81,91 @@ export const MAX_RAW_SCORE = FACTORS.reduce((s, f) => s + f.maxPoints, 0);
 /** Bundled survey questions — frontend renders these in order. */
 export const SURVEY_QUESTIONS: SurveyQuestion[] = [
   {
-    kind: 'number',
-    id: 'monthly_income',
-    label: 'What is your monthly net income (PHP)?',
-    help: 'Take-home pay after taxes and standard deductions.',
+    kind: "number",
+    id: "monthly_income",
+    label: "What is your monthly net income (PHP)?",
+    help: "Take-home pay after taxes and standard deductions.",
     min: 0,
     max: 200_000,
     step: 1000,
-    factorId: 'income',
+    factorId: "income",
   },
   {
-    kind: 'choice',
-    id: 'employment_status',
-    label: 'What best describes your employment?',
-    factorId: 'employment',
+    kind: "choice",
+    id: "employment_status",
+    label: "What best describes your employment?",
+    factorId: "employment",
     options: [
-      { label: 'Regular employee (1+ year)', value: 'regular_1y', weight: 1.0 },
-      { label: 'Regular employee (<1 year)', value: 'regular_lt1y', weight: 0.7 },
-      { label: 'Contractual / project-based', value: 'contractual', weight: 0.5 },
-      { label: 'Self-employed / freelance',   value: 'self_employed', weight: 0.55 },
-      { label: 'Unemployed / student',        value: 'unemployed', weight: 0.0 },
+      { label: "Regular employee (1+ year)", value: "regular_1y", weight: 1.0 },
+      {
+        label: "Regular employee (<1 year)",
+        value: "regular_lt1y",
+        weight: 0.7,
+      },
+      {
+        label: "Contractual / project-based",
+        value: "contractual",
+        weight: 0.5,
+      },
+      {
+        label: "Self-employed / freelance",
+        value: "self_employed",
+        weight: 0.55,
+      },
+      { label: "Unemployed / student", value: "unemployed", weight: 0.0 },
     ],
   },
   {
-    kind: 'number',
-    id: 'existing_debt',
-    label: 'Total monthly debt payments today (PHP)',
-    help: 'Other loans, credit-card minimums, etc. Lower is better.',
+    kind: "number",
+    id: "existing_debt",
+    label: "Total monthly debt payments today (PHP)",
+    help: "Other loans, credit-card minimums, etc. Lower is better.",
     min: 0,
     max: 100_000,
     step: 500,
-    factorId: 'debt',
+    factorId: "debt",
     inverted: true,
   },
   {
-    kind: 'choice',
-    id: 'housing',
-    label: 'Where do you live?',
-    factorId: 'housing',
+    kind: "choice",
+    id: "housing",
+    label: "Where do you live?",
+    factorId: "housing",
     options: [
-      { label: 'Owned (no mortgage)',    value: 'owned',     weight: 1.0 },
-      { label: 'Owned (with mortgage)',  value: 'mortgaged', weight: 0.8 },
-      { label: 'Renting',                value: 'renting',   weight: 0.5 },
-      { label: 'Living with family',     value: 'family',    weight: 0.7 },
+      { label: "Owned (no mortgage)", value: "owned", weight: 1.0 },
+      { label: "Owned (with mortgage)", value: "mortgaged", weight: 0.8 },
+      { label: "Renting", value: "renting", weight: 0.5 },
+      { label: "Living with family", value: "family", weight: 0.7 },
     ],
   },
   {
-    kind: 'number',
-    id: 'dependents',
-    label: 'How many dependents do you support financially?',
+    kind: "number",
+    id: "dependents",
+    label: "How many dependents do you support financially?",
     min: 0,
     max: 10,
     step: 1,
-    factorId: 'dependents',
+    factorId: "dependents",
     inverted: true,
   },
   {
-    kind: 'choice',
-    id: 'education',
-    label: 'Highest education attained',
-    factorId: 'education',
+    kind: "choice",
+    id: "education",
+    label: "Highest education attained",
+    factorId: "education",
     options: [
-      { label: 'Postgraduate',    value: 'postgrad',   weight: 1.0 },
-      { label: 'College graduate', value: 'college',   weight: 0.85 },
-      { label: 'Some college',     value: 'some_college', weight: 0.6 },
-      { label: 'High school',      value: 'highschool', weight: 0.45 },
-      { label: 'Elementary',       value: 'elementary', weight: 0.3 },
+      { label: "Postgraduate", value: "postgrad", weight: 1.0 },
+      { label: "College graduate", value: "college", weight: 0.85 },
+      { label: "Some college", value: "some_college", weight: 0.6 },
+      { label: "High school", value: "highschool", weight: 0.45 },
+      { label: "Elementary", value: "elementary", weight: 0.3 },
     ],
   },
   {
-    kind: 'boolean',
-    id: 'savings_habit',
-    label: 'Do you set aside money for savings every month?',
+    kind: "boolean",
+    id: "savings_habit",
+    label: "Do you set aside money for savings every month?",
     weightWhenTrue: 1.0,
-    factorId: 'savings',
+    factorId: "savings",
   },
 ];

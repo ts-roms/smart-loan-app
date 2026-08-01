@@ -23,7 +23,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DemandLetterService } from "./demand-letters.service";
 
-function makeService(opts?: { letter?: unknown | null }) {
+function makeService(opts?: { letter?: unknown }) {
   const audit = { record: vi.fn().mockResolvedValue(undefined) };
   const repo = {
     findById: vi.fn().mockResolvedValue(opts?.letter ?? null),

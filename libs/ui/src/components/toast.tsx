@@ -1,9 +1,15 @@
-import * as ToastPrimitive from '@radix-ui/react-toast';
-import { X } from 'lucide-react';
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
-import { cn } from '../lib/cn';
+import * as ToastPrimitive from "@radix-ui/react-toast";
+import { X } from "lucide-react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  type ReactNode,
+} from "react";
+import { cn } from "../lib/cn";
 
-type ToastKind = 'success' | 'error' | 'info';
+type ToastKind = "success" | "error" | "info";
 interface ToastItem {
   id: number;
   kind: ToastKind;
@@ -20,7 +26,7 @@ const ToastCtx = createContext<ToastApi | null>(null);
 
 export function useToast(): ToastApi {
   const ctx = useContext(ToastCtx);
-  if (!ctx) throw new Error('useToast must be used inside <Toaster>');
+  if (!ctx) throw new Error("useToast must be used inside <Toaster>");
   return ctx;
 }
 
@@ -28,13 +34,16 @@ export function Toaster({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
 
   const push = useCallback((kind: ToastKind, title: string) => {
-    setItems((curr) => [...curr, { id: Date.now() + Math.random(), kind, title }]);
+    setItems((curr) => [
+      ...curr,
+      { id: Date.now() + Math.random(), kind, title },
+    ]);
   }, []);
 
   const api: ToastApi = {
-    success: (m) => push('success', m),
-    error: (m) => push('error', m),
-    info: (m) => push('info', m),
+    success: (m) => push("success", m),
+    error: (m) => push("error", m),
+    info: (m) => push("info", m),
   };
 
   return (
@@ -48,18 +57,18 @@ export function Toaster({ children }: { children: ReactNode }) {
               if (!open) setItems((curr) => curr.filter((x) => x.id !== t.id));
             }}
             className={cn(
-              'group pointer-events-auto relative flex w-[20rem] items-start gap-3 rounded-md border p-3 shadow-lg backdrop-blur-md',
-              t.kind === 'success' && 'border-emerald-400/30 bg-emerald-500/10',
-              t.kind === 'error' && 'border-rose-400/30 bg-rose-500/10',
-              t.kind === 'info' && 'border-sky-400/30 bg-sky-500/10',
+              "group pointer-events-auto relative flex w-[20rem] items-start gap-3 rounded-md border p-3 shadow-lg backdrop-blur-md",
+              t.kind === "success" && "border-emerald-400/30 bg-emerald-500/10",
+              t.kind === "error" && "border-rose-400/30 bg-rose-500/10",
+              t.kind === "info" && "border-sky-400/30 bg-sky-500/10",
               // Slide in from the right, slide back out on auto-dismiss /
               // close. The swipe-cancel transition lets a flicked-then-
               // released toast rubber-band back into place smoothly.
-              'data-[state=open]:animate-toast-in',
-              'data-[state=closed]:animate-toast-out',
-              'data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)]',
-              'data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:transition-transform data-[swipe=cancel]:duration-150',
-              'data-[swipe=end]:animate-toast-swipe-out',
+              "data-[state=open]:animate-toast-in",
+              "data-[state=closed]:animate-toast-out",
+              "data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)]",
+              "data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:transition-transform data-[swipe=cancel]:duration-150",
+              "data-[swipe=end]:animate-toast-swipe-out",
             )}
           >
             <ToastPrimitive.Title className="text-sm font-medium flex-1">

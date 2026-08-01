@@ -141,7 +141,7 @@ export function IssueLicense() {
                 color: "#fca5a5",
               }}
             >
-              {(issue.error as Error).message}
+              {issue.error.message}
             </div>
           )}
 

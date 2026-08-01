@@ -161,6 +161,12 @@ export class LicensingService {
           jti: payload.jti,
           tenantName: payload.tenant,
           tier: payload.tier,
+          // Prisma's Json column input type doesn't accept an interface
+          // with optional members. The double assertion is load-bearing:
+          // remove it and tsc fails with "Type 'LicensePayload' is not
+          // assignable to type 'JsonNull | InputJsonValue'". The lint rule
+          // only inspects the outer `as object` and calls it redundant.
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
           payload: payload as unknown as object,
           issuedAt: new Date(payload.iat),
           notBefore: payload.nbf ? new Date(payload.nbf) : null,

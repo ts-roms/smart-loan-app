@@ -75,7 +75,7 @@ export class PortalController {
         .code(400)
         .send({ error: "BadRequest", message: "signatureUrl required" });
     }
-    const ip = clientIp(req.headers as Record<string, unknown>, req.ip);
+    const ip = clientIp(req.headers, req.ip);
     const result = await req.portalServices!.portal.signBorrower({
       customerId: auth,
       loanId: req.params.id,

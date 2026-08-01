@@ -19,12 +19,7 @@ import {
   cronIsValid,
   parseNextRun,
 } from "@loan/jobs";
-import type {
-  JobRun,
-  JobStatus,
-  PrismaClient,
-  ScheduledJob,
-} from "@prisma/client";
+import type { JobRun, PrismaClient, ScheduledJob } from "@prisma/client";
 
 export class JobRepository {
   /** Tick interval. 60s is plenty; cron precision is per-minute anyway. */
@@ -98,7 +93,7 @@ export class JobRepository {
     const run = await this.prisma.jobRun.create({
       data: {
         jobId: job.id,
-        status: "RUNNING" as JobStatus,
+        status: "RUNNING",
         manual: opts.manual ?? false,
       },
     });
@@ -116,7 +111,7 @@ export class JobRepository {
       return this.prisma.jobRun.update({
         where: { id: run.id },
         data: {
-          status: "SUCCEEDED" as JobStatus,
+          status: "SUCCEEDED",
           finishedAt: new Date(),
           result: (result as never) ?? undefined,
         },
@@ -129,7 +124,7 @@ export class JobRepository {
       return this.prisma.jobRun.update({
         where: { id: run.id },
         data: {
-          status: "FAILED" as JobStatus,
+          status: "FAILED",
           finishedAt: new Date(),
           error: (err as Error).message,
         },

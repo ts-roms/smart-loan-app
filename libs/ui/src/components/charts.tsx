@@ -22,12 +22,7 @@ import { cn } from "../lib/cn";
 // ─── Tone palette ────────────────────────────────────────────────────
 
 export type ChartTone =
-  | "primary"
-  | "success"
-  | "warning"
-  | "danger"
-  | "info"
-  | "neutral";
+  "primary" | "success" | "warning" | "danger" | "info" | "neutral";
 
 const TONE_VAR: Record<ChartTone, string> = {
   primary: "--primary",

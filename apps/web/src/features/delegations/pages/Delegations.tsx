@@ -129,8 +129,10 @@ export function DelegationsPage() {
   }, [users.data]);
 
   // ── Derived: status + name lookup applied to both lists. ───────
-  const granted = mine.data?.granted ?? [];
-  const held = mine.data?.held ?? [];
+  // Memoized rather than `?? []` inline: the fallback array would be a new
+  // identity every render, changing `all`'s deps each pass.
+  const granted = useMemo(() => mine.data?.granted ?? [], [mine.data]);
+  const held = useMemo(() => mine.data?.held ?? [], [mine.data]);
   const all = useMemo(() => [...granted, ...held], [granted, held]);
 
   const summary = useMemo(() => {
@@ -378,7 +380,7 @@ function DelegationPreviewDialog({
           <SkeletonCard />
         ) : query.isError ? (
           <div className="text-sm text-rose-300 bg-rose-500/5 border border-rose-500/20 rounded px-3 py-2">
-            {(query.error as Error).message}
+            {query.error.message}
           </div>
         ) : data ? (
           <div className="space-y-4">

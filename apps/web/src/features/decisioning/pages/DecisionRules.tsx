@@ -4,13 +4,13 @@ import {
   useDeleteDecisionRule,
   useSeedDecisionRules,
   useUpdateDecisionRule,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import type {
   DecisionRule,
   DecisioningCondition,
   DecisioningOp,
   RuleAction,
-} from '@loan/shared-types';
+} from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -32,27 +32,27 @@ import {
   SkeletonCard,
   useConfirm,
   useToast,
-} from '@loan/ui';
-import { Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+} from "@loan/ui";
+import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 const FIELDS = [
-  'productCode',
-  'principal',
-  'termMonths',
-  'annualInterestRate',
-  'tierAtApply',
-  'creditScoreAtApply',
-  'amlStatus',
-  'kycComplete',
-  'customerAge',
-  'monthlyIncome',
-  'existingActiveLoans',
+  "productCode",
+  "principal",
+  "termMonths",
+  "annualInterestRate",
+  "tierAtApply",
+  "creditScoreAtApply",
+  "amlStatus",
+  "kycComplete",
+  "customerAge",
+  "monthlyIncome",
+  "existingActiveLoans",
 ] as const;
 
-const OPS: DecisioningOp[] = ['=', '!=', '<', '<=', '>', '>=', 'in', 'not_in'];
+const OPS: DecisioningOp[] = ["=", "!=", "<", "<=", ">", ">=", "in", "not_in"];
 
 /**
  * Admin-only catalog of decision rules. Each rule has a priority, an
@@ -70,7 +70,7 @@ export function DecisionRulesPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { user } = useAuth();
-  const canEdit = user?.role === 'ADMIN';
+  const canEdit = user?.role === "ADMIN";
   const [editing, setEditing] = useState<DecisionRule | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -78,16 +78,16 @@ export function DecisionRulesPage() {
     const ok = await confirm({
       title: `Delete rule "${r.name}"?`,
       message:
-        'New applications will no longer be evaluated against this rule. Existing decisions are unaffected.',
-      confirmLabel: 'Delete rule',
-      tone: 'destructive',
+        "New applications will no longer be evaluated against this rule. Existing decisions are unaffected.",
+      confirmLabel: "Delete rule",
+      tone: "destructive",
     });
     if (!ok) return;
     try {
       await remove.mutateAsync(r.id);
-      toast.success('Rule deleted');
+      toast.success("Rule deleted");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -104,7 +104,7 @@ export function DecisionRulesPage() {
                   const r = await seed.mutateAsync();
                   toast.success(`Seeded ${r.created} (${r.existing} present)`);
                 } catch (err) {
-                  toast.error((err as Error).message ?? 'Failed');
+                  toast.error((err as Error).message ?? "Failed");
                 }
               }}
               disabled={seed.isPending}
@@ -123,13 +123,15 @@ export function DecisionRulesPage() {
         <p className="text-xs text-white/55 mb-3">
           Rules evaluate at loan apply time in priority order (lowest first).
           The first rule whose conditions ALL match decides the loan's initial
-          status. If nothing matches, the loan stays SUBMITTED for manual review.
+          status. If nothing matches, the loan stays SUBMITTED for manual
+          review.
         </p>
         {rules.isLoading ? (
           <SkeletonCard />
         ) : (rules.data ?? []).length === 0 ? (
           <p className="text-sm text-white/55">
-            No rules configured. Every loan goes to manual review. Click "Seed defaults" for a starting policy.
+            No rules configured. Every loan goes to manual review. Click "Seed
+            defaults" for a starting policy.
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -150,15 +152,19 @@ export function DecisionRulesPage() {
                   <td className="py-2 px-2">
                     <div className="font-medium">{r.name}</div>
                     {r.description && (
-                      <div className="text-xs text-white/45">{r.description}</div>
+                      <div className="text-xs text-white/45">
+                        {r.description}
+                      </div>
                     )}
                   </td>
                   <td className="py-2 px-2 text-xs">
                     <ul className="space-y-0.5">
                       {(r.conditions ?? []).map((c, i) => (
                         <li key={i} className="font-mono">
-                          {c.field} {c.op}{' '}
-                          {Array.isArray(c.value) ? `[${c.value.join(',')}]` : String(c.value)}
+                          {c.field} {c.op}{" "}
+                          {Array.isArray(c.value)
+                            ? `[${c.value.join(",")}]`
+                            : String(c.value)}
                         </li>
                       ))}
                     </ul>
@@ -167,8 +173,8 @@ export function DecisionRulesPage() {
                     <ActionBadge action={r.action} />
                   </td>
                   <td className="py-2 px-2">
-                    <Badge variant={r.active ? 'success' : 'muted'}>
-                      {r.active ? 'Active' : 'Paused'}
+                    <Badge variant={r.active ? "success" : "muted"}>
+                      {r.active ? "Active" : "Paused"}
                     </Badge>
                   </td>
                   <td className="py-2 px-2 text-right">
@@ -200,18 +206,20 @@ export function DecisionRulesPage() {
         )}
       </CardContent>
       {creating && <RuleDialog onClose={() => setCreating(false)} />}
-      {editing && <RuleDialog rule={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <RuleDialog rule={editing} onClose={() => setEditing(null)} />
+      )}
     </Card>
   );
 }
 
 function ActionBadge({ action }: { action: RuleAction }) {
   const v =
-    action === 'AUTO_APPROVE'
-      ? 'success'
-      : action === 'AUTO_REJECT'
-        ? 'danger'
-        : 'warning';
+    action === "AUTO_APPROVE"
+      ? "success"
+      : action === "AUTO_REJECT"
+        ? "danger"
+        : "warning";
   return <Badge variant={v}>{action}</Badge>;
 }
 
@@ -225,18 +233,22 @@ function RuleDialog({
   const create = useCreateDecisionRule();
   const update = useUpdateDecisionRule();
   const toast = useToast();
-  const [name, setName] = useState(rule?.name ?? '');
-  const [description, setDescription] = useState(rule?.description ?? '');
+  const [name, setName] = useState(rule?.name ?? "");
+  const [description, setDescription] = useState(rule?.description ?? "");
   const [priority, setPriority] = useState(rule?.priority ?? 500);
-  const [action, setAction] = useState<RuleAction>(rule?.action ?? 'AUTO_APPROVE');
-  const [reason, setReason] = useState(rule?.reason ?? '');
+  const [action, setAction] = useState<RuleAction>(
+    rule?.action ?? "AUTO_APPROVE",
+  );
+  const [reason, setReason] = useState(rule?.reason ?? "");
   const [active, setActive] = useState(rule?.active ?? true);
   const [conditions, setConditions] = useState<DecisioningCondition[]>(
-    rule?.conditions ?? [{ field: 'tierAtApply', op: '=', value: 'A' }],
+    rule?.conditions ?? [{ field: "tierAtApply", op: "=", value: "A" }],
   );
 
   const setCondition = (idx: number, patch: Partial<DecisioningCondition>) => {
-    setConditions(conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
+    setConditions(
+      conditions.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
+    );
   };
 
   const onSubmit = async (e: FormEvent) => {
@@ -253,7 +265,7 @@ function RuleDialog({
           reason: reason || undefined,
           active,
         });
-        toast.success('Rule saved');
+        toast.success("Rule saved");
       } else {
         await create.mutateAsync({
           name,
@@ -264,11 +276,11 @@ function RuleDialog({
           reason: reason || undefined,
           active,
         });
-        toast.success('Rule created');
+        toast.success("Rule created");
       }
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -276,12 +288,16 @@ function RuleDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{rule ? 'Edit rule' : 'New rule'}</DialogTitle>
+          <DialogTitle>{rule ? "Edit rule" : "New rule"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Name">
-              <Input value={name} onChange={(e) => setName(e.target.value)} required />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
             </Field>
             <Field label="Priority (lower fires first)">
               <Input
@@ -300,8 +316,13 @@ function RuleDialog({
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Action">
-              <Select value={action} onValueChange={(v) => setAction(v as RuleAction)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={action}
+                onValueChange={(v) => setAction(v as RuleAction)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="AUTO_APPROVE">Auto-approve</SelectItem>
                   <SelectItem value="AUTO_REJECT">Auto-reject</SelectItem>
@@ -310,8 +331,13 @@ function RuleDialog({
               </Select>
             </Field>
             <Field label="Status">
-              <Select value={active ? 'a' : 'p'} onValueChange={(v) => setActive(v === 'a')}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={active ? "a" : "p"}
+                onValueChange={(v) => setActive(v === "a")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="a">Active</SelectItem>
                   <SelectItem value="p">Paused</SelectItem>
@@ -333,7 +359,7 @@ function RuleDialog({
                 onClick={() =>
                   setConditions([
                     ...conditions,
-                    { field: 'principal', op: '<=', value: 100_000 },
+                    { field: "principal", op: "<=", value: 100_000 },
                   ])
                 }
               >
@@ -344,38 +370,58 @@ function RuleDialog({
             {conditions.map((c, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 text-xs">
                 <div className="col-span-4">
-                  <Select value={c.field} onValueChange={(v) => setCondition(i, { field: v })}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={c.field}
+                    onValueChange={(v) => setCondition(i, { field: v })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {FIELDS.map((f) => (
-                        <SelectItem key={f} value={f}>{f}</SelectItem>
+                        <SelectItem key={f} value={f}>
+                          {f}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="col-span-2">
-                  <Select value={c.op} onValueChange={(v) => setCondition(i, { op: v as DecisioningOp })}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={c.op}
+                    onValueChange={(v) =>
+                      setCondition(i, { op: v as DecisioningOp })
+                    }
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {OPS.map((o) => (
-                        <SelectItem key={o} value={o}>{o}</SelectItem>
+                        <SelectItem key={o} value={o}>
+                          {o}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <Input
                   className="col-span-5 h-9"
-                  value={Array.isArray(c.value) ? c.value.join(',') : String(c.value)}
+                  value={
+                    Array.isArray(c.value) ? c.value.join(",") : String(c.value)
+                  }
                   onChange={(e) => {
                     const v = e.target.value;
-                    let parsed: DecisioningCondition['value'] = v;
-                    if (c.op === 'in' || c.op === 'not_in') {
-                      parsed = v.split(',').map((s) => {
+                    let parsed: DecisioningCondition["value"] = v;
+                    if (c.op === "in" || c.op === "not_in") {
+                      parsed = v.split(",").map((s) => {
                         const n = Number(s.trim());
-                        return Number.isFinite(n) && s.trim() !== '' ? n : s.trim();
+                        return Number.isFinite(n) && s.trim() !== ""
+                          ? n
+                          : s.trim();
                       });
-                    } else if (v === 'true' || v === 'false') {
-                      parsed = v === 'true';
+                    } else if (v === "true" || v === "false") {
+                      parsed = v === "true";
                     } else if (Number.isFinite(Number(v))) {
                       parsed = Number(v);
                     }
@@ -385,7 +431,9 @@ function RuleDialog({
                 <button
                   type="button"
                   className="col-span-1 text-white/55 hover:text-rose-300"
-                  onClick={() => setConditions(conditions.filter((_, idx) => idx !== i))}
+                  onClick={() =>
+                    setConditions(conditions.filter((_, idx) => idx !== i))
+                  }
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
@@ -394,9 +442,14 @@ function RuleDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={create.isPending || update.isPending}>
-              {rule ? 'Save' : 'Create'}
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={create.isPending || update.isPending}
+            >
+              {rule ? "Save" : "Create"}
             </Button>
           </DialogFooter>
         </form>
@@ -405,7 +458,13 @@ function RuleDialog({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <label className="text-xs text-white/55">{label}</label>

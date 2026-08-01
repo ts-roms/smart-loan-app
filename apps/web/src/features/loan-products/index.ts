@@ -1,2 +1,2 @@
 // Public API of the loan-products feature.
-export { LoanProductsPage } from './pages/LoanProducts';
+export { LoanProductsPage } from "./pages/LoanProducts";

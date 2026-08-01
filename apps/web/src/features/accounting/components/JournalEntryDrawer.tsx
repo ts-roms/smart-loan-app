@@ -1,7 +1,4 @@
-import {
-  useJournalEntry,
-  useReverseEntry,
-} from '@loan/api-client';
+import { useJournalEntry, useReverseEntry } from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -17,10 +14,10 @@ import {
   useConfirm,
   usePrompt,
   useToast,
-} from '@loan/ui';
-import { formatDateTime, formatMoney } from '@loan/shared-utils';
-import { ArrowUpRight, RotateCcw, ScrollText } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+} from "@loan/ui";
+import { formatDateTime, formatMoney } from "@loan/shared-utils";
+import { ArrowUpRight, RotateCcw, ScrollText } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 /**
  * Click-to-inspect wrapper for any journal entry id. Wraps a child trigger
@@ -78,27 +75,27 @@ function JournalEntryInspector({
 
   const onReverse = async () => {
     const ok = await confirm({
-      title: 'Reverse this entry?',
+      title: "Reverse this entry?",
       message:
-        'A reversing entry is posted into the current period. The original stays in its original period and is marked reversed.',
-      confirmLabel: 'Reverse',
-      tone: 'destructive',
+        "A reversing entry is posted into the current period. The original stays in its original period and is marked reversed.",
+      confirmLabel: "Reverse",
+      tone: "destructive",
     });
     if (!ok) return;
     const memo = await askPrompt({
-      title: 'Memo (optional)',
-      message: 'Stamped onto the reversing entry for the audit trail.',
-      label: 'Memo',
-      placeholder: 'e.g. correcting wrong account',
-      confirmLabel: 'Reverse',
+      title: "Memo (optional)",
+      message: "Stamped onto the reversing entry for the audit trail.",
+      label: "Memo",
+      placeholder: "e.g. correcting wrong account",
+      confirmLabel: "Reverse",
     });
     if (memo === null) return;
     try {
       await reverse.mutateAsync({ id, memo: memo || undefined });
-      toast.success('Entry reversed');
+      toast.success("Entry reversed");
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Reversal failed');
+      toast.error((err as Error).message ?? "Reversal failed");
     }
   };
 
@@ -143,12 +140,13 @@ function JournalEntryInspector({
           <div className="flex-1 min-w-0">
             <DrawerTitle className="font-mono">{e.number}</DrawerTitle>
             <DrawerDescription>
-              {formatDateTime(e.entryDate)} · posted {formatDateTime(e.postedAt)}
+              {formatDateTime(e.entryDate)} · posted{" "}
+              {formatDateTime(e.postedAt)}
               {e.postedBy && ` by ${e.postedBy.name}`}
             </DrawerDescription>
           </div>
-          <Badge variant={balanced ? 'success' : 'danger'}>
-            {balanced ? 'Balanced' : 'Out of balance'}
+          <Badge variant={balanced ? "success" : "danger"}>
+            {balanced ? "Balanced" : "Out of balance"}
           </Badge>
         </div>
       </DrawerHeader>
@@ -157,16 +155,21 @@ function JournalEntryInspector({
         {/* Source + reversal state */}
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-            <div className="text-[10px] uppercase tracking-wider text-white/45">Source</div>
+            <div className="text-[10px] uppercase tracking-wider text-white/45">
+              Source
+            </div>
             <div className="font-mono mt-0.5">{e.source}</div>
             {e.sourceRefId && (
               <div className="text-[10px] text-white/55 mt-1 truncate">
-                {e.sourceRefType} · <span className="font-mono">{e.sourceRefId.slice(0, 8)}</span>
+                {e.sourceRefType} ·{" "}
+                <span className="font-mono">{e.sourceRefId.slice(0, 8)}</span>
               </div>
             )}
           </div>
           <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-            <div className="text-[10px] uppercase tracking-wider text-white/45">Reversal</div>
+            <div className="text-[10px] uppercase tracking-wider text-white/45">
+              Reversal
+            </div>
             {reversed ? (
               <>
                 <Badge variant="muted">Reversed</Badge>
@@ -182,14 +185,18 @@ function JournalEntryInspector({
 
         {e.memo && (
           <div className="text-xs">
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">Memo</div>
+            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">
+              Memo
+            </div>
             <div className="text-white/85">{e.memo}</div>
           </div>
         )}
 
         {/* Lines */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">Lines</div>
+          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">
+            Lines
+          </div>
           <table className="w-full text-xs">
             <thead className="text-left text-[10px] uppercase tracking-wider text-white/45">
               <tr>
@@ -205,14 +212,18 @@ function JournalEntryInspector({
                     <div className="font-mono text-[10px] text-white/65">
                       {l.account?.code}
                     </div>
-                    <div>{l.account?.name ?? '—'}</div>
-                    {l.memo && <div className="text-[10px] text-white/45 mt-0.5">{l.memo}</div>}
+                    <div>{l.account?.name ?? "—"}</div>
+                    {l.memo && (
+                      <div className="text-[10px] text-white/45 mt-0.5">
+                        {l.memo}
+                      </div>
+                    )}
                   </td>
                   <td className="py-1.5 px-2 text-right font-mono">
-                    {Number(l.debit) > 0 ? formatMoney(Number(l.debit)) : '—'}
+                    {Number(l.debit) > 0 ? formatMoney(Number(l.debit)) : "—"}
                   </td>
                   <td className="py-1.5 px-2 text-right font-mono">
-                    {Number(l.credit) > 0 ? formatMoney(Number(l.credit)) : '—'}
+                    {Number(l.credit) > 0 ? formatMoney(Number(l.credit)) : "—"}
                   </td>
                 </tr>
               ))}
@@ -220,8 +231,12 @@ function JournalEntryInspector({
                 <td className="py-1.5 px-2 text-[10px] uppercase tracking-wider text-white/55">
                   Total
                 </td>
-                <td className="py-1.5 px-2 text-right font-mono">{formatMoney(debits)}</td>
-                <td className="py-1.5 px-2 text-right font-mono">{formatMoney(credits)}</td>
+                <td className="py-1.5 px-2 text-right font-mono">
+                  {formatMoney(debits)}
+                </td>
+                <td className="py-1.5 px-2 text-right font-mono">
+                  {formatMoney(credits)}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -230,13 +245,20 @@ function JournalEntryInspector({
 
       <DrawerFooter>
         <Button variant="outline" asChild>
-          <a href={`/accounting/journal`} className="inline-flex items-center gap-1">
+          <a
+            href={`/accounting/journal`}
+            className="inline-flex items-center gap-1"
+          >
             <ArrowUpRight className="h-3 w-3" />
             Open in Journal
           </a>
         </Button>
-        {!reversed && e.source !== 'REVERSAL' && (
-          <Button variant="destructive" onClick={onReverse} disabled={reverse.isPending}>
+        {!reversed && e.source !== "REVERSAL" && (
+          <Button
+            variant="destructive"
+            onClick={onReverse}
+            disabled={reverse.isPending}
+          >
             <RotateCcw className="h-3 w-3" />
             Reverse
           </Button>

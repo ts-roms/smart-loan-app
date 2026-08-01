@@ -327,7 +327,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       const rt = refreshToken;
       if (rt) void logoutSession(rt).catch(() => {});
       signOut();
-      navigate("/login");
+      void navigate("/login");
     },
   });
 
@@ -502,7 +502,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   const rt = refreshToken;
                   if (rt) void logoutSession(rt).catch(() => {});
                   signOut();
-                  navigate("/login");
+                  void navigate("/login");
                 }}
                 className="text-rose-300 focus:text-rose-200"
               >

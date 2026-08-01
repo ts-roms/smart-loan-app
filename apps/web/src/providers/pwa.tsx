@@ -86,14 +86,13 @@ export function PwaProvider({ children }: { children: ReactNode }) {
           },
           onRegisterError(err: unknown) {
             // Don't surface — failed SW reg shouldn't break the app.
-            // eslint-disable-next-line no-console
+
             console.warn("[pwa] SW register failed", err);
           },
         });
       } catch (err) {
         // virtual:pwa-register doesn't resolve in dev — that's expected.
         if (import.meta.env.PROD) {
-          // eslint-disable-next-line no-console
           console.warn("[pwa] SW import failed", err);
         }
       }

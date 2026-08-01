@@ -39,8 +39,10 @@ export function useSubmitKyc() {
       notes?: string;
     }) => getApiClient().post<KycSubmission>("/kyc", input),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: kycKeys.forCustomer(vars.customerId) });
-      qc.invalidateQueries({ queryKey: kycKeys.status(vars.customerId) });
+      void qc.invalidateQueries({
+        queryKey: kycKeys.forCustomer(vars.customerId),
+      });
+      void qc.invalidateQueries({ queryKey: kycKeys.status(vars.customerId) });
     },
   });
 }
@@ -59,8 +61,10 @@ export function useDecideKyc() {
         reason: input.reason,
       }),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: kycKeys.forCustomer(vars.customerId) });
-      qc.invalidateQueries({ queryKey: kycKeys.status(vars.customerId) });
+      void qc.invalidateQueries({
+        queryKey: kycKeys.forCustomer(vars.customerId),
+      });
+      void qc.invalidateQueries({ queryKey: kycKeys.status(vars.customerId) });
     },
   });
 }

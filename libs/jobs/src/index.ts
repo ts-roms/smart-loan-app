@@ -12,7 +12,7 @@
  * BullMQ workers expect, so swapping is a runtime change, not a code change.
  */
 
-import parser from 'cron-parser';
+import parser from "cron-parser";
 
 export interface JobContext {
   /** Run id (matches the JobRun row). */

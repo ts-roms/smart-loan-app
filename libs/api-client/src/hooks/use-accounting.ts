@@ -106,7 +106,7 @@ export function usePostJournalEntry() {
     mutationFn: (input: JournalEntryCreateInput) =>
       getApiClient().post<JournalEntry>("/accounting/journal", input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["accounting"] });
+      void qc.invalidateQueries({ queryKey: ["accounting"] });
     },
   });
 }
@@ -199,8 +199,8 @@ export function useClosePeriod() {
         {},
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: periodKeys.all });
-      qc.invalidateQueries({ queryKey: ["accounting"] });
+      void qc.invalidateQueries({ queryKey: periodKeys.all });
+      void qc.invalidateQueries({ queryKey: ["accounting"] });
     },
   });
 }
@@ -214,8 +214,8 @@ export function useReopenPeriod() {
         {},
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: periodKeys.all });
-      qc.invalidateQueries({ queryKey: ["accounting"] });
+      void qc.invalidateQueries({ queryKey: periodKeys.all });
+      void qc.invalidateQueries({ queryKey: ["accounting"] });
     },
   });
 }

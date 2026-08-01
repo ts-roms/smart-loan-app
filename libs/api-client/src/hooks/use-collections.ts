@@ -110,8 +110,8 @@ export function useAccrueLateFees() {
         {},
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["collections"] });
-      qc.invalidateQueries({ queryKey: ["accounting"] });
+      void qc.invalidateQueries({ queryKey: ["collections"] });
+      void qc.invalidateQueries({ queryKey: ["accounting"] });
     },
   });
 }

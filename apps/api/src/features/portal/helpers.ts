@@ -32,9 +32,7 @@ export type LedgerScope = "ALL" | "LOANS" | "COOP";
  */
 export function parseScope(raw: string | undefined): LedgerScope {
   const up = (raw ?? "ALL").toUpperCase();
-  return up === "LOANS" || up === "COOP" || up === "ALL"
-    ? (up as LedgerScope)
-    : "ALL";
+  return up === "LOANS" || up === "COOP" || up === "ALL" ? up : "ALL";
 }
 
 /**

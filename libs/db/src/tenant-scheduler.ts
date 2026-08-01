@@ -92,11 +92,11 @@ export class TenantScheduler {
     if (this.intervalRef) return;
     // Run-and-swallow so a transient platform DB hiccup never kills
     // the scheduler.
-    this.tickAll().catch((err) => {
+    this.tickAll().catch((err: unknown) => {
       this.log.error({ err }, "TenantScheduler initial tick failed");
     });
     this.intervalRef = setInterval(() => {
-      this.tickAll().catch((err) => {
+      this.tickAll().catch((err: unknown) => {
         this.log.error({ err }, "TenantScheduler tick failed");
       });
     }, this.tickIntervalMs);

@@ -14,7 +14,7 @@ import {
   lateFeeFor,
   policyFromProduct,
 } from "@loan/loans";
-import { keyOf, lateFeeAccrualEntry, periodFor } from "@loan/accounting";
+import { lateFeeAccrualEntry } from "@loan/accounting";
 import type {
   CollectionNote,
   CollectionNoteType,

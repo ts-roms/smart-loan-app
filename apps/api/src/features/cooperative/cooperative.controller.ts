@@ -98,9 +98,14 @@ export class CooperativeController {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
+      // `z.ZodTypeAny` erases the output type, so `parsed.data` lands as
+      // `any` and would silently disable checking on the service call.
+      // The runtime value is exactly `z.infer<S>` — only the static type
+      // was lost — so re-assert it rather than passing `any` through.
+      const input = parsed.data as z.infer<S>;
       const result = await runService(
         req.cooperativeServices!.coop,
-        parsed.data,
+        input,
         req.user.sub,
       );
       if (!result.ok) {
