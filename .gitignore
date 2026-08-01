@@ -31,3 +31,5 @@ data/
 
 .claude/worktrees
 .claude/settings.local.json
+# TypeScript incremental build artifacts
+*.tsbuildinfo
