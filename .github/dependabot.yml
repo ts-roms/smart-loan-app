@@ -8,6 +8,63 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+
+    ignore:
+      # Prisma majors are blocked deliberately, not because we're behind.
+      #
+      # Prisma 7 removes Prisma-managed connection pools in favour of
+      # driver adapters — and this system's tenant isolation is enforced
+      # *by the pool*: each tenant's client binds its connections to
+      # `schema=tenant_<slug>`, so a query cannot reach another tenant's
+      # data even if it's constructed wrong. See libs/db/src/tenant-cache.ts:
+      # "separation lives in the connection pool, not in the application
+      # code."
+      #
+      # Taking that major therefore means re-implementing a cross-tenant
+      # security boundary on application-owned pg pools, plus re-deciding
+      # per-tenant pool sizing. That is not a dependency bump, and it must
+      # not arrive bundled into the `api` group below.
+      #
+      # Unblock once that work is scoped and there's a test proving tenant
+      # A still cannot read tenant B.
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
+
+      # ── The frontend migration ──────────────────────────────────────
+      #
+      # React 19, Vite 8 and react-router 8 have to move together, so they
+      # are held together rather than landing as three separate PRs that
+      # each break the other two.
+      #
+      # react-router is the hard constraint: react-router-dom has no v8 at
+      # all (that package stops at 7.18.2 — v8 ships as `react-router`),
+      # and react-router@8 declares `react >= 19.2.7`. So it is literally
+      # uninstallable until React 19 lands, and React 19 changes ref /
+      # context APIs and types across web, platform and marketing.
+      #
+      # Deliberately NOT wildcarded as "react*": that would also catch
+      # react-day-picker, which is unrelated to this work.
+      #
+      # Majors only — security patches on 18.x / 6.x still come through.
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-router-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite-plugin-pwa"
+        update-types: ["version-update:semver-major"]
+
     groups:
       # Bundle small patch updates so the inbox doesn't drown.
       patches:
