@@ -476,8 +476,7 @@ interface PropertyData {
 
 function CollateralPanel(
   props:
-    | { kind: "VEHICLE"; v: VehicleData }
-    | { kind: "PROPERTY"; p: PropertyData },
+    { kind: "VEHICLE"; v: VehicleData } | { kind: "PROPERTY"; p: PropertyData },
 ) {
   return (
     <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
@@ -1182,6 +1181,15 @@ function DocumentsPanel({
   status: string;
 }) {
   const toast = useToast();
+  // Every hook must run before the early return below. `status` changes
+  // under this component while the page is open (an officer approves the
+  // loan in another tab, the query refetches), which flips the guard from
+  // "return null" to "render" — and if a hook sat after the return, that
+  // transition would change the hook count between renders and React
+  // would throw "Rendered more hooks than during the previous render".
+  const mySig = useMySignature();
+  const hasSig = Boolean(mySig.data?.signatureUrl);
+
   // Agreement only makes sense once the customer has accepted terms — i.e.
   // post-APPROVED. Statement is available any time once schedule exists.
   const showAgreement = ![
@@ -1195,9 +1203,6 @@ function DocumentsPanel({
     status,
   );
   if (!showAgreement && !showStatement) return null;
-
-  const mySig = useMySignature();
-  const hasSig = Boolean(mySig.data?.signatureUrl);
 
   const download = async (kind: "agreement" | "statement", signed = false) => {
     try {
