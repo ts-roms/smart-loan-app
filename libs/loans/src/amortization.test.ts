@@ -25,6 +25,73 @@ import { computeFees, validateLoanApplication } from "./products";
  *   - frequency math (monthly / bi-weekly / weekly) is consistent
  */
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Ledger-reconciliation invariants, swept across the whole supported
+ * parameter space rather than one hand-picked loan.
+ *
+ * These exist because the schedule rows are persisted verbatim to
+ * `LoanSchedule` and the loan is booked to Loans Receivable at full
+ * principal on disbursement. If the rounded rows don't sum back to
+ * `principal`, paying every installment leaves a residual receivable that
+ * never clears; if `totalDue != principalDue + interestDue`, the two code
+ * paths in `recordPayment` (which compares against `totalDue`) and
+ * `allocatePayment` (which reads the split) disagree.
+ *
+ * A single-case assertion missed this for DECLINING: it drifted on ~70% of
+ * schedules, by up to ~1 peso on weekly terms, while FLAT was always
+ * correct.
+ */
+describe("schedule reconciliation (property sweep)", () => {
+  const principals = [50_000, 12_345.67, 99_999.99, 250_000, 1_000_000];
+  const rates = [0, 0.06, 0.12, 0.18, 0.24, 0.36];
+  const terms = [3, 6, 12, 24, 36, 60];
+  const methods = ["DECLINING", "FLAT"] as const;
+  const freqs = ["MONTHLY", "BIWEEKLY", "WEEKLY"] as const;
+
+  for (const method of methods) {
+    for (const frequency of freqs) {
+      it(`${method}/${frequency}: rows reconcile for every principal × rate × term`, () => {
+        for (const principal of principals) {
+          for (const annualRate of rates) {
+            for (const termMonths of terms) {
+              const rows = computeAmortizationFor(
+                principal,
+                annualRate,
+                termMonths,
+                { method, frequency },
+              );
+              const where = `${method}/${frequency} P=${principal} r=${annualRate} t=${termMonths}`;
+
+              // 1. The rounded principal column ties out to the principal.
+              const sumPrincipal = round2(
+                rows.reduce((s, r) => s + r.principal, 0),
+              );
+              expect(sumPrincipal, `Σprincipal — ${where}`).toBe(principal);
+
+              // 2. Each row upholds totalDue = principalDue + interestDue,
+              //    which is what LoanSchedule.totalDue is documented to be.
+              for (const row of rows) {
+                expect(
+                  row.payment,
+                  `row ${row.installmentNo} payment — ${where}`,
+                ).toBe(round2(row.principal + row.interest));
+              }
+
+              // 3. The loan closes at exactly zero.
+              expect(
+                rows[rows.length - 1]!.balance,
+                `final balance — ${where}`,
+              ).toBe(0);
+            }
+          }
+        }
+      });
+    }
+  }
+});
+
 describe("monthlyPayment", () => {
   it("matches the closed-form annuity formula for 100k @ 12%/yr over 12 months", () => {
     // Standard PMT: principal=100000, periodRate=0.01 (12%/12), n=12
@@ -51,15 +118,18 @@ describe("computeAmortization (declining balance)", () => {
     expect(rows[rows.length - 1]!.balance).toBe(0);
   });
 
-  it("sums principal portions back to the original principal (within 1 cent)", () => {
-    const sumPrincipal = rows.reduce((s, r) => s + r.principal, 0);
-    expect(sumPrincipal).toBeCloseTo(principal, 1);
+  // Exact, not `toBeCloseTo(principal, 1)`. That form allows ±0.05, which
+  // is far too loose for a figure that has to tie out against Loans
+  // Receivable — it let a real rounding drift sit here undetected.
+  it("sums principal portions back to the original principal exactly", () => {
+    const sumPrincipal = round2(rows.reduce((s, r) => s + r.principal, 0));
+    expect(sumPrincipal).toBe(principal);
   });
 
-  it("total paid = principal + interest paid", () => {
-    const totalInterest = rows.reduce((s, r) => s + r.interest, 0);
-    const totalPaid = rows.reduce((s, r) => s + r.payment, 0);
-    expect(totalPaid).toBeCloseTo(principal + totalInterest, 1);
+  it("total paid = principal + interest paid, exactly", () => {
+    const totalInterest = round2(rows.reduce((s, r) => s + r.interest, 0));
+    const totalPaid = round2(rows.reduce((s, r) => s + r.payment, 0));
+    expect(totalPaid).toBe(round2(principal + totalInterest));
   });
 
   it("every payment except the last is equal to the closed-form PMT (±1 cent)", () => {
