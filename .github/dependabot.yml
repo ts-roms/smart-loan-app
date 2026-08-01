@@ -8,6 +8,30 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+
+    ignore:
+      # Prisma majors are blocked deliberately, not because we're behind.
+      #
+      # Prisma 7 removes Prisma-managed connection pools in favour of
+      # driver adapters — and this system's tenant isolation is enforced
+      # *by the pool*: each tenant's client binds its connections to
+      # `schema=tenant_<slug>`, so a query cannot reach another tenant's
+      # data even if it's constructed wrong. See libs/db/src/tenant-cache.ts:
+      # "separation lives in the connection pool, not in the application
+      # code."
+      #
+      # Taking that major therefore means re-implementing a cross-tenant
+      # security boundary on application-owned pg pools, plus re-deciding
+      # per-tenant pool sizing. That is not a dependency bump, and it must
+      # not arrive bundled into the `api` group below.
+      #
+      # Unblock once that work is scoped and there's a test proving tenant
+      # A still cannot read tenant B.
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
+
     groups:
       # Bundle small patch updates so the inbox doesn't drown.
       patches:
