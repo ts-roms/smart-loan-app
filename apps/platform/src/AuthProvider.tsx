@@ -116,7 +116,9 @@ export function makeApi(token: string | null) {
       },
     });
     const text = await res.text();
-    const body = text ? JSON.parse(text) : null;
+    // `JSON.parse` returns `any` — land it in `unknown` so the narrowing
+    // below is actually type-checked rather than assumed.
+    const body: unknown = text ? JSON.parse(text) : null;
     if (!res.ok) {
       const msg =
         body && typeof body === "object" && "message" in body

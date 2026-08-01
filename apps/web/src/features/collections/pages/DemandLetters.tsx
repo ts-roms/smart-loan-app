@@ -19,19 +19,12 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   Drawer,
   DrawerBody,
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
   DrawerTitle,
-  Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -50,7 +43,7 @@ import {
   ScrollText,
   Send,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { findArticle, TourButton } from "../../help";
@@ -118,7 +111,7 @@ export function DemandLettersPage() {
   const onDisplay = () => {
     setSelected(new Set());
     setCandidatesVisible(true);
-    candidates.refetch();
+    void candidates.refetch();
   };
 
   const toggle = (loanId: string) =>

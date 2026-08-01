@@ -6,7 +6,7 @@
  * to ship, no licensing surprises.
  */
 
-import PDFDocument from 'pdfkit';
+import PDFDocument from "pdfkit";
 
 export interface ChromeOptions {
   /** Lender's name (top-left of the header band). */
@@ -22,33 +22,36 @@ export const PAGE_WIDTH = 612; // US Letter
 export const CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN;
 
 /** Build a new doc + paint the header. Returns the doc ready for body content. */
-export function startDoc(opts: ChromeOptions): InstanceType<typeof PDFDocument> {
+export function startDoc(
+  opts: ChromeOptions,
+): InstanceType<typeof PDFDocument> {
   const doc = new PDFDocument({
-    size: 'LETTER',
+    size: "LETTER",
     margins: { top: MARGIN, bottom: MARGIN, left: MARGIN, right: MARGIN },
     info: { Title: opts.title, Author: opts.companyName },
   });
 
   // Header band.
   doc
-    .fillColor('#1e293b')
+    .fillColor("#1e293b")
     .rect(0, 0, PAGE_WIDTH, 60)
     .fill()
-    .fillColor('white')
+    .fillColor("white")
     .fontSize(18)
-    .font('Helvetica-Bold')
+    .font("Helvetica-Bold")
     .text(opts.companyName, MARGIN, 18)
     .fontSize(12)
-    .font('Helvetica')
-    .text(opts.title, MARGIN, 18, { align: 'right', width: CONTENT_WIDTH });
+    .font("Helvetica")
+    .text(opts.title, MARGIN, 18, { align: "right", width: CONTENT_WIDTH });
   if (opts.documentNumber) {
-    doc
-      .fontSize(9)
-      .text(opts.documentNumber, MARGIN, 38, { align: 'right', width: CONTENT_WIDTH });
+    doc.fontSize(9).text(opts.documentNumber, MARGIN, 38, {
+      align: "right",
+      width: CONTENT_WIDTH,
+    });
   }
 
   // Reset cursor below the header band.
-  doc.fillColor('black').fontSize(10).font('Helvetica').moveDown(2);
+  doc.fillColor("black").fontSize(10).font("Helvetica").moveDown(2);
   doc.y = 80;
 
   return doc;
@@ -63,47 +66,57 @@ export function kv(
 ): void {
   const leftW = opts.leftWidth ?? 160;
   const y = doc.y;
-  doc.font('Helvetica').fontSize(9).fillColor('#475569').text(label, MARGIN, y, { width: leftW });
   doc
-    .font('Helvetica-Bold')
+    .font("Helvetica")
+    .fontSize(9)
+    .fillColor("#475569")
+    .text(label, MARGIN, y, { width: leftW });
+  doc
+    .font("Helvetica-Bold")
     .fontSize(10)
-    .fillColor('black')
+    .fillColor("black")
     .text(value, MARGIN + leftW + 10, y, { width: CONTENT_WIDTH - leftW - 10 });
   doc.moveDown(0.4);
 }
 
 /** Section heading with underline. */
-export function section(doc: InstanceType<typeof PDFDocument>, title: string): void {
+export function section(
+  doc: InstanceType<typeof PDFDocument>,
+  title: string,
+): void {
   doc.moveDown(0.8);
   doc
-    .font('Helvetica-Bold')
+    .font("Helvetica-Bold")
     .fontSize(11)
-    .fillColor('#1e293b')
+    .fillColor("#1e293b")
     .text(title.toUpperCase(), MARGIN, doc.y);
   const lineY = doc.y + 2;
   doc
     .moveTo(MARGIN, lineY)
     .lineTo(MARGIN + CONTENT_WIDTH, lineY)
-    .strokeColor('#cbd5e1')
+    .strokeColor("#cbd5e1")
     .lineWidth(0.5)
     .stroke();
   doc.moveDown(0.4);
-  doc.fillColor('black').font('Helvetica').fontSize(10);
+  doc.fillColor("black").font("Helvetica").fontSize(10);
 }
 
-export function paragraph(doc: InstanceType<typeof PDFDocument>, text: string): void {
+export function paragraph(
+  doc: InstanceType<typeof PDFDocument>,
+  text: string,
+): void {
   doc
-    .font('Helvetica')
+    .font("Helvetica")
     .fontSize(9.5)
-    .fillColor('#1e293b')
+    .fillColor("#1e293b")
     .text(text, MARGIN, doc.y, { width: CONTENT_WIDTH, lineGap: 2 });
   doc.moveDown(0.5);
 }
 
 export function moneyPHP(n: number): string {
-  return new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
     maximumFractionDigits: 2,
   }).format(n);
 }
@@ -113,12 +126,12 @@ export function pct(n: number): string {
 }
 
 export function fmtDate(d: Date | string | null | undefined): string {
-  if (!d) return '—';
-  const date = typeof d === 'string' ? new Date(d) : d;
-  return date.toLocaleDateString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
   });
 }
 
@@ -126,21 +139,29 @@ export function fmtDate(d: Date | string | null | undefined): string {
 export function table(
   doc: InstanceType<typeof PDFDocument>,
   rows: string[][],
-  opts: { header?: string[]; columnWidths?: number[]; alignments?: Array<'left' | 'right' | 'center'> },
+  opts: {
+    header?: string[];
+    columnWidths?: number[];
+    alignments?: Array<"left" | "right" | "center">;
+  },
 ): void {
-  const cols = opts.header ? opts.header.length : rows[0]?.length ?? 0;
+  const cols = opts.header ? opts.header.length : (rows[0]?.length ?? 0);
   if (cols === 0) return;
   const widths =
     opts.columnWidths ??
     Array.from({ length: cols }, () => Math.floor(CONTENT_WIDTH / cols));
-  const aligns = opts.alignments ?? Array.from({ length: cols }, () => 'left' as const);
+  const aligns =
+    opts.alignments ?? Array.from({ length: cols }, () => "left" as const);
 
   const drawRow = (cells: string[], bold = false) => {
     const startY = doc.y;
     let x = MARGIN;
-    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8.5).fillColor('black');
+    doc
+      .font(bold ? "Helvetica-Bold" : "Helvetica")
+      .fontSize(8.5)
+      .fillColor("black");
     for (let i = 0; i < cols; i++) {
-      doc.text(cells[i] ?? '', x, startY, {
+      doc.text(cells[i] ?? "", x, startY, {
         width: widths[i],
         align: aligns[i],
       });
@@ -158,7 +179,7 @@ export function table(
     doc
       .moveTo(MARGIN, lineY)
       .lineTo(MARGIN + CONTENT_WIDTH, lineY)
-      .strokeColor('#cbd5e1')
+      .strokeColor("#cbd5e1")
       .lineWidth(0.5)
       .stroke();
     doc.moveDown(0.2);
@@ -190,39 +211,39 @@ export function signatureBlock(
       try {
         doc.image(s.signature, x + 15, y - 5, {
           fit: [cellW - 30, 32],
-          align: 'center',
-          valign: 'bottom',
+          align: "center",
+          valign: "bottom",
         });
       } catch {
         // pdfkit throws on unsupported image formats; fall back to a blank line.
       }
     }
     doc
-      .strokeColor('#1e293b')
+      .strokeColor("#1e293b")
       .lineWidth(0.5)
       .moveTo(x + 10, lineY)
       .lineTo(x + cellW - 10, lineY)
       .stroke();
     doc
-      .font('Helvetica-Bold')
+      .font("Helvetica-Bold")
       .fontSize(9)
-      .fillColor('#1e293b')
-      .text(s.label, x, lineY + 6, { width: cellW, align: 'center' });
+      .fillColor("#1e293b")
+      .text(s.label, x, lineY + 6, { width: cellW, align: "center" });
     if (s.nameHint) {
       doc
-        .font('Helvetica')
+        .font("Helvetica")
         .fontSize(8)
-        .fillColor('#64748b')
-        .text(s.nameHint, x, lineY + 20, { width: cellW, align: 'center' });
+        .fillColor("#64748b")
+        .text(s.nameHint, x, lineY + 20, { width: cellW, align: "center" });
     }
     if (s.signedAt) {
       doc
-        .font('Helvetica-Oblique')
+        .font("Helvetica-Oblique")
         .fontSize(7)
-        .fillColor('#94a3b8')
+        .fillColor("#94a3b8")
         .text(`Signed ${fmtDate(s.signedAt)}`, x, lineY + 32, {
           width: cellW,
-          align: 'center',
+          align: "center",
         });
     }
   });
@@ -248,7 +269,7 @@ export function personnelStamp(
   doc: InstanceType<typeof PDFDocument>,
   personnel: PersonnelSignature,
 ): void {
-  const label = personnel.label ?? 'Prepared by';
+  const label = personnel.label ?? "Prepared by";
   doc.moveDown(2);
   const y = doc.y;
   const cellW = CONTENT_WIDTH / 2;
@@ -257,28 +278,28 @@ export function personnelStamp(
     try {
       doc.image(personnel.signature, MARGIN + 10, y - 5, {
         fit: [cellW - 20, 28],
-        align: 'center',
-        valign: 'bottom',
+        align: "center",
+        valign: "bottom",
       });
     } catch {
       // unsupported image — fall back to blank line
     }
   }
   doc
-    .strokeColor('#1e293b')
+    .strokeColor("#1e293b")
     .lineWidth(0.5)
     .moveTo(MARGIN, lineY)
     .lineTo(MARGIN + cellW - 10, lineY)
     .stroke();
   doc
-    .font('Helvetica-Bold')
+    .font("Helvetica-Bold")
     .fontSize(9)
-    .fillColor('#1e293b')
+    .fillColor("#1e293b")
     .text(label, MARGIN, lineY + 6, { width: cellW - 10 });
   doc
-    .font('Helvetica')
+    .font("Helvetica")
     .fontSize(8)
-    .fillColor('#64748b')
+    .fillColor("#64748b")
     .text(
       personnel.role ? `${personnel.name} · ${personnel.role}` : personnel.name,
       MARGIN,
@@ -287,9 +308,9 @@ export function personnelStamp(
     );
   if (personnel.signedAt) {
     doc
-      .font('Helvetica-Oblique')
+      .font("Helvetica-Oblique")
       .fontSize(7)
-      .fillColor('#94a3b8')
+      .fillColor("#94a3b8")
       .text(`Signed ${fmtDate(personnel.signedAt)}`, MARGIN, lineY + 30, {
         width: cellW - 10,
       });
@@ -297,19 +318,22 @@ export function personnelStamp(
   doc.y = lineY + 46;
 }
 
-export function footer(doc: InstanceType<typeof PDFDocument>, text: string): void {
+export function footer(
+  doc: InstanceType<typeof PDFDocument>,
+  text: string,
+): void {
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(range.start + i);
     doc
-      .font('Helvetica')
+      .font("Helvetica")
       .fontSize(8)
-      .fillColor('#94a3b8')
+      .fillColor("#94a3b8")
       .text(
         `${text}    ·    Page ${i + 1} of ${range.count}`,
         MARGIN,
         doc.page.height - 30,
-        { width: CONTENT_WIDTH, align: 'center' },
+        { width: CONTENT_WIDTH, align: "center" },
       );
   }
 }

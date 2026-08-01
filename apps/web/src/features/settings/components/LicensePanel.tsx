@@ -96,7 +96,7 @@ export function LicensePanel() {
           <SkeletonLine className="h-16" />
         ) : error ? (
           <p className="text-sm text-rose-300">
-            Could not load license status: {(error as Error).message}
+            Could not load license status: {error.message}
           </p>
         ) : data?.status === "ACTIVE" ? (
           <ActiveLicenseSummary data={data} />

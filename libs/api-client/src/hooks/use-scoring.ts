@@ -38,7 +38,7 @@ export function useSubmitSurvey() {
         input,
       ),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({
+      void qc.invalidateQueries({
         queryKey: ["scoring", "customer", vars.customerId],
       });
     },

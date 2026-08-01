@@ -4,7 +4,7 @@ import {
   usePortalPaymentIntent,
   useSignAsBorrower,
   useUpload,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -20,24 +20,32 @@ import {
   Input,
   SkeletonCard,
   useToast,
-} from '@loan/ui';
-import { formatDate, formatMoney } from '@loan/shared-utils';
-import { Copy, Download, ExternalLink, FileText, Link2, Pen } from 'lucide-react';
-import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+} from "@loan/ui";
+import { formatDate, formatMoney } from "@loan/shared-utils";
+import {
+  Copy,
+  Download,
+  ExternalLink,
+  FileText,
+  Link2,
+  Pen,
+} from "lucide-react";
+import { useState } from "react";
+import { useParams } from "react-router-dom";
 
-import { downloadPdf } from '../../../lib/download-pdf';
-import { SignaturePad } from '../../../components/SignaturePad';
-import { LoanMessagePanel } from '../../messaging';
+import { downloadPdf } from "../../../lib/download-pdf";
+import { SignaturePad } from "../../../components/SignaturePad";
+import { LoanMessagePanel } from "../../messaging";
 
 export function PortalLoanDetail() {
-  const { id = '' } = useParams<{ id: string }>();
+  const { id = "" } = useParams<{ id: string }>();
   const loan = usePortalLoan(id);
 
   if (loan.isLoading) return <SkeletonCard />;
-  if (!loan.data) return <p className="text-sm text-white/55">Loan not found.</p>;
+  if (!loan.data)
+    return <p className="text-sm text-white/55">Loan not found.</p>;
   const l = loan.data;
-  const payable = ['DISBURSED', 'ACTIVE'].includes(l.status);
+  const payable = ["DISBURSED", "ACTIVE"].includes(l.status);
 
   return (
     <div className="space-y-4">
@@ -50,7 +58,9 @@ export function PortalLoanDetail() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <Info label="Principal">{formatMoney(Number(l.principal))}</Info>
             <Info label="Term">{l.termMonths} months</Info>
-            <Info label="APR">{(Number(l.annualInterestRate) * 100).toFixed(2)}%</Info>
+            <Info label="APR">
+              {(Number(l.annualInterestRate) * 100).toFixed(2)}%
+            </Info>
             <Info label="Submitted">{formatDate(l.submittedAt)}</Info>
             <Info label="Decided">{formatDate(l.decidedAt)}</Info>
             <Info label="Disbursed">{formatDate(l.disbursedAt)}</Info>
@@ -72,16 +82,31 @@ export function PortalLoanDetail() {
           {payable && (
             <div className="mt-4 flex flex-wrap gap-2">
               <PayNowButton loanId={l.id} />
-              <PortalDocsButtons loanId={l.id} loanNumber={l.number} status={l.status} />
+              <PortalDocsButtons
+                loanId={l.id}
+                loanNumber={l.number}
+                status={l.status}
+              />
             </div>
           )}
-          {!payable && !['DRAFT', 'SUBMITTED', 'UNDER_REVIEW'].includes(l.status) && (
-            <div className="mt-4">
-              <PortalDocsButtons loanId={l.id} loanNumber={l.number} status={l.status} />
-            </div>
-          )}
+          {!payable &&
+            !["DRAFT", "SUBMITTED", "UNDER_REVIEW"].includes(l.status) && (
+              <div className="mt-4">
+                <PortalDocsButtons
+                  loanId={l.id}
+                  loanNumber={l.number}
+                  status={l.status}
+                />
+              </div>
+            )}
 
-          {!['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'REJECTED', 'CANCELLED'].includes(l.status) && (
+          {![
+            "DRAFT",
+            "SUBMITTED",
+            "UNDER_REVIEW",
+            "REJECTED",
+            "CANCELLED",
+          ].includes(l.status) && (
             <PortalSignaturePanel
               loanId={l.id}
               borrowerSignatureUrl={l.borrowerSignatureUrl}
@@ -94,7 +119,7 @@ export function PortalLoanDetail() {
       {/* Direct line to the loan officer. Available once the
           application is past DRAFT — borrowers can ask questions about
           their submission, expected timelines, etc. */}
-      {l.status !== 'DRAFT' && (
+      {l.status !== "DRAFT" && (
         <LoanMessagePanel loanId={l.id} perspective="BORROWER" />
       )}
     </div>
@@ -112,18 +137,20 @@ function PortalSignaturePanel({
 }) {
   const [open, setOpen] = useState(false);
   const upload = useUpload();
-  const sign = useSignAsBorrower('portal');
+  const sign = useSignAsBorrower("portal");
   const toast = useToast();
 
   const onCapture = async (blob: Blob) => {
     try {
-      const file = new File([blob], 'borrower-signature.png', { type: 'image/png' });
-      const result = await upload.mutateAsync({ file, subdir: 'signatures' });
+      const file = new File([blob], "borrower-signature.png", {
+        type: "image/png",
+      });
+      const result = await upload.mutateAsync({ file, subdir: "signatures" });
       await sign.mutateAsync({ loanId, signatureUrl: result.url });
-      toast.success('Signature saved');
+      toast.success("Signature saved");
       setOpen(false);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -143,7 +170,9 @@ function PortalSignaturePanel({
           <div className="text-xs text-white/55">
             <Badge variant="success">Signed</Badge>
             {borrowerSignedAt && (
-              <div className="mt-1">on {new Date(borrowerSignedAt).toLocaleDateString()}</div>
+              <div className="mt-1">
+                on {new Date(borrowerSignedAt).toLocaleDateString()}
+              </div>
             )}
           </div>
           <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
@@ -154,7 +183,8 @@ function PortalSignaturePanel({
       ) : (
         <div className="space-y-2">
           <p className="text-sm text-white/65">
-            Please sign your loan agreement. Your signature will be embedded in the official document.
+            Please sign your loan agreement. Your signature will be embedded in
+            the official document.
           </p>
           <Button onClick={() => setOpen(true)}>
             <Pen className="h-3 w-3" />
@@ -197,14 +227,14 @@ function PayNowButton({ loanId }: { loanId: string }) {
       const created = await create.mutateAsync({ loanId, amount });
       setIntentId(created.id);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
   const copyLink = async () => {
     if (!intent.data?.paymentUrl) return;
     await navigator.clipboard.writeText(intent.data.paymentUrl);
-    toast.success('Link copied');
+    toast.success("Link copied");
   };
 
   const reset = () => {
@@ -231,13 +261,18 @@ function PayNowButton({ loanId }: { loanId: string }) {
                   type="number"
                   min={1}
                   placeholder="Amount (₱)"
-                  value={amount || ''}
+                  value={amount || ""}
                   onChange={(e) => setAmount(Number(e.target.value))}
                 />
                 <DialogFooter>
-                  <Button variant="outline" onClick={reset}>Cancel</Button>
-                  <Button onClick={onCreate} disabled={create.isPending || amount <= 0}>
-                    {create.isPending ? 'Generating…' : 'Continue'}
+                  <Button variant="outline" onClick={reset}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={onCreate}
+                    disabled={create.isPending || amount <= 0}
+                  >
+                    {create.isPending ? "Generating…" : "Continue"}
                   </Button>
                 </DialogFooter>
               </div>
@@ -245,17 +280,21 @@ function PayNowButton({ loanId }: { loanId: string }) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-white/55">Status</span>
-                  <Badge variant={intent.data?.status === 'PAID' ? 'success' : 'warning'}>
-                    {intent.data?.status ?? 'CREATED'}
+                  <Badge
+                    variant={
+                      intent.data?.status === "PAID" ? "success" : "warning"
+                    }
+                  >
+                    {intent.data?.status ?? "CREATED"}
                   </Badge>
                 </div>
                 <div className="flex gap-2">
-                  <Input value={intent.data?.paymentUrl ?? ''} readOnly />
+                  <Input value={intent.data?.paymentUrl ?? ""} readOnly />
                   <Button variant="outline" size="sm" onClick={copyLink}>
                     <Copy className="h-3 w-3" />
                   </Button>
                   <a
-                    href={intent.data?.paymentUrl ?? '#'}
+                    href={intent.data?.paymentUrl ?? "#"}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center h-9 px-2 rounded-md border border-white/15 hover:bg-white/[0.06]"
@@ -268,7 +307,7 @@ function PayNowButton({ loanId }: { loanId: string }) {
                 </p>
                 <DialogFooter>
                   <Button onClick={reset}>
-                    {intent.data?.status === 'PAID' ? 'Done' : 'Close'}
+                    {intent.data?.status === "PAID" ? "Done" : "Close"}
                   </Button>
                 </DialogFooter>
               </div>
@@ -290,26 +329,37 @@ function PortalDocsButtons({
   status: string;
 }) {
   const toast = useToast();
-  const showAgreement = !['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'REJECTED', 'CANCELLED'].includes(status);
-  const showStatement = !['DRAFT', 'SUBMITTED', 'UNDER_REVIEW'].includes(status);
-  const download = async (kind: 'agreement' | 'statement') => {
+  const showAgreement = ![
+    "DRAFT",
+    "SUBMITTED",
+    "UNDER_REVIEW",
+    "REJECTED",
+    "CANCELLED",
+  ].includes(status);
+  const showStatement = !["DRAFT", "SUBMITTED", "UNDER_REVIEW"].includes(
+    status,
+  );
+  const download = async (kind: "agreement" | "statement") => {
     try {
-      await downloadPdf(`/portal/loans/${loanId}/${kind}.pdf`, `${kind}-${loanNumber}.pdf`);
+      await downloadPdf(
+        `/portal/loans/${loanId}/${kind}.pdf`,
+        `${kind}-${loanNumber}.pdf`,
+      );
     } catch (err) {
-      toast.error((err as Error).message ?? 'Download failed');
+      toast.error((err as Error).message ?? "Download failed");
     }
   };
   return (
     <>
       {showAgreement && (
-        <Button variant="outline" onClick={() => download('agreement')}>
+        <Button variant="outline" onClick={() => download("agreement")}>
           <FileText className="h-3 w-3" />
           <Download className="h-3 w-3" />
           Agreement
         </Button>
       )}
       {showStatement && (
-        <Button variant="outline" onClick={() => download('statement')}>
+        <Button variant="outline" onClick={() => download("statement")}>
           <FileText className="h-3 w-3" />
           <Download className="h-3 w-3" />
           Statement
@@ -319,18 +369,28 @@ function PortalDocsButtons({
   );
 }
 
-function Info({ label, children }: { label: string; children: React.ReactNode }) {
+function Info({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">{label}</div>
-      <div>{children ?? '—'}</div>
+      <div className="text-[10px] uppercase tracking-wider text-white/45">
+        {label}
+      </div>
+      <div>{children ?? "—"}</div>
     </div>
   );
 }
 
-function badgeVariant(status: string): 'success' | 'danger' | 'muted' | 'warning' {
-  if (['APPROVED', 'DISBURSED', 'ACTIVE'].includes(status)) return 'success';
-  if (['REJECTED', 'DEFAULTED', 'CANCELLED'].includes(status)) return 'danger';
-  if (status === 'CLOSED') return 'muted';
-  return 'warning';
+function badgeVariant(
+  status: string,
+): "success" | "danger" | "muted" | "warning" {
+  if (["APPROVED", "DISBURSED", "ACTIVE"].includes(status)) return "success";
+  if (["REJECTED", "DEFAULTED", "CANCELLED"].includes(status)) return "danger";
+  if (status === "CLOSED") return "muted";
+  return "warning";
 }

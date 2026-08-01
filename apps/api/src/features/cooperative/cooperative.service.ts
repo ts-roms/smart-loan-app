@@ -24,8 +24,7 @@ import type {
  */
 
 type CreateResult<T> =
-  | { ok: true; row: T }
-  | { ok: false; kind: "RepoError"; message: string };
+  { ok: true; row: T } | { ok: false; kind: "RepoError"; message: string };
 
 export type ContributionResult = CreateResult<
   Awaited<ReturnType<CooperativeRepository["createContribution"]>>

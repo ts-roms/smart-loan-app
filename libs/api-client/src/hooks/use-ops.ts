@@ -45,8 +45,8 @@ export function useRunJob() {
     mutationFn: (name: string) =>
       getApiClient().post<JobRun>(`/jobs/${name}/run`, {}),
     onSuccess: (_d, name) => {
-      qc.invalidateQueries({ queryKey: jobKeys.all });
-      qc.invalidateQueries({ queryKey: jobKeys.runs(name) });
+      void qc.invalidateQueries({ queryKey: jobKeys.all });
+      void qc.invalidateQueries({ queryKey: jobKeys.runs(name) });
     },
   });
 }
@@ -135,7 +135,9 @@ export function useRunScreening() {
         {},
       ),
     onSuccess: (_d, customerId) => {
-      qc.invalidateQueries({ queryKey: ["screening", "customer", customerId] });
+      void qc.invalidateQueries({
+        queryKey: ["screening", "customer", customerId],
+      });
     },
   });
 }
@@ -397,8 +399,8 @@ export function useAutoMatchStatement() {
         matchedAmount: number;
       }>(`/reconciliation/statements/${id}/auto-match`, {}),
     onSuccess: (_d, id) => {
-      qc.invalidateQueries({ queryKey: reconciliationKeys.statement(id) });
-      qc.invalidateQueries({ queryKey: reconciliationKeys.summary(id) });
+      void qc.invalidateQueries({ queryKey: reconciliationKeys.statement(id) });
+      void qc.invalidateQueries({ queryKey: reconciliationKeys.summary(id) });
     },
   });
 }
@@ -422,10 +424,10 @@ export function useMatchLine() {
         },
       ),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({
+      void qc.invalidateQueries({
         queryKey: reconciliationKeys.statement(vars.statementId),
       });
-      qc.invalidateQueries({
+      void qc.invalidateQueries({
         queryKey: reconciliationKeys.summary(vars.statementId),
       });
     },
@@ -461,10 +463,10 @@ export function useUnmatchLine() {
         {},
       ),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({
+      void qc.invalidateQueries({
         queryKey: reconciliationKeys.statement(vars.statementId),
       });
-      qc.invalidateQueries({
+      void qc.invalidateQueries({
         queryKey: reconciliationKeys.summary(vars.statementId),
       });
     },

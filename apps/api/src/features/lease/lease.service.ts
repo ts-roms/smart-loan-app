@@ -29,10 +29,7 @@ type LeaseAgreementRow = Awaited<ReturnType<LeaseRepository["pullOut"]>>;
  */
 
 type AuditAction =
-  | "LEASE_BUYOUT"
-  | "LEASE_PULL_OUT"
-  | "LEASE_RETURNED"
-  | "LEASE_EXTENDED";
+  "LEASE_BUYOUT" | "LEASE_PULL_OUT" | "LEASE_RETURNED" | "LEASE_EXTENDED";
 
 export type BuyoutResult =
   | {

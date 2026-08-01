@@ -1,7 +1,15 @@
-import { useTrialBalance } from '@loan/api-client';
-import { Badge, Card, CardContent, CardHeader, CardTitle, DatePicker, SkeletonCard } from '@loan/ui';
-import { formatMoney } from '@loan/shared-utils';
-import { useState } from 'react';
+import { useTrialBalance } from "@loan/api-client";
+import {
+  Badge,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  DatePicker,
+  SkeletonCard,
+} from "@loan/ui";
+import { formatMoney } from "@loan/shared-utils";
+import { useState } from "react";
 
 export function TrialBalancePage() {
   const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
@@ -15,8 +23,8 @@ export function TrialBalancePage() {
           <label className="text-white/55">As of</label>
           <DatePicker value={asOf} onChange={setAsOf} className="h-9 w-44" />
           {trial.data && (
-            <Badge variant={trial.data.inBalance ? 'success' : 'danger'}>
-              {trial.data.inBalance ? 'In balance' : 'Out of balance'}
+            <Badge variant={trial.data.inBalance ? "success" : "danger"}>
+              {trial.data.inBalance ? "In balance" : "Out of balance"}
             </Badge>
           )}
         </div>
@@ -42,10 +50,10 @@ export function TrialBalancePage() {
                   <td className="py-2 px-2">{r.name}</td>
                   <td className="py-2 px-2 text-white/65">{r.type}</td>
                   <td className="py-2 px-2 text-right font-mono">
-                    {r.debit > 0 ? formatMoney(r.debit) : ''}
+                    {r.debit > 0 ? formatMoney(r.debit) : ""}
                   </td>
                   <td className="py-2 px-2 text-right font-mono">
-                    {r.credit > 0 ? formatMoney(r.credit) : ''}
+                    {r.credit > 0 ? formatMoney(r.credit) : ""}
                   </td>
                 </tr>
               ))}

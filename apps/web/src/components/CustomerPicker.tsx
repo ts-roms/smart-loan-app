@@ -32,7 +32,10 @@ export function CustomerPicker({
   placeholder?: string;
 }) {
   const customers = useCustomers();
-  const rows = customers.data ?? [];
+  // Memoized because `?? []` allocates a fresh array on every render while
+  // the query is loading, which would change the `selected` memo's deps
+  // each pass and defeat it entirely.
+  const rows = useMemo(() => customers.data ?? [], [customers.data]);
 
   // Resolve the currently-selected customer (if any) so SearchInput can
   // render its label inside the input once chosen.
@@ -55,6 +58,10 @@ export function CustomerPicker({
       }
       getDisplayLabel={(c) => `${c.firstName} ${c.lastName}`}
       getItemKey={(c) => c.id}
+      // Operators usually reach for the same handful of members, so open
+      // with a starting set instead of an empty field they have to guess at.
+      suggestOnFocus
+      maxResults={10}
       placeholder={placeholder}
       emptyMessage={(q) => `No customers match “${q}”.`}
       renderSuggestion={(c) => (

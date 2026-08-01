@@ -12,10 +12,10 @@
  * who know the Dialog API are immediately productive here.
  */
 
-import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { X } from 'lucide-react';
-import { forwardRef, type HTMLAttributes } from 'react';
-import { cn } from '../lib/cn';
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
+import { forwardRef, type HTMLAttributes } from "react";
+import { cn } from "../lib/cn";
 
 export const Drawer = DialogPrimitive.Root;
 export const DrawerTrigger = DialogPrimitive.Trigger;
@@ -28,14 +28,14 @@ const DrawerOverlay = forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-black/40 backdrop-blur-sm',
-      'data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out',
+      "fixed inset-0 z-50 bg-black/40 backdrop-blur-sm",
+      "data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out",
       className,
     )}
     {...props}
   />
 ));
-DrawerOverlay.displayName = 'DrawerOverlay';
+DrawerOverlay.displayName = "DrawerOverlay";
 
 export const DrawerContent = forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
@@ -51,8 +51,8 @@ export const DrawerContent = forwardRef<
         void e;
       }}
       className={cn(
-        'fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-white/10 bg-slate-950/95 backdrop-blur-xl shadow-2xl flex flex-col',
-        'data-[state=open]:animate-drawer-in-right data-[state=closed]:animate-drawer-out-right',
+        "fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-white/10 bg-slate-950/95 backdrop-blur-xl shadow-2xl flex flex-col",
+        "data-[state=open]:animate-drawer-in-right data-[state=closed]:animate-drawer-out-right",
         className,
       )}
       {...props}
@@ -67,27 +67,39 @@ export const DrawerContent = forwardRef<
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>
 ));
-DrawerContent.displayName = 'DrawerContent';
+DrawerContent.displayName = "DrawerContent";
 
-export const DrawerHeader = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
+export const DrawerHeader = ({
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      'shrink-0 border-b border-white/10 px-5 py-4 pr-12',
-      'flex flex-col gap-1',
+      "shrink-0 border-b border-white/10 px-5 py-4 pr-12",
+      "flex flex-col gap-1",
       className,
     )}
     {...props}
   />
 );
 
-export const DrawerBody = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex-1 overflow-y-auto px-5 py-4 space-y-4', className)} {...props} />
+export const DrawerBody = ({
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn("flex-1 overflow-y-auto px-5 py-4 space-y-4", className)}
+    {...props}
+  />
 );
 
-export const DrawerFooter = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
+export const DrawerFooter = ({
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      'shrink-0 border-t border-white/10 px-5 py-3 flex items-center justify-end gap-2',
+      "shrink-0 border-t border-white/10 px-5 py-3 flex items-center justify-end gap-2",
       className,
     )}
     {...props}
@@ -100,11 +112,14 @@ export const DrawerTitle = forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-lg font-semibold leading-none tracking-tight', className)}
+    className={cn(
+      "text-lg font-semibold leading-none tracking-tight",
+      className,
+    )}
     {...props}
   />
 ));
-DrawerTitle.displayName = 'DrawerTitle';
+DrawerTitle.displayName = "DrawerTitle";
 
 export const DrawerDescription = forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
@@ -112,8 +127,8 @@ export const DrawerDescription = forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn('text-xs text-white/55', className)}
+    className={cn("text-xs text-white/55", className)}
     {...props}
   />
 ));
-DrawerDescription.displayName = 'DrawerDescription';
+DrawerDescription.displayName = "DrawerDescription";

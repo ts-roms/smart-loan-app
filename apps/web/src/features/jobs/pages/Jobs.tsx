@@ -4,7 +4,7 @@ import {
   useRunJob,
   useSetJobEnabled,
   useUpdateJobCron,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -15,12 +15,12 @@ import {
   Input,
   SkeletonCard,
   useToast,
-} from '@loan/ui';
-import { formatDateTime } from '@loan/shared-utils';
-import { Play, Settings } from 'lucide-react';
-import { useState } from 'react';
+} from "@loan/ui";
+import { formatDateTime } from "@loan/shared-utils";
+import { Play, Settings } from "lucide-react";
+import { useState } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 /**
  * Scheduled jobs admin. Lists every registered job with its cron, enabled
@@ -36,10 +36,10 @@ export function JobsPage() {
   const { user } = useAuth();
   const [selected, setSelected] = useState<string | null>(null);
   const [editingCron, setEditingCron] = useState<string | null>(null);
-  const [cronDraft, setCronDraft] = useState('');
+  const [cronDraft, setCronDraft] = useState("");
 
-  const canAdmin = user?.role === 'ADMIN';
-  const canRun = canAdmin || user?.role === 'ACCOUNTANT';
+  const canAdmin = user?.role === "ADMIN";
+  const canRun = canAdmin || user?.role === "ACCOUNTANT";
 
   return (
     <div className="space-y-4">
@@ -69,17 +69,22 @@ export function JobsPage() {
                   <tr
                     key={j.id}
                     onClick={() => setSelected(j.name)}
-                    className={`hover:bg-white/[0.03] cursor-pointer ${selected === j.name ? 'bg-white/[0.05]' : ''}`}
+                    className={`hover:bg-white/[0.03] cursor-pointer ${selected === j.name ? "bg-white/[0.05]" : ""}`}
                   >
                     <td className="py-2 px-2">
                       <div className="font-medium">{j.name}</div>
                       {j.description && (
-                        <div className="text-xs text-white/45">{j.description}</div>
+                        <div className="text-xs text-white/45">
+                          {j.description}
+                        </div>
                       )}
                     </td>
                     <td className="py-2 px-2 font-mono text-xs">
                       {editingCron === j.name ? (
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <div
+                          className="flex items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Input
                             value={cronDraft}
                             onChange={(e) => setCronDraft(e.target.value)}
@@ -89,11 +94,14 @@ export function JobsPage() {
                             size="sm"
                             onClick={async () => {
                               try {
-                                await updateCron.mutateAsync({ name: j.name, cron: cronDraft });
-                                toast.success('Cron updated');
+                                await updateCron.mutateAsync({
+                                  name: j.name,
+                                  cron: cronDraft,
+                                });
+                                toast.success("Cron updated");
                                 setEditingCron(null);
                               } catch (err) {
-                                toast.error((err as Error).message ?? 'Failed');
+                                toast.error((err as Error).message ?? "Failed");
                               }
                             }}
                           >
@@ -108,29 +116,32 @@ export function JobsPage() {
                             setEditingCron(j.name);
                             setCronDraft(j.cron);
                           }}
-                          className={canAdmin ? 'hover:underline' : ''}
+                          className={canAdmin ? "hover:underline" : ""}
                         >
                           {j.cron}
                         </span>
                       )}
                     </td>
                     <td className="py-2 px-2 text-xs text-white/65">
-                      {j.nextRunAt ? formatDateTime(j.nextRunAt) : '—'}
+                      {j.nextRunAt ? formatDateTime(j.nextRunAt) : "—"}
                     </td>
                     <td className="py-2 px-2 text-xs text-white/65">
-                      {j.lastRunAt ? formatDateTime(j.lastRunAt) : 'never'}
+                      {j.lastRunAt ? formatDateTime(j.lastRunAt) : "never"}
                     </td>
                     <td className="py-2 px-2">
-                      <Badge variant={j.enabled ? 'success' : 'muted'}>
-                        {j.enabled ? 'Enabled' : 'Paused'}
+                      <Badge variant={j.enabled ? "success" : "muted"}>
+                        {j.enabled ? "Enabled" : "Paused"}
                       </Badge>
                     </td>
-                    <td className="py-2 px-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td
+                      className="py-2 px-2 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div className="flex items-center justify-end gap-1">
                         {canAdmin && (
                           <button
                             type="button"
-                            title={j.enabled ? 'Pause' : 'Resume'}
+                            title={j.enabled ? "Pause" : "Resume"}
                             className="text-white/55 hover:text-sky-300"
                             onClick={async () => {
                               try {
@@ -139,7 +150,7 @@ export function JobsPage() {
                                   enabled: !j.enabled,
                                 });
                               } catch (err) {
-                                toast.error((err as Error).message ?? 'Failed');
+                                toast.error((err as Error).message ?? "Failed");
                               }
                             }}
                           >
@@ -155,12 +166,12 @@ export function JobsPage() {
                               try {
                                 const r = await run.mutateAsync(j.name);
                                 toast.success(
-                                  r.status === 'SUCCEEDED'
+                                  r.status === "SUCCEEDED"
                                     ? `Ran ${j.name}`
-                                    : `${j.name} failed: ${r.error ?? 'see logs'}`,
+                                    : `${j.name} failed: ${r.error ?? "see logs"}`,
                                 );
                               } catch (err) {
-                                toast.error((err as Error).message ?? 'Failed');
+                                toast.error((err as Error).message ?? "Failed");
                               }
                             }}
                           >
@@ -209,7 +220,7 @@ function JobRuns({ name }: { name: string }) {
               {(runs.data ?? []).map((r) => {
                 const duration = r.finishedAt
                   ? `${((new Date(r.finishedAt).getTime() - new Date(r.startedAt).getTime()) / 1000).toFixed(2)}s`
-                  : '—';
+                  : "—";
                 return (
                   <tr key={r.id} className="hover:bg-white/[0.03]">
                     <td className="py-2 px-2 text-xs text-white/65">
@@ -218,11 +229,11 @@ function JobRuns({ name }: { name: string }) {
                     <td className="py-2 px-2">
                       <Badge
                         variant={
-                          r.status === 'SUCCEEDED'
-                            ? 'success'
-                            : r.status === 'FAILED'
-                              ? 'danger'
-                              : 'warning'
+                          r.status === "SUCCEEDED"
+                            ? "success"
+                            : r.status === "FAILED"
+                              ? "danger"
+                              : "warning"
                         }
                       >
                         {r.status}
@@ -231,11 +242,15 @@ function JobRuns({ name }: { name: string }) {
                     <td className="py-2 px-2 text-xs">{duration}</td>
                     <td className="py-2 px-2 text-xs text-white/65 max-w-[40ch]">
                       <div className="truncate">
-                        {r.error ?? (r.result ? JSON.stringify(r.result) : '—')}
+                        {r.error ?? (r.result ? JSON.stringify(r.result) : "—")}
                       </div>
                     </td>
                     <td className="py-2 px-2 text-xs">
-                      {r.manual ? <Badge variant="warning">manual</Badge> : <Badge variant="muted">scheduled</Badge>}
+                      {r.manual ? (
+                        <Badge variant="warning">manual</Badge>
+                      ) : (
+                        <Badge variant="muted">scheduled</Badge>
+                      )}
                     </td>
                   </tr>
                 );

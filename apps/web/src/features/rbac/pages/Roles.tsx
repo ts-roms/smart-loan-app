@@ -304,7 +304,7 @@ function RoleDialog({
         // If the impact check itself fails, fall through to the
         // optimistic save — the server still enforces invariants;
         // we just lose the warning UX.
-        // eslint-disable-next-line no-console
+
         console.warn("Role edit-impact check failed; proceeding to save", err);
       }
     }

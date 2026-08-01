@@ -79,6 +79,11 @@ export function PortalApply() {
         kind: productCode === "MOTORCYCLE" ? "MOTORCYCLE" : "CAR",
       }));
     }
+    // Keyed on `product?.id`, not `product`: this snaps the borrower's
+    // entered amounts to the newly-selected product's bounds, and must
+    // fire only when the product actually changes. Depending on the object
+    // would re-run on every refetch and overwrite what they typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?.id, productCode]);
 
   useEffect(() => {
@@ -122,7 +127,7 @@ export function PortalApply() {
       toast.success(
         "Application submitted! An officer will review it shortly.",
       );
-      navigate(`/portal/loans/${created.number}`);
+      void navigate(`/portal/loans/${created.number}`);
     } catch (err) {
       toast.error((err as Error).message ?? "Could not apply");
     }

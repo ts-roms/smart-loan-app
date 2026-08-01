@@ -1,5 +1,5 @@
-import { useNotifications, useSendTestNotification } from '@loan/api-client';
-import type { NotificationChannel } from '@loan/shared-types';
+import { useNotifications, useSendTestNotification } from "@loan/api-client";
+import type { NotificationChannel } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -20,12 +20,12 @@ import {
   SelectValue,
   SkeletonCard,
   useToast,
-} from '@loan/ui';
-import { formatDateTime } from '@loan/shared-utils';
-import { Mail, Send } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+} from "@loan/ui";
+import { formatDateTime } from "@loan/shared-utils";
+import { Mail, Send } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 export function NotificationsPage() {
   const notifs = useNotifications();
@@ -39,7 +39,7 @@ export function NotificationsPage() {
           <Mail className="h-4 w-4" />
           Notifications
         </CardTitle>
-        {user?.role === 'ADMIN' && (
+        {user?.role === "ADMIN" && (
           <Button variant="outline" onClick={() => setTesting(true)}>
             <Send className="h-3 w-3" />
             Send test
@@ -75,23 +75,29 @@ export function NotificationsPage() {
                   <td className="py-2 px-2 text-xs">{n.channel}</td>
                   <td className="py-2 px-2 text-xs">{n.recipient}</td>
                   <td className="py-2 px-2 max-w-[40ch]">
-                    <div className="text-xs font-medium truncate">{n.subject ?? ''}</div>
-                    <div className="text-xs text-white/55 truncate">{n.body}</div>
+                    <div className="text-xs font-medium truncate">
+                      {n.subject ?? ""}
+                    </div>
+                    <div className="text-xs text-white/55 truncate">
+                      {n.body}
+                    </div>
                   </td>
                   <td className="py-2 px-2">
                     <Badge
                       variant={
-                        n.status === 'SENT'
-                          ? 'success'
-                          : n.status === 'FAILED'
-                            ? 'danger'
-                            : 'warning'
+                        n.status === "SENT"
+                          ? "success"
+                          : n.status === "FAILED"
+                            ? "danger"
+                            : "warning"
                       }
                     >
                       {n.status}
                     </Badge>
                     {n.error && (
-                      <div className="text-xs text-rose-300 mt-1">{n.error}</div>
+                      <div className="text-xs text-rose-300 mt-1">
+                        {n.error}
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -108,18 +114,18 @@ export function NotificationsPage() {
 function TestDialog({ onClose }: { onClose: () => void }) {
   const send = useSendTestNotification();
   const toast = useToast();
-  const [channel, setChannel] = useState<NotificationChannel>('EMAIL');
-  const [recipient, setRecipient] = useState('');
-  const [note, setNote] = useState('Hello from the test endpoint.');
+  const [channel, setChannel] = useState<NotificationChannel>("EMAIL");
+  const [recipient, setRecipient] = useState("");
+  const [note, setNote] = useState("Hello from the test endpoint.");
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await send.mutateAsync({ channel, recipient, note });
-      toast.success('Test sent (check console for mock output)');
+      toast.success("Test sent (check console for mock output)");
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed');
+      toast.error((err as Error).message ?? "Failed");
     }
   };
 
@@ -132,8 +138,13 @@ function TestDialog({ onClose }: { onClose: () => void }) {
         <form onSubmit={onSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Channel">
-              <Select value={channel} onValueChange={(v) => setChannel(v as NotificationChannel)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={channel}
+                onValueChange={(v) => setChannel(v as NotificationChannel)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="EMAIL">Email</SelectItem>
                   <SelectItem value="SMS">SMS</SelectItem>
@@ -145,7 +156,9 @@ function TestDialog({ onClose }: { onClose: () => void }) {
               <Input
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}
-                placeholder={channel === 'EMAIL' ? 'name@example.com' : '+639xx…'}
+                placeholder={
+                  channel === "EMAIL" ? "name@example.com" : "+639xx…"
+                }
                 required
               />
             </Field>
@@ -154,9 +167,11 @@ function TestDialog({ onClose }: { onClose: () => void }) {
             <Input value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={send.isPending || !recipient}>
-              {send.isPending ? 'Sending…' : 'Send'}
+              {send.isPending ? "Sending…" : "Send"}
             </Button>
           </DialogFooter>
         </form>
@@ -165,7 +180,13 @@ function TestDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <label className="text-xs text-white/55">{label}</label>

@@ -38,8 +38,8 @@ export function useCreatePaymentIntent() {
       description?: string;
     }) => getApiClient().post<PaymentIntent>("/payments/intents", input),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: paymentKeys.list(vars.loanId) });
-      qc.invalidateQueries({ queryKey: ["loans", "detail", vars.loanId] });
+      void qc.invalidateQueries({ queryKey: paymentKeys.list(vars.loanId) });
+      void qc.invalidateQueries({ queryKey: ["loans", "detail", vars.loanId] });
     },
   });
 }

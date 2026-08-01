@@ -55,7 +55,7 @@ export function LoginPage() {
         refreshToken: res.refreshToken,
         user: res.user,
       });
-      navigate("/", { replace: true });
+      void navigate("/", { replace: true });
     } catch (err) {
       // Server signals "needs 2FA" via a 401 with `requires2fa: true` in
       // the body. Switch the form into 2FA mode instead of toasting an

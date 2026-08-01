@@ -1,10 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type {
-  ApproveResult,
-  DemandLetterService,
-  LetterResult,
-} from "./demand-letters.service";
+import type { ApproveResult, LetterResult } from "./demand-letters.service";
 import {
   approveSchema,
   batchSchema,

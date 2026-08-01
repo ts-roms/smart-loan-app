@@ -1,5 +1,5 @@
-import { useAccounts, useCreateAccount, useSeedChart } from '@loan/api-client';
-import type { Account } from '@loan/shared-types';
+import { useAccounts, useCreateAccount, useSeedChart } from "@loan/api-client";
+import type { Account } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -20,11 +20,11 @@ import {
   SelectValue,
   SkeletonCard,
   useToast,
-} from '@loan/ui';
-import { Plus, Sparkles } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+} from "@loan/ui";
+import { Plus, Sparkles } from "lucide-react";
+import { useState, type FormEvent } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 /**
  * The chart of accounts. ADMIN/ACCOUNTANT can add new accounts; everyone
@@ -37,7 +37,7 @@ export function ChartOfAccountsPage() {
   const seed = useSeedChart();
   const toast = useToast();
   const { user } = useAuth();
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
+  const canEdit = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
   const [creating, setCreating] = useState(false);
 
   return (
@@ -45,15 +45,17 @@ export function ChartOfAccountsPage() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Chart of accounts</CardTitle>
         <div className="flex items-center gap-2">
-          {user?.role === 'ADMIN' && (
+          {user?.role === "ADMIN" && (
             <Button
               variant="outline"
               onClick={async () => {
                 try {
                   const r = await seed.mutateAsync();
-                  toast.success(`Seeded ${r.created} accounts (${r.existing} already present)`);
+                  toast.success(
+                    `Seeded ${r.created} accounts (${r.existing} already present)`,
+                  );
                 } catch (err) {
-                  toast.error((err as Error).message ?? 'Could not seed');
+                  toast.error((err as Error).message ?? "Could not seed");
                 }
               }}
               disabled={seed.isPending}
@@ -75,7 +77,8 @@ export function ChartOfAccountsPage() {
           <SkeletonCard />
         ) : (accounts.data ?? []).length === 0 ? (
           <p className="text-sm text-white/55">
-            No accounts yet. Click "Seed defaults" to install the standard chart.
+            No accounts yet. Click "Seed defaults" to install the standard
+            chart.
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -95,7 +98,9 @@ export function ChartOfAccountsPage() {
                   <td className="py-2 px-2">
                     {a.name}
                     {a.description && (
-                      <div className="text-xs text-white/45">{a.description}</div>
+                      <div className="text-xs text-white/45">
+                        {a.description}
+                      </div>
                     )}
                   </td>
                   <td className="py-2 px-2">
@@ -116,14 +121,22 @@ export function ChartOfAccountsPage() {
   );
 }
 
-function typeVariant(type: Account['type']): 'success' | 'danger' | 'muted' | 'warning' {
+function typeVariant(
+  type: Account["type"],
+): "success" | "danger" | "muted" | "warning" {
   switch (type) {
-    case 'ASSET': return 'success';
-    case 'LIABILITY': return 'warning';
-    case 'EQUITY': return 'muted';
-    case 'INCOME': return 'success';
-    case 'EXPENSE': return 'danger';
-    default: return 'muted';
+    case "ASSET":
+      return "success";
+    case "LIABILITY":
+      return "warning";
+    case "EQUITY":
+      return "muted";
+    case "INCOME":
+      return "success";
+    case "EXPENSE":
+      return "danger";
+    default:
+      return "muted";
   }
 }
 
@@ -133,15 +146,15 @@ function NewAccountDialog({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<{
     code: string;
     name: string;
-    type: Account['type'];
-    normalBalance: Account['normalBalance'];
+    type: Account["type"];
+    normalBalance: Account["normalBalance"];
     description: string;
   }>({
-    code: '',
-    name: '',
-    type: 'ASSET',
-    normalBalance: 'DEBIT',
-    description: '',
+    code: "",
+    name: "",
+    type: "ASSET",
+    normalBalance: "DEBIT",
+    description: "",
   });
 
   const onSubmit = async (e: FormEvent) => {
@@ -154,10 +167,10 @@ function NewAccountDialog({ onClose }: { onClose: () => void }) {
         normalBalance: form.normalBalance,
         description: form.description || undefined,
       });
-      toast.success('Account created');
+      toast.success("Account created");
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Could not create');
+      toast.error((err as Error).message ?? "Could not create");
     }
   };
 
@@ -192,12 +205,15 @@ function NewAccountDialog({ onClose }: { onClose: () => void }) {
                 onValueChange={(v) =>
                   setForm({
                     ...form,
-                    type: v as Account['type'],
-                    normalBalance: v === 'ASSET' || v === 'EXPENSE' ? 'DEBIT' : 'CREDIT',
+                    type: v as Account["type"],
+                    normalBalance:
+                      v === "ASSET" || v === "EXPENSE" ? "DEBIT" : "CREDIT",
                   })
                 }
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ASSET">Asset</SelectItem>
                   <SelectItem value="LIABILITY">Liability</SelectItem>
@@ -210,9 +226,16 @@ function NewAccountDialog({ onClose }: { onClose: () => void }) {
             <Field label="Normal balance">
               <Select
                 value={form.normalBalance}
-                onValueChange={(v) => setForm({ ...form, normalBalance: v as Account['normalBalance'] })}
+                onValueChange={(v) =>
+                  setForm({
+                    ...form,
+                    normalBalance: v as Account["normalBalance"],
+                  })
+                }
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="DEBIT">Debit</SelectItem>
                   <SelectItem value="CREDIT">Credit</SelectItem>
@@ -223,13 +246,17 @@ function NewAccountDialog({ onClose }: { onClose: () => void }) {
           <Field label="Description (optional)">
             <Input
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, description: e.target.value })
+              }
             />
           </Field>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? 'Creating…' : 'Create'}
+              {create.isPending ? "Creating…" : "Create"}
             </Button>
           </DialogFooter>
         </form>
@@ -238,7 +265,13 @@ function NewAccountDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <label className="text-xs text-white/55">{label}</label>

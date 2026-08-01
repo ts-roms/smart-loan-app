@@ -728,8 +728,8 @@ export class AccountingRepository {
       accountId: r.accountId,
       accountCode: r.account.code,
       accountName: r.account.name,
-      accountType: r.account.type as AccountTypeCode,
-      normalBalance: r.account.normalBalance as NormalBalanceCode,
+      accountType: r.account.type,
+      normalBalance: r.account.normalBalance,
       debit: Number(r.debit),
       credit: Number(r.credit),
     }));

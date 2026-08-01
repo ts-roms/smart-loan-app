@@ -266,7 +266,10 @@ export function renderLoanAgreement(
       footer(doc, `${input.companyName} · Loan ${input.loan.number}`);
       doc.end();
     } catch (err) {
-      reject(err);
+      // Normalize before rejecting — a thrown non-Error (pdfkit surfaces
+      // strings for some stream faults) would otherwise reach callers
+      // with no stack, and every call site does `(err as Error).message`.
+      reject(err instanceof Error ? err : new Error(String(err)));
     }
   });
 }

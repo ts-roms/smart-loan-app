@@ -124,6 +124,27 @@ export function computeAmortizationFor(
   return computeAmortization(principal, periodRate, n, opts);
 }
 
+/**
+ * Declining-balance schedule.
+ *
+ * Two balances are tracked deliberately:
+ *
+ * - `exactBalance` is unrounded and drives the interest math, so interest
+ *   is computed on the true remaining principal (standard amortization);
+ *   rounding each period first would compound the error across the term.
+ * - `principalAccum` sums the *rounded* principal actually written to each
+ *   row, and the final installment trues up against it.
+ *
+ * That second part is what makes the schedule reconcile. The rows are what
+ * gets persisted to `LoanSchedule` and what the borrower actually pays, and
+ * the loan is booked to Loans Receivable at full `principal` on
+ * disbursement — so if the rounded rows don't sum to `principal`, paying
+ * every installment in full leaves a permanent residual on the receivable.
+ * `payment` is likewise derived from the rounded parts, upholding the
+ * `totalDue = principalDue + interestDue` invariant that LoanSchedule
+ * documents. `flatSchedule` below has always done this; declining didn't,
+ * and drifted by up to ~1 peso on weekly terms.
+ */
 function decliningSchedule(
   principal: number,
   periodRate: number,
@@ -131,18 +152,28 @@ function decliningSchedule(
 ): AmortizationRow[] {
   const payment = monthlyPayment(principal, periodRate, periodCount);
   const out: AmortizationRow[] = [];
-  let balance = principal;
+  let exactBalance = principal;
+  let principalAccum = 0;
   for (let i = 1; i <= periodCount; i++) {
-    const interest = balance * periodRate;
-    let principalDue = payment - interest;
-    if (i === periodCount) principalDue = balance;
-    balance = Math.max(0, balance - principalDue);
+    const isLast = i === periodCount;
+    const interestRaw = exactBalance * periodRate;
+    const principalRaw = isLast ? exactBalance : payment - interestRaw;
+    exactBalance = Math.max(0, exactBalance - principalRaw);
+
+    const interest = round2(interestRaw);
+    // The last row absorbs the accumulated rounding drift so the rounded
+    // principal column sums to exactly `principal`.
+    const principalDue = isLast
+      ? round2(principal - principalAccum)
+      : round2(principalRaw);
+    principalAccum = round2(principalAccum + principalDue);
+
     out.push({
       installmentNo: i,
-      principal: round2(principalDue),
-      interest: round2(interest),
+      principal: principalDue,
+      interest,
       payment: round2(principalDue + interest),
-      balance: round2(balance),
+      balance: round2(principal - principalAccum),
     });
   }
   return out;

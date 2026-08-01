@@ -235,10 +235,10 @@ function validatePayloadShape(
       tier: o.tier as LicenseTier,
       features,
       iat: o.iat,
-      nbf: o.nbf as number | undefined,
+      nbf: o.nbf,
       exp: o.exp,
       seats: o.seats,
-      notes: o.notes as string | undefined,
+      notes: o.notes,
     },
   };
 }

@@ -133,7 +133,7 @@ export function useCreateLoanDraft() {
     mutationFn: (input: LoanDraftCreateInput) =>
       getApiClient().post<LoanDraft>("/loans/drafts", input),
     onSuccess: (created) => {
-      qc.invalidateQueries({ queryKey: loanKeys.drafts() });
+      void qc.invalidateQueries({ queryKey: loanKeys.drafts() });
       qc.setQueryData(loanKeys.draft(created.id), created);
     },
   });
@@ -148,7 +148,7 @@ export function useUpdateLoanDraft() {
         body: JSON.stringify(input.patch),
       }),
     onSuccess: (updated) => {
-      qc.invalidateQueries({ queryKey: loanKeys.drafts() });
+      void qc.invalidateQueries({ queryKey: loanKeys.drafts() });
       qc.setQueryData(loanKeys.draft(updated.id), updated);
     },
   });
@@ -160,7 +160,7 @@ export function useDeleteLoanDraft() {
     mutationFn: (id: string) =>
       getApiClient().request<void>(`/loans/drafts/${id}`, { method: "DELETE" }),
     onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: loanKeys.drafts() });
+      void qc.invalidateQueries({ queryKey: loanKeys.drafts() });
       qc.removeQueries({ queryKey: loanKeys.draft(id) });
     },
   });
@@ -180,7 +180,7 @@ export function useRecordSelfieMatch(loanId: string) {
         input,
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: loanKeys.detail(loanId) });
+      void qc.invalidateQueries({ queryKey: loanKeys.detail(loanId) });
     },
   });
 }
@@ -200,9 +200,9 @@ export function useDecideLoan() {
         overrideKyc: input.overrideKyc,
       }),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: loanKeys.all });
-      qc.invalidateQueries({ queryKey: loanKeys.detail(vars.id) });
-      qc.invalidateQueries({ queryKey: loanKeys.kycStatus(vars.id) });
+      void qc.invalidateQueries({ queryKey: loanKeys.all });
+      void qc.invalidateQueries({ queryKey: loanKeys.detail(vars.id) });
+      void qc.invalidateQueries({ queryKey: loanKeys.kycStatus(vars.id) });
     },
   });
 }
@@ -213,8 +213,8 @@ export function useDisburseLoan() {
     mutationFn: (id: string) =>
       getApiClient().post<LoanApplication>(`/loans/${id}/disburse`, {}),
     onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: loanKeys.all });
-      qc.invalidateQueries({ queryKey: loanKeys.detail(id) });
+      void qc.invalidateQueries({ queryKey: loanKeys.all });
+      void qc.invalidateQueries({ queryKey: loanKeys.detail(id) });
     },
   });
 }
@@ -240,8 +240,8 @@ export function useCloseEarlyLoan() {
         reference: input.reference,
       }),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: loanKeys.all });
-      qc.invalidateQueries({ queryKey: loanKeys.detail(vars.id) });
+      void qc.invalidateQueries({ queryKey: loanKeys.all });
+      void qc.invalidateQueries({ queryKey: loanKeys.detail(vars.id) });
     },
   });
 }
@@ -275,8 +275,8 @@ export function useRecordPaymentsBulk() {
     mutationFn: (input: { rows: BulkPaymentRow[]; stopOnError?: boolean }) =>
       getApiClient().post<BulkPaymentResponse>("/loans/payments/bulk", input),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: loanKeys.all });
-      qc.invalidateQueries({ queryKey: ["accounting"] });
+      void qc.invalidateQueries({ queryKey: loanKeys.all });
+      void qc.invalidateQueries({ queryKey: ["accounting"] });
     },
   });
 }
@@ -296,7 +296,7 @@ export function useRecordPayment() {
         reference: input.reference,
       }),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: loanKeys.detail(vars.loanId) });
+      void qc.invalidateQueries({ queryKey: loanKeys.detail(vars.loanId) });
     },
   });
 }
@@ -342,9 +342,11 @@ export function useWaivePenalty() {
         reason: input.reason,
       }),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: loanKeys.penalties(vars.loanId) });
-      qc.invalidateQueries({ queryKey: loanKeys.penaltyWaivers(vars.loanId) });
-      qc.invalidateQueries({ queryKey: loanKeys.detail(vars.loanId) });
+      void qc.invalidateQueries({ queryKey: loanKeys.penalties(vars.loanId) });
+      void qc.invalidateQueries({
+        queryKey: loanKeys.penaltyWaivers(vars.loanId),
+      });
+      void qc.invalidateQueries({ queryKey: loanKeys.detail(vars.loanId) });
     },
   });
 }

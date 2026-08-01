@@ -30,7 +30,7 @@ export function Login() {
         },
       );
       signIn(res.token, res.user);
-      navigate("/tenants", { replace: true });
+      void navigate("/tenants", { replace: true });
     } catch (err) {
       setError((err as Error).message);
     } finally {

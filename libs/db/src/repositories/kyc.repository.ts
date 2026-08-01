@@ -1,7 +1,6 @@
 import type {
   KycDocumentType,
   KycSubmission,
-  KycSubmissionStatus,
   PrismaClient,
 } from "@prisma/client";
 import { idOrNumberWhere, nextKycNumber } from "../lib/reference-numbers";
@@ -112,7 +111,7 @@ export class KycRepository {
       const updated = await tx.kycSubmission.update({
         where: { id },
         data: {
-          status: input.status as KycSubmissionStatus,
+          status: input.status,
           reason: input.reason,
           decidedAt: new Date(),
           decidedById: input.decidedById,

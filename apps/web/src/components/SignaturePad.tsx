@@ -1,6 +1,6 @@
-import { Button } from '@loan/ui';
-import { Eraser } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Button } from "@loan/ui";
+import { Eraser } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Canvas-based signature pad. Captures mouse/touch strokes, exposes the
@@ -14,7 +14,7 @@ export function SignaturePad({
   onSubmit,
   submitting,
   height = 180,
-  label = 'Sign here',
+  label = "Sign here",
 }: {
   onSubmit: (blob: Blob) => void | Promise<void>;
   submitting?: boolean;
@@ -37,20 +37,20 @@ export function SignaturePad({
       cv.height = height * dpr;
       cv.style.width = `${w}px`;
       cv.style.height = `${height}px`;
-      const ctx = cv.getContext('2d');
+      const ctx = cv.getContext("2d");
       if (ctx) {
         ctx.scale(dpr, dpr);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
         ctx.lineWidth = 2;
-        ctx.strokeStyle = '#0f172a';
-        ctx.fillStyle = 'white';
+        ctx.strokeStyle = "#0f172a";
+        ctx.fillStyle = "white";
         ctx.fillRect(0, 0, cv.width, cv.height);
       }
     };
     fit();
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
   }, [height]);
 
   const getXY = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -69,7 +69,7 @@ export function SignaturePad({
     if (!drawingRef.current) return;
     const next = getXY(e);
     const last = lastRef.current!;
-    const ctx = canvasRef.current!.getContext('2d');
+    const ctx = canvasRef.current!.getContext("2d");
     if (ctx) {
       ctx.beginPath();
       ctx.moveTo(last.x, last.y);
@@ -88,9 +88,9 @@ export function SignaturePad({
   const clear = () => {
     const cv = canvasRef.current;
     if (!cv) return;
-    const ctx = cv.getContext('2d');
+    const ctx = cv.getContext("2d");
     if (ctx) {
-      ctx.fillStyle = 'white';
+      ctx.fillStyle = "white";
       ctx.fillRect(0, 0, cv.width, cv.height);
     }
     setEmpty(true);
@@ -101,7 +101,7 @@ export function SignaturePad({
     if (!cv) return;
     cv.toBlob((blob) => {
       if (blob) void onSubmit(blob);
-    }, 'image/png');
+    }, "image/png");
   };
 
   return (
@@ -127,7 +127,7 @@ export function SignaturePad({
           onClick={submit}
           disabled={empty || submitting}
         >
-          {submitting ? 'Saving…' : 'Save signature'}
+          {submitting ? "Saving…" : "Save signature"}
         </Button>
       </div>
     </div>

@@ -12,7 +12,7 @@
     "cron-parser": "^4.9.0"
   },
   "devDependencies": {
-    "@types/node": "^22.9.0",
-    "typescript": "~5.7.2"
+    "@types/node": "^22.20.1",
+    "typescript": "~5.7.3"
   }
 }

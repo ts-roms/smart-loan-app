@@ -1,4 +1,4 @@
-import argon2 from 'argon2';
+import argon2 from "argon2";
 
 /**
  * Hash a password with Argon2id at sensible defaults. The cost is tuned
@@ -14,7 +14,10 @@ export async function hashPassword(plain: string): Promise<string> {
   });
 }
 
-export async function verifyPassword(hash: string, plain: string): Promise<boolean> {
+export async function verifyPassword(
+  hash: string,
+  plain: string,
+): Promise<boolean> {
   try {
     return await argon2.verify(hash, plain);
   } catch {

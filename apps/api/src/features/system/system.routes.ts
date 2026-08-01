@@ -269,28 +269,22 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
       const data: Record<string, string | null> = {};
       if (parsed.data.twilioAccountSid !== undefined)
         data.twilioAccountSid = empty(parsed.data.twilioAccountSid) as
-          | string
-          | null;
+          string | null;
       if (parsed.data.twilioAuthToken !== undefined)
         data.twilioAuthToken = empty(parsed.data.twilioAuthToken) as
-          | string
-          | null;
+          string | null;
       if (parsed.data.twilioFromNumber !== undefined)
         data.twilioFromNumber = empty(parsed.data.twilioFromNumber) as
-          | string
-          | null;
+          string | null;
       if (parsed.data.sendgridApiKey !== undefined)
         data.sendgridApiKey = empty(parsed.data.sendgridApiKey) as
-          | string
-          | null;
+          string | null;
       if (parsed.data.sendgridFromEmail !== undefined)
         data.sendgridFromEmail = empty(parsed.data.sendgridFromEmail) as
-          | string
-          | null;
+          string | null;
       if (parsed.data.sendgridFromName !== undefined)
         data.sendgridFromName = empty(parsed.data.sendgridFromName) as
-          | string
-          | null;
+          string | null;
 
       await req.tenantCtx.prisma.systemConfig.upsert({
         where: { id: "singleton" },

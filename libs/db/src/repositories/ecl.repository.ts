@@ -19,7 +19,7 @@
  * with: stay in Stage 3 unless DPD has been 0 for 6+ months.
  */
 
-import type { LoanProduct, PrismaClient, Prisma } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@prisma/client";
 
 import { eclProvisionEntry } from "@loan/accounting";
 
@@ -117,7 +117,7 @@ export class EclRepository {
         : 0;
 
       const stage = stageFromDpd(dpd);
-      const product = loan.product as LoanProduct;
+      const product = loan.product;
       const pd =
         stage === "STAGE_1"
           ? Number(product.eclPd12m)

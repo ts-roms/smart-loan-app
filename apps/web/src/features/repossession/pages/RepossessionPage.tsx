@@ -29,11 +29,10 @@ import {
   SelectTrigger,
   SelectValue,
   SkeletonCard,
-  useConfirm,
   usePrompt,
   useToast,
 } from "@loan/ui";
-import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
+import { formatDateTime, formatMoney } from "@loan/shared-utils";
 import {
   Car,
   CheckCircle2,
@@ -227,7 +226,6 @@ function CaseActions({
 }) {
   const advance = useAdvanceRepossession();
   const toast = useToast();
-  const confirm = useConfirm();
   const askPrompt = usePrompt();
   const outstanding = useRepossessionOutstanding(
     c.status === "AGENT_ASSIGNED" ? c.id : null,

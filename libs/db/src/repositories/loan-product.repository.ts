@@ -7,7 +7,7 @@
  * so we treat code as immutable post-creation.
  */
 
-import { DEFAULT_PRODUCTS } from '@loan/loans';
+import { DEFAULT_PRODUCTS } from "@loan/loans";
 import type {
   CollateralKind,
   InterestMethod,
@@ -15,7 +15,7 @@ import type {
   LoanProduct,
   PaymentFrequency,
   PrismaClient,
-} from '@prisma/client';
+} from "@prisma/client";
 
 export interface LoanProductCreateInput {
   code: string;
@@ -45,13 +45,15 @@ export interface LoanProductCreateInput {
   active?: boolean;
 }
 
-export type LoanProductUpdateInput = Partial<Omit<LoanProductCreateInput, 'code'>>;
+export type LoanProductUpdateInput = Partial<
+  Omit<LoanProductCreateInput, "code">
+>;
 
 export class LoanProductRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   list(): Promise<LoanProduct[]> {
-    return this.prisma.loanProduct.findMany({ orderBy: { code: 'asc' } });
+    return this.prisma.loanProduct.findMany({ orderBy: { code: "asc" } });
   }
 
   findByCode(code: string): Promise<LoanProduct | null> {
@@ -65,7 +67,7 @@ export class LoanProductRepository {
         code: input.code,
         name: input.name,
         description: input.description ?? null,
-        collateralKind: (input.collateralKind ?? 'NONE') as never,
+        collateralKind: (input.collateralKind ?? "NONE") as never,
         requiredKycDocs: (input.requiredKycDocs ?? []) as never,
         minPrincipal: input.minPrincipal,
         maxPrincipal: input.maxPrincipal,
@@ -82,8 +84,8 @@ export class LoanProductRepository {
         lateFeeCapFraction: input.lateFeeCapFraction ?? 0.1,
         lateFeeGraceDays: input.lateFeeGraceDays ?? 3,
         preTerminationFeeRate: input.preTerminationFeeRate ?? 0,
-        interestMethod: (input.interestMethod ?? 'DECLINING') as never,
-        paymentFrequency: (input.paymentFrequency ?? 'MONTHLY') as never,
+        interestMethod: (input.interestMethod ?? "DECLINING") as never,
+        paymentFrequency: (input.paymentFrequency ?? "MONTHLY") as never,
         rateByTier: input.rateByTier ?? undefined,
         ltvByTier: input.ltvByTier ?? undefined,
         active: input.active ?? true,
@@ -113,7 +115,9 @@ export class LoanProductRepository {
     let created = 0;
     let existing = 0;
     for (const p of DEFAULT_PRODUCTS) {
-      const found = await this.prisma.loanProduct.findUnique({ where: { code: p.code } });
+      const found = await this.prisma.loanProduct.findUnique({
+        where: { code: p.code },
+      });
       if (found) {
         existing += 1;
         continue;
@@ -122,7 +126,7 @@ export class LoanProductRepository {
         code: p.code,
         name: p.name,
         description: p.description,
-        collateralKind: p.collateralKind as never,
+        collateralKind: p.collateralKind,
         requiredKycDocs: p.requiredKycDocs as never,
         minPrincipal: p.minPrincipal,
         maxPrincipal: p.maxPrincipal,
@@ -139,8 +143,8 @@ export class LoanProductRepository {
         lateFeeCapFraction: p.lateFeeCapFraction,
         lateFeeGraceDays: p.lateFeeGraceDays,
         preTerminationFeeRate: p.preTerminationFeeRate,
-        interestMethod: p.interestMethod as never,
-        paymentFrequency: p.paymentFrequency as never,
+        interestMethod: p.interestMethod,
+        paymentFrequency: p.paymentFrequency,
       });
       created += 1;
     }

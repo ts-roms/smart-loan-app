@@ -4,6 +4,7 @@ import type {
   EmploymentStatus,
   Gender,
   GovernmentIdType,
+  LoanStatus,
   PrismaClient,
   Sex,
 } from "@prisma/client";
@@ -64,14 +65,86 @@ export interface CustomerCreateInput {
 
 export type CustomerUpdateInput = Partial<CustomerCreateInput>;
 
+/**
+ * Loan statuses that make a customer count as "already borrowing" for
+ * the {@link CustomerListItem.hasLoans} flag: approved-but-not-yet-
+ * disbursed, disbursed, and in-repayment.
+ *
+ * Everything else is deliberately excluded. DRAFT / SUBMITTED /
+ * UNDER_REVIEW haven't been granted yet; REJECTED and CANCELLED never
+ * became loans; CLOSED / DEFAULTED / RESTRUCTURED / WRITTEN_OFF are
+ * finished, so the customer has nothing running today. A borrower whose
+ * only loan is in one of those states reads as a first-timer here — the
+ * repeat-eligibility endpoint is the place that looks at loan history.
+ */
+const ACTIVE_LOAN_STATUSES: readonly LoanStatus[] = [
+  "APPROVED",
+  "DISBURSED",
+  "ACTIVE",
+];
+
+/**
+ * Loan statuses that mark a customer as having burned the lender:
+ * DEFAULTED (missed too many payments) and WRITTEN_OFF (collection
+ * abandoned, principal booked to Bad Debt).
+ *
+ * RESTRUCTURED is *not* here — the original loan is terminal because it
+ * was replaced by a new one, which is a workout, not a loss.
+ */
+const DEFAULTED_LOAN_STATUSES: readonly LoanStatus[] = [
+  "DEFAULTED",
+  "WRITTEN_OFF",
+];
+
+/**
+ * A customer row as served by the list endpoint: the full record plus
+ * two cheap risk markers — is there a live loan on this person, and have
+ * they ever defaulted.
+ *
+ * The flags exist so pickers (New Loan's borrower step, in particular)
+ * can rank and warn without every caller pulling the entire `/loans`
+ * collection just to diff customer ids. Only loans in the statuses above
+ * are fetched, and only their `status` column — the query stays small
+ * regardless of how much history a borrower has.
+ */
+export type CustomerListItem = Customer & {
+  hasLoans: boolean;
+  hasDefaulted: boolean;
+};
+
 export class CustomerRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  list(): Promise<Customer[]> {
-    return this.prisma.customer.findMany({
+  async list(): Promise<CustomerListItem[]> {
+    const rows = await this.prisma.customer.findMany({
       orderBy: { createdAt: "desc" },
       take: 200,
+      include: {
+        // Statuses only — two independent flags can't come from a single
+        // `_count` (Prisma allows one filter per relation), so we pull the
+        // handful of interesting rows and fold them below.
+        loanApplications: {
+          where: {
+            status: {
+              in: [...ACTIVE_LOAN_STATUSES, ...DEFAULTED_LOAN_STATUSES],
+            },
+          },
+          select: { status: true },
+        },
+      },
     });
+    // Fold the relation away so the wire payload stays a plain customer
+    // record plus two booleans. Callers that need real counts or amounts
+    // use /customers/:id/summary.
+    return rows.map(({ loanApplications, ...customer }) => ({
+      ...customer,
+      hasLoans: loanApplications.some((l) =>
+        ACTIVE_LOAN_STATUSES.includes(l.status),
+      ),
+      hasDefaulted: loanApplications.some((l) =>
+        DEFAULTED_LOAN_STATUSES.includes(l.status),
+      ),
+    }));
   }
 
   findById(id: string): Promise<Customer | null> {
@@ -107,7 +180,7 @@ export class CustomerRepository {
    * caller decides whether a partial failure aborts the batch.
    */
   // bulk results live in shared-types-friendly shape — string ids only
-  /* eslint-disable-next-line */
+
   // (kept colocated with the create method so the schema is obvious)
 
   /**

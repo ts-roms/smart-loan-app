@@ -16,16 +16,34 @@
     "db:seed": "pnpm --filter @loan/db prisma:seed",
     "db:studio": "pnpm --filter @loan/db prisma:studio",
     "dev:license": "pnpm --filter @loan/db run dev:license",
+    "dev:up": "pnpm dev:db:up && pnpm db:generate && pnpm --filter @loan/db exec dotenv -e ../../.env -- prisma migrate deploy && pnpm db:seed",
+    "dev:db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
+    "dev:db:down": "docker compose -f docker-compose.dev.yml down",
+    "dev:db:reset": "docker compose -f docker-compose.dev.yml down -v",
+    "docker:build": "docker compose -f deploy/docker/docker-compose.yml build",
+    "docker:up": "docker compose -f deploy/docker/docker-compose.yml up -d --build --wait",
+    "docker:seed": "docker compose -f deploy/docker/docker-compose.yml run --rm seed",
+    "docker:up:seed": "pnpm docker:up && pnpm docker:seed",
+    "docker:logs": "docker compose -f deploy/docker/docker-compose.yml logs -f",
+    "docker:ps": "docker compose -f deploy/docker/docker-compose.yml ps",
+    "docker:down": "docker compose -f deploy/docker/docker-compose.yml down",
+    "docker:reset": "docker compose -f deploy/docker/docker-compose.yml down -v",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
     "prepare": "husky || true"
   },
   "devDependencies": {
-    "@types/node": "^22.9.0",
+    "@eslint/js": "^9",
+    "@types/node": "^22.20.1",
+    "eslint": "^9",
+    "eslint-plugin-react-hooks": "^5",
+    "eslint-plugin-react-refresh": "^0.4",
+    "globals": "^15",
     "husky": "^9.1.7",
-    "lint-staged": "^15.2.10",
-    "nx": "^20.3.0",
-    "prettier": "^3.4.2",
-    "typescript": "~5.7.2"
+    "lint-staged": "^15.5.2",
+    "nx": "23.1.1",
+    "prettier": "^3.9.6",
+    "typescript": "~5.7.3",
+    "typescript-eslint": "^8"
   },
   "lint-staged": {
     "*.{ts,tsx}": "prettier --write",
@@ -35,5 +53,10 @@
     "node": ">=20.11.0",
     "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@9.15.0"
+  "packageManager": "pnpm@9.15.0",
+  "pnpm": {
+    "overrides": {
+      "minimatch@<9.0.7": ">=9.0.7"
+    }
+  }
 }

@@ -61,7 +61,10 @@ export function BulkCustomersPage() {
     const reader = new FileReader();
     reader.onerror = () => toast.error("Failed to read file");
     reader.onload = () => {
-      const text = String(reader.result ?? "");
+      // `readAsText` always resolves to a string; the DOM type is widened
+      // to cover readAsArrayBuffer, so narrow rather than stringify —
+      // String(ArrayBuffer) would silently produce "[object ArrayBuffer]".
+      const text = typeof reader.result === "string" ? reader.result : "";
       setRaw(text);
       setFileName(f.name);
       setResults(null);
@@ -412,8 +415,17 @@ function ResultRow({
 
 // ─── CSV parsing ──────────────────────────────────────────────────────
 
+/**
+ * A parsed cell. `splitCsvLine` only ever yields strings; the parser
+ * coerces exactly two columns to numbers. Typing this as `unknown` (as it
+ * was) forced every render site through `String(...)`, which lint
+ * correctly flagged as a possible `[object Object]` — a value shape this
+ * parser cannot actually produce.
+ */
+type CsvCell = string | number;
+
 interface ParseResult {
-  rows: Array<Record<string, unknown>>;
+  rows: Array<Record<string, CsvCell>>;
   errors: { line: number; message: string }[];
 }
 
@@ -430,7 +442,7 @@ interface ParseResult {
  * about `z.number()` on those.
  */
 function parseCsv(raw: string): ParseResult {
-  const rows: Array<Record<string, unknown>> = [];
+  const rows: Array<Record<string, CsvCell>> = [];
   const errors: { line: number; message: string }[] = [];
   const lines = raw.split(/\r?\n/);
   let header: string[] | null = null;
@@ -450,7 +462,7 @@ function parseCsv(raw: string): ParseResult {
       continue;
     }
 
-    const obj: Record<string, unknown> = {};
+    const obj: Record<string, CsvCell> = {};
     for (let i = 0; i < header.length; i++) {
       const key = header[i]!;
       const v = cols[i];
@@ -504,7 +516,7 @@ function splitCsvLine(line: string): string[] {
       }
     } else if (ch === '"' || ch === "'") {
       inQuote = true;
-      quoteChar = ch as '"' | "'";
+      quoteChar = ch;
     } else if (ch === ",") {
       out.push(cur.trim());
       cur = "";

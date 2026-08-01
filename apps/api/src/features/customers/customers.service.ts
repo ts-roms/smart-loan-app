@@ -1,5 +1,6 @@
 import type {
   Customer,
+  CustomerListItem,
   CustomerRepository,
   PrismaClient,
   ScreeningRepository,
@@ -29,7 +30,8 @@ export class CustomerService {
     private readonly screening: ScreeningRepository,
   ) {}
 
-  list(): Promise<Customer[]> {
+  /** List rows carry a `hasLoans` marker — see {@link CustomerListItem}. */
+  list(): Promise<CustomerListItem[]> {
     return this.customers.list();
   }
 

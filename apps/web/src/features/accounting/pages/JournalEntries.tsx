@@ -4,8 +4,8 @@ import {
   usePostJournalEntry,
   useReverseEntriesBulk,
   useReverseEntry,
-} from '@loan/api-client';
-import type { JournalSource } from '@loan/shared-types';
+} from "@loan/api-client";
+import type { JournalSource } from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -29,14 +29,14 @@ import {
   useConfirm,
   usePrompt,
   useToast,
-} from '@loan/ui';
-import { formatDate, formatMoney } from '@loan/shared-utils';
-import { Plus, RotateCcw, Trash2 } from 'lucide-react';
+} from "@loan/ui";
+import { formatDate, formatMoney } from "@loan/shared-utils";
+import { Plus, RotateCcw, Trash2 } from "lucide-react";
 
-import { JournalEntryLink } from '../components/JournalEntryDrawer';
-import { useState, type FormEvent } from 'react';
+import { JournalEntryLink } from "../components/JournalEntryDrawer";
+import { useState, type FormEvent } from "react";
 
-import { useAuth } from '../../../providers/auth';
+import { useAuth } from "../../../providers/auth";
 
 interface LineDraft {
   accountCode: string;
@@ -58,14 +58,16 @@ export function JournalEntriesPage() {
   const confirm = useConfirm();
   const askPrompt = usePrompt();
   const { user } = useAuth();
-  const canPost = user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT';
+  const canPost = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
   const [posting, setPosting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const data = entries.data ?? [];
   // Reversible = not already reversed, not itself a reversal, not auto-reversed-from.
-  const reversible = (e: { reversedById?: string | null; source: JournalSource }) =>
-    !e.reversedById && e.source !== 'REVERSAL';
+  const reversible = (e: {
+    reversedById?: string | null;
+    source: JournalSource;
+  }) => !e.reversedById && e.source !== "REVERSAL";
 
   const toggle = (id: string) => {
     const next = new Set(selected);
@@ -75,44 +77,45 @@ export function JournalEntriesPage() {
   };
 
   const toggleAll = () => {
-    if (selected.size === data.filter(reversible).length) setSelected(new Set());
+    if (selected.size === data.filter(reversible).length)
+      setSelected(new Set());
     else setSelected(new Set(data.filter(reversible).map((e) => e.id)));
   };
 
   const onReverseOne = async (id: string) => {
     const memo = await askPrompt({
-      title: 'Reverse journal entry?',
+      title: "Reverse journal entry?",
       message:
-        'A reversing entry will be posted into the current period. Optional: include a memo for the audit trail.',
-      label: 'Memo (optional)',
-      placeholder: 'e.g. correcting wrong account',
-      confirmLabel: 'Reverse',
+        "A reversing entry will be posted into the current period. Optional: include a memo for the audit trail.",
+      label: "Memo (optional)",
+      placeholder: "e.g. correcting wrong account",
+      confirmLabel: "Reverse",
     });
     if (memo === null) return;
     try {
       await reverseOne.mutateAsync({ id, memo: memo || undefined });
-      toast.success('Entry reversed');
+      toast.success("Entry reversed");
     } catch (err) {
-      toast.error((err as Error).message ?? 'Reversal failed');
+      toast.error((err as Error).message ?? "Reversal failed");
     }
   };
 
   const onReverseSelected = async () => {
     if (selected.size === 0) return;
     const ok = await confirm({
-      title: `Reverse ${selected.size} entr${selected.size === 1 ? 'y' : 'ies'}?`,
+      title: `Reverse ${selected.size} entr${selected.size === 1 ? "y" : "ies"}?`,
       message:
-        'A reversing entry is posted into the current period for each. The originals stay in their original period and are marked reversed.',
-      confirmLabel: 'Reverse all',
-      tone: 'destructive',
+        "A reversing entry is posted into the current period for each. The originals stay in their original period and are marked reversed.",
+      confirmLabel: "Reverse all",
+      tone: "destructive",
     });
     if (!ok) return;
     const memo = await askPrompt({
-      title: 'Reason for bulk reversal?',
-      message: 'Optional memo applied to every reversing entry.',
-      label: 'Memo (optional)',
-      placeholder: 'e.g. quarterly close adjustment',
-      confirmLabel: 'Reverse',
+      title: "Reason for bulk reversal?",
+      message: "Optional memo applied to every reversing entry.",
+      label: "Memo (optional)",
+      placeholder: "e.g. quarterly close adjustment",
+      confirmLabel: "Reverse",
     });
     if (memo === null) return;
     try {
@@ -123,7 +126,7 @@ export function JournalEntriesPage() {
       toast.success(`${r.succeeded} reversed, ${r.failed} failed`);
       setSelected(new Set());
     } catch (err) {
-      toast.error((err as Error).message ?? 'Bulk reversal failed');
+      toast.error((err as Error).message ?? "Bulk reversal failed");
     }
   };
 
@@ -139,7 +142,9 @@ export function JournalEntriesPage() {
               disabled={reverseBulk.isPending}
             >
               <RotateCcw className="h-4 w-4" />
-              {reverseBulk.isPending ? 'Reversing…' : `Reverse ${selected.size} selected`}
+              {reverseBulk.isPending
+                ? "Reversing…"
+                : `Reverse ${selected.size} selected`}
             </Button>
           )}
           {canPost && (
@@ -181,14 +186,17 @@ export function JournalEntriesPage() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {data.map((e) => {
-                const debits = (e.lines ?? []).reduce((s, l) => s + Number(l.debit), 0);
+                const debits = (e.lines ?? []).reduce(
+                  (s, l) => s + Number(l.debit),
+                  0,
+                );
                 const isReversed = Boolean(e.reversedById);
-                const isReversal = e.source === 'REVERSAL';
+                const isReversal = e.source === "REVERSAL";
                 const canReverse = reversible(e);
                 return (
                   <tr
                     key={e.id}
-                    className={`hover:bg-white/[0.03] align-top ${isReversed ? 'opacity-50' : ''}`}
+                    className={`hover:bg-white/[0.03] align-top ${isReversed ? "opacity-50" : ""}`}
                   >
                     {canPost && (
                       <td className="py-2 px-2">
@@ -203,29 +211,41 @@ export function JournalEntriesPage() {
                     )}
                     <td className="py-2 px-2 font-mono">
                       <JournalEntryLink id={e.id}>
-                        <span className="text-sky-300 hover:underline">{e.number}</span>
+                        <span className="text-sky-300 hover:underline">
+                          {e.number}
+                        </span>
                       </JournalEntryLink>
                     </td>
-                    <td className="py-2 px-2 text-white/65">{formatDate(e.entryDate)}</td>
-                    <td className="py-2 px-2"><SourceBadge source={e.source} /></td>
+                    <td className="py-2 px-2 text-white/65">
+                      {formatDate(e.entryDate)}
+                    </td>
+                    <td className="py-2 px-2">
+                      <SourceBadge source={e.source} />
+                    </td>
                     <td className="py-2 px-2 max-w-[24ch]">
-                      <div className="truncate" title={e.memo ?? ''}>
-                        {e.memo ?? '—'}
+                      <div className="truncate" title={e.memo ?? ""}>
+                        {e.memo ?? "—"}
                         {isReversed && (
-                          <span className="ml-2 text-rose-300 text-xs">reversed</span>
+                          <span className="ml-2 text-rose-300 text-xs">
+                            reversed
+                          </span>
                         )}
                         {isReversal && (
-                          <span className="ml-2 text-amber-300 text-xs">reversal entry</span>
+                          <span className="ml-2 text-amber-300 text-xs">
+                            reversal entry
+                          </span>
                         )}
                       </div>
                       {e.lines && (
                         <details className="mt-1 text-xs text-white/55">
-                          <summary className="cursor-pointer">{e.lines.length} lines</summary>
+                          <summary className="cursor-pointer">
+                            {e.lines.length} lines
+                          </summary>
                           <ul className="mt-1 space-y-0.5">
                             {e.lines.map((l) => (
                               <li key={l.id} className="font-mono">
                                 {l.account?.code} {l.account?.name}
-                                {' · '}
+                                {" · "}
                                 {Number(l.debit) > 0
                                   ? `Dr ${formatMoney(Number(l.debit))}`
                                   : `Cr ${formatMoney(Number(l.credit))}`}
@@ -235,7 +255,9 @@ export function JournalEntriesPage() {
                         </details>
                       )}
                     </td>
-                    <td className="py-2 px-2 text-right font-mono">{formatMoney(debits)}</td>
+                    <td className="py-2 px-2 text-right font-mono">
+                      {formatMoney(debits)}
+                    </td>
                     <td className="py-2 px-2 text-right">
                       {canPost && canReverse && (
                         <button
@@ -262,12 +284,15 @@ export function JournalEntriesPage() {
 }
 
 function SourceBadge({ source }: { source: JournalSource }) {
-  const map: Record<JournalSource, { label: string; variant: 'success' | 'danger' | 'muted' | 'warning' }> = {
-    MANUAL: { label: 'Manual', variant: 'muted' },
-    LOAN_DISBURSEMENT: { label: 'Disbursement', variant: 'success' },
-    LOAN_PAYMENT: { label: 'Payment', variant: 'success' },
-    REVERSAL: { label: 'Reversal', variant: 'warning' },
-    ADJUSTMENT: { label: 'Adjustment', variant: 'warning' },
+  const map: Record<
+    JournalSource,
+    { label: string; variant: "success" | "danger" | "muted" | "warning" }
+  > = {
+    MANUAL: { label: "Manual", variant: "muted" },
+    LOAN_DISBURSEMENT: { label: "Disbursement", variant: "success" },
+    LOAN_PAYMENT: { label: "Payment", variant: "success" },
+    REVERSAL: { label: "Reversal", variant: "warning" },
+    ADJUSTMENT: { label: "Adjustment", variant: "warning" },
   };
   const v = map[source];
   return <Badge variant={v.variant}>{v.label}</Badge>;
@@ -277,23 +302,29 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
   const accounts = useAccounts();
   const post = usePostJournalEntry();
   const toast = useToast();
-  const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [memo, setMemo] = useState('');
+  const [entryDate, setEntryDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [memo, setMemo] = useState("");
   const [lines, setLines] = useState<LineDraft[]>([
-    { accountCode: '', debit: 0, credit: 0, memo: '' },
-    { accountCode: '', debit: 0, credit: 0, memo: '' },
+    { accountCode: "", debit: 0, credit: 0, memo: "" },
+    { accountCode: "", debit: 0, credit: 0, memo: "" },
   ]);
 
   const totals = lines.reduce(
-    (acc, l) => ({ debit: acc.debit + (Number(l.debit) || 0), credit: acc.credit + (Number(l.credit) || 0) }),
+    (acc, l) => ({
+      debit: acc.debit + (Number(l.debit) || 0),
+      credit: acc.credit + (Number(l.credit) || 0),
+    }),
     { debit: 0, credit: 0 },
   );
-  const balanced = Math.abs(totals.debit - totals.credit) < 0.005 && totals.debit > 0;
+  const balanced =
+    Math.abs(totals.debit - totals.credit) < 0.005 && totals.debit > 0;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!balanced) {
-      toast.error('Debits must equal credits');
+      toast.error("Debits must equal credits");
       return;
     }
     try {
@@ -309,10 +340,10 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
             memo: l.memo || undefined,
           })),
       });
-      toast.success('Journal entry posted');
+      toast.success("Journal entry posted");
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Could not post entry');
+      toast.error((err as Error).message ?? "Could not post entry");
     }
   };
 
@@ -349,7 +380,9 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
                     <td className="p-1">
                       <Select
                         value={l.accountCode}
-                        onValueChange={(v) => updateLine(setLines, idx, { accountCode: v })}
+                        onValueChange={(v) =>
+                          updateLine(setLines, idx, { accountCode: v })
+                        }
                       >
                         <SelectTrigger className="h-9">
                           <SelectValue placeholder="— select account —" />
@@ -368,7 +401,7 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
                         type="number"
                         min={0}
                         step={0.01}
-                        value={l.debit || ''}
+                        value={l.debit || ""}
                         onChange={(e) =>
                           updateLine(setLines, idx, {
                             debit: Number(e.target.value),
@@ -382,7 +415,7 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
                         type="number"
                         min={0}
                         step={0.01}
-                        value={l.credit || ''}
+                        value={l.credit || ""}
                         onChange={(e) =>
                           updateLine(setLines, idx, {
                             credit: Number(e.target.value),
@@ -394,7 +427,9 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
                     <td className="p-1">
                       <Input
                         value={l.memo}
-                        onChange={(e) => updateLine(setLines, idx, { memo: e.target.value })}
+                        onChange={(e) =>
+                          updateLine(setLines, idx, { memo: e.target.value })
+                        }
                       />
                     </td>
                     <td className="p-1 text-right">
@@ -402,7 +437,9 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
                         <button
                           type="button"
                           className="text-white/45 hover:text-rose-300"
-                          onClick={() => setLines(lines.filter((_, i) => i !== idx))}
+                          onClick={() =>
+                            setLines(lines.filter((_, i) => i !== idx))
+                          }
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -413,9 +450,15 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
               </tbody>
               <tfoot>
                 <tr className="border-t border-white/10 bg-white/[0.02]">
-                  <td className="px-2 py-2 text-xs uppercase tracking-wider text-white/45">Total</td>
-                  <td className="px-2 py-2 font-mono">{formatMoney(totals.debit)}</td>
-                  <td className="px-2 py-2 font-mono">{formatMoney(totals.credit)}</td>
+                  <td className="px-2 py-2 text-xs uppercase tracking-wider text-white/45">
+                    Total
+                  </td>
+                  <td className="px-2 py-2 font-mono">
+                    {formatMoney(totals.debit)}
+                  </td>
+                  <td className="px-2 py-2 font-mono">
+                    {formatMoney(totals.credit)}
+                  </td>
                   <td className="px-2 py-2 text-xs">
                     {balanced ? (
                       <span className="text-emerald-300">Balanced</span>
@@ -435,7 +478,10 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
               variant="outline"
               size="sm"
               onClick={() =>
-                setLines([...lines, { accountCode: '', debit: 0, credit: 0, memo: '' }])
+                setLines([
+                  ...lines,
+                  { accountCode: "", debit: 0, credit: 0, memo: "" },
+                ])
               }
             >
               <Plus className="h-4 w-4" />
@@ -444,9 +490,11 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={!balanced || post.isPending}>
-              {post.isPending ? 'Posting…' : 'Post entry'}
+              {post.isPending ? "Posting…" : "Post entry"}
             </Button>
           </DialogFooter>
         </form>
@@ -463,7 +511,13 @@ function updateLine(
   setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1">
       <label className="text-xs text-white/55">{label}</label>

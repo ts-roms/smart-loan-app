@@ -98,8 +98,19 @@ export class LeaseRepository {
       // Allow paying ≥ residual; over-payment is captured as-is so the
       // ledger reflects what changed hands (rare but possible if the
       // borrower also tops up missing rentals at the same time).
+      //
+      // The lower bound is enforced here rather than in the zod schema
+      // because `residual` is per-agreement — the request schema can only
+      // assert `> 0`. Without this, any positive amount bought out the
+      // unit: ₱1 against a ₱50,000 residual transferred the asset and
+      // posted ₱1 to the ledger.
       if (input.amountPaid <= 0) {
         throw new Error("Amount paid must be > 0");
+      }
+      if (round2(input.amountPaid) < round2(residual)) {
+        throw new Error(
+          `Buyout amount ${round2(input.amountPaid)} is below the residual value ${round2(residual)}`,
+        );
       }
 
       const { leaseBuyoutEntry } = await import("@loan/accounting");

@@ -1,9 +1,18 @@
-import type { UserRole } from '@loan/shared-types';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { UserRole } from "@loan/shared-types";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
-const TOKEN_KEY = 'loan.auth.token';
-const REFRESH_KEY = 'loan.auth.refresh';
-const USER_KEY = 'loan.auth.user';
+const TOKEN_KEY = "loan.auth.token";
+const REFRESH_KEY = "loan.auth.refresh";
+const USER_KEY = "loan.auth.user";
 
 export interface AuthUser {
   id: string;
@@ -33,7 +42,9 @@ interface AuthApi {
 const AuthCtx = createContext<AuthApi | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() =>
+    localStorage.getItem(TOKEN_KEY),
+  );
   const [refreshToken, setRefreshToken] = useState<string | null>(() =>
     localStorage.getItem(REFRESH_KEY),
   );
@@ -90,8 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     };
-    window.addEventListener('storage', handler);
-    return () => window.removeEventListener('storage', handler);
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
   }, []);
 
   const value = useMemo<AuthApi>(
@@ -104,6 +115,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth(): AuthApi {
   const ctx = useContext(AuthCtx);
-  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
+  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
   return ctx;
 }

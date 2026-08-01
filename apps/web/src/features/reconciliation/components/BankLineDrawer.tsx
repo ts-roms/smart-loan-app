@@ -2,7 +2,7 @@ import {
   useBankLineCandidates,
   useMatchLine,
   type BankStatementLine,
-} from '@loan/api-client';
+} from "@loan/api-client";
 import {
   Badge,
   Button,
@@ -18,10 +18,10 @@ import {
   Label,
   SkeletonLine,
   useToast,
-} from '@loan/ui';
-import { formatDate, formatMoney } from '@loan/shared-utils';
-import { Banknote, CheckCircle2, CircleHelp, Link2 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+} from "@loan/ui";
+import { formatDate, formatMoney } from "@loan/shared-utils";
+import { Banknote, CheckCircle2, CircleHelp, Link2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 /**
  * Inspector drawer for a bank statement line. The trigger sits on the
@@ -80,14 +80,18 @@ function BankLineInspector({
   const toast = useToast();
 
   // Manual fallback form
-  const [manualType, setManualType] = useState('MANUAL');
-  const [manualRefId, setManualRefId] = useState('');
-  const [manualNote, setManualNote] = useState('');
+  const [manualType, setManualType] = useState("MANUAL");
+  const [manualRefId, setManualRefId] = useState("");
+  const [manualNote, setManualNote] = useState("");
 
   const amount = Number(line.amount);
   const isCredit = amount > 0;
 
-  const onApplyCandidate = async (c: { type: string; refId: string; label: string }) => {
+  const onApplyCandidate = async (c: {
+    type: string;
+    refId: string;
+    label: string;
+  }) => {
     try {
       await matchLine.mutateAsync({
         lineId: line.id,
@@ -99,13 +103,13 @@ function BankLineInspector({
       toast.success(`Matched · ${c.label}`);
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Match failed');
+      toast.error((err as Error).message ?? "Match failed");
     }
   };
 
   const onApplyManual = async () => {
     if (!manualType.trim()) {
-      toast.error('Pick a match type');
+      toast.error("Pick a match type");
       return;
     }
     try {
@@ -116,10 +120,10 @@ function BankLineInspector({
         refId: manualRefId.trim() || undefined,
         note: manualNote.trim() || undefined,
       });
-      toast.success('Line matched manually');
+      toast.success("Line matched manually");
       onClose();
     } catch (err) {
-      toast.error((err as Error).message ?? 'Match failed');
+      toast.error((err as Error).message ?? "Match failed");
     }
   };
 
@@ -131,13 +135,13 @@ function BankLineInspector({
           <div className="flex-1 min-w-0">
             <DrawerTitle>Match bank line</DrawerTitle>
             <DrawerDescription>
-              {formatDate(line.txnDate)} ·{' '}
-              <span className={isCredit ? 'text-emerald-300' : 'text-rose-300'}>
+              {formatDate(line.txnDate)} ·{" "}
+              <span className={isCredit ? "text-emerald-300" : "text-rose-300"}>
                 {formatMoney(amount)}
               </span>
               {line.reference && (
                 <>
-                  {' · '}
+                  {" · "}
                   <span className="font-mono">{line.reference}</span>
                 </>
               )}
@@ -169,7 +173,8 @@ function BankLineInspector({
           ) : (candidates.data ?? []).length === 0 ? (
             <p className="text-xs text-white/55 inline-flex items-center gap-1">
               <CircleHelp className="h-3 w-3" />
-              No candidates within ±2 days at exact amount. Use the manual form below.
+              No candidates within ±2 days at exact amount. Use the manual form
+              below.
             </p>
           ) : (
             <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
@@ -180,16 +185,18 @@ function BankLineInspector({
                 >
                   <div className="min-w-0">
                     <div className="font-medium">{c.label}</div>
-                    <div className="text-[10px] text-white/55 truncate">{c.detail}</div>
+                    <div className="text-[10px] text-white/55 truncate">
+                      {c.detail}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge
                       variant={
                         c.score >= 0.95
-                          ? 'success'
+                          ? "success"
                           : c.score >= 0.8
-                            ? 'warning'
-                            : 'muted'
+                            ? "warning"
+                            : "muted"
                       }
                     >
                       {(c.score * 100).toFixed(0)}%
@@ -247,7 +254,7 @@ function BankLineInspector({
               onClick={onApplyManual}
               disabled={matchLine.isPending || !manualType.trim()}
             >
-              {matchLine.isPending ? 'Matching…' : 'Match manually'}
+              {matchLine.isPending ? "Matching…" : "Match manually"}
             </Button>
           </div>
         </div>

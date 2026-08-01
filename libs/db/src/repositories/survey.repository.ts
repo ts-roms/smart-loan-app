@@ -1,4 +1,4 @@
-import type { CreditTier, PrismaClient, SurveyResponse } from '@prisma/client';
+import type { CreditTier, PrismaClient, SurveyResponse } from "@prisma/client";
 
 export interface SaveResponseInput {
   customerId: string;
@@ -15,7 +15,7 @@ export class SurveyRepository {
   listForCustomer(customerId: string): Promise<SurveyResponse[]> {
     return this.prisma.surveyResponse.findMany({
       where: { customerId },
-      orderBy: { computedAt: 'desc' },
+      orderBy: { computedAt: "desc" },
     });
   }
 

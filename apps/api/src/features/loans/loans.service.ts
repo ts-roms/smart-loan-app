@@ -13,7 +13,6 @@ import { evaluateRules, type DecisioningContext } from "@loan/decisioning";
 import { validateKyc, type KycDocumentType } from "@loan/kyc";
 
 import { computeAnomalyFlags } from "../../lib/anomaly";
-import { notifyApproversForStep } from "./notify-approvers";
 import type { ApplyInput, DecideInput } from "./schemas";
 
 /**

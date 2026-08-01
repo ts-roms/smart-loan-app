@@ -86,7 +86,7 @@ export function useDraftDemandLetters() {
         input,
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["demand-letters"] });
+      void qc.invalidateQueries({ queryKey: ["demand-letters"] });
     },
   });
 }

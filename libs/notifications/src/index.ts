@@ -60,7 +60,6 @@ export class MockNotificationProvider implements NotificationProvider {
   readonly channels: ReadonlySet<Channel> = new Set(["EMAIL", "SMS", "IN_APP"]);
 
   async send(input: SendInput): Promise<SendResult> {
-    // eslint-disable-next-line no-console
     console.log(
       `[notify:${input.channel}] → ${input.recipient}: ${input.subject ?? ""}\n${input.body}`,
     );
@@ -102,8 +101,10 @@ export interface RenderedMessage {
  * a DB table; we ship code-defined ones for now.
  */
 export function renderTemplate(input: RenderInput): RenderedMessage {
+  // The replacer's capture groups arrive as `any`; naming `k` as a string
+  // keeps the `input.data` lookup type-checked.
   const sub = (s: string) =>
-    s.replace(/%\{(\w+)\}%/g, (_, k) => String(input.data[k] ?? ""));
+    s.replace(/%\{(\w+)\}%/g, (_, k: string) => String(input.data[k] ?? ""));
   const t = TEMPLATES[input.event];
   if (!t) return { body: `${input.event} (no template)` };
   return {

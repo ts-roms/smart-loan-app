@@ -25,7 +25,7 @@ export interface MatchHit {
   reason?: string;
 }
 
-export type ScreenStatus = 'PENDING' | 'CLEAR' | 'MATCH' | 'REVIEW';
+export type ScreenStatus = "PENDING" | "CLEAR" | "MATCH" | "REVIEW";
 
 export interface ScreenResult {
   status: ScreenStatus;
@@ -48,10 +48,17 @@ export interface AmlProvider {
  * The interface stays the same.
  */
 export class MockAmlProvider implements AmlProvider {
-  readonly name = 'MOCK';
+  readonly name = "MOCK";
 
   constructor(
-    private readonly loader: () => Promise<Array<{ list: string; fullName: string; aliases: string[]; reason: string | null }>>,
+    private readonly loader: () => Promise<
+      Array<{
+        list: string;
+        fullName: string;
+        aliases: string[];
+        reason: string | null;
+      }>
+    >,
   ) {}
 
   async screen(input: ScreenInput): Promise<ScreenResult> {
@@ -59,7 +66,9 @@ export class MockAmlProvider implements AmlProvider {
     const subject = input.fullName.toLowerCase().trim();
     const matches: MatchHit[] = [];
     for (const row of list) {
-      const candidates = [row.fullName, ...row.aliases].map((s) => s.toLowerCase());
+      const candidates = [row.fullName, ...row.aliases].map((s) =>
+        s.toLowerCase(),
+      );
       for (const c of candidates) {
         if (!c) continue;
         if (c === subject) {
@@ -82,8 +91,8 @@ export class MockAmlProvider implements AmlProvider {
         }
       }
     }
-    if (matches.length === 0) return { status: 'CLEAR', matches };
-    if (matches.some((m) => m.score >= 1)) return { status: 'MATCH', matches };
-    return { status: 'REVIEW', matches };
+    if (matches.length === 0) return { status: "CLEAR", matches };
+    if (matches.some((m) => m.score >= 1)) return { status: "MATCH", matches };
+    return { status: "REVIEW", matches };
   }
 }

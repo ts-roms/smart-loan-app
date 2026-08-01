@@ -53,9 +53,15 @@ export function Contact() {
         }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+        // `res.json()` is typed `any`; narrow before reading `.message`
+        // so a non-object error body can't produce `undefined` here.
+        const body: unknown = await res.json().catch(() => ({}));
+        const message =
+          typeof body === "object" && body !== null && "message" in body
+            ? String(body.message)
+            : null;
         throw new Error(
-          body.message ?? `Submission failed (${res.status}). Try again later.`,
+          message ?? `Submission failed (${res.status}). Try again later.`,
         );
       }
       setState({ kind: "success" });

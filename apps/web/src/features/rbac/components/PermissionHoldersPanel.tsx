@@ -39,7 +39,7 @@ export function PermissionHoldersPanel() {
     for (const r of rows) {
       const cat = r.category ?? "other";
       byCategory[cat] = byCategory[cat] ?? [];
-      byCategory[cat]!.push(r);
+      byCategory[cat].push(r);
     }
     return byCategory;
   }, [permissions.data, query]);
@@ -113,7 +113,7 @@ export function PermissionHoldersPanel() {
             key={selectedKey}
             payload={holders.data}
             isLoading={holders.isLoading}
-            errorMsg={holders.isError ? (holders.error as Error).message : null}
+            errorMsg={holders.isError ? holders.error.message : null}
           />
         )}
       </CardContent>

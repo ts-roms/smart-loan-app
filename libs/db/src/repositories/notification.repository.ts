@@ -17,13 +17,8 @@ import {
   type NotificationProvider,
   type TemplateData,
   renderTemplate,
-} from '@loan/notifications';
-import type {
-  Notification,
-  NotificationChannel,
-  NotificationStatus,
-  PrismaClient,
-} from '@prisma/client';
+} from "@loan/notifications";
+import type { Notification, PrismaClient } from "@prisma/client";
 
 export interface DispatchInput {
   event: NotificationEvent;
@@ -44,7 +39,7 @@ export class NotificationRepository {
   list(filter?: {
     customerId?: string;
     event?: NotificationEvent;
-    status?: 'QUEUED' | 'SENT' | 'FAILED';
+    status?: "QUEUED" | "SENT" | "FAILED";
     take?: number;
   }): Promise<Notification[]> {
     return this.prisma.notification.findMany({
@@ -53,7 +48,7 @@ export class NotificationRepository {
         event: filter?.event as never,
         status: filter?.status as never,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: filter?.take ?? 100,
     });
   }
@@ -68,14 +63,14 @@ export class NotificationRepository {
     let row = await this.prisma.notification.create({
       data: {
         event: input.event as never,
-        channel: input.channel as NotificationChannel,
+        channel: input.channel,
         recipient: input.recipient,
         subject: rendered.subject,
         body: rendered.body,
         refType: input.refType,
         refId: input.refId,
         customerId: input.customerId,
-        status: 'QUEUED' as NotificationStatus,
+        status: "QUEUED",
       },
     });
 
@@ -89,7 +84,7 @@ export class NotificationRepository {
       row = await this.prisma.notification.update({
         where: { id: row.id },
         data: {
-          status: 'SENT' as NotificationStatus,
+          status: "SENT",
           sentAt: new Date(),
           providerRef: result.providerRef,
         },
@@ -98,7 +93,7 @@ export class NotificationRepository {
       row = await this.prisma.notification.update({
         where: { id: row.id },
         data: {
-          status: 'FAILED' as NotificationStatus,
+          status: "FAILED",
           error: (err as Error).message,
         },
       });

@@ -5,10 +5,7 @@ import {
   preTerminationFeeEntry,
 } from "@loan/accounting";
 import {
-  type CreditTier as TierString,
-  type InterestMethod as MethodString,
   type LoanProductConfig,
-  type PaymentFrequency as FreqString,
   computeAmortizationFor,
   computeFees,
   daysBetweenInstallments,
@@ -34,8 +31,6 @@ import {
   nextPropertyNumber,
   nextVehicleNumber,
 } from "../lib/reference-numbers";
-
-type Tx = Prisma.TransactionClient | PrismaClient;
 
 export interface VehicleInput {
   kind: "CAR" | "MOTORCYCLE";
@@ -219,10 +214,7 @@ export class LoanRepository {
           { ...cfg, defaultRate: Number(product.defaultRate) },
           input.tierAtApply,
         );
-        if (
-          tierRate == null &&
-          cfg.rateByTier[input.tierAtApply as TierString] === null
-        ) {
+        if (tierRate == null && cfg.rateByTier[input.tierAtApply] === null) {
           throw new Error(
             `Product ${product.code} is not available for tier ${input.tierAtApply}.`,
           );
@@ -237,7 +229,7 @@ export class LoanRepository {
         termMonths: input.termMonths,
         annualInterestRate: rate,
         collateralAppraisedValue: collateralValue,
-        tierAtApply: (input.tierAtApply as TierString | null) ?? null,
+        tierAtApply: input.tierAtApply ?? null,
       });
       if (issues.length > 0) {
         const err = new Error(issues.map((i) => i.message).join(" "));
@@ -380,7 +372,7 @@ export class LoanRepository {
     return this.prisma.loanApplication.update({
       where: { id },
       data: {
-        status: input.status as LoanStatus,
+        status: input.status,
         decisionReason: input.reason,
         decidedAt: new Date(),
         decidedById: input.decidedById,
@@ -436,8 +428,8 @@ export class LoanRepository {
       const product = loan.product;
       const principal = Number(loan.principal);
       const annual = Number(loan.annualInterestRate);
-      const method = product.interestMethod as MethodString;
-      const frequency = product.paymentFrequency as FreqString;
+      const method = product.interestMethod;
+      const frequency = product.paymentFrequency;
       const schedule = computeAmortizationFor(
         principal,
         annual,
@@ -844,7 +836,7 @@ export class LoanRepository {
       const updatedOriginal = await tx.loanApplication.update({
         where: { id: originalId },
         data: {
-          status: "RESTRUCTURED" as LoanStatus,
+          status: "RESTRUCTURED",
           closedAt: new Date(),
         },
       });
@@ -992,7 +984,7 @@ export class LoanRepository {
       const updated = await tx.loanApplication.update({
         where: { id },
         data: {
-          status: "WRITTEN_OFF" as LoanStatus,
+          status: "WRITTEN_OFF",
           writeOffAmount: amount,
           writeOffReason: input.reason,
           writtenOffAt: new Date(),
@@ -1250,7 +1242,7 @@ export class LoanRepository {
 function toConfig(p: LoanProduct): LoanProductConfig & { defaultRate: number } {
   return {
     code: p.code,
-    collateralKind: p.collateralKind as LoanProductConfig["collateralKind"],
+    collateralKind: p.collateralKind,
     minPrincipal: Number(p.minPrincipal),
     maxPrincipal: Number(p.maxPrincipal),
     minTermMonths: p.minTermMonths,

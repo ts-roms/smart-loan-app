@@ -120,9 +120,7 @@ describe("RetentionService.runPurge", () => {
     await svc.runPurge({ actorId: "system" });
     const after = Date.now();
 
-    const call = prisma.auditEvent.deleteMany.mock.calls[0]![0] as unknown as {
-      where: { createdAt: { lt: Date } };
-    };
+    const call = prisma.auditEvent.deleteMany.mock.calls[0]![0];
     const cutoff = call.where.createdAt.lt.getTime();
     // cutoff = startedAt - 30 days. Allow a ~1s window for the
     // before/after timestamps to bracket it.

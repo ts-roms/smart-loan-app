@@ -48,13 +48,13 @@ export function useSetPermissionStatus() {
         body: JSON.stringify({ status: input.status }),
       }),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: rbacKeys.permissions });
-      qc.invalidateQueries({
+      void qc.invalidateQueries({ queryKey: rbacKeys.permissions });
+      void qc.invalidateQueries({
         queryKey: rbacKeys.permissionHolders(vars.key),
       });
       // Effective permission set for the current user may also have
       // shifted (esp. if they're an admin flipping their own grant).
-      qc.invalidateQueries({ queryKey: rbacKeys.mePermissions });
+      void qc.invalidateQueries({ queryKey: rbacKeys.mePermissions });
     },
   });
 }
@@ -187,7 +187,7 @@ export function useBulkImportUsers() {
       ),
     onSuccess: (data) => {
       if (!data.dryRun && data.succeeded > 0) {
-        qc.invalidateQueries({ queryKey: rbacKeys.users });
+        void qc.invalidateQueries({ queryKey: rbacKeys.users });
       }
     },
   });

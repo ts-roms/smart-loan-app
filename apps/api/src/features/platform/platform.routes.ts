@@ -62,8 +62,7 @@ export async function platformRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: "Unauthorized" });
     }
     const payload = req.user as unknown as
-      | Partial<PlatformJwtPayload>
-      | undefined;
+      Partial<PlatformJwtPayload> | undefined;
     if (!payload || payload.platform !== true) {
       return reply.code(401).send({
         error: "Unauthorized",

@@ -408,6 +408,18 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
       "reports.read",
       "screening.read",
       "screening.run",
+      /**
+       * Read-only DORSI. The customer detail page auto-screens every
+       * borrower against the DORSI register (FRD §3.10.1) and the officer
+       * is the one who has to confirm the result before originating —
+       * without this the screen 403s and the banner cannot render, which
+       * reads to the officer as "screened clean".
+       *
+       * Deliberately read-only: `dorsi.tag` and `dorsi.board_approve`
+       * stay admin-only, so an officer can see a potential match but
+       * can't classify a customer or self-approve a DORSI loan.
+       */
+      "dorsi.read",
       "documents.download",
       "products.read",
       "accounting.read",

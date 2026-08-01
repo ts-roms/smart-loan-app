@@ -242,11 +242,7 @@ export interface ScheduleRowForAging {
 }
 
 export type AgingBucket =
-  | "CURRENT"
-  | "D_1_30"
-  | "D_31_60"
-  | "D_61_90"
-  | "D_90_PLUS";
+  "CURRENT" | "D_1_30" | "D_31_60" | "D_61_90" | "D_90_PLUS";
 
 export interface AgingRow {
   loanId: string;

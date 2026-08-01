@@ -108,37 +108,37 @@ export function parseIdFields(rawText: string): ExtractedIdFields {
   for (const line of lines) {
     if (
       !fields.lastName &&
-      /(?:surname|last\s*name)\s*[:\-]\s*(.+)/i.test(line)
+      /(?:surname|last\s*name)\s*[:-]\s*(.+)/i.test(line)
     ) {
-      fields.lastName = line.replace(/^[^:\-]+[:\-]\s*/, "").trim();
+      fields.lastName = line.replace(/^[^:-]+[:-]\s*/, "").trim();
     }
     if (
       !fields.firstName &&
-      /(?:given\s*names?|first\s*name)\s*[:\-]\s*(.+)/i.test(line)
+      /(?:given\s*names?|first\s*name)\s*[:-]\s*(.+)/i.test(line)
     ) {
-      fields.firstName = line.replace(/^[^:\-]+[:\-]\s*/, "").trim();
+      fields.firstName = line.replace(/^[^:-]+[:-]\s*/, "").trim();
     }
     if (
       !fields.dateOfBirth &&
-      /(?:date\s*of\s*birth|d\.?o\.?b\.?|birthday)\s*[:\-]\s*(.+)/i.test(line)
+      /(?:date\s*of\s*birth|d\.?o\.?b\.?|birthday)\s*[:-]\s*(.+)/i.test(line)
     ) {
-      const raw = line.replace(/^[^:\-]+[:\-]\s*/, "").trim();
+      const raw = line.replace(/^[^:-]+[:-]\s*/, "").trim();
       fields.dateOfBirth = normalizeDate(raw) ?? raw;
     }
     if (
       !fields.idNumber &&
-      /(?:id\s*(?:no|number|#)|crn|prc\s*no|license\s*no|passport\s*no)\s*[:\-]\s*(.+)/i.test(
+      /(?:id\s*(?:no|number|#)|crn|prc\s*no|license\s*no|passport\s*no)\s*[:-]\s*(.+)/i.test(
         line,
       )
     ) {
-      const raw = line.replace(/^[^:\-]+[:\-]\s*/, "").trim();
+      const raw = line.replace(/^[^:-]+[:-]\s*/, "").trim();
       // ID numbers commonly have hyphens / digits / a letter prefix.
       // Strip everything else (extra commas, trailing dots) but keep
       // the inner shape intact.
-      fields.idNumber = raw.replace(/[^A-Z0-9\- ]/gi, "").trim();
+      fields.idNumber = raw.replace(/[^A-Z0-9 -]/gi, "").trim();
     }
-    if (!fields.address && /address\s*[:\-]\s*(.+)/i.test(line)) {
-      fields.address = line.replace(/^[^:\-]+[:\-]\s*/, "").trim();
+    if (!fields.address && /address\s*[:-]\s*(.+)/i.test(line)) {
+      fields.address = line.replace(/^[^:-]+[:-]\s*/, "").trim();
     }
   }
 
@@ -166,7 +166,7 @@ export function parseIdFields(rawText: string): ExtractedIdFields {
       if (m && !extractDate(line)) {
         fields.idNumber = m[1]!
           .replace(/\s+/g, "-")
-          .replace(/[^A-Z0-9\-]/gi, "")
+          .replace(/[^A-Z0-9-]/gi, "")
           .toUpperCase();
         break;
       }
@@ -177,7 +177,7 @@ export function parseIdFields(rawText: string): ExtractedIdFields {
   // Only kicks in if we didn't get a Last+First combo from labels.
   if (!fields.firstName && !fields.lastName && !fields.fullName) {
     const candidate = lines
-      .filter((l) => /^[A-Z][A-Z\s.,'\-]{4,60}$/.test(l)) // ALL-CAPS, mostly letters
+      .filter((l) => /^[A-Z][A-Z\s.,'-]{4,60}$/.test(l)) // ALL-CAPS, mostly letters
       .sort((a, b) => b.length - a.length)[0];
     if (candidate) {
       const cleaned = candidate.replace(/[.,]/g, "").trim();
@@ -206,12 +206,12 @@ export function parseIdFields(rawText: string): ExtractedIdFields {
  */
 function extractDate(line: string): string | null {
   // Year-first: YYYY-MM-DD or YYYY/MM/DD.
-  let m = line.match(/(\d{4})[\-./](\d{1,2})[\-./](\d{1,2})/);
+  let m = line.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
   if (m) {
     return iso(Number(m[1]), Number(m[2]), Number(m[3]));
   }
   // Month-day-year (slash or dot separated).
-  m = line.match(/\b(\d{1,2})[\-./](\d{1,2})[\-./](\d{4})\b/);
+  m = line.match(/\b(\d{1,2})[-./](\d{1,2})[-./](\d{4})\b/);
   if (m) {
     // MM/DD/YYYY is more common on PH gov't IDs than DD/MM.
     return iso(Number(m[3]), Number(m[1]), Number(m[2]));

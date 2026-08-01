@@ -32,7 +32,9 @@ export function policyFromProduct(p: {
 }): LateFeePolicy {
   return {
     dailyRate: Number(p.lateFeeDailyRate ?? DEFAULT_LATE_FEE_POLICY.dailyRate),
-    capFraction: Number(p.lateFeeCapFraction ?? DEFAULT_LATE_FEE_POLICY.capFraction),
+    capFraction: Number(
+      p.lateFeeCapFraction ?? DEFAULT_LATE_FEE_POLICY.capFraction,
+    ),
     graceDays: p.lateFeeGraceDays ?? DEFAULT_LATE_FEE_POLICY.graceDays,
   };
 }

@@ -32,8 +32,16 @@ export function signLicense(
   privateKey: KeyObject | string | Buffer,
 ): string {
   if (payload.v !== LICENSE_FORMAT_VERSION) {
+    // `LicensePayload.v` is typed as the literal current version, so TS
+    // narrows it to `never` in this branch and considers the check dead.
+    // It isn't: payloads reach here after JSON decoding, where `v` can
+    // hold whatever an older issuer (or a hand-edited token) put there.
+    // Widen back to `unknown` so the message can render the real value.
+    const got: unknown = payload.v;
     throw new Error(
-      `License payload version mismatch: expected ${LICENSE_FORMAT_VERSION}, got ${payload.v}`,
+      `License payload version mismatch: expected ${String(
+        LICENSE_FORMAT_VERSION,
+      )}, got ${String(got)}`,
     );
   }
   const key =

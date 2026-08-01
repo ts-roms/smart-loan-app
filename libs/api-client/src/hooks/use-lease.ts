@@ -48,8 +48,8 @@ export function useBuyoutLease() {
         amountPaid: input.amountPaid,
       }),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: ["lease"] });
-      qc.invalidateQueries({ queryKey: ["loans", "detail", vars.loanId] });
+      void qc.invalidateQueries({ queryKey: ["lease"] });
+      void qc.invalidateQueries({ queryKey: ["loans", "detail", vars.loanId] });
     },
   });
 }

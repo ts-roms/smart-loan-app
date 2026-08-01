@@ -15,11 +15,7 @@
  *                  Operator action required (set env, restart).
  */
 export type LicenseStatusKind =
-  | "ACTIVE"
-  | "EXPIRED"
-  | "TAMPERED"
-  | "NONE"
-  | "NO_KEY";
+  "ACTIVE" | "EXPIRED" | "TAMPERED" | "NONE" | "NO_KEY";
 
 export type LicenseTier = "BASIC" | "PROFESSIONAL" | "ENTERPRISE";
 
@@ -113,12 +109,7 @@ export type StaffRole = (typeof STAFF_ROLES)[number];
 
 // Customer
 export type GovernmentIdType =
-  | "PASSPORT"
-  | "DRIVERS_LICENSE"
-  | "NATIONAL_ID"
-  | "SSS"
-  | "TIN"
-  | "OTHER";
+  "PASSPORT" | "DRIVERS_LICENSE" | "NATIONAL_ID" | "SSS" | "TIN" | "OTHER";
 export type EmploymentStatus =
   | "EMPLOYED"
   | "SELF_EMPLOYED"
@@ -129,12 +120,7 @@ export type EmploymentStatus =
 export type Gender = "MALE" | "FEMALE" | "NON_BINARY" | "PREFER_NOT_TO_SAY";
 export type Sex = "MALE" | "FEMALE" | "INTERSEX";
 export type CivilStatus =
-  | "SINGLE"
-  | "MARRIED"
-  | "WIDOWED"
-  | "SEPARATED"
-  | "ANNULLED"
-  | "DIVORCED";
+  "SINGLE" | "MARRIED" | "WIDOWED" | "SEPARATED" | "ANNULLED" | "DIVORCED";
 export type KycStatus = "NONE" | "PENDING" | "VERIFIED" | "REJECTED";
 
 export interface Customer {
@@ -191,6 +177,33 @@ export interface Customer {
   kycStatus: KycStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * What `GET /customers` returns: the customer record plus two cheap risk
+ * markers, used by the New Loan borrower picker to rank and to warn.
+ *
+ * Only the list endpoint computes them. `GET /customers/:id` stays a
+ * plain {@link Customer} — hence the separate type rather than optional
+ * fields that every consumer would have to null-check.
+ *
+ * Neither flag replaces `/customers/:id/repeat-eligibility`, which is
+ * the authoritative read on repeat-borrower standing (closed-loan count,
+ * fast-path eligibility, decline reasons).
+ */
+export interface CustomerListItem extends Customer {
+  /**
+   * A loan is live right now: APPROVED, DISBURSED, or ACTIVE. Current
+   * exposure, not history — closed, defaulted, rejected, cancelled, and
+   * still-in-review applications all leave this false.
+   */
+  hasLoans: boolean;
+  /**
+   * A loan has gone bad at some point: DEFAULTED or WRITTEN_OFF. Never
+   * clears — a subsequent good loan sets `hasLoans` without unsetting
+   * this. RESTRUCTURED doesn't count (workout, not a loss).
+   */
+  hasDefaulted: boolean;
 }
 
 export interface CustomerCreateInput {
@@ -700,14 +713,7 @@ export interface CoMakerInput {
 // Decision rules
 export type RuleAction = "AUTO_APPROVE" | "AUTO_REJECT" | "MANUAL_REVIEW";
 export type DecisioningOp =
-  | "="
-  | "!="
-  | "<"
-  | "<="
-  | ">"
-  | ">="
-  | "in"
-  | "not_in";
+  "=" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not_in";
 
 export interface DecisioningCondition {
   field: string;
@@ -1004,18 +1010,10 @@ export interface LoanPayment {
 
 // Accounting
 export type AccountType =
-  | "ASSET"
-  | "LIABILITY"
-  | "EQUITY"
-  | "INCOME"
-  | "EXPENSE";
+  "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
 export type NormalBalance = "DEBIT" | "CREDIT";
 export type JournalSource =
-  | "MANUAL"
-  | "LOAN_DISBURSEMENT"
-  | "LOAN_PAYMENT"
-  | "REVERSAL"
-  | "ADJUSTMENT";
+  "MANUAL" | "LOAN_DISBURSEMENT" | "LOAN_PAYMENT" | "REVERSAL" | "ADJUSTMENT";
 
 export interface Account {
   id: string;
@@ -1130,11 +1128,7 @@ export interface BalanceSheetReport {
 }
 
 export type AgingBucket =
-  | "CURRENT"
-  | "D_1_30"
-  | "D_31_60"
-  | "D_61_90"
-  | "D_90_PLUS";
+  "CURRENT" | "D_1_30" | "D_31_60" | "D_61_90" | "D_90_PLUS";
 
 export interface AgingRow {
   loanId: string;
@@ -1199,11 +1193,7 @@ export interface PromiseToPay {
 // Payments
 export type PaymentProviderName = "MOCK" | "GCASH" | "MAYA";
 export type PaymentIntentStatus =
-  | "CREATED"
-  | "PROCESSING"
-  | "PAID"
-  | "FAILED"
-  | "EXPIRED";
+  "CREATED" | "PROCESSING" | "PAID" | "FAILED" | "EXPIRED";
 
 export interface PaymentIntent {
   id: string;
@@ -1226,11 +1216,7 @@ export interface PaymentIntent {
 // ─── Lease-to-Own (FRD §3.5) ────────────────────────────────────────────────
 
 export type LeaseStatus =
-  | "ACTIVE"
-  | "PULLED_OUT"
-  | "BUYOUT_COMPLETED"
-  | "RETURNED"
-  | "EXTENDED";
+  "ACTIVE" | "PULLED_OUT" | "BUYOUT_COMPLETED" | "RETURNED" | "EXTENDED";
 
 export type LeaseTitleHolder = "COMPANY" | "CUSTOMER";
 
@@ -1265,10 +1251,7 @@ export interface LeaseAgreementWithLoan extends LeaseAgreement {
 // ─── DORSI compliance (FRD §3.10) ───────────────────────────────────────────
 
 export type DorsiCategory =
-  | "DIRECTOR"
-  | "OFFICER"
-  | "STOCKHOLDER"
-  | "RELATED_INTEREST";
+  "DIRECTOR" | "OFFICER" | "STOCKHOLDER" | "RELATED_INTEREST";
 
 export interface DorsiRecord {
   id: string;
@@ -1405,17 +1388,10 @@ export interface RepossessionCaseWithLoan extends RepossessionCase {
 // ─── Demand letters (FRD §3.6) ──────────────────────────────────────────────
 
 export type DemandLetterStage =
-  | "FIRST"
-  | "FINAL"
-  | "ATTORNEY_FIRST"
-  | "ATTORNEY_FINAL";
+  "FIRST" | "FINAL" | "ATTORNEY_FIRST" | "ATTORNEY_FINAL";
 
 export type DemandLetterStatus =
-  | "DRAFTED"
-  | "APPROVED"
-  | "DISPATCHED"
-  | "RESPONDED"
-  | "WAIVED";
+  "DRAFTED" | "APPROVED" | "DISPATCHED" | "RESPONDED" | "WAIVED";
 
 export interface DemandLetter {
   id: string;
@@ -1467,11 +1443,7 @@ export interface DemandCandidate {
 // ─── Annual / renewable documents (FRD §3.8) ────────────────────────────────
 
 export type AnnualDocumentType =
-  | "CAR_INSURANCE"
-  | "OR_CR"
-  | "RPT"
-  | "FIRE_INSURANCE"
-  | "OTHER";
+  "CAR_INSURANCE" | "OR_CR" | "RPT" | "FIRE_INSURANCE" | "OTHER";
 
 export type AnnualDocumentStatus = "VALID" | "EXPIRING_SOON" | "EXPIRED";
 
@@ -1719,10 +1691,7 @@ export interface OverdueRow {
 // ─── Approval chain (per-product workflow) ──────────────────────────────
 
 export type LoanApprovalStatus =
-  | "PENDING"
-  | "APPROVED"
-  | "REJECTED"
-  | "SKIPPED";
+  "PENDING" | "APPROVED" | "REJECTED" | "SKIPPED";
 
 export interface LoanApprovalStep {
   id: string;

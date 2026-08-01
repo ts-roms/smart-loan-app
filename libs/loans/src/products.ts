@@ -7,10 +7,10 @@
  * only enforce the math + per-tier overrides.
  */
 
-export type CollateralKind = 'NONE' | 'VEHICLE' | 'PROPERTY';
-export type InterestMethod = 'DECLINING' | 'FLAT';
-export type PaymentFrequency = 'MONTHLY' | 'BIWEEKLY' | 'WEEKLY';
-export type CreditTier = 'A' | 'B' | 'C' | 'D' | 'F';
+export type CollateralKind = "NONE" | "VEHICLE" | "PROPERTY";
+export type InterestMethod = "DECLINING" | "FLAT";
+export type PaymentFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY";
+export type CreditTier = "A" | "B" | "C" | "D" | "F";
 
 /** Subset of LoanProduct columns the validator needs. */
 export interface LoanProductConfig {
@@ -52,15 +52,21 @@ export function validateLoanApplication(
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
-  if (input.principal < product.minPrincipal || input.principal > product.maxPrincipal) {
+  if (
+    input.principal < product.minPrincipal ||
+    input.principal > product.maxPrincipal
+  ) {
     issues.push({
-      field: 'principal',
+      field: "principal",
       message: `Principal must be between ${product.minPrincipal} and ${product.maxPrincipal} for ${product.code}.`,
     });
   }
-  if (input.termMonths < product.minTermMonths || input.termMonths > product.maxTermMonths) {
+  if (
+    input.termMonths < product.minTermMonths ||
+    input.termMonths > product.maxTermMonths
+  ) {
     issues.push({
-      field: 'termMonths',
+      field: "termMonths",
       message: `Term must be between ${product.minTermMonths} and ${product.maxTermMonths} months for ${product.code}.`,
     });
   }
@@ -69,7 +75,7 @@ export function validateLoanApplication(
     input.annualInterestRate > product.maxRate
   ) {
     issues.push({
-      field: 'annualInterestRate',
+      field: "annualInterestRate",
       message: `Rate must be between ${pct(product.minRate)} and ${pct(product.maxRate)} for ${product.code}.`,
     });
   }
@@ -79,21 +85,27 @@ export function validateLoanApplication(
     const tierRate = product.rateByTier[input.tierAtApply];
     if (tierRate === null) {
       issues.push({
-        field: 'tierAtApply',
+        field: "tierAtApply",
         message: `${product.code} is not available for credit tier ${input.tierAtApply}.`,
       });
-    } else if (tierRate !== undefined && Math.abs(tierRate - input.annualInterestRate) > 0.0001) {
+    } else if (
+      tierRate !== undefined &&
+      Math.abs(tierRate - input.annualInterestRate) > 0.0001
+    ) {
       issues.push({
-        field: 'annualInterestRate',
+        field: "annualInterestRate",
         message: `Rate for tier ${input.tierAtApply} on ${product.code} is fixed at ${pct(tierRate)}.`,
       });
     }
   }
 
-  if (product.collateralKind !== 'NONE') {
-    if (!input.collateralAppraisedValue || input.collateralAppraisedValue <= 0) {
+  if (product.collateralKind !== "NONE") {
+    if (
+      !input.collateralAppraisedValue ||
+      input.collateralAppraisedValue <= 0
+    ) {
       issues.push({
-        field: 'collateral',
+        field: "collateral",
         message: `${product.code} requires collateral with a positive appraised value.`,
       });
     } else {
@@ -102,8 +114,8 @@ export function validateLoanApplication(
         const ltv = input.principal / input.collateralAppraisedValue;
         if (ltv > ltvCap + 0.0001) {
           issues.push({
-            field: 'principal',
-            message: `Loan-to-value ${pct(ltv)} exceeds ${pct(ltvCap)} ceiling for ${product.code}${input.tierAtApply ? ` (tier ${input.tierAtApply})` : ''}.`,
+            field: "principal",
+            message: `Loan-to-value ${pct(ltv)} exceeds ${pct(ltvCap)} ceiling for ${product.code}${input.tierAtApply ? ` (tier ${input.tierAtApply})` : ""}.`,
           });
         }
       }
@@ -157,7 +169,9 @@ export interface FeeBreakdown {
 }
 
 export function computeFees(principal: number, fees: FeeConfig): FeeBreakdown {
-  const processing = round2(principal * fees.processingFeeRate + fees.processingFeeFlat);
+  const processing = round2(
+    principal * fees.processingFeeRate + fees.processingFeeFlat,
+  );
   const documentary = round2(principal * fees.documentaryStampRate);
   const total = round2(processing + documentary);
   return {
@@ -199,10 +213,10 @@ export const DEFAULT_PRODUCTS: ReadonlyArray<{
   paymentFrequency: PaymentFrequency;
 }> = [
   {
-    code: 'SALARY',
-    name: 'Salary Loan',
-    description: 'Short-term unsecured loan for employed individuals.',
-    collateralKind: 'NONE',
+    code: "SALARY",
+    name: "Salary Loan",
+    description: "Short-term unsecured loan for employed individuals.",
+    collateralKind: "NONE",
     requiredKycDocs: [],
     minPrincipal: 5_000,
     maxPrincipal: 500_000,
@@ -219,15 +233,15 @@ export const DEFAULT_PRODUCTS: ReadonlyArray<{
     lateFeeCapFraction: 0.1,
     lateFeeGraceDays: 3,
     preTerminationFeeRate: 0.02,
-    interestMethod: 'DECLINING',
-    paymentFrequency: 'MONTHLY',
+    interestMethod: "DECLINING",
+    paymentFrequency: "MONTHLY",
   },
   {
-    code: 'MOTORCYCLE',
-    name: 'Motorcycle Loan',
-    description: 'Secured by the motorcycle being financed.',
-    collateralKind: 'VEHICLE',
-    requiredKycDocs: ['VEHICLE_OR', 'VEHICLE_CR'],
+    code: "MOTORCYCLE",
+    name: "Motorcycle Loan",
+    description: "Secured by the motorcycle being financed.",
+    collateralKind: "VEHICLE",
+    requiredKycDocs: ["VEHICLE_OR", "VEHICLE_CR"],
     minPrincipal: 20_000,
     maxPrincipal: 300_000,
     minTermMonths: 6,
@@ -243,15 +257,15 @@ export const DEFAULT_PRODUCTS: ReadonlyArray<{
     lateFeeCapFraction: 0.1,
     lateFeeGraceDays: 3,
     preTerminationFeeRate: 0.03,
-    interestMethod: 'DECLINING',
-    paymentFrequency: 'MONTHLY',
+    interestMethod: "DECLINING",
+    paymentFrequency: "MONTHLY",
   },
   {
-    code: 'AUTOMOTIVE',
-    name: 'Auto Loan',
-    description: 'Secured by the car being financed.',
-    collateralKind: 'VEHICLE',
-    requiredKycDocs: ['VEHICLE_OR', 'VEHICLE_CR'],
+    code: "AUTOMOTIVE",
+    name: "Auto Loan",
+    description: "Secured by the car being financed.",
+    collateralKind: "VEHICLE",
+    requiredKycDocs: ["VEHICLE_OR", "VEHICLE_CR"],
     minPrincipal: 100_000,
     maxPrincipal: 2_000_000,
     minTermMonths: 12,
@@ -267,15 +281,15 @@ export const DEFAULT_PRODUCTS: ReadonlyArray<{
     lateFeeCapFraction: 0.1,
     lateFeeGraceDays: 5,
     preTerminationFeeRate: 0.05,
-    interestMethod: 'DECLINING',
-    paymentFrequency: 'MONTHLY',
+    interestMethod: "DECLINING",
+    paymentFrequency: "MONTHLY",
   },
   {
-    code: 'HOUSING',
-    name: 'Housing Loan',
-    description: 'Long-term loan secured by real estate.',
-    collateralKind: 'PROPERTY',
-    requiredKycDocs: ['PROPERTY_TITLE', 'TAX_DECLARATION'],
+    code: "HOUSING",
+    name: "Housing Loan",
+    description: "Long-term loan secured by real estate.",
+    collateralKind: "PROPERTY",
+    requiredKycDocs: ["PROPERTY_TITLE", "TAX_DECLARATION"],
     minPrincipal: 500_000,
     maxPrincipal: 10_000_000,
     minTermMonths: 60,
@@ -291,7 +305,7 @@ export const DEFAULT_PRODUCTS: ReadonlyArray<{
     lateFeeCapFraction: 0.1,
     lateFeeGraceDays: 7,
     preTerminationFeeRate: 0.05,
-    interestMethod: 'DECLINING',
-    paymentFrequency: 'MONTHLY',
+    interestMethod: "DECLINING",
+    paymentFrequency: "MONTHLY",
   },
 ];

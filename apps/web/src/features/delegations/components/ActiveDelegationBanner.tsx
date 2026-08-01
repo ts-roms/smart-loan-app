@@ -2,9 +2,9 @@ import {
   useActiveDelegations,
   useDelegationUserDirectory,
   type DelegationUserEntry,
-} from '@loan/api-client';
-import { formatDate } from '@loan/shared-utils';
-import { ShieldCheck } from 'lucide-react';
+} from "@loan/api-client";
+import { formatDate } from "@loan/shared-utils";
+import { ShieldCheck } from "lucide-react";
 
 /**
  * Amber banner rendered at the top of every staff page when the caller
@@ -24,17 +24,17 @@ export function ActiveDelegationBanner() {
       <div className="flex items-center gap-2 font-medium">
         <ShieldCheck className="h-3 w-3" />
         Acting under {active.data.length} active delegation
-        {active.data.length === 1 ? '' : 's'}
+        {active.data.length === 1 ? "" : "s"}
       </div>
       <ul className="mt-1 space-y-0.5 pl-5 list-disc">
         {active.data.map((d) => {
           const from = userById.get(d.delegatorId);
           return (
             <li key={d.id}>
-              from <strong>{from?.name ?? d.delegatorId.slice(0, 8)}</strong> ·{' '}
+              from <strong>{from?.name ?? d.delegatorId.slice(0, 8)}</strong> ·{" "}
               {d.permissions.length === 0
-                ? 'all permissions'
-                : `${d.permissions.length} permission${d.permissions.length === 1 ? '' : 's'}`}{' '}
+                ? "all permissions"
+                : `${d.permissions.length} permission${d.permissions.length === 1 ? "" : "s"}`}{" "}
               · until {formatDate(d.endsAt)}
             </li>
           );
