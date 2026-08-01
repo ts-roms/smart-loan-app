@@ -1,6 +1,7 @@
 import type {
   Customer,
   CustomerCreateInput,
+  CustomerListItem,
   CustomerSummary,
   RepeatEligibility,
 } from "@loan/shared-types";
@@ -15,10 +16,15 @@ export const customerKeys = {
   repeat: (id: string) => [...customerKeys.all, "repeat", id] as const,
 };
 
+/**
+ * Full customer list. Rows carry `hasLoans` (an approved/disbursed/active
+ * loan exists) and `hasDefaulted` (a loan went bad at some point), so
+ * pickers can rank and warn without fetching `/loans`.
+ */
 export function useCustomers() {
   return useQuery({
     queryKey: customerKeys.all,
-    queryFn: () => getApiClient().get<Customer[]>("/customers"),
+    queryFn: () => getApiClient().get<CustomerListItem[]>("/customers"),
   });
 }
 
@@ -80,8 +86,8 @@ export function useUpdateCustomer() {
         body: JSON.stringify(input.patch),
       }),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: customerKeys.all });
-      qc.invalidateQueries({ queryKey: customerKeys.detail(vars.id) });
+      void qc.invalidateQueries({ queryKey: customerKeys.all });
+      void qc.invalidateQueries({ queryKey: customerKeys.detail(vars.id) });
     },
   });
 }
@@ -124,7 +130,8 @@ export function useBulkImportCustomers() {
     mutationFn: (input: BulkCustomerImportInput) =>
       getApiClient().post<BulkCustomerImportResponse>("/customers/bulk", input),
     onSuccess: (res) => {
-      if (!res.dryRun) qc.invalidateQueries({ queryKey: customerKeys.all });
+      if (!res.dryRun)
+        void qc.invalidateQueries({ queryKey: customerKeys.all });
     },
   });
 }

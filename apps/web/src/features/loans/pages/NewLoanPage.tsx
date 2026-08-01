@@ -14,6 +14,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  cn,
   Input,
   SearchInput,
   Select,
@@ -62,6 +63,20 @@ import {
 } from "../hooks";
 
 // ─── Step definitions ─────────────────────────────────────────────────
+
+/**
+ * Step ids in wizard order. Module-scoped rather than rebuilt per render:
+ * the contents are constant, and as a local it became a changing
+ * dependency of the `completedIds` memo every pass.
+ * Kept parallel to STEPS below and to the keys of `validity`.
+ */
+const STEP_KEYS = [
+  "borrower",
+  "product",
+  "collateral",
+  "verification",
+  "review",
+] as const;
 
 const STEPS: StepperStep[] = [
   { id: "borrower", label: "Borrower", hint: "Pick the customer" },
@@ -249,18 +264,11 @@ export function NewLoanPage() {
       review: true,
     };
   }, [form, kycReady, collateralKind, collateralValue]);
-  const stepKeys: (keyof typeof validity)[] = [
-    "borrower",
-    "product",
-    "collateral",
-    "verification",
-    "review",
-  ];
-  const currentValid = validity[stepKeys[step]!];
+  const currentValid = validity[STEP_KEYS[step]!];
   const completedIds = useMemo(() => {
     const set = new Set<string>();
     for (let i = 0; i < step; i++) {
-      if (validity[stepKeys[i]!]) set.add(STEPS[i]!.id);
+      if (validity[STEP_KEYS[i]!]) set.add(STEPS[i]!.id);
     }
     return set;
   }, [step, validity]);
@@ -300,7 +308,7 @@ export function NewLoanPage() {
         // soft-fail; navigate anyway
       }
     }
-    navigate("/loans");
+    void navigate("/loans");
   };
 
   // ─── Step navigation ──────────────────────────────────────────────
@@ -356,7 +364,7 @@ export function NewLoanPage() {
       toast.success("Application submitted");
       // Navigate via the new "LN-..." reference number rather than the UUID
       // — operator URLs are now expected to be human-readable everywhere.
-      navigate(`/loans/${created.number}`);
+      void navigate(`/loans/${created.number}`);
     } catch (err) {
       toast.error((err as Error).message ?? "Could not apply");
     }
@@ -513,8 +521,23 @@ function Step1Borrower({
     firstName: string;
     lastName: string;
     kycStatus: string;
+    hasLoans: boolean;
+    hasDefaulted: boolean;
   }>;
 }) {
+  // A new application usually goes to someone with nothing running, so the
+  // idle suggestion list ranks in three tiers off the server-computed
+  // flags: clear first, then customers already on the books, then anyone
+  // with a prior default. Nobody is filtered out — typing still finds
+  // every customer — they just don't get the top-10 slots by default.
+  const ranked = useMemo(() => {
+    const tier = (c: (typeof customers)[number]) =>
+      c.hasDefaulted ? 2 : c.hasLoans ? 1 : 0;
+    // Array#sort is stable, so the API's newest-first order survives
+    // inside each tier.
+    return [...customers].sort((a, b) => tier(a) - tier(b));
+  }, [customers]);
+
   // Resolve the selected customer for the SearchInput value prop. We keep
   // the form state shape unchanged (just the UUID) — only the picker
   // chrome upgrades from a fixed Select to a typeahead.
@@ -530,10 +553,12 @@ function Step1Borrower({
       />
       <Field label="Customer">
         {/* Typeahead picker — operators with hundreds of customers couldn't
-            scroll a flat Select. Suggestions stay hidden until the user
-            types so the field looks clean by default. */}
+            scroll a flat Select. Focusing the field suggests up to 10
+            borrowers with nothing running; typing searches everyone. */}
         <SearchInput
-          items={customers}
+          items={ranked}
+          suggestOnFocus
+          maxResults={10}
           value={selectedCustomer}
           onSelect={(c) => setForm((f) => ({ ...f, customerId: c?.id ?? "" }))}
           matches={(c, q) =>
@@ -546,13 +571,36 @@ function Step1Borrower({
           placeholder="Search by name or reference"
           emptyMessage={(q) => `No customers match “${q}”.`}
           renderSuggestion={(c) => (
-            <span className="flex items-center justify-between gap-3 min-w-0">
+            <span
+              className={cn(
+                "flex items-center justify-between gap-3 min-w-0",
+                // The whole row goes red, not just the tag — a prior
+                // default is the one thing an officer must not miss while
+                // skimming, and it outranks the "nothing running" nudge
+                // that put this customer near the top of the list.
+                c.hasDefaulted && "text-danger",
+              )}
+            >
               <span className="min-w-0 truncate">
                 {c.firstName} {c.lastName}
               </span>
-              <span className="flex items-center gap-2 shrink-0 text-[10px] font-mono text-fg-subtle">
+              <span
+                className={cn(
+                  "flex items-center gap-2 shrink-0 text-[10px] font-mono",
+                  c.hasDefaulted ? "text-danger" : "text-fg-subtle",
+                )}
+              >
                 {c.number && <span>{c.number}</span>}
                 <span>{c.kycStatus}</span>
+                {c.hasDefaulted && (
+                  <span className="font-semibold">PRIOR DEFAULT</span>
+                )}
+                {/* Says "no live loan", not "never borrowed" — a customer
+                    with a closed or defaulted loan lands here too. The
+                    default warning wins the slot when both apply. */}
+                {!c.hasLoans && !c.hasDefaulted && (
+                  <span className="text-primary">NO ACTIVE LOAN</span>
+                )}
               </span>
             </span>
           )}

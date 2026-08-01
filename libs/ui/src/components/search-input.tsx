@@ -38,6 +38,7 @@ import { cn } from "../lib/cn";
  *
  * Behaviour summary:
  *   • idle  → just the input with search/chevron icons
+ *             (or the first `maxResults` items, with `suggestOnFocus`)
  *   • typing → floating dropdown over content below
  *   • selected → input shows the chosen item's display label
  *   • clear (×) → drops selection, focuses input
@@ -73,6 +74,14 @@ export interface SearchInputProps<T> {
   placeholder?: string;
   /** Max number of suggestions shown — typeahead encourages narrowing. */
   maxResults?: number;
+  /**
+   * Open the popup with the first `maxResults` items as soon as the field
+   * is focused, before anything is typed. Off by default (the component's
+   * usual stance is "no noise until you type"), but worth enabling where
+   * the pool is small enough that seeing a starting set beats guessing at
+   * a spelling — e.g. the customer pickers.
+   */
+  suggestOnFocus?: boolean;
   /** Optional wrapping className. */
   className?: string;
   /** Optional className applied to the input element. */
@@ -101,6 +110,7 @@ export function SearchInput<T>({
   renderSuggestion,
   placeholder = "Search…",
   maxResults = 8,
+  suggestOnFocus = false,
   className,
   inputClassName,
   disabled = false,
@@ -113,9 +123,11 @@ export function SearchInput<T>({
 
   // Hide suggestions when there's nothing to filter on — the point of
   // this component. The filter runs against the trimmed lowercased query.
+  // With `suggestOnFocus` the empty query instead yields a starting set of
+  // the first `maxResults` items rather than nothing.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return [];
+    if (!q) return suggestOnFocus ? items.slice(0, maxResults) : [];
     const out: T[] = [];
     for (const item of items) {
       if (matches(item, q)) {
@@ -124,7 +136,7 @@ export function SearchInput<T>({
       }
     }
     return out;
-  }, [items, query, matches, maxResults]);
+  }, [items, query, matches, maxResults, suggestOnFocus]);
 
   // Reset highlight whenever results change so we don't index past end.
   useEffect(() => {
@@ -174,7 +186,8 @@ export function SearchInput<T>({
       // Allow ArrowDown to re-open the dropdown if there's already a
       // query — useful when tabbing back into a field whose popup
       // closed on a previous interaction.
-      if (e.key === "ArrowDown" && query.trim().length > 0) setOpen(true);
+      if (e.key === "ArrowDown" && (suggestOnFocus || query.trim().length > 0))
+        setOpen(true);
       return;
     }
     if (e.key === "ArrowDown") {
@@ -216,7 +229,7 @@ export function SearchInput<T>({
             if (value) onSelect(null);
           }}
           onFocus={() => {
-            if (query.trim().length > 0) setOpen(true);
+            if (suggestOnFocus || query.trim().length > 0) setOpen(true);
           }}
           onKeyDown={onKeyDown}
           className={cn(
