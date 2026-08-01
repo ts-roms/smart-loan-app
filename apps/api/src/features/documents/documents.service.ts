@@ -1,4 +1,4 @@
-import { allocatePayment } from "@loan/accounting";
+import { ACCOUNT_CODES, allocatePayment } from "@loan/accounting";
 import { type LoanRepository, type PrismaClient } from "@loan/db";
 import { computeFees } from "@loan/loans";
 import {
@@ -269,10 +269,17 @@ export class DocumentsService {
   }
 
   /**
-   * Receipt builder shared by officer + portal paths. The OR allocation
-   * is re-derived from the schedule snapshot at payment time — for
-   * closed loans this is approximate (principalPaid is now full), but
-   * good enough for an OR receipt.
+   * Receipt builder shared by officer + portal paths.
+   *
+   * The OR allocation is read back off the payment's journal entry rather
+   * than re-derived from the schedule. Re-deriving can't work: the schedule
+   * holds current state, not state as of the payment, so a loan that took
+   * several payments would have every receipt reprint the same split. The
+   * journal entry is the authoritative record of what this payment was
+   * actually applied to, and it's written in the same transaction.
+   *
+   * Falls back to a fresh allocation only when no entry exists (a payment
+   * recorded before auto-posting, or one whose period was closed).
    */
   private async buildReceipt(
     loan: Awaited<ReturnType<LoanRepository["findById"]>> extends infer L
@@ -283,17 +290,15 @@ export class DocumentsService {
     >["payments"][number],
     personnel: PersonnelSignature | null,
   ): Promise<PdfBundle> {
-    const openAtTime = loan.schedule
-      .filter((s) => !s.paidInFullAt || s.paidInFullAt >= payment.paidOn)
-      .map((s) => ({
-        interestDue: Number(s.interestDue),
-        principalDue: Number(s.principalDue),
-      }));
-    const allocation = allocatePayment(Number(payment.amount), openAtTime);
+    const allocation = await this.paymentAllocation(loan, payment);
     const remainingOutstanding = loan.schedule
       .filter((s) => !s.paidInFullAt)
       .reduce(
-        (sum, s) => sum + (Number(s.totalDue) - Number(s.principalPaid)),
+        (sum, s) =>
+          sum +
+          (Number(s.totalDue) -
+            Number(s.principalPaid) -
+            Number(s.interestPaid)),
         0,
       );
     const branding = await getBranding(this.prisma);
@@ -316,12 +321,67 @@ export class DocumentsService {
       },
       allocation: {
         interest: allocation.interest,
-        principal: allocation.principal + allocation.overpayment,
+        principal: allocation.principal,
+        advance: allocation.overpayment,
       },
       remainingOutstanding,
       personnelSignature: personnel,
     });
     return { buf, filename: `receipt-${payment.id.slice(0, 8)}.pdf` };
+  }
+
+  /**
+   * What a given payment was applied to. Reads the LOAN_PAYMENT journal
+   * entry posted alongside it — Interest Income (4000) is the interest
+   * slice, Loans Receivable (1100) the principal, Customer Advances (2100)
+   * the overpayment.
+   */
+  private async paymentAllocation(
+    loan: NonNullable<Awaited<ReturnType<LoanRepository["findById"]>>>,
+    payment: NonNullable<
+      Awaited<ReturnType<LoanRepository["findById"]>>
+    >["payments"][number],
+  ): Promise<{ interest: number; principal: number; overpayment: number }> {
+    const entry = await this.prisma.journalEntry.findFirst({
+      where: {
+        source: "LOAN_PAYMENT",
+        sourceRefType: "LoanPayment",
+        sourceRefId: payment.id,
+      },
+      include: { lines: { include: { account: true } } },
+    });
+
+    if (entry) {
+      const creditTo = (code: string) =>
+        entry.lines
+          .filter((l) => l.account.code === code)
+          .reduce((sum, l) => sum + Number(l.credit), 0);
+      return {
+        interest: creditTo(ACCOUNT_CODES.INTEREST_INCOME),
+        principal: creditTo(ACCOUNT_CODES.LOANS_RECEIVABLE),
+        overpayment: creditTo(ACCOUNT_CODES.CUSTOMER_ADVANCES),
+      };
+    }
+
+    // No entry — fall back to allocating against the schedule as it stands.
+    // Only right for the most recent payment on the loan, which is the
+    // common case for a reprint of an unposted payment.
+    const alloc = allocatePayment(
+      Number(payment.amount),
+      loan.schedule
+        .filter((s) => !s.paidInFullAt)
+        .map((s) => ({
+          interestDue: Number(s.interestDue),
+          principalDue: Number(s.principalDue),
+          interestPaid: Number(s.interestPaid),
+          principalPaid: Number(s.principalPaid),
+        })),
+    );
+    return {
+      interest: alloc.interest,
+      principal: alloc.principal,
+      overpayment: alloc.overpayment,
+    };
   }
 
   // ─── shape helpers (kept inline because they're shared with portal) ──
@@ -426,6 +486,7 @@ export class DocumentsService {
       totalDue: Number(s.totalDue),
       paidInFullAt: s.paidInFullAt,
       principalPaid: Number(s.principalPaid),
+      interestPaid: Number(s.interestPaid),
     }));
   }
 

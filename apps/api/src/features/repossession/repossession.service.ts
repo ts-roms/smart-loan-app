@@ -92,7 +92,9 @@ export class RepossessionService {
       where: { loanId: c.loanId, paidInFullAt: null },
     });
     const outstanding = schedule.reduce(
-      (s, x) => s + (Number(x.totalDue) - Number(x.principalPaid)),
+      (s, x) =>
+        s +
+        (Number(x.totalDue) - Number(x.principalPaid) - Number(x.interestPaid)),
       0,
     );
     const penalties = await this.loans.accruedPenaltiesFor(c.loanId);

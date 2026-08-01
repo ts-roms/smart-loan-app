@@ -848,8 +848,15 @@ model LoanSchedule {
   interestDue   Decimal   @db.Decimal(14, 2)
   /// `principalDue + interestDue`
   totalDue      Decimal   @db.Decimal(14, 2)
-  /// Cumulative principal paid up to and including this row
+  /// Principal collected on THIS installment so far (0 .. principalDue).
+  /// Written by every payment, not only the one that settles the row —
+  /// this is what makes repeated partial payments accumulate correctly.
   principalPaid Decimal   @default(0) @db.Decimal(14, 2)
+  /// Interest collected on THIS installment so far (0 .. interestDue).
+  /// Payment allocation runs against `interestDue - interestPaid`; without
+  /// it every partial payment would re-recognize the same interest income.
+  interestPaid  Decimal   @default(0) @db.Decimal(14, 2)
+  /// Set once `principalPaid >= principalDue AND interestPaid >= interestDue`.
   paidInFullAt  DateTime?
 
   loan LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)

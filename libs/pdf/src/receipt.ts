@@ -39,6 +39,12 @@ export interface PaymentReceiptInput {
   allocation?: {
     interest: number;
     principal: number;
+    /**
+     * Amount received beyond everything the loan still owed. Shown as its
+     * own line so the borrower sees credit held for them rather than a
+     * principal figure larger than the principal that existed.
+     */
+    advance?: number;
   };
   /** Remaining outstanding after this payment. */
   remainingOutstanding?: number;
@@ -85,11 +91,15 @@ export function renderPaymentReceipt(
 
       if (input.allocation) {
         section(doc, "Allocation");
+        const advance = input.allocation.advance ?? 0;
         table(
           doc,
           [
             ["Interest", moneyPHP(input.allocation.interest)],
             ["Principal", moneyPHP(input.allocation.principal)],
+            ...(advance > 0
+              ? [["Advance / credit on account", moneyPHP(advance)]]
+              : []),
           ],
           {
             header: ["Component", "Amount"],

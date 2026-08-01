@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { ACCOUNT_CODES } from "./chart";
 import {
   allocatePayment,
   buildEntry,
@@ -208,6 +209,186 @@ describe("allocatePayment", () => {
     expect(r.interest).toBe(0);
     expect(r.principal).toBe(0);
     expect(r.overpayment).toBe(0);
+  });
+
+  it("reports which installment each slice landed on", () => {
+    const r = allocatePayment(1_500, [
+      { interestDue: 300, principalDue: 700 },
+      { interestDue: 280, principalDue: 720 },
+    ]);
+    expect(r.perInstallment).toEqual([
+      { index: 0, interest: 300, principal: 700 },
+      { index: 1, interest: 280, principal: 220 },
+    ]);
+  });
+
+  it("omits installments the payment never reached", () => {
+    const r = allocatePayment(400, [
+      { interestDue: 300, principalDue: 700 },
+      { interestDue: 280, principalDue: 720 },
+    ]);
+    expect(r.perInstallment).toEqual([
+      { index: 0, interest: 300, principal: 100 },
+    ]);
+  });
+});
+
+/**
+ * The regression that motivated per-installment progress tracking.
+ *
+ * Without `interestPaid` / `principalPaid`, every call allocates against
+ * the same full dues, so the same interest is recognized once per payment.
+ */
+describe("allocatePayment — against remaining due", () => {
+  it("does not re-charge interest already collected on an installment", () => {
+    const r = allocatePayment(1_000, [
+      { interestDue: 1_000, principalDue: 4_000, interestPaid: 1_000 },
+    ]);
+    expect(r.interest).toBe(0);
+    expect(r.principal).toBe(1_000);
+  });
+
+  it("splits five 1,000 partials into 1,000 interest and 4,000 principal", () => {
+    const inst = { interestDue: 1_000, principalDue: 4_000 };
+    let interestPaid = 0;
+    let principalPaid = 0;
+    let totalInterest = 0;
+    let totalPrincipal = 0;
+
+    for (let i = 0; i < 5; i++) {
+      const r = allocatePayment(1_000, [
+        { ...inst, interestPaid, principalPaid },
+      ]);
+      interestPaid += r.interest;
+      principalPaid += r.principal;
+      totalInterest += r.interest;
+      totalPrincipal += r.principal;
+      expect(r.overpayment).toBe(0);
+    }
+
+    // The whole point: 1,000 of interest income, not 5,000.
+    expect(totalInterest).toBe(1_000);
+    expect(totalPrincipal).toBe(4_000);
+  });
+
+  it("carries a payment across the boundary between two installments", () => {
+    const r = allocatePayment(1_500, [
+      {
+        interestDue: 200,
+        principalDue: 800,
+        interestPaid: 0,
+        principalPaid: 0,
+      },
+      {
+        interestDue: 200,
+        principalDue: 800,
+        interestPaid: 0,
+        principalPaid: 0,
+      },
+    ]);
+    // Installment 1 in full (1,000), then 200 interest + 300 principal on #2.
+    expect(r.interest).toBe(400);
+    expect(r.principal).toBe(1_100);
+    expect(r.perInstallment).toEqual([
+      { index: 0, interest: 200, principal: 800 },
+      { index: 1, interest: 200, principal: 300 },
+    ]);
+  });
+
+  it("skips a fully-settled installment and moves to the next", () => {
+    const r = allocatePayment(500, [
+      {
+        interestDue: 200,
+        principalDue: 800,
+        interestPaid: 200,
+        principalPaid: 800,
+      },
+      { interestDue: 200, principalDue: 800 },
+    ]);
+    expect(r.perInstallment).toEqual([
+      { index: 1, interest: 200, principal: 300 },
+    ]);
+  });
+
+  it("clamps an over-credited row instead of handing back negative headroom", () => {
+    // A repair script or manual edit could leave paid > due. That must not
+    // inflate the slice available to the next installment.
+    const r = allocatePayment(1_000, [
+      { interestDue: 200, principalDue: 800, interestPaid: 500 },
+      { interestDue: 200, principalDue: 800 },
+    ]);
+    expect(r.interest).toBe(200); // 0 from #1 (over-credited), 200 from #2
+    expect(r.principal).toBe(800); // all of #1's principal
+    expect(r.overpayment).toBe(0);
+  });
+
+  it("only calls it overpayment once every installment is settled", () => {
+    const r = allocatePayment(1_500, [
+      {
+        interestDue: 200,
+        principalDue: 800,
+        interestPaid: 200,
+        principalPaid: 800,
+      },
+      {
+        interestDue: 200,
+        principalDue: 800,
+        interestPaid: 100,
+        principalPaid: 0,
+      },
+    ]);
+    // #2 has 100 interest + 800 principal left = 900; the rest is advance.
+    expect(r.interest).toBe(100);
+    expect(r.principal).toBe(800);
+    expect(r.overpayment).toBe(600);
+  });
+});
+
+describe("loanPaymentEntry — overpayment", () => {
+  const DATE = new Date("2026-03-15");
+
+  it("credits the excess to Customer Advances, not Loans Receivable", () => {
+    const e = loanPaymentEntry({
+      loanId: "L1",
+      loanNumber: "LN-2026-000001",
+      paymentId: "P1",
+      amount: 2_500,
+      interestPortion: 400,
+      principalPortion: 1_600,
+      advancePortion: 500,
+      paidOn: DATE,
+    });
+
+    const creditTo = (code: string) =>
+      e.lines
+        .filter((l) => l.accountCode === code)
+        .reduce((s, l) => s + l.credit, 0);
+
+    // Loans Receivable must see only the real principal. Folding the
+    // overpayment in here is what drove the borrower's receivable negative.
+    expect(creditTo(ACCOUNT_CODES.LOANS_RECEIVABLE)).toBe(1_600);
+    expect(creditTo(ACCOUNT_CODES.CUSTOMER_ADVANCES)).toBe(500);
+    expect(creditTo(ACCOUNT_CODES.INTEREST_INCOME)).toBe(400);
+
+    const debits = e.lines.reduce((s, l) => s + l.debit, 0);
+    const credits = e.lines.reduce((s, l) => s + l.credit, 0);
+    expect(debits).toBeCloseTo(credits, 2);
+    expect(debits).toBeCloseTo(2_500, 2);
+  });
+
+  it("omits the advance line when there is no overpayment", () => {
+    const e = loanPaymentEntry({
+      loanId: "L1",
+      loanNumber: "LN-2026-000001",
+      paymentId: "P1",
+      amount: 1_000,
+      interestPortion: 200,
+      principalPortion: 800,
+      paidOn: DATE,
+    });
+    expect(
+      e.lines.some((l) => l.accountCode === ACCOUNT_CODES.CUSTOMER_ADVANCES),
+    ).toBe(false);
   });
 });
 
