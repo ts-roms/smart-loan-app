@@ -27,6 +27,19 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# `schema.prisma` reads `url = env("DATABASE_URL")`, and the Prisma CLI
+# resolves that at parse time — so `validate`, `format --check` and
+# `generate` all fail without it, even though none of them open a
+# connection. Locally the CLI picks it up from the untracked root `.env`;
+# CI has no such file, so supply a placeholder.
+#
+# This is deliberately NOT a secret and points nowhere. If a step is ever
+# added that genuinely talks to a database (migrate deploy, integration
+# tests against a service container), give that step its own real URL
+# rather than making this one live.
+env:
+  DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci_placeholder
+
 jobs:
   # ── Validate schema + lockfile ────────────────────────────────────────
   validate:
