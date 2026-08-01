@@ -97,18 +97,35 @@ git clone <repo>
 cd smart-loan-app
 pnpm install
 
-# 2. Create the database
-createdb -U postgres smart_loan
-# or, from inside psql: CREATE DATABASE smart_loan;
-
-# 3. Copy the env template; tweak DATABASE_URL if your Postgres
-#    user/password/port differ from the defaults
+# 2. Copy the env template
 cp .env.example .env
 
-# 4. Apply schema + seed demo data
+# 3. Start Postgres in Docker, generate the client, migrate, seed
+pnpm dev:up
+```
+
+`pnpm dev:up` brings up the throwaway dev database defined in
+[`docker-compose.dev.yml`](./docker-compose.dev.yml) — Postgres 16 on
+`127.0.0.1:5433`, which is what `.env.example`'s `DATABASE_URL` already
+points at — then runs `db:generate`, `prisma migrate deploy` and
+`db:seed` against it. `pnpm dev:db:down` stops it; `pnpm dev:db:reset`
+also deletes its volume.
+
+<details>
+<summary>Using your own Postgres instead of Docker</summary>
+
+```bash
+createdb -U postgres smart_loan     # or, in psql: CREATE DATABASE smart_loan;
+# point DATABASE_URL in .env at it (default template assumes :5433)
 pnpm db:migrate
 pnpm db:seed
 ```
+
+</details>
+
+To run the whole application in Docker — API, web and Postgres, the
+same stack a cooperative installs — see
+[Docker (full stack)](#docker-full-stack) below.
 
 The seed creates a starter customer + default loan products + RBAC
 catalog + two demo users:
@@ -166,6 +183,35 @@ pnpm db:generate                                  # After a schema.prisma edit
 pnpm --filter @loan/db migrate-tenants            # Apply migrations to each tenant schema
 pnpm --filter @loan/db adopt-existing-as-tenant   # One-time: move single-tenant data into a tenant schema
 ```
+
+### Docker (full stack)
+
+`pnpm dev` runs the API and web on the host and only uses Docker for
+Postgres. To instead run **the whole application in containers** — the
+same api + web + Postgres stack a cooperative installs on-prem — use
+[`deploy/docker/`](./deploy/docker/):
+
+```bash
+cp deploy/docker/.env.production.example deploy/docker/.env
+# fill in POSTGRES_PASSWORD, JWT_SECRET, WEB_ORIGIN
+
+pnpm docker:up:seed      # build → start → wait for healthy → seed
+```
+
+Then open `http://localhost:8080` (the `WEB_PORT` in that `.env`) and
+sign in with the credentials the seed printed.
+
+`docker:up:seed` is `docker:up` followed by `docker:seed`; both are
+listed under [Common scripts](#common-scripts). Seeding is a separate,
+profile-gated one-shot service rather than part of `up`, so restarting
+the stack never rewrites data. It's also idempotent, so re-running it
+after an upgrade just adds whatever defaults the new release
+introduced.
+
+Note this stack is production packaging — no hot reload, images rebuilt
+on each `docker:up`. For day-to-day development `pnpm dev` is the
+faster loop. Full operator docs, backups and TLS:
+[`deploy/docker/README.md`](./deploy/docker/README.md).
 
 ---
 
@@ -325,6 +371,14 @@ See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the request flow and
 | ------------------------------------------------- | --------------------------------------------------------------------- |
 | `pnpm dev`                                        | Run `api` + `web` in parallel (hot reload).                           |
 | `pnpm dev:api` / `pnpm dev:web`                   | Just one side.                                                        |
+| `pnpm dev:up`                                     | Start the dev Postgres container, then generate + migrate + seed.     |
+| `pnpm dev:db:up` / `pnpm dev:db:down`             | Just start / stop that container.                                     |
+| `pnpm dev:db:reset`                               | Stop it **and delete its volume** — wipes local data.                 |
+| `pnpm docker:up:seed`                             | Full stack in Docker: build, start, wait for healthy, seed.           |
+| `pnpm docker:up` / `pnpm docker:seed`             | The two halves of the above, separately.                              |
+| `pnpm docker:logs` / `pnpm docker:ps`             | Tail logs / show status for the full stack.                           |
+| `pnpm docker:down`                                | Stop the full stack. Volumes survive.                                 |
+| `pnpm docker:reset`                               | Stop it **and delete the DB + uploads volumes**.                      |
 | `pnpm db:migrate`                                 | Apply Prisma migrations to your local Postgres.                       |
 | `pnpm db:generate`                                | Regenerate the Prisma client after a schema edit.                     |
 | `pnpm db:seed`                                    | Re-seed demo users + starter customer + default products.             |

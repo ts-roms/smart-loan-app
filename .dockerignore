@@ -31,11 +31,15 @@ coverage
 .github
 .husky
 
-# Local env — secrets are injected at runtime via compose, never baked in
-.env
-.env.local
-.env.*.local
-deploy/docker/.env
+# Local env — secrets are injected at runtime via compose, never baked in.
+#
+# The `**/` prefix matters: bare `.env` is anchored to the context root,
+# so it does NOT exclude nested ones like libs/db/.env — which is a real
+# file in this repo carrying dev DB credentials and a placeholder
+# JWT_SECRET. Without the glob it ships inside the image.
+**/.env
+**/.env.local
+**/.env.*.local
 
 # Editor / OS cruft
 .DS_Store
