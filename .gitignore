@@ -9,9 +9,19 @@ build/
 .env.local
 .env.*.local
 *.log
-uploads/
 coverage/
 .DS_Store
+
+# Runtime file storage (UPLOADS_DIR — KYC scans, signatures, logos).
+# Anchored to the two places the API actually resolves it from: the repo
+# root and apps/api, depending on the cwd it was started with.
+#
+# These MUST stay anchored. A bare `uploads/` matches any directory of
+# that name at any depth, which silently swallowed
+# apps/api/src/features/uploads/ — the route module was written, never
+# tracked, and the API stopped booting on a missing import.
+/uploads/
+/apps/api/uploads/
 
 # Raw PSA PSGC publication CSV — downloaded by an operator and fed to
 # scripts/ingest-psgc.mjs to regenerate the bundled city/barangay

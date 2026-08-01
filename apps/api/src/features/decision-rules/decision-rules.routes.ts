@@ -1,7 +1,7 @@
 /**
  * Decision-rule admin: rules driving /loans/:id/decide.
  *
- *   GET    /decision-rules            any authenticated
+ *   GET    /decision-rules            loans.read
  *   POST   /decision-rules            admin.decision_rules
  *   PATCH  /decision-rules/:id        admin.decision_rules
  *   DELETE /decision-rules/:id        admin.decision_rules
@@ -35,7 +35,11 @@ export async function decisionRuleRoutes(app: FastifyInstance) {
 
   const ctrl = new DecisionRuleController();
 
-  app.get("/", ctrl.list);
+  // Reading the rules is `loans.read`, not `admin.decision_rules` —
+  // officers need to see which rule fired on a decision, but the rules
+  // are internal underwriting policy and shouldn't be visible to the
+  // borrower they're being applied to.
+  app.get("/", { preHandler: app.requirePermission("loans.read") }, ctrl.list);
   app.post(
     "/",
     { preHandler: app.requirePermission("admin.decision_rules") },

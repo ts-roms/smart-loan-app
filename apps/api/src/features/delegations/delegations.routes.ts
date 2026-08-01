@@ -15,6 +15,11 @@
  *   • every explicit permission key being delegated must already be one
  *     the delegator currently holds — empty list = "all of mine"
  *
+ * Those two rules make the CRUD routes genuinely self-scoped, which is
+ * why they carry no `requirePermission` gate: the caller-id always
+ * comes from the JWT subject and you can't delegate authority you
+ * don't have. `/users/directory` is the exception — see below.
+ *
  * Layered: routes → controller → service → repo + audit.
  */
 
@@ -43,17 +48,31 @@ export async function delegationRoutes(app: FastifyInstance) {
         prisma,
         new DelegationRepository(prisma),
         new AuditLogRepository(prisma, req.user?.impersonatedBy),
-        (userId) => app.resolvePermissions(userId),
+        (userId) => app.resolvePermissions(userId, prisma),
         app.notifications(prisma),
         app.log,
       ),
-      resolveCallerPerms: (userId: string) => app.resolvePermissions(userId),
+      resolveCallerPerms: (userId: string) =>
+        app.resolvePermissions(userId, prisma),
     };
   });
 
   const ctrl = new DelegationController();
 
-  app.get("/users/directory", ctrl.userDirectory);
+  /**
+   * Picker for "delegate to whom". Unlike the rest of this feature it
+   * is NOT self-scoped — it returns every active user's name, email and
+   * role — so it needs a gate. `loans.read` is used as the staff
+   * discriminator: all three staff roles (LOAN_OFFICER, ACCOUNTANT,
+   * ADMIN) hold it and CUSTOMER does not, and any of them may need to
+   * hand their authority to a colleague while on leave. `admin.users`
+   * would be wrong here — it would restrict delegation to admins.
+   */
+  app.get(
+    "/users/directory",
+    { preHandler: app.requirePermission("loans.read") },
+    ctrl.userDirectory,
+  );
   app.get("/", ctrl.listMine);
   app.get(
     "/all",

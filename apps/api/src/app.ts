@@ -2,6 +2,7 @@ import { fastifyAuth } from "@loan/auth";
 import {
   fastifyPrisma,
   fastifyTenantPrisma,
+  type PrismaClient,
   resolveEffectivePermissions,
 } from "@loan/db";
 import cors from "@fastify/cors";
@@ -154,11 +155,20 @@ export async function buildApp() {
   // to @loan/db (where the schema + RBAC tables live). The resolver also
   // includes active delegations so the delegate's effective permission set
   // is the union of (their own roles ∪ delegated permissions).
+  //
+  // `tenantPrisma` is the caller's `req.tenantCtx.prisma`, threaded in by
+  // `requirePermission` (and by the handful of feature routes that call
+  // `app.resolvePermissions` directly). It MUST be used when present:
+  // User / Role / UserRoleAssignment / Delegation all live in the
+  // tenant's own schema, so resolving against `app.prisma` in
+  // MULTI_TENANT=true mode reads the public schema, finds no roles, and
+  // denies every gated route. The `app.prisma` fallback is only correct
+  // in single-tenant mode, where the two are the same client anyway.
   await app.register(fastifyAuth, {
     secret: config.jwtSecret,
-    resolvePermissions: async (userId: string) => {
+    resolvePermissions: async (userId: string, tenantPrisma?: unknown) => {
       const { permissions } = await resolveEffectivePermissions(
-        app.prisma,
+        (tenantPrisma as PrismaClient | undefined) ?? app.prisma,
         userId,
       );
       return permissions;

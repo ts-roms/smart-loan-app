@@ -20,8 +20,11 @@
  *                                       (?tenantSlug=&action=&limit=)
  *
  * Auth: a dedicated preHandler that requires the JWT carry
- * `platform: true`. Tenant-side JWTs are rejected (and vice-versa
- * on tenant routes — they reject `platform: true` claims).
+ * `platform: true`. Tenant-side JWTs are rejected here, and the
+ * reciprocal check lives in `app.authenticate` (libs/auth/src/plugin.ts)
+ * — a `platform: true` token gets a 401 on every tenant route, so the
+ * only way vendor staff reach tenant data is the audited
+ * /platform/tenants/:slug/impersonate flow below.
  *
  * Note on the JWT instance: we re-use the Fastify `@fastify/jwt`
  * plugin already registered by `fastifyAuth`. Both tenant and

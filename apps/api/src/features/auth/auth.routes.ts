@@ -179,7 +179,9 @@ function buildAuthService(app: FastifyInstance) {
       prisma,
       audit,
       (payload, opts) => app.jwt.sign(payload, opts),
-      (userId) => app.resolvePermissions(userId),
+      // Resolve against the tenant's schema — the RBAC tables live
+      // there, not in the public schema.
+      (userId) => app.resolvePermissions(userId, prisma),
     );
     req.authServices = { auth: service };
   };

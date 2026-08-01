@@ -1,10 +1,21 @@
 /**
  * Credit-scoring endpoints — questionnaire + persisted scores.
  *
- *   GET  /scoring/survey/questions             any authenticated
- *   POST /scoring/survey/submit                any authenticated
- *   GET  /scoring/customers/:customerId/score  any authenticated
+ *   GET  /scoring/survey/questions             customers.read
+ *   POST /scoring/survey/submit                customers.write
+ *   GET  /scoring/customers/:customerId/score  customers.read
  *   GET  /scoring/tier?score=720               any authenticated
+ *
+ * The scoring surface is officer tooling keyed by `customerId`, so it
+ * inherits the customers keys rather than growing its own: reading a
+ * borrower's credit score is a `customers.read` act, and submitting the
+ * questionnaire persists a CreditScore row against a customer — a
+ * decisioning input — so it takes `customers.write`. The questionnaire
+ * structure itself is gated too; it's the shape of the underwriting
+ * model and there's no borrower-facing surface that needs it.
+ *
+ * `GET /tier` is left open: it's a pure lookup of the tier band for a
+ * score passed in the query string, touching no rows at all.
  *
  * Phase 2: per-request service wiring via `req.scoringServices`.
  * Repos + service tree are built fresh per request against the
@@ -38,10 +49,17 @@ export async function scoringRoutes(app: FastifyInstance) {
 
   const ctrl = new ScoringController();
 
-  app.get("/survey/questions", ctrl.questions);
-  app.post("/survey/submit", ctrl.submit);
+  const read = { preHandler: app.requirePermission("customers.read") };
+
+  app.get("/survey/questions", read, ctrl.questions);
+  app.post(
+    "/survey/submit",
+    { preHandler: app.requirePermission("customers.write") },
+    ctrl.submit,
+  );
   app.get<{ Params: { customerId: string } }>(
     "/customers/:customerId/score",
+    read,
     ctrl.latestForCustomer,
   );
   app.get("/tier", ctrl.tier);

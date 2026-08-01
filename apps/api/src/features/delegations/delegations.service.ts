@@ -104,9 +104,15 @@ export class DelegationService {
 
   // ─── reads ────────────────────────────────────────────────────────
 
+  /**
+   * Staff picker for the "delegate to" field. CUSTOMER rows are
+   * excluded: portal accounts hold only `portal.self`, so they can
+   * neither be a useful delegate nor a delegator, and listing them
+   * turned this into a borrower-directory dump.
+   */
   userDirectory() {
     return this.prisma.user.findMany({
-      where: { active: true },
+      where: { active: true, role: { not: "CUSTOMER" } },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true, role: true },
     });

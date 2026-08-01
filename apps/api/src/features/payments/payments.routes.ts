@@ -43,11 +43,24 @@ export async function paymentsRoutes(app: FastifyInstance) {
   const provider = new MockProvider({ baseUrl });
 
   // ─── Authenticated routes ─────────────────────────────────────────
+  //
+  // Staff-side intent management. `loanId` comes from the request, so
+  // these are not self-scoped — a borrower creating an intent against
+  // someone else's loan would push a payment into the wrong ledger.
+  // Creation takes `payments.intents` (ACCOUNTANT + ADMIN); the reads
+  // also accept `loans.read` so a servicing officer can see whether a
+  // borrower's gateway payment settled without holding the cash keys.
+  // Borrowers use POST/GET /portal/payments/intents, which resolves the
+  // customer from the JWT and re-checks loan ownership.
 
   app.post(
     "/intents",
     {
-      preHandler: [app.authenticate, app.resolveTenant],
+      preHandler: [
+        app.authenticate,
+        app.resolveTenant,
+        app.requirePermission("payments.intents"),
+      ],
     },
     async (req: FastifyRequest, reply) => {
       const parsed = createIntentSchema.safeParse(req.body);
@@ -80,7 +93,13 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { id: string } }>(
     "/intents/:id",
-    { preHandler: [app.authenticate, app.resolveTenant] },
+    {
+      preHandler: [
+        app.authenticate,
+        app.resolveTenant,
+        app.requirePermission("payments.intents", "loans.read"),
+      ],
+    },
     async (req, reply) => {
       const intents = new PaymentIntentRepository(
         req.tenantCtx.prisma,
@@ -94,7 +113,13 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { loanId?: string } }>(
     "/intents",
-    { preHandler: [app.authenticate, app.resolveTenant] },
+    {
+      preHandler: [
+        app.authenticate,
+        app.resolveTenant,
+        app.requirePermission("payments.intents", "loans.read"),
+      ],
+    },
     async (req, reply) => {
       if (!req.query.loanId) {
         return reply
