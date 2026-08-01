@@ -12,12 +12,18 @@
 # one is a throwaway dev DB with trivial credentials, bound to 127.0.0.1
 # only so it never listens on a public interface.
 #
-# First-time setup:
-#   docker compose -f docker-compose.dev.yml up -d
+# First-time setup, from the repo root:
+#   pnpm dev:up                      # this DB + generate + migrate + seed
+#   pnpm run dev
+#
+# `pnpm dev:up` is just these four steps in order:
+#   docker compose -f docker-compose.dev.yml up -d --wait
 #   pnpm db:generate                 # generate the Prisma client
 #   pnpm --filter @loan/db exec dotenv -e ../../.env -- prisma migrate deploy
-#   pnpm db:seed                     # optional: seed dev data
-#   pnpm run dev
+#   pnpm db:seed
+#
+# Run them individually if you only need one. `pnpm dev:db:up` starts
+# just the container; `pnpm dev:db:reset` drops it *and its volume*.
 #
 # Port 5433 (not the default 5432) matches the root .env and avoids
 # clashing with any other Postgres already running on 5432.

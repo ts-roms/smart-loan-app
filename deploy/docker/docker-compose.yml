@@ -1,12 +1,14 @@
 # SmartLoan — production docker-compose for on-prem cooperative installs.
 #
-# Three services:
+# Four services:
 #   db      — PostgreSQL 16. Optional: set DATABASE_URL in .env to point
 #             at an external DB and remove this service if you have an
 #             existing Postgres you'd rather use.
 #   api     — Fastify API (Node + tsx + Prisma). Runs migrations on boot.
 #   web     — nginx serving the static SPA + reverse-proxying /api/v1
 #             to the api service.
+#   seed    — one-shot seeder, behind the `seed` profile so a plain
+#             `up` never touches data. See the seed service below.
 #
 # Networking: only `web` publishes a port to the host. `api` is reachable
 # from `web` over the internal compose network; `db` is reachable from
@@ -17,11 +19,13 @@
 #       + serves the static files directly. We ship plain HTTP here
 #       because most cooperatives already have a TLS-terminating proxy.
 #
-# First-time setup is two steps:
-#   $ docker compose up -d
-#   $ docker compose exec api pnpm --filter @loan/db prisma:seed
-# After that, sign in with the seeded admin (check logs for the
-# bootstrap password) and activate your license under Settings.
+# First-time setup, from the repo root:
+#   $ pnpm docker:up:seed
+# or, from this directory, the same thing spelled out:
+#   $ docker compose up -d --build --wait
+#   $ docker compose run --rm seed
+# After that, sign in with the seeded admin (the seed prints the
+# bootstrap credentials) and activate your license under Settings.
 
 name: smartloan
 
@@ -55,6 +59,9 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile.api
+    # Explicit tag so the `seed` service below can reuse this exact
+    # image instead of building (and storing) a second copy.
+    image: smartloan-api:latest
     restart: unless-stopped
     environment:
       # Database
@@ -107,6 +114,44 @@ services:
       # Stick a Caddy/nginx in front for TLS — most cooperatives already
       # have one of those for their other services.
       - "${WEB_PORT:-8080}:80"
+
+  # ─── seed (one-shot) ──────────────────────────────────────────────────
+  #
+  # Creates the bootstrap users, the default chart of accounts, loan
+  # products, decision rules and the RBAC catalog. Every write is an
+  # upsert, so re-running it is safe — it will not clobber data you've
+  # since edited, and it never deletes.
+  #
+  # Behind the `seed` profile: `docker compose up -d` ignores this
+  # service entirely. It only runs when you ask for it:
+  #
+  #   docker compose run --rm seed          # attached, prints the creds
+  #   docker compose --profile seed up -d   # detached, check `logs seed`
+  #
+  # Reuses the api image (no second build) and waits for the api
+  # container to report healthy, which means its boot-time
+  # `prisma migrate deploy` has already finished and the schema is
+  # current. The migrate in the command below is therefore normally a
+  # no-op; it's kept so the service still works if you run it against a
+  # stack where the api is up but lagging a migration.
+  seed:
+    profiles: ["seed"]
+    image: smartloan-api:latest
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.api
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-loan}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-smart_loan}}
+    depends_on:
+      api:
+        condition: service_healthy
+    command:
+      [
+        "sh",
+        "-c",
+        "pnpm --filter @loan/db exec prisma migrate deploy && pnpm --filter @loan/db prisma:seed",
+      ]
 
 volumes:
   smartloan-db-data:

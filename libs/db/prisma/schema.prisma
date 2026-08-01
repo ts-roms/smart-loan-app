@@ -1144,17 +1144,17 @@ model PaymentIntent {
 // any route can call AuditLogRepository.record() without coordination.
 
 model AuditEvent {
-  id         String   @id @default(uuid())
+  id                  String   @id @default(uuid())
   /// Coarse action label, e.g. "LOAN_DECIDE", "JOURNAL_REVERSE", "PRODUCT_CREATE".
-  action     String
+  action              String
   /// User who performed the action.
-  actorId    String
+  actorId             String
   /// Optional pointer to the affected row.
-  targetType String?
-  targetId   String?
+  targetType          String?
+  targetId            String?
   /// Free-form context — reason, before/after snapshot, payload, etc.
-  payload    Json?
-  createdAt  DateTime @default(now())
+  payload             Json?
+  createdAt           DateTime @default(now())
   /// Set when the action was performed during a platform-impersonated
   /// session (vendor support staff logged in as `actorId` via
   /// `/platform/tenants/:slug/impersonate`). Two columns over a JSON
@@ -2450,40 +2450,40 @@ model LeaseAgreement {
 // later commit. See docs/multi-tenant-roadmap.md for the full plan.
 
 model Tenant {
-  id        String   @id @default(uuid())
+  id                String       @id @default(uuid())
   /// URL-safe slug — used as the Postgres schema name (`tenant_<slug>`).
   /// Lowercase alphanumeric + dashes. Enforced by zod at the API layer
   /// since Prisma doesn't support CHECK constraints natively.
-  slug      String   @unique
+  slug              String       @unique
   /// Human-readable name (cooperative legal name).
-  name      String
-  status    TenantStatus @default(PROVISIONING)
+  name              String
+  status            TenantStatus @default(PROVISIONING)
   /// JSON snapshot of the license that was active when this tenant was
   /// last seen. Lets the platform console show "Mt Banahaw MPC →
   /// ENTERPRISE, expires 2027-05-22" without reaching into the tenant
   /// schema. Refreshed by the tenant's API on every license activation.
-  licenseSnapshot Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  licenseSnapshot   Json?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
   /// When the tenant was last seen calling back to the platform (license
   /// check-in, telemetry ping). Null until the first contact.
-  lastSeenAt DateTime?
+  lastSeenAt        DateTime?
   /// Captures the most recent provisioning failure. Set when
   /// background provisioning throws; cleared when provisioning
   /// succeeds (status flips to ACTIVE). Surfaced on the platform
   /// console's tenant detail page so vendor staff can see what
   /// went wrong without trawling logs.
-  provisioningError String? @db.Text
+  provisioningError String?      @db.Text
 
   @@index([status])
   @@index([lastSeenAt])
 }
 
 enum TenantStatus {
-  PROVISIONING  // schema being created / migrations running
-  ACTIVE        // healthy, serving traffic
-  SUSPENDED     // license lapsed or platform-imposed pause
-  ARCHIVED      // soft-deleted; data retained but no longer served
+  PROVISIONING // schema being created / migrations running
+  ACTIVE // healthy, serving traffic
+  SUSPENDED // license lapsed or platform-imposed pause
+  ARCHIVED // soft-deleted; data retained but no longer served
 }
 
 // Platform-side users — the vendor's team, NOT a tenant's staff. Lives
@@ -2491,20 +2491,20 @@ enum TenantStatus {
 // receives a JWT with `platform: true` claim. Strictly separate from
 // the per-tenant User table.
 model PlatformUser {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String       @id @default(uuid())
+  email        String       @unique
   passwordHash String
   name         String
   role         PlatformRole @default(PLATFORM_SALES)
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   lastLoginAt  DateTime?
 }
 
 enum PlatformRole {
-  PLATFORM_ADMIN  // everything: provision, suspend, archive, issue licenses
-  PLATFORM_SALES  // view + issue licenses, no destructive ops
+  PLATFORM_ADMIN // everything: provision, suspend, archive, issue licenses
+  PLATFORM_SALES // view + issue licenses, no destructive ops
 }
 
 // Platform-side record of every license issued. Mirror of the
@@ -2523,9 +2523,9 @@ enum PlatformRole {
 // would close the gap, but isn't needed for v1 since revocation in
 // practice means "don't renew + manually suspend the tenant".
 model PlatformIssuedLicense {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   /// JWT id from the signed payload. Unique per issued license.
-  jti           String   @unique
+  jti           String    @unique
   /// Slug of the tenant the license was issued for. Denormalized so
   /// "list licenses for tenant X" is a plain index scan, no joins.
   tenantSlug    String
@@ -2542,10 +2542,10 @@ model PlatformIssuedLicense {
   /// Verified payload at issuance. JSONB for cheap "tier=ENTERPRISE
   /// AND active" queries without re-parsing.
   payload       Json
-  issuedAt      DateTime @default(now())
+  issuedAt      DateTime  @default(now())
   notBefore     DateTime?
   expiresAt     DateTime
-  seats         Int      @default(0)
+  seats         Int       @default(0)
   notes         String?
   /// PlatformUser id of whoever issued it. No FK — same denormalized
   /// pattern as PlatformAuditLog.
@@ -2567,7 +2567,7 @@ model PlatformIssuedLicense {
 // vendor's internal actions.
 model PlatformAuditLog {
   id         String   @id @default(uuid())
-  action     String   // PLATFORM_TENANT_PROVISION, PLATFORM_LICENSE_ISSUE, ...
+  action     String // PLATFORM_TENANT_PROVISION, PLATFORM_LICENSE_ISSUE, ...
   actorId    String
   actorEmail String
   /// The tenant the action targeted, when applicable. Null for system-level
@@ -2590,42 +2590,42 @@ model PlatformAuditLog {
 // leads + convert them into provisioned tenants.
 
 model Lead {
-  id            String   @id @default(uuid())
-  name          String
-  email         String
-  cooperative   String
+  id                 String                 @id @default(uuid())
+  name               String
+  email              String
+  cooperative        String
   /// Optional — helps sales recommend a tier without asking.
-  memberCount   Int?
+  memberCount        Int?
   deploymentInterest LeadDeploymentInterest @default(ONPREM)
-  message       String?  @db.Text
+  message            String?                @db.Text
   /// Where the form was submitted from. Lets sales tell if a lead came
   /// from the contact page, the pricing page, the install page, etc.
-  source        String?
+  source             String?
   /// Sales workflow state. Defaults to NEW; vendor staff move it
   /// through the funnel manually.
-  status        LeadStatus @default(NEW)
+  status             LeadStatus             @default(NEW)
   /// PlatformUser id of whoever is handling the lead. Null = unassigned.
-  assignedToId  String?
-  notes         String?  @db.Text
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  assignedToId       String?
+  notes              String?                @db.Text
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
 
   @@index([status, createdAt])
   @@index([email])
 }
 
 enum LeadDeploymentInterest {
-  ONPREM   // wants to self-host
-  HOSTED   // wants the SaaS option
-  BOTH     // undecided / wants both pitches
+  ONPREM // wants to self-host
+  HOSTED // wants the SaaS option
+  BOTH // undecided / wants both pitches
 }
 
 enum LeadStatus {
-  NEW         // just submitted
-  CONTACTED   // sales has reached out
-  QUALIFIED   // real opportunity
-  CONVERTED   // became a Tenant
-  REJECTED    // not a fit (spam, wrong product, etc.)
+  NEW // just submitted
+  CONTACTED // sales has reached out
+  QUALIFIED // real opportunity
+  CONVERTED // became a Tenant
+  REJECTED // not a fit (spam, wrong product, etc.)
 }
 
 // ─── Licensing ──────────────────────────────────────────────────────────────
@@ -2645,12 +2645,12 @@ enum LeadStatus {
 // re-parsing every row.
 
 model License {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   /// Full wire-format token (SMARTLOAN-LIC-v1.<payload>.<signature>).
   token         String
   /// JWT id from the payload — unique per issued license. Lets us
   /// detect re-activation of the same token and avoid duplicate rows.
-  jti           String   @unique
+  jti           String    @unique
   tenantName    String
   tier          String
   /// Snapshot of the verified payload at activation. JSON for grep-
@@ -2659,11 +2659,11 @@ model License {
   issuedAt      DateTime
   notBefore     DateTime?
   expiresAt     DateTime
-  seats         Int      @default(0)
+  seats         Int       @default(0)
   notes         String?
   /// When the operator clicked Activate. Distinct from `issuedAt`,
   /// which is when the platform minted the token.
-  activatedAt   DateTime @default(now())
+  activatedAt   DateTime  @default(now())
   activatedById String?
   /// When an operator explicitly deactivated this license. Inactive
   /// when non-null; the boot hook ignores revoked rows.

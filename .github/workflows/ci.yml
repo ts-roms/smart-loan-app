@@ -1,14 +1,15 @@
 # ──────────────────────────────────────────────────────────────────────────
 # Smart Loan CI
 #
-# Runs on every push + PR. Three concurrent jobs (validate, build, test)
-# share a cached pnpm store via setup-node's built-in cache.
+# Runs on every push + PR. Concurrent jobs (validate, typecheck, lint,
+# build, test) share a cached pnpm store via setup-node's built-in cache.
 #
 # What it guarantees:
 #   - prisma schema parses + matches migrations
 #   - every workspace package typechecks
+#   - eslint passes (type-aware rules; see eslint.config.mjs)
 #   - api + web builds succeed
-#   - vitest suite (currently @loan/loans only) passes
+#   - the vitest suites pass
 #
 # Cycle time: ~3 min on a cold cache, ~90s with cache warm.
 # ──────────────────────────────────────────────────────────────────────────
@@ -26,6 +27,19 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# `schema.prisma` reads `url = env("DATABASE_URL")`, and the Prisma CLI
+# resolves that at parse time — so `validate`, `format --check` and
+# `generate` all fail without it, even though none of them open a
+# connection. Locally the CLI picks it up from the untracked root `.env`;
+# CI has no such file, so supply a placeholder.
+#
+# This is deliberately NOT a secret and points nowhere. If a step is ever
+# added that genuinely talks to a database (migrate deploy, integration
+# tests against a service container), give that step its own real URL
+# rather than making this one live.
+env:
+  DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci_placeholder
+
 jobs:
   # ── Validate schema + lockfile ────────────────────────────────────────
   validate:
@@ -33,12 +47,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No `version:` here on purpose — `packageManager` in package.json is
+      # the single source of truth. Specifying both makes action-setup fail
+      # with ERR_PNPM_BAD_PM_VERSION, and this way CI always runs the exact
+      # pnpm the repo pins locally.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Validate Prisma schema
@@ -52,12 +68,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No `version:` here on purpose — `packageManager` in package.json is
+      # the single source of truth. Specifying both makes action-setup fail
+      # with ERR_PNPM_BAD_PM_VERSION, and this way CI always runs the exact
+      # pnpm the repo pins locally.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
@@ -71,12 +89,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No `version:` here on purpose — `packageManager` in package.json is
+      # the single source of truth. Specifying both makes action-setup fail
+      # with ERR_PNPM_BAD_PM_VERSION, and this way CI always runs the exact
+      # pnpm the repo pins locally.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client (web depends on @loan/db types)
@@ -84,18 +104,40 @@ jobs:
       - name: Build web
         run: pnpm --filter @loan/web build
 
+  # ── Lint ──────────────────────────────────────────────────────────────
+  # Type-aware rules, so this needs the generated Prisma client like the
+  # typecheck job does — without it every `prisma.*` expression resolves to
+  # `any` and the no-unsafe-* rules fire across the repo.
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm --filter @loan/db exec prisma generate
+      - name: Lint
+        run: pnpm exec eslint .
+
   # ── Run vitest suites ─────────────────────────────────────────────────
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No `version:` here on purpose — `packageManager` in package.json is
+      # the single source of truth. Specifying both makes action-setup fail
+      # with ERR_PNPM_BAD_PM_VERSION, and this way CI always runs the exact
+      # pnpm the repo pins locally.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client

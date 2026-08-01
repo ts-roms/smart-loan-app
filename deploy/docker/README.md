@@ -23,33 +23,57 @@ instead — same software, different packaging.
 
 ```sh
 # From the repo root
-cd deploy/docker
-cp .env.production.example .env
+cp deploy/docker/.env.production.example deploy/docker/.env
 
-# Fill in the REQUIRED values in .env:
+# Fill in the REQUIRED values in deploy/docker/.env:
 #   POSTGRES_PASSWORD          random, long
 #   JWT_SECRET                 32+ chars (openssl rand -base64 48)
 #   WEB_ORIGIN                 https://lending.your-coop.example
 #   LICENSE_PUBLIC_KEY_PEM     the PEM from your vendor
 
-# Build the images. ~5 min on first run, cached afterwards.
-docker compose build
-
-# Bring everything up.
-docker compose up -d
-
-# Watch the api container come up — Prisma runs migrations on boot.
-docker compose logs -f api
-
-# Once you see "Server listening on http://0.0.0.0:3001" hit the
-# bootstrap admin endpoint by visiting the web URL. The seed
-# command below creates the default admin user.
-docker compose exec api pnpm --filter @loan/db prisma:seed
-
-# The seed prints a bootstrap admin email + password. Sign in,
-# change the password immediately, then go to Settings → License
-# to paste your vendor-issued license token.
+# Build, start, wait for healthy, then seed. ~5 min on the first run
+# (the image build dominates); cached and under a minute afterwards.
+pnpm docker:up:seed
 ```
+
+The seed prints a bootstrap admin email + password. Sign in at
+`http://localhost:8080` (or your `WEB_ORIGIN`), **change the password
+immediately**, then go to Settings → License to paste your
+vendor-issued license token.
+
+`pnpm docker:up:seed` is two steps you can also run separately —
+`pnpm docker:up` then `pnpm docker:seed`. Spelled out without pnpm:
+
+```sh
+cd deploy/docker
+docker compose up -d --build --wait   # returns once api + web are healthy
+docker compose run --rm seed          # one-shot seeder, prints the creds
+```
+
+Seeding is idempotent (every write is an upsert, nothing is deleted),
+so re-running `pnpm docker:seed` after an upgrade is safe — it just
+adds any new default products, rules or permissions the release
+introduced.
+
+## Command reference
+
+All run from the repo root; each is a thin wrapper over
+`docker compose -f deploy/docker/docker-compose.yml`.
+
+| Command               | What it does                                         |
+| --------------------- | ---------------------------------------------------- |
+| `pnpm docker:up:seed` | Build + start + wait for healthy + seed. Start here. |
+| `pnpm docker:up`      | Build + start + wait for healthy. No data written.   |
+| `pnpm docker:seed`    | Run the one-shot seeder against a running stack.     |
+| `pnpm docker:build`   | Build the images only.                               |
+| `pnpm docker:ps`      | Service status.                                      |
+| `pnpm docker:logs`    | Tail logs for every service.                         |
+| `pnpm docker:down`    | Stop and remove containers. Volumes survive.         |
+| `pnpm docker:reset`   | Same, **plus deletes the DB and uploads volumes**.   |
+
+`pnpm docker:reset` is destructive and unrecoverable without a backup.
+It exists for rebuilding a test install from scratch; don't point it at
+production.
 
 ## Day-2 operations
 
@@ -74,8 +98,11 @@ docker compose restart api
 git pull
 
 # Rebuild images and restart only what changed
-docker compose build
-docker compose up -d
+pnpm docker:up
+
+# Optional: pick up any new default products / rules / permissions
+# the release ships. Safe on an install with live data — upserts only.
+pnpm docker:seed
 ```
 
 Migrations run automatically on api container start — no manual step
