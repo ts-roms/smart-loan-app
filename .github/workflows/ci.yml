@@ -1,14 +1,15 @@
 # ──────────────────────────────────────────────────────────────────────────
 # Smart Loan CI
 #
-# Runs on every push + PR. Three concurrent jobs (validate, build, test)
-# share a cached pnpm store via setup-node's built-in cache.
+# Runs on every push + PR. Concurrent jobs (validate, typecheck, lint,
+# build, test) share a cached pnpm store via setup-node's built-in cache.
 #
 # What it guarantees:
 #   - prisma schema parses + matches migrations
 #   - every workspace package typechecks
+#   - eslint passes (type-aware rules; see eslint.config.mjs)
 #   - api + web builds succeed
-#   - vitest suite (currently @loan/loans only) passes
+#   - the vitest suites pass
 #
 # Cycle time: ~3 min on a cold cache, ~90s with cache warm.
 # ──────────────────────────────────────────────────────────────────────────
@@ -33,12 +34,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No `version:` here on purpose — `packageManager` in package.json is
+      # the single source of truth. Specifying both makes action-setup fail
+      # with ERR_PNPM_BAD_PM_VERSION, and this way CI always runs the exact
+      # pnpm the repo pins locally.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Validate Prisma schema
@@ -52,12 +55,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No `version:` here on purpose — `packageManager` in package.json is
+      # the single source of truth. Specifying both makes action-setup fail
+      # with ERR_PNPM_BAD_PM_VERSION, and this way CI always runs the exact
+      # pnpm the repo pins locally.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
@@ -71,12 +76,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No `version:` here on purpose — `packageManager` in package.json is
+      # the single source of truth. Specifying both makes action-setup fail
+      # with ERR_PNPM_BAD_PM_VERSION, and this way CI always runs the exact
+      # pnpm the repo pins locally.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client (web depends on @loan/db types)
@@ -84,18 +91,40 @@ jobs:
       - name: Build web
         run: pnpm --filter @loan/web build
 
+  # ── Lint ──────────────────────────────────────────────────────────────
+  # Type-aware rules, so this needs the generated Prisma client like the
+  # typecheck job does — without it every `prisma.*` expression resolves to
+  # `any` and the no-unsafe-* rules fire across the repo.
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm --filter @loan/db exec prisma generate
+      - name: Lint
+        run: pnpm exec eslint .
+
   # ── Run vitest suites ─────────────────────────────────────────────────
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No `version:` here on purpose — `packageManager` in package.json is
+      # the single source of truth. Specifying both makes action-setup fail
+      # with ERR_PNPM_BAD_PM_VERSION, and this way CI always runs the exact
+      # pnpm the repo pins locally.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
