@@ -7,8 +7,9 @@ import { PortalShell } from "./components/PortalShell";
 import { useAuth } from "./providers/auth";
 
 // Login + Dashboard stay eager — they're the entry points; lazy-loading
-// them would only add a flash of the suspense fallback.
-import { LoginPage } from "./features/auth";
+// them would only add a flash of the suspense fallback. Register sits
+// next to Login for the same reason: it's the other front door.
+import { CompleteProfilePage, LoginPage, RegisterPage } from "./features/auth";
 import { DashboardPage } from "./features/dashboard";
 
 /**
@@ -222,9 +223,23 @@ export function App() {
     return (
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
+  }
+
+  /**
+   * A borrower who registered but never finished the profile step has
+   * no linked Customer row, and every portal endpoint refuses such an
+   * account. Render the profile form *instead of* the portal rather
+   * than letting them in to meet a wall of failed requests.
+   *
+   * No <Routes> here on purpose — there is nowhere else to go until
+   * this is done, so any URL they type resolves to the same form.
+   */
+  if (user?.role === "CUSTOMER" && !user.customerId) {
+    return <CompleteProfilePage />;
   }
 
   // CUSTOMER role gets the borrower portal; everyone else gets the officer console.

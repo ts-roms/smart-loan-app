@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { btnPrimary, btnSecondary, container } from "../App";
+import { appUrl, btnPrimary, btnSecondary, container } from "../App";
 
 /**
  * Home page — single-scroll layout, on-prem-first messaging.
@@ -87,12 +87,18 @@ function Hero() {
           <Link to="/install" style={btnPrimary}>
             Install on your server →
           </Link>
-          <Link to="/pricing" style={btnSecondary}>
-            See pricing
+          {/*
+            Secondary on purpose. The hosted trial is now self-serve
+            rather than a sales conversation, so it earns a real button
+            — but the page's argument is on-prem ownership, and making
+            them equals would undercut it.
+          */}
+          <Link to="/signup" style={btnSecondary}>
+            Try it hosted, free
           </Link>
         </div>
         <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 24 }}>
-          Or <Link to="/contact">talk to us</Link> about a hosted trial.
+          30-day trial, no card. Or <Link to="/pricing">see pricing</Link>.
         </p>
       </div>
     </section>
@@ -342,8 +348,9 @@ function DeploymentModels() {
             "Automatic updates + backups",
             "Tenant isolation via dedicated Postgres schema",
             "Export your data at any time — no lock-in",
+            "Sign up yourself — workspace ready in a minute",
           ]}
-          cta={{ label: "Talk to sales →", to: "/contact" }}
+          cta={{ label: "Start a free trial →", to: "/signup" }}
         />
       </div>
     </section>
@@ -456,8 +463,9 @@ function FinalCTA() {
             marginBottom: 32,
           }}
         >
-          Tell us about your cooperative and we'll send you the install bundle +
-          a trial license. Or jump straight into pricing.
+          Spin up a hosted workspace now and have a look around, or tell us
+          about your cooperative and we'll send the install bundle and a trial
+          license for your own server.
         </p>
         <div
           style={{
@@ -467,13 +475,17 @@ function FinalCTA() {
             flexWrap: "wrap",
           }}
         >
-          <Link to="/contact" style={btnPrimary}>
-            Request a trial license
+          <Link to="/signup" style={btnPrimary}>
+            Start a free trial
           </Link>
-          <Link to="/pricing" style={btnSecondary}>
-            See pricing
+          <Link to="/contact" style={btnSecondary}>
+            Request the install bundle
           </Link>
         </div>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 24 }}>
+          Already a member of a cooperative that uses SmartLoan?{" "}
+          <a href={`${appUrl}/register`}>Create your member account</a>.
+        </p>
       </div>
     </section>
   );

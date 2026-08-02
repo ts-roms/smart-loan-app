@@ -8,6 +8,17 @@ export interface LoggedInUser {
   email: string;
   name: string;
   role: UserRole;
+  /**
+   * Borrower record attached to this login, or null.
+   *
+   * A CUSTOMER with null here registered but hasn't completed their
+   * profile — every portal endpoint will refuse them until they do.
+   * The web app treats that as a hard gate rather than a nudge, so
+   * check this before routing a borrower anywhere else.
+   *
+   * Always null for staff, who have no borrower record.
+   */
+  customerId: string | null;
 }
 
 export interface LoginResponse {
@@ -46,6 +57,58 @@ export function useRegister() {
       name: string;
       tenantSlug?: string;
     }) => getApiClient().post<LoginResponse>("/auth/register", input),
+  });
+}
+
+/** Fields the borrower fills in on the profile-completion screen. */
+export interface CompleteProfileInput {
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  suffix?: string;
+  /** YYYY-MM-DD. Date-only on purpose — see the server-side schema. */
+  dateOfBirth: string;
+  civilStatus?:
+    "SINGLE" | "MARRIED" | "WIDOWED" | "SEPARATED" | "ANNULLED" | "DIVORCED";
+  phone: string;
+  secondaryPhone?: string;
+  email?: string;
+  address: string;
+  addressLine2?: string;
+  barangay?: string;
+  city: string;
+  province?: string;
+  region?: string;
+  postalCode?: string;
+  governmentIdType:
+    "PASSPORT" | "DRIVERS_LICENSE" | "NATIONAL_ID" | "SSS" | "TIN" | "OTHER";
+  governmentIdNumber: string;
+  employmentStatus:
+    | "EMPLOYED"
+    | "SELF_EMPLOYED"
+    | "FREELANCE"
+    | "UNEMPLOYED"
+    | "RETIRED"
+    | "STUDENT";
+  employerName?: string;
+  jobTitle?: string;
+  monthlyIncome: number;
+}
+
+/**
+ * Create the borrower record for a freshly-registered account. On
+ * success the returned user carries a non-null `customerId`, which is
+ * what lifts the portal gate — callers should feed it straight back
+ * into their auth state rather than waiting for the next /auth/me.
+ */
+export function useCompleteProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CompleteProfileInput) =>
+      getApiClient().post<{ user: LoggedInUser }>("/auth/me/profile", input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["auth", "me"] });
+    },
   });
 }
 

@@ -46,6 +46,100 @@ export const registerSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+/**
+ * Profile completion — the second half of self-registration.
+ *
+ * `registerSchema` above deliberately asks for almost nothing, so
+ * signing up is one short screen. This is where the borrower supplies
+ * what a loan file actually requires, and it's mandatory: until it
+ * succeeds the account has no linked Customer and every portal route
+ * refuses it.
+ *
+ * The required set is exactly the NOT NULL columns on Customer: legal
+ * name, birth date, a contact number, enough of an address to serve a
+ * notice to, a government ID, and employment + income. Nothing here is
+ * required by choice — a Customer row cannot be inserted without them,
+ * so anything omitted would have to be faked with a placeholder, and a
+ * fabricated ID number or income figure is worse than an extra field.
+ *
+ * Everything else the model can hold (spouse details, employer name,
+ * hire dates, tenure) stays optional and gets filled in later from the
+ * portal profile page or by staff during KYC.
+ */
+export const completeProfileSchema = z.object({
+  // Personal
+  firstName: z.string().min(1).max(80),
+  middleName: z.string().max(80).optional(),
+  lastName: z.string().min(1).max(80),
+  suffix: z.string().max(10).optional(),
+  /**
+   * Date-only (YYYY-MM-DD) rather than a full timestamp — a birth date
+   * has no time component, and accepting one invites a timezone shift
+   * that moves someone's birthday across midnight.
+   */
+  dateOfBirth: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .refine((s) => !Number.isNaN(Date.parse(s)), "Not a real date")
+    .refine(
+      (s) => Date.parse(s) < Date.now(),
+      "Date of birth is in the future",
+    ),
+  civilStatus: z
+    .enum(["SINGLE", "MARRIED", "WIDOWED", "SEPARATED", "ANNULLED", "DIVORCED"])
+    .optional(),
+
+  // Contact
+  phone: z.string().min(7).max(30),
+  secondaryPhone: z.string().max(30).optional(),
+  /**
+   * Optional: the account's login email is used when this is absent.
+   * Present so a borrower can route loan correspondence somewhere
+   * other than the address they signed in with.
+   */
+  email: z.string().email().optional(),
+
+  // Address
+  address: z.string().min(1).max(200),
+  addressLine2: z.string().max(200).optional(),
+  barangay: z.string().max(120).optional(),
+  city: z.string().min(1).max(120),
+  province: z.string().max(120).optional(),
+  region: z.string().max(120).optional(),
+  postalCode: z.string().max(20).optional(),
+
+  // Government ID
+  governmentIdType: z.enum([
+    "PASSPORT",
+    "DRIVERS_LICENSE",
+    "NATIONAL_ID",
+    "SSS",
+    "TIN",
+    "OTHER",
+  ]),
+  governmentIdNumber: z.string().min(1).max(60),
+
+  // Employment + income
+  employmentStatus: z.enum([
+    "EMPLOYED",
+    "SELF_EMPLOYED",
+    "FREELANCE",
+    "UNEMPLOYED",
+    "RETIRED",
+    "STUDENT",
+  ]),
+  employerName: z.string().max(160).optional(),
+  jobTitle: z.string().max(160).optional(),
+  /**
+   * Non-negative rather than positive: UNEMPLOYED, RETIRED and STUDENT
+   * are all valid statuses here, and forcing them to claim income to
+   * get past the form would poison the figure underwriting reads.
+   */
+  monthlyIncome: z.number().nonnegative().max(1_000_000_000),
+});
+
+export type CompleteProfileInput = z.infer<typeof completeProfileSchema>;
+
 export const refreshSchema = z.object({
   refreshToken: z.string().min(1).max(200),
   /**

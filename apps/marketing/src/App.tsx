@@ -4,6 +4,19 @@ import { Contact } from "./pages/Contact";
 import { Home } from "./pages/Home";
 import { Install } from "./pages/Install";
 import { Pricing } from "./pages/Pricing";
+import { Signup } from "./pages/Signup";
+
+/**
+ * Where the tenant app lives. The marketing site and the app are
+ * separate deployments (different ports in dev, usually different
+ * hosts in production), so every "sign in" link has to be absolute.
+ *
+ * Set VITE_APP_URL at build time; the fallback is the dev server the
+ * repo's `pnpm dev` starts.
+ */
+export const appUrl: string =
+  (import.meta.env.VITE_APP_URL as string | undefined) ??
+  "http://localhost:5173";
 
 /**
  * Marketing site shell. Header + footer wrap every page; routes
@@ -24,6 +37,7 @@ export function App() {
           <Route path="/" element={<Home />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/install" element={<Install />} />
+          <Route path="/signup" element={<Signup />} />
           <Route path="/contact" element={<Contact />} />
           <Route
             path="*"
@@ -89,8 +103,23 @@ function Header() {
           <NavLink to="/contact" active={isActive("/contact")}>
             Contact
           </NavLink>
+          {/*
+            Absolute, not a <Link> — the app is a separate deployment.
+            Members and staff both land on the same login screen; which
+            console they get is decided by their role once they're in.
+          */}
           <a
-            href="/install"
+            href={`${appUrl}/login`}
+            style={{
+              color: "var(--text-dim)",
+              textDecoration: "none",
+              fontSize: 14,
+            }}
+          >
+            Sign in
+          </a>
+          <Link
+            to="/signup"
             style={{
               background: "var(--accent-strong)",
               color: "white",
@@ -102,7 +131,7 @@ function Header() {
             }}
           >
             Get started
-          </a>
+          </Link>
         </nav>
       </div>
     </header>
@@ -182,6 +211,14 @@ function Footer() {
             links={[
               { label: "Pricing", to: "/pricing" },
               { label: "Install", to: "/install" },
+              { label: "Start a hosted trial", to: "/signup" },
+            ]}
+          />
+          <FooterColumn
+            title="Members"
+            links={[
+              { label: "Sign in", href: `${appUrl}/login` },
+              { label: "Create an account", href: `${appUrl}/register` },
             ]}
           />
           <FooterColumn

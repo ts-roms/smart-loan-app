@@ -6,6 +6,7 @@ import type {
   RefreshResult,
 } from "./auth.service";
 import {
+  completeProfileSchema,
   loginSchema,
   refreshSchema,
   registerSchema,
@@ -91,6 +92,43 @@ export class AuthController {
     const user = await req.authServices!.auth.me(req.user.sub);
     if (!user) return reply.code(404).send({ error: "NotFound" });
     return user;
+  };
+
+  /**
+   * Second half of self-registration — creates the borrower's Customer
+   * record and links it to their login. Authenticated: the account
+   * already exists at this point, it just can't do anything yet.
+   */
+  completeProfile = async (req: FastifyRequest, reply: FastifyReply) => {
+    const parsed = completeProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await req.authServices!.auth.completeProfile(
+      req.user.sub,
+      parsed.data,
+    );
+    if (result.ok) return reply.code(201).send({ user: result.user });
+
+    switch (result.kind) {
+      case "NotFound":
+        return reply.code(404).send({ error: "NotFound" });
+      case "NotACustomer":
+        // 403, not 400: the request is well-formed, the caller just
+        // isn't a borrower. Staff records are managed through /rbac.
+        return reply.code(403).send({
+          error: "NotACustomer",
+          message: "Only borrower accounts have a profile to complete.",
+        });
+      case "AlreadyLinked":
+        return reply.code(409).send({
+          error: "AlreadyLinked",
+          message:
+            "This account already has a borrower profile. Edit it from your portal profile instead.",
+        });
+    }
   };
 
   getSignature = async (req: FastifyRequest, reply: FastifyReply) => {

@@ -79,6 +79,13 @@ export async function authRoutes(app: FastifyInstance) {
   ];
 
   app.get("/me", { preHandler: authedPre }, auth.me);
+
+  // Completes a self-registered borrower's profile. Authenticated, but
+  // deliberately NOT gated on already having a customer link — this is
+  // the endpoint that creates that link, so requiring one would
+  // deadlock every account it exists for.
+  app.post("/me/profile", { preHandler: authedPre }, auth.completeProfile);
+
   app.get("/me/signature", { preHandler: authedPre }, auth.getSignature);
   app.put("/me/signature", { preHandler: authedPre }, auth.setSignature);
   app.delete("/me/signature", { preHandler: authedPre }, auth.clearSignature);

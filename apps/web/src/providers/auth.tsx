@@ -19,6 +19,17 @@ export interface AuthUser {
   email: string;
   name: string;
   role: UserRole;
+  /**
+   * Borrower record linked to this login, or null.
+   *
+   * Null on a CUSTOMER means self-registration finished but the
+   * profile step didn't — the portal API refuses every request from
+   * such an account, so App routes them to the profile form instead.
+   *
+   * Optional on the type because sessions stored by an older build
+   * predate the field; treat `undefined` the same as null.
+   */
+  customerId?: string | null;
 }
 
 export interface SignInPayload {
@@ -37,6 +48,13 @@ interface AuthApi {
   signOut: () => void;
   /** Stored-token replacement, used by ApiClient when /auth/refresh rotates. */
   applyRefresh: (next: { accessToken: string; refreshToken: string }) => void;
+  /**
+   * Replace the cached user without touching the tokens. Used when a
+   * response tells us something about the account changed mid-session
+   * — completing a borrower profile populates `customerId`, which is
+   * what lifts the portal gate.
+   */
+  updateUser: (user: AuthUser) => void;
 }
 
 const AuthCtx = createContext<AuthApi | null>(null);
@@ -82,6 +100,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((next: AuthUser) => {
+    localStorage.setItem(USER_KEY, JSON.stringify(next));
+    setUser(next);
+  }, []);
+
   const applyRefresh = useCallback(
     (next: { accessToken: string; refreshToken: string }) => {
       localStorage.setItem(TOKEN_KEY, next.accessToken);
@@ -106,8 +129,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthApi>(
-    () => ({ token, refreshToken, user, signIn, signOut, applyRefresh }),
-    [token, refreshToken, user, signIn, signOut, applyRefresh],
+    () => ({
+      token,
+      refreshToken,
+      user,
+      signIn,
+      signOut,
+      applyRefresh,
+      updateUser,
+    }),
+    [token, refreshToken, user, signIn, signOut, applyRefresh, updateUser],
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
