@@ -9,13 +9,18 @@ import { Badge } from "@loan/ui";
 import { formatMoney } from "@loan/shared-utils";
 import {
   AlertTriangle,
+  Briefcase,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   FileCheck2,
+  IdCard,
   Repeat,
   ShieldAlert,
   User,
   XCircle,
 } from "lucide-react";
+import { useState } from "react";
 
 /**
  * Snapshot of the borrower shown at the top of NewLoanDialog as soon as
@@ -40,6 +45,14 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
   const summary = useCustomerSummary(customerId);
   const repeat = useRepeatEligibility(customerId);
   const dorsi = useDorsiForCustomer(customerId);
+  /**
+   * Identity + employment stay collapsed by default. This is a context
+   * *bar* — the four metrics above are what an officer needs at a glance,
+   * and inlining fourteen more fields would bury them. Officers who need
+   * to confirm the person or check job tenure open it; nobody else pays
+   * for it in vertical space.
+   */
+  const [showDetails, setShowDetails] = useState(false);
 
   if (!customerId) return null;
 
@@ -165,6 +178,69 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
         />
       </div>
 
+      {/* Identity + employment — collapsed by default, see note above */}
+      <div className="border-t border-white/5 pt-2">
+        <button
+          type="button"
+          onClick={() => setShowDetails((v) => !v)}
+          aria-expanded={showDetails}
+          className="flex items-center gap-1 text-[11px] text-white/60 hover:text-white/85 transition-colors"
+        >
+          {showDetails ? (
+            <ChevronDown className="h-3 w-3" />
+          ) : (
+            <ChevronRight className="h-3 w-3" />
+          )}
+          {showDetails ? "Hide" : "Show"} borrower &amp; employment details
+        </button>
+
+        {showDetails && (
+          <div className="mt-2 grid gap-3 md:grid-cols-2">
+            <DetailGroup icon={IdCard} title="Borrower">
+              <Field label="Full name" value={fullName(c)} />
+              <Field label="Date of birth" value={formatDob(c.dateOfBirth)} />
+              <Field
+                label="Civil status"
+                value={titleCase(c.civilStatus ?? undefined)}
+              />
+              <Field
+                label="Government ID"
+                value={`${c.governmentIdType.replace("_", " ")} · ${c.governmentIdNumber}`}
+              />
+              <Field label="Mobile" value={c.phone} />
+              <Field label="Alt. mobile" value={c.secondaryPhone} />
+              <Field label="Email" value={c.email} />
+              <Field label="Address" value={formatAddress(c)} />
+            </DetailGroup>
+
+            <DetailGroup icon={Briefcase} title="Employment">
+              <Field
+                label="Status"
+                value={titleCase(c.employmentStatus)}
+                tone={c.employmentStatus === "UNEMPLOYED" ? "warn" : undefined}
+              />
+              <Field label="Employer" value={c.employerName} />
+              <Field label="Job title" value={c.jobTitle} />
+              <Field label="Position" value={c.position} />
+              <Field label="Hired" value={formatDob(c.hireDate)} />
+              <Field
+                label="Regularized"
+                value={formatDob(c.regularizationDate)}
+                /* Probationary staff are a materially different risk from
+                   regularized ones, so call it out rather than leave a gap. */
+                tone={c.hireDate && !c.regularizationDate ? "warn" : undefined}
+                fallback={c.hireDate ? "not yet regularized" : undefined}
+              />
+              <Field label="Tenure" value={formatTenure(c)} />
+              <Field
+                label="Monthly income"
+                value={`₱${formatMoney(Number(c.monthlyIncome)).replace(/^₱/, "")}`}
+              />
+            </DetailGroup>
+          </div>
+        )}
+      </div>
+
       {/* Smart hints — concise, actionable, never blocking */}
       {(kycRejected || hasPriorDefault || isDorsi || !kycVerified || !tier) && (
         <div className="space-y-1 border-t border-white/5 pt-2">
@@ -238,6 +314,60 @@ function Metric({
   );
 }
 
+function DetailGroup({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: typeof User;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Icon className="h-3 w-3 text-white/45" />
+        <span className="text-[9px] uppercase tracking-wider text-white/45">
+          {title}
+        </span>
+      </div>
+      <dl className="space-y-1">{children}</dl>
+    </div>
+  );
+}
+
+/**
+ * One label/value row. Renders nothing when there is no value and no
+ * fallback — a borrower with no spouse or no second phone shouldn't
+ * produce a column of em-dashes for the officer to read past.
+ */
+function Field({
+  label,
+  value,
+  tone,
+  fallback,
+}: {
+  label: string;
+  value?: string | null;
+  tone?: "warn";
+  fallback?: string;
+}) {
+  const shown = value?.trim() ? value : fallback;
+  if (!shown) return null;
+  return (
+    <div className="flex items-baseline gap-2 text-[11px] leading-snug">
+      <dt className="text-white/45 shrink-0 w-[86px]">{label}</dt>
+      <dd
+        className={`font-mono min-w-0 break-words ${
+          tone === "warn" ? "text-amber-300" : "text-white/85"
+        }`}
+      >
+        {shown}
+      </dd>
+    </div>
+  );
+}
+
 function Hint({
   tone,
   icon: Icon,
@@ -280,6 +410,90 @@ function KycBadge({
       {label}
     </Badge>
   );
+}
+
+/** Customer fields these formatters read. Kept structural so the helpers
+ *  don't drag the whole Customer type through the file. */
+type BorrowerLike = {
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+  suffix?: string | null;
+  address?: string | null;
+  addressLine2?: string | null;
+  barangay?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+  hireDate?: string | null;
+  yearsAtCurrentJob?: string | number | null;
+};
+
+function fullName(c: BorrowerLike): string {
+  return [c.firstName, c.middleName, c.lastName, c.suffix]
+    .filter((p) => p && String(p).trim())
+    .join(" ");
+}
+
+/** Date plus age — lending has age floors and ceilings, and computing it
+ *  in your head from a birth date is exactly the sort of thing that gets
+ *  skipped. */
+function formatDob(iso: string | null | undefined): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  const formatted = d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+  const years = yearsSince(d);
+  return years === null ? formatted : `${formatted} (${years}y)`;
+}
+
+function formatAddress(c: BorrowerLike): string | undefined {
+  const parts = [
+    c.address,
+    c.addressLine2,
+    c.barangay,
+    c.city,
+    c.province,
+    c.postalCode,
+  ].filter((p) => p && String(p).trim());
+  return parts.length ? parts.join(", ") : undefined;
+}
+
+/**
+ * Prefer the stored `yearsAtCurrentJob` — it is what the officer captured
+ * and what scoring uses — and fall back to deriving it from the hire date
+ * so a record with one but not the other still says something useful.
+ */
+function formatTenure(c: BorrowerLike): string | undefined {
+  const stated = c.yearsAtCurrentJob;
+  if (stated !== null && stated !== undefined && String(stated).trim() !== "") {
+    const n = Number(stated);
+    if (Number.isFinite(n)) return `${n} yr${n === 1 ? "" : "s"}`;
+  }
+  if (!c.hireDate) return undefined;
+  const years = yearsSince(new Date(c.hireDate));
+  return years === null ? undefined : `~${years} yr${years === 1 ? "" : "s"}`;
+}
+
+function yearsSince(d: Date): number | null {
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let years = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) years -= 1;
+  return years < 0 ? null : years;
+}
+
+function titleCase(v: string | undefined): string | undefined {
+  if (!v) return undefined;
+  return v
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
 function formatRelativeDate(iso: string | null | undefined): string {
