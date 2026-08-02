@@ -64,6 +64,15 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vite-plugin-pwa"
         update-types: ["version-update:semver-major"]
+      # Tailwind 4 is a config-format rewrite (the JS config gives way to
+      # CSS-first `@theme`), so it belongs to the same chunk rather than
+      # landing on its own. tailwind-merge v3 targets Tailwind v4, so it
+      # cannot go ahead of it — libs/ui's `cn()` helper is built on it and
+      # every component would inherit the mismatch.
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwind-merge"
+        update-types: ["version-update:semver-major"]
 
     groups:
       # Bundle small patch updates so the inbox doesn't drown.
