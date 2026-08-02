@@ -52,6 +52,10 @@ export default tseslint.config(
       // them would need a tsconfig that exists only to satisfy the linter.
       "**/scripts/**/*.mjs",
       "**/prisma/seed.ts",
+      // Smoke-test fixtures. Same story: not part of any tsconfig, so the
+      // type-aware parser can't resolve them, and pulling docs/ into a
+      // tsconfig purely to satisfy the linter isn't worth it.
+      "docs/**",
     ],
   },
 
