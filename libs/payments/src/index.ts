@@ -111,6 +111,37 @@ export class MockProvider implements PaymentProvider {
 // + a sandbox account. The skeleton makes swapping in real wiring a
 // constructor-arg + ~30-line implementation change.
 
+/**
+ * Refuse to treat an unverified callback as genuine.
+ *
+ * A payment webhook is an instruction to credit money against a loan: the
+ * route hands the parsed event straight to `handleWebhook`, which records a
+ * LoanPayment when the status is PAID. The only thing separating that from
+ * anyone who can reach the endpoint is the provider's HMAC signature.
+ *
+ * Both real providers currently check that a signature *header is present*
+ * and then never verify it, so any attacker-supplied value was accepted.
+ * `createIntent` already throws for these providers, which makes them
+ * unusable end to end — but the webhook half looked implemented, and would
+ * have quietly accepted forged callbacks for anyone who set
+ * PAYMENT_PROVIDER without noticing the other half was a stub.
+ *
+ * Failing closed here keeps the two halves consistent. Replace this call
+ * with a real constant-time HMAC comparison when wiring the provider up.
+ *
+ * Declared `void` rather than `never` deliberately: a `never` return marks
+ * everything after the call unreachable, and TypeScript skips control-flow
+ * narrowing in unreachable code — which would strip the type-checking from
+ * the parsing scaffolding below that an implementer still needs to keep.
+ */
+function assertSignatureVerified(provider: string, secretEnv: string): void {
+  throw new Error(
+    `${provider} webhook signature verification is not implemented. ` +
+      `Refusing to accept an unverified callback — implement the HMAC check ` +
+      `against ${secretEnv} before enabling this provider.`,
+  );
+}
+
 export interface GcashConfig {
   baseUrl: string;
   apiKey: string;
@@ -142,8 +173,7 @@ export class GcashProvider implements PaymentProvider {
   parseWebhook(headers: Record<string, string>, body: unknown): WebhookEvent {
     const sig = headers["x-gcash-signature"];
     if (!sig) throw new Error("Missing GCash signature");
-    // Real call: HMAC-verify sig against opts.webhookSecret + raw body.
-    void this.opts.webhookSecret;
+    assertSignatureVerified("GCASH", "GCASH_WEBHOOK_SECRET");
     const b = body as {
       data?: {
         id?: string;
@@ -191,7 +221,7 @@ export class MayaProvider implements PaymentProvider {
   parseWebhook(headers: Record<string, string>, body: unknown): WebhookEvent {
     const sig = headers["paymongo-signature"] ?? headers["maya-signature"];
     if (!sig) throw new Error("Missing Maya signature");
-    void this.opts.webhookSecret;
+    assertSignatureVerified("MAYA", "MAYA_WEBHOOK_SECRET");
     const b = body as {
       data?: {
         attributes?: {
@@ -253,14 +283,24 @@ function mapMayaStatus(s: string): PaymentIntentStatus {
 }
 
 /**
- * Factory: pick the provider based on env. Returns the MockProvider for any
- * unknown / unset value so dev keeps working without configuration.
+ * Factory: pick the provider based on env.
+ *
+ * Unset falls back to the MockProvider so dev works without configuration.
+ * A value that is set but unrecognised throws instead of falling back:
+ * MockProvider accepts any webhook without a signature, so silently
+ * downgrading to it on a typo (`gcsh`, `GCash `) would turn a production
+ * payments endpoint into one that trusts anything, with nothing in the logs
+ * to say so. Failing at boot is the cheaper failure.
  */
 export function buildProvider(
   env: Record<string, string | undefined>,
   baseUrl: string,
 ): PaymentProvider {
-  switch ((env.PAYMENT_PROVIDER ?? "mock").toLowerCase()) {
+  // `|| undefined` rather than `??`: a var declared but left blank in a
+  // .env file is "not configured", not a typo, and shouldn't stop dev
+  // booting. Only a non-empty unrecognised value is an error.
+  const configured = env.PAYMENT_PROVIDER?.trim() || undefined;
+  switch ((configured ?? "mock").toLowerCase()) {
     case "gcash":
       return new GcashProvider({
         baseUrl: env.GCASH_BASE_URL ?? "https://api.gcash.com",
@@ -276,7 +316,12 @@ export function buildProvider(
         webhookSecret: env.MAYA_WEBHOOK_SECRET ?? "",
         successUrl: env.MAYA_SUCCESS_URL ?? `${baseUrl}/portal/loans`,
       });
-    default:
+    case "mock":
       return new MockProvider({ baseUrl });
+    default:
+      throw new Error(
+        `Unknown PAYMENT_PROVIDER "${configured}". Expected one of: mock, gcash, maya. ` +
+          `Leave it unset for the sandbox provider.`,
+      );
   }
 }
