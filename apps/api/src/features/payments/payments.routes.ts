@@ -14,8 +14,25 @@ import { createIntentSchema } from "./schemas";
  * Webhook handling:
  *   - POST /payments/webhook/:provider — the provider calls this when a
  *     payment is confirmed. We parse the payload via the provider's
- *     `parseWebhook` (which verifies signatures for real providers) and
- *     delegate to the repository.
+ *     `parseWebhook` and delegate to the repository.
+ *
+ *     !! This endpoint is UNAUTHENTICATED and, today, UNVERIFIED. It has
+ *     to be unauthenticated — a gateway has no JWT — which is exactly why
+ *     a signature check is the control that matters. `provider` below is
+ *     hardcoded to MockProvider, which by design accepts any body without
+ *     checking a signature, and @loan/payments.buildProvider is never
+ *     called, so PAYMENT_PROVIDER has no effect here.
+ *
+ *     `handleWebhook` does require the intent to already exist, so a
+ *     forged callback cannot conjure a payment out of nothing. But the
+ *     externalId is handed to the client when the intent is created, so
+ *     whoever created an intent can POST a "PAID" callback for it and
+ *     have the LoanPayment + journal entry written without any money
+ *     moving.
+ *
+ *     Wiring `buildProvider` here is the intended fix: the real providers
+ *     now fail closed until their HMAC check is implemented, and an unset
+ *     PAYMENT_PROVIDER still yields the mock so dev is unaffected.
  *   - POST /payments/mock/confirm/:externalId — sandbox-only. Hitting
  *     this URL simulates the customer paying and fires our own webhook
  *     handler.
@@ -31,8 +48,10 @@ import { createIntentSchema } from "./schemas";
  * The interesting business logic lives in
  *   • `PaymentIntentRepository.handleWebhook` — settles the intent and
  *     posts the LoanPayment + journal entry inside one transaction.
- *   • `provider.parseWebhook` — verifies the signature and normalises
- *     the event shape.
+ *   • `provider.parseWebhook` — normalises the event shape, and is where
+ *     signature verification belongs. The real providers reject
+ *     unverified callbacks; MockProvider accepts anything, which is fine
+ *     for a sandbox and is why it must not be the provider in production.
  * The handlers below are thin request adapters around those calls;
  * adding a service would be ceremony with no payoff.
  */
@@ -40,6 +59,10 @@ export async function paymentsRoutes(app: FastifyInstance) {
   const baseUrl =
     process.env.PUBLIC_API_URL ??
     `http://localhost:${process.env.PORT ?? 3001}`;
+  // TODO(security): replace with `buildProvider(process.env, baseUrl)`.
+  // Hardcoding the mock means PAYMENT_PROVIDER is ignored and the
+  // unauthenticated webhook route below accepts unsigned callbacks in every
+  // deployment. See the header comment for the full path.
   const provider = new MockProvider({ baseUrl });
 
   // ─── Authenticated routes ─────────────────────────────────────────
