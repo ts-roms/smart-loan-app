@@ -5,6 +5,7 @@ import type {
   User,
   UserRole,
 } from "@loan/db";
+import { nextCustomerNumber } from "@loan/db";
 import { authenticator } from "otplib";
 
 import {
@@ -16,7 +17,12 @@ import {
   hashRecoveryCode,
   hashRefreshToken,
 } from "./helpers";
-import type { LoginInput, RegisterInput, TotpCodeInput } from "./schemas";
+import type {
+  CompleteProfileInput,
+  LoginInput,
+  RegisterInput,
+  TotpCodeInput,
+} from "./schemas";
 
 // Standard TOTP: 30-second window, 6-digit codes, ±1 step tolerance
 // for clock skew. Matches Google Authenticator / Authy / 1Password
@@ -62,6 +68,19 @@ export interface UserDigest {
   email: string;
   name: string;
   role: UserRole;
+  /**
+   * The Customer row this login belongs to, or null.
+   *
+   * Load-bearing for borrowers: `/auth/register` creates the User with
+   * no Customer attached, and every portal route resolves through
+   * `resolveCustomerId`, which refuses a CUSTOMER whose customerId is
+   * null. So null here means "registered but has not completed their
+   * profile yet" — the client gates on it to force the profile step
+   * before the portal is reachable.
+   *
+   * Always null for staff, who are never linked to a borrower record.
+   */
+  customerId: string | null;
 }
 
 /** Login outcomes — discriminated so the controller maps to HTTP codes. */
@@ -75,6 +94,10 @@ export type LoginResult =
 export type RegisterResult =
   | { ok: true; tokens: TokenPair; user: UserDigest }
   | { ok: false; kind: "EmailExists" };
+
+export type CompleteProfileResult =
+  | { ok: true; user: UserDigest }
+  | { ok: false; kind: "NotFound" | "NotACustomer" | "AlreadyLinked" };
 
 export type RefreshResult =
   | { ok: true; tokens: TokenPair; user: UserDigest }
@@ -308,8 +331,104 @@ export class AuthService {
         role: true,
         active: true,
         createdAt: true,
+        // See UserDigest.customerId — null on a CUSTOMER means the
+        // profile step hasn't been completed and the portal will 403.
+        customerId: true,
       },
     });
+  }
+
+  /**
+   * Complete a self-registered borrower's profile: create the Customer
+   * row and attach it to their login.
+   *
+   * `/auth/register` deliberately asks for the bare minimum (name,
+   * email, password) so signing up is one screen. Everything a loan
+   * actually needs — legal name, birth date, address, contact details —
+   * is collected here, on first login, before the portal opens up.
+   *
+   * The Customer is created through the User's relation rather than as
+   * a separate insert, so Prisma emits both writes in one transaction.
+   * A Customer created without the link would be an orphan the borrower
+   * could never reach and staff would see as a duplicate applicant the
+   * next time they tried.
+   */
+  async completeProfile(
+    userId: string,
+    input: CompleteProfileInput,
+  ): Promise<CompleteProfileResult> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return { ok: false, kind: "NotFound" };
+
+    // Staff have no borrower record by design; linking one would put a
+    // loan officer into the borrower portal and scope their reads to a
+    // Customer row. Refuse rather than quietly widening what this
+    // endpoint can do.
+    if (user.role !== "CUSTOMER") return { ok: false, kind: "NotACustomer" };
+
+    // Already linked. Not an error the UI should ever hit (the gate
+    // that routes here checks the same field), so it means a double
+    // submit or a stale tab — either way, creating a second Customer
+    // would strand the first. Profile edits go through the portal's
+    // own profile endpoint.
+    if (user.customerId) return { ok: false, kind: "AlreadyLinked" };
+
+    // Same generator the staff-side CustomerRepository.create uses, so
+    // self-registered borrowers land in one CUST-<year>-NNNNNN sequence
+    // with the ones an officer keys in. `number` is UNIQUE, so a race
+    // between two signups fails the insert rather than issuing a
+    // duplicate — identical to the staff path's behaviour.
+    const number = await nextCustomerNumber(this.prisma);
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        // Registration collected a single free-text name; the profile
+        // form has the real parts. Keep the display name in step so the
+        // portal header doesn't disagree with the loan documents.
+        name: [input.firstName, input.lastName].join(" "),
+        customer: {
+          create: {
+            number,
+            firstName: input.firstName,
+            middleName: input.middleName,
+            lastName: input.lastName,
+            suffix: input.suffix,
+            dateOfBirth: new Date(input.dateOfBirth),
+            civilStatus: input.civilStatus,
+            phone: input.phone,
+            secondaryPhone: input.secondaryPhone,
+            // The login email is the address they'll actually be
+            // reached at, so it seeds the record unless they gave
+            // another one.
+            email: input.email ?? user.email,
+            address: input.address,
+            addressLine2: input.addressLine2,
+            barangay: input.barangay,
+            city: input.city,
+            province: input.province,
+            region: input.region,
+            postalCode: input.postalCode,
+            governmentIdType: input.governmentIdType,
+            governmentIdNumber: input.governmentIdNumber,
+            employmentStatus: input.employmentStatus,
+            employerName: input.employerName,
+            jobTitle: input.jobTitle,
+            monthlyIncome: input.monthlyIncome,
+          },
+        },
+      },
+    });
+
+    await this.audit.record({
+      action: "PORTAL_PROFILE_COMPLETED",
+      actorId: userId,
+      targetType: "Customer",
+      targetId: updated.customerId!,
+      payload: { via: "self-registration" },
+    });
+
+    return { ok: true, user: digest(updated) };
   }
 
   async getSignature(userId: string) {
@@ -522,5 +641,11 @@ export class AuthService {
 
 /** Public user shape returned alongside tokens. Hides sensitive fields. */
 function digest(user: User): UserDigest {
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    customerId: user.customerId,
+  };
 }

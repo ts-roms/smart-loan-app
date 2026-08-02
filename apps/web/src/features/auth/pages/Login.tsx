@@ -10,7 +10,7 @@ import {
 } from "@loan/ui";
 import { Lock, Wallet } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../providers/auth";
 
 /**
@@ -169,6 +169,15 @@ export function LoginPage() {
                   : "Sign in"}
             </Button>
             <p className="text-xs text-white/45 text-center pt-2">
+              New member?{" "}
+              <Link
+                to={tenantSlug ? `/register?tenant=${tenantSlug}` : "/register"}
+                className="text-sky-300 underline"
+              >
+                Create an account
+              </Link>
+            </p>
+            <p className="text-xs text-white/45 text-center">
               Default admin · admin@loan.local / P@ssw0rd123
             </p>
           </form>
