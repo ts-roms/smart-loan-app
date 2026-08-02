@@ -64,10 +64,30 @@ export class MockAmlProvider implements AmlProvider {
   async screen(input: ScreenInput): Promise<ScreenResult> {
     const list = await this.loader();
     const subject = input.fullName.toLowerCase().trim();
+
+    // An empty or whitespace-only name is unscreenable, not clean.
+    //
+    // Returning CLEAR would assert a negative we never established. And
+    // falling through to the loop below is worse: `c.includes("")` is true
+    // for every string, so an empty subject used to "match" every row on
+    // the watchlist and hand the officer the entire list as hits.
+    //
+    // REVIEW with no matches keeps a human in the loop — which is also what
+    // the old code effectively returned, minus the noise.
+    if (!subject) {
+      return { status: "REVIEW", matches: [] };
+    }
+
     const matches: MatchHit[] = [];
     for (const row of list) {
+      // Trim the candidates too, not just the subject. Watchlist rows are
+      // imported from third-party files and routinely carry stray
+      // whitespace; without this, " Juan Dela Cruz " never compares equal to
+      // an exact hit, so it scored 0.7 and downgraded the result from MATCH
+      // to REVIEW. Only MATCH trips the AML auto-reject, so a single padded
+      // row was enough to stop a sanctions hit from blocking a loan.
       const candidates = [row.fullName, ...row.aliases].map((s) =>
-        s.toLowerCase(),
+        s.toLowerCase().trim(),
       );
       for (const c of candidates) {
         if (!c) continue;
