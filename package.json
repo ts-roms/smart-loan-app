@@ -10,6 +10,7 @@
     "build": "nx run-many -t build --all",
     "lint": "nx run-many -t lint --all",
     "test": "nx run-many -t test --all",
+    "e2e": "bash docs/smoke-tests/e2e.sh",
     "typecheck": "nx run-many -t typecheck --all",
     "db:migrate": "pnpm --filter @loan/db prisma:migrate",
     "db:generate": "pnpm --filter @loan/db prisma:generate",

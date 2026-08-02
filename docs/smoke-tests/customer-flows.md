@@ -51,8 +51,32 @@ pnpm --filter @loan/db test           # 18 tests (dorsi-helpers)
 pnpm test
 ```
 
-All four suites should pass. If they don't, fix that before browsing —
-the browser will hit the same bugs in awkward places.
+All suites should pass. If they don't, fix that before browsing — the
+browser will hit the same bugs in awkward places.
+
+### Running the automated smoke test
+
+`e2e.sh` in this directory drives the API end to end and covers the parts
+that are tedious to click through: auth rejection paths, the RBAC gates,
+the picker's `hasLoans`/`hasDefaulted` flags across all three ranking
+tiers, DORSI read-vs-write separation, payment provider selection plus
+the sandbox intent→paid flow, and schedule reconciliation.
+
+```bash
+pnpm e2e
+```
+
+It needs a running stack — `pnpm dev:up`, `pnpm dev:license`, `pnpm dev`.
+**The licence step is not optional**: DORSI and other licensed features
+return 402 without one, which looks exactly like an authorisation
+failure and will send you hunting for a permissions bug that isn't there.
+
+It reseeds the `PICKER-*` fixtures on every run (see `fixtures.ts`), so it
+is repeatable — and it records a real payment against a fixture loan, so
+point it at a throwaway database only.
+
+On Windows run it from Git Bash; `bash` in PowerShell may resolve to WSL,
+which won't have the toolchain.
 
 ---
 
