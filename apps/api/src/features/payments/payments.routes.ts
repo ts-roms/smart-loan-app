@@ -1,5 +1,5 @@
 import { PaymentIntentRepository, type PrismaClient } from "@loan/db";
-import { MockProvider } from "@loan/payments";
+import { buildProvider } from "@loan/payments";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 
@@ -7,35 +7,35 @@ import { config } from "../../config";
 import { createIntentSchema } from "./schemas";
 
 /**
- * Payment-gateway routes. Today only the MockProvider is wired up;
- * real providers (GCash, Maya) plug in by passing a different
- * `PaymentProvider` implementation to PaymentIntentRepository.
+ * Payment-gateway routes. The provider comes from PAYMENT_PROVIDER via
+ * `buildProvider`; unset yields the sandbox MockProvider.
  *
  * Webhook handling:
- *   - POST /payments/webhook/:provider — the provider calls this when a
+ *   - POST /payments/webhook/:provider — the gateway calls this when a
  *     payment is confirmed. We parse the payload via the provider's
  *     `parseWebhook` and delegate to the repository.
  *
- *     !! This endpoint is UNAUTHENTICATED and, today, UNVERIFIED. It has
- *     to be unauthenticated — a gateway has no JWT — which is exactly why
- *     a signature check is the control that matters. `provider` below is
- *     hardcoded to MockProvider, which by design accepts any body without
- *     checking a signature, and @loan/payments.buildProvider is never
- *     called, so PAYMENT_PROVIDER has no effect here.
+ *     This endpoint is unauthenticated, and has to be: a gateway carries
+ *     no JWT. The signature check inside `parseWebhook` is therefore the
+ *     only control on it, which makes the provider selection above a
+ *     security decision rather than a configuration detail.
  *
- *     `handleWebhook` does require the intent to already exist, so a
- *     forged callback cannot conjure a payment out of nothing. But the
- *     externalId is handed to the client when the intent is created, so
- *     whoever created an intent can POST a "PAID" callback for it and
- *     have the LoanPayment + journal entry written without any money
- *     moving.
+ *     `handleWebhook` requires the intent to already exist, so a forged
+ *     callback cannot conjure a payment from nothing. It can still settle
+ *     an intent that does exist — and the externalId is handed to the
+ *     client at creation — so under MockProvider, which accepts any body,
+ *     whoever created an intent can mark it PAID without money moving.
+ *     That is acceptable in a sandbox and is why MockProvider must not be
+ *     the provider in production.
  *
- *     Wiring `buildProvider` here is the intended fix: the real providers
- *     now fail closed until their HMAC check is implemented, and an unset
- *     PAYMENT_PROVIDER still yields the mock so dev is unaffected.
- *   - POST /payments/mock/confirm/:externalId — sandbox-only. Hitting
- *     this URL simulates the customer paying and fires our own webhook
- *     handler.
+ *     GCASH and MAYA currently reject every callback: their HMAC check is
+ *     unimplemented and they fail closed rather than trust an unverified
+ *     one. Implement it in @loan/payments before enabling either.
+ *
+ *   - POST /payments/mock/confirm/:externalId — sandbox-only, and 404s
+ *     unless the configured provider is MOCK. It simulates the customer
+ *     paying, so leaving it reachable beside a real gateway would be a
+ *     way to settle intents the gateway never saw.
  *
  * Phase 2 multi-tenant: webhooks have no JWT, so the tenant has to
  * ride the URL itself. We accept an optional `:tenantSlug` path
@@ -59,11 +59,12 @@ export async function paymentsRoutes(app: FastifyInstance) {
   const baseUrl =
     process.env.PUBLIC_API_URL ??
     `http://localhost:${process.env.PORT ?? 3001}`;
-  // TODO(security): replace with `buildProvider(process.env, baseUrl)`.
-  // Hardcoding the mock means PAYMENT_PROVIDER is ignored and the
-  // unauthenticated webhook route below accepts unsigned callbacks in every
-  // deployment. See the header comment for the full path.
-  const provider = new MockProvider({ baseUrl });
+  // Selected from PAYMENT_PROVIDER rather than hardcoded, so a deployment
+  // that configures a real gateway actually gets one. Unset still yields the
+  // sandbox MockProvider, so dev is unaffected; an unrecognised value throws
+  // at boot rather than silently falling back to a provider that accepts
+  // unsigned callbacks.
+  const provider = buildProvider(process.env, baseUrl);
 
   // ─── Authenticated routes ─────────────────────────────────────────
   //
@@ -171,12 +172,14 @@ export async function paymentsRoutes(app: FastifyInstance) {
     req: FastifyRequest<{ Params: { provider: string; tenantSlug?: string } }>,
     reply: FastifyReply,
   ) => {
+    // The URL segment has to name the provider this deployment is actually
+    // configured for. Accepting any other value would let a caller pick the
+    // parser their forged payload happens to satisfy.
     const name = req.params.provider.toUpperCase();
-    if (name !== "MOCK") {
-      // Real providers (GCASH/MAYA) would dispatch here.
-      return reply.code(501).send({
-        error: "NotImplemented",
-        message: `Provider ${name} not wired`,
+    if (name !== provider.name) {
+      return reply.code(400).send({
+        error: "ProviderMismatch",
+        message: `This deployment is configured for ${provider.name}, not ${name}.`,
       });
     }
     const prisma = await resolveWebhookTenantPrisma(
@@ -192,7 +195,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
         req.body,
       );
       const result = await intents.handleWebhook({
-        provider: "MOCK",
+        provider: provider.name,
         externalId: event.externalId,
         status: event.status,
         amount: event.amount,
@@ -232,6 +235,13 @@ export async function paymentsRoutes(app: FastifyInstance) {
     }>,
     reply: FastifyReply,
   ) => {
+    // This endpoint *is* payment forgery — that's its purpose in the
+    // sandbox. It must not exist when a real gateway is configured, or it
+    // becomes a way to settle an intent without the gateway ever seeing
+    // money. 404 rather than 403: don't advertise it.
+    if (provider.name !== "MOCK") {
+      return reply.code(404).send({ error: "NotFound" });
+    }
     const prisma = await resolveWebhookTenantPrisma(
       app,
       req.params.tenantSlug,
@@ -251,7 +261,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
         },
       );
       const result = await intents.handleWebhook({
-        provider: "MOCK",
+        provider: provider.name,
         externalId: event.externalId,
         status: event.status,
         amount: event.amount,
