@@ -56,6 +56,15 @@ export const config = {
   port: num("PORT", 3001),
   host: str("HOST", "0.0.0.0"),
   webOrigin: str("WEB_ORIGIN", "http://localhost:5173"),
+  /**
+   * Where the marketing site is served. Distinct from `webOrigin` —
+   * these are separate deployments, usually different hosts.
+   *
+   * Used to build the self-serve signup confirmation link, which has to
+   * land on the marketing site's /signup/confirm page rather than the
+   * tenant app: the person clicking it has no account anywhere yet.
+   */
+  marketingOrigin: str("MARKETING_ORIGIN", "http://localhost:5175"),
   /** Public-facing URL. Falls back to http://localhost:PORT in dev. */
   get publicApiUrl(): string {
     return process.env.PUBLIC_API_URL ?? `http://localhost:${this.port}`;

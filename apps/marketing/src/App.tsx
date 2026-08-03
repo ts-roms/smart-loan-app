@@ -5,6 +5,7 @@ import { Home } from "./pages/Home";
 import { Install } from "./pages/Install";
 import { Pricing } from "./pages/Pricing";
 import { Signup } from "./pages/Signup";
+import { SignupConfirm } from "./pages/SignupConfirm";
 
 /**
  * Where the tenant app lives. The marketing site and the app are
@@ -38,6 +39,8 @@ export function App() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/install" element={<Install />} />
           <Route path="/signup" element={<Signup />} />
+          {/* Landing page for the emailed confirmation link. */}
+          <Route path="/signup/confirm" element={<SignupConfirm />} />
           <Route path="/contact" element={<Contact />} />
           <Route
             path="*"

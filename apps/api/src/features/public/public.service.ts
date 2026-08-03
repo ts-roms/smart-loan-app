@@ -1,5 +1,7 @@
 import type { PrismaClient } from "@loan/db";
+import type { NotificationProvider } from "@loan/notifications";
 import type { FastifyBaseLogger } from "fastify";
+import { createHash, randomBytes } from "node:crypto";
 
 import type { PlatformService } from "../platform/platform.service";
 import type { CaptureLeadInput, SignupTenantInput } from "./schemas";
@@ -17,7 +19,20 @@ export type CaptureLeadResult =
   | { ok: true; leadId: string }
   | { ok: false; kind: "DuplicateRecent"; message: string };
 
-export type SignupTenantResult =
+/**
+ * Signup step 1 — recorded, email sent, nothing provisioned. The
+ * response deliberately carries no token: the whole point is that only
+ * someone reading that inbox can continue.
+ */
+export type RequestSignupResult =
+  | { ok: true; adminEmail: string; expiresAt: string }
+  | {
+      ok: false;
+      kind: "ModeDisabled" | "SlugTaken";
+      message: string;
+    };
+
+export type ConfirmSignupResult =
   | {
       ok: true;
       slug: string;
@@ -38,7 +53,13 @@ export type SignupTenantResult =
     }
   | {
       ok: false;
-      kind: "ModeDisabled" | "SlugTaken" | "ProvisioningFailed";
+      kind:
+        | "ModeDisabled"
+        | "InvalidToken"
+        | "Expired"
+        | "AlreadyUsed"
+        | "SlugTaken"
+        | "ProvisioningFailed";
       message: string;
     };
 
@@ -49,6 +70,18 @@ export type SignupTenantResult =
  * licensed features.
  */
 const TRIAL_DAYS = 30;
+
+/**
+ * How long a confirmation link stays valid. Long enough to survive a
+ * signup at the end of a working day, short enough that an address
+ * which later changes hands can't be used to claim a stale signup.
+ */
+const CONFIRM_TTL_HOURS = 24;
+
+/** SHA-256, matching how RefreshToken hashes its secrets. */
+function hashToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 export class PublicService {
   constructor(
@@ -61,6 +94,22 @@ export class PublicService {
      * the platform audit log. A second implementation here would drift.
      */
     private readonly platform: PlatformService,
+    /**
+     * Platform-level notification provider — NOT the tenant-aware
+     * wrapper the rest of the app uses. The confirmation email goes out
+     * before any tenant exists, so there is no SystemConfig to read and
+     * no tenant schema to persist a Notification row into.
+     *
+     * Today every provider in this codebase resolves to a mock that
+     * logs (see providers.ts), which means the confirmation link
+     * appears in the API console and nowhere else. The gate is real
+     * regardless: provisioning cannot happen without the token. Wiring
+     * a real provider makes the link reach actual inboxes with no
+     * change here.
+     */
+    private readonly notifications: NotificationProvider,
+    /** Base URL for the confirmation link — the marketing site. */
+    private readonly marketingOrigin: string,
   ) {}
 
   /**
@@ -115,55 +164,175 @@ export class PublicService {
   }
 
   /**
-   * Provision a cooperative's tenant from the marketing site, with no
-   * vendor in the loop.
+   * Signup step 1 — record the request and email a confirmation link.
+   * Provisions nothing.
    *
-   * This is by far the heaviest anonymous endpoint in the system: it
-   * creates a Postgres schema, runs the full migration set against it,
-   * seeds reference data, and mints an admin account. The per-IP rate
-   * limit in public.routes.ts is what keeps that from being a free
-   * schema-creation API, and it's load-bearing rather than defensive
-   * polish.
+   * Everything expensive happens in `confirmTenantSignup`, behind a
+   * token that only reaches the address supplied. Without this split,
+   * an anonymous POST would create a Postgres schema, run every
+   * migration against it, seed it, and mint an admin whose password is
+   * shown exactly once — so a mistyped address left a live tenant
+   * nobody could reach and nobody cleaned up.
    *
-   * No email verification runs first — a deliberate product decision.
-   * The consequence to know about: a typo'd address produces a live
-   * tenant whose only admin credentials went nowhere. If verification
-   * is added later, the place to gate is here, before `provisionTenant`
-   * — everything downstream is already idempotent enough to re-run.
+   * The response says nothing about whether the address exists or
+   * already signed up, and carries no token. It is the same for every
+   * caller who gets this far.
    */
-  async signupTenant(args: {
+  async requestTenantSignup(args: {
     input: SignupTenantInput;
-  }): Promise<SignupTenantResult> {
-    // Single-tenant installations have no schema-per-tenant machinery,
-    // so provisionTenant would insert a catalog row and stop, handing
-    // back credentials for a tenant that doesn't exist. Refuse loudly
-    // instead of appearing to succeed.
-    if ((process.env.MULTI_TENANT ?? "").toLowerCase() !== "true") {
+  }): Promise<RequestSignupResult> {
+    if (!isMultiTenantMode()) return modeDisabled();
+
+    const slug = args.input.slug.toLowerCase();
+    const adminEmail = args.input.adminEmail.trim().toLowerCase();
+
+    // Checked here purely so the form can say "pick another name"
+    // straight away. It's re-checked at confirm time, because between
+    // now and then someone else may take it — this check is a
+    // courtesy, not a reservation.
+    const taken = await this.prisma.tenant.findUnique({ where: { slug } });
+    if (taken) {
       return {
         ok: false,
-        kind: "ModeDisabled",
-        message:
-          "This installation doesn't offer hosted signup. Get in touch and we'll set you up.",
+        kind: "SlugTaken",
+        message: `The name "${slug}" is already taken. Try another.`,
       };
     }
 
-    const slug = args.input.slug.toLowerCase();
+    // 32 bytes from the CSPRNG. Only the hash is stored, so a database
+    // leak yields nothing usable — the plaintext exists in the email
+    // and in the response to nobody.
+    const token = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + CONFIRM_TTL_HOURS * 60 * 60 * 1000);
+
+    await this.prisma.pendingTenantSignup.create({
+      data: {
+        slug,
+        name: args.input.name.trim(),
+        adminEmail,
+        adminName: args.input.adminName.trim(),
+        tokenHash: hashToken(token),
+        expiresAt,
+      },
+    });
+
+    const confirmUrl = `${this.marketingOrigin}/signup/confirm?token=${token}`;
+    await this.notifications
+      .send({
+        channel: "EMAIL",
+        recipient: adminEmail,
+        subject: `Confirm your SmartLoan workspace: ${args.input.name.trim()}`,
+        body: [
+          `Hi ${args.input.adminName.trim()},`,
+          "",
+          `Confirm this address to finish setting up "${args.input.name.trim()}".`,
+          "Nothing has been created yet — your workspace is built when you click:",
+          "",
+          confirmUrl,
+          "",
+          `The link expires in ${CONFIRM_TTL_HOURS} hours. If you didn't request this, ignore it — no account exists and none will be created.`,
+        ].join("\n"),
+      })
+      .catch((err: unknown) => {
+        // Don't fail the request: the row is written and the link is
+        // reproducible by requesting again. Failing here would also
+        // tell an anonymous caller whether delivery succeeded, which
+        // is a small address-probing oracle.
+        this.log.error({ slug, err }, "[public] confirmation email failed");
+      });
+
+    this.log.info(
+      { slug, expiresAt },
+      "[public] signup requested, awaiting email confirmation",
+    );
+
+    return { ok: true, adminEmail, expiresAt: expiresAt.toISOString() };
+  }
+
+  /**
+   * Signup step 2 — redeem the token and actually provision.
+   *
+   * This is by far the heaviest anonymous endpoint in the system: a
+   * Postgres schema, the full migration set, seed data, and an admin
+   * account. It now requires possession of a token that was only ever
+   * sent to the address being verified, which is the real control; the
+   * per-IP rate limit remains as a volume bound.
+   */
+  async confirmTenantSignup(args: {
+    token: string;
+  }): Promise<ConfirmSignupResult> {
+    if (!isMultiTenantMode()) return modeDisabled();
+
+    const pending = await this.prisma.pendingTenantSignup.findUnique({
+      where: { tokenHash: hashToken(args.token) },
+    });
+    // Unknown token. Same message whether it never existed or was
+    // garbage — there's nothing to distinguish for a caller who has
+    // neither.
+    if (!pending) {
+      return {
+        ok: false,
+        kind: "InvalidToken",
+        message: "That confirmation link isn't valid. Try signing up again.",
+      };
+    }
+    if (pending.consumedAt) {
+      return {
+        ok: false,
+        kind: "AlreadyUsed",
+        message:
+          "That link has already been used. Your workspace exists — sign in, or use forgot-password if you've lost the credentials.",
+      };
+    }
+    if (pending.expiresAt.getTime() < Date.now()) {
+      return {
+        ok: false,
+        kind: "Expired",
+        message: "That confirmation link has expired. Please sign up again.",
+      };
+    }
+
+    /**
+     * Claim the token before doing any work, conditional on it still
+     * being unclaimed. Two clicks in quick succession — a double-click,
+     * a mail client prefetch, a retry — would otherwise both pass the
+     * checks above and provision twice: two schemas, two admins, one
+     * of each pair unreachable.
+     *
+     * The trade-off is that a provisioning failure burns the token.
+     * That's the right way round: a burnt token is a support request,
+     * whereas a duplicate tenant is silent corruption.
+     */
+    const claimed = await this.prisma.pendingTenantSignup.updateMany({
+      where: { id: pending.id, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      return {
+        ok: false,
+        kind: "AlreadyUsed",
+        message: "That link has already been used.",
+      };
+    }
+
+    const slug = pending.slug;
 
     // The actor recorded against every audit row this produces. Not a
     // PlatformUser — nobody at the vendor authorised it — so it's a
     // synthetic id that reads unambiguously in the log, paired with
     // the signer's own email so the trail leads back to a person.
-    const actor = {
-      id: "self-serve-signup",
-      email: args.input.adminEmail.trim().toLowerCase(),
-    };
+    const actor = { id: "self-serve-signup", email: pending.adminEmail };
 
+    // provisionTenant does its own slug check, which is the one that
+    // matters — the courtesy check at request time was up to 24 hours
+    // ago and reserved nothing, so someone else may have taken the name
+    // in between.
     const provisioned = await this.platform.provisionTenant({
       input: {
         slug,
-        name: args.input.name.trim(),
+        name: pending.name,
         adminEmail: actor.email,
-        adminName: args.input.adminName.trim(),
+        adminName: pending.adminName,
       },
       actor,
     });
@@ -176,7 +345,7 @@ export class PublicService {
         return {
           ok: false,
           kind: "SlugTaken",
-          message: `The name "${slug}" is already taken. Try another.`,
+          message: `The name "${slug}" was taken while you were confirming. Please sign up again with a different one.`,
         };
       }
       this.log.error(
@@ -215,7 +384,7 @@ export class PublicService {
     const license = await this.platform.issueLicense({
       input: {
         tenantSlug: slug,
-        tenantName: args.input.name.trim(),
+        tenantName: pending.name,
         tier: "PROFESSIONAL",
         expiresAt: new Date(
           Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000,
@@ -239,12 +408,12 @@ export class PublicService {
     await this.prisma.lead
       .create({
         data: {
-          name: args.input.adminName.trim(),
+          name: pending.adminName,
           email: actor.email,
-          cooperative: args.input.name.trim(),
+          cooperative: pending.name,
           deploymentInterest: "HOSTED",
           source: "self-serve-signup",
-          message: `Self-provisioned tenant "${slug}".`,
+          message: `Self-provisioned tenant "${slug}" (email confirmed).`,
         },
       })
       .catch((err: unknown) => {
@@ -254,15 +423,41 @@ export class PublicService {
         this.log.warn({ slug, err }, "[public] signup lead insert failed");
       });
 
+    // Link the pending row to what it produced, so support can trace a
+    // confirmation back to its tenant. Best-effort for the same reason
+    // as the lead insert.
+    await this.prisma.pendingTenantSignup
+      .update({ where: { id: pending.id }, data: { tenantSlug: slug } })
+      .catch(() => {});
+
     this.log.info({ slug, licensed }, "[public] self-serve tenant provisioned");
 
     return {
       ok: true,
       slug,
-      name: args.input.name.trim(),
+      name: pending.name,
       adminEmail: actor.email,
       bootstrapPassword: provisioned.bootstrapPassword ?? null,
       licensed,
     };
   }
+}
+
+/**
+ * Single-tenant installations have no schema-per-tenant machinery, so
+ * provisionTenant would insert a catalog row and stop, handing back
+ * credentials for a tenant that doesn't exist. Both signup steps refuse
+ * loudly rather than appear to succeed.
+ */
+function isMultiTenantMode(): boolean {
+  return (process.env.MULTI_TENANT ?? "").toLowerCase() === "true";
+}
+
+function modeDisabled(): { ok: false; kind: "ModeDisabled"; message: string } {
+  return {
+    ok: false,
+    kind: "ModeDisabled",
+    message:
+      "This installation doesn't offer hosted signup. Get in touch and we'll set you up.",
+  };
 }

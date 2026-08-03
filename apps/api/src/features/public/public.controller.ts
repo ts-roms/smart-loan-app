@@ -1,7 +1,11 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import type { PublicService } from "./public.service";
-import { captureLeadSchema, signupTenantSchema } from "./schemas";
+import {
+  captureLeadSchema,
+  confirmSignupSchema,
+  signupTenantSchema,
+} from "./schemas";
 
 /**
  * HTTP adapter for the anonymous /public/* surface.
@@ -34,19 +38,21 @@ export class PublicController {
   };
 
   /**
-   * Self-serve cooperative signup. Unlike every other endpoint on this
-   * surface, the response body is sensitive: it carries the bootstrap
-   * admin password, which exists nowhere else after this request.
+   * Self-serve signup, step 1. Records the request and emails a link.
+   * 202 rather than 201 — nothing has been created yet, which is the
+   * entire point of the step.
    */
-  signupTenant = async (req: FastifyRequest, reply: FastifyReply) => {
+  requestSignup = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = signupTenantSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await this.service.signupTenant({ input: parsed.data });
-    if (result.ok) return reply.code(201).send(result);
+    const result = await this.service.requestTenantSignup({
+      input: parsed.data,
+    });
+    if (result.ok) return reply.code(202).send(result);
 
     switch (result.kind) {
       case "SlugTaken":
@@ -56,6 +62,45 @@ export class PublicController {
       case "ModeDisabled":
         // 501 rather than 403: the caller did nothing wrong, this
         // installation just doesn't implement hosted signup.
+        return reply
+          .code(501)
+          .send({ error: result.kind, message: result.message });
+    }
+  };
+
+  /**
+   * Self-serve signup, step 2 — the one that actually provisions.
+   * Unlike every other endpoint on this surface, the response body is
+   * sensitive: it carries the bootstrap admin password, which exists
+   * nowhere else after this request.
+   */
+  confirmSignup = async (req: FastifyRequest, reply: FastifyReply) => {
+    const parsed = confirmSignupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      // A malformed token is indistinguishable from a wrong one as far
+      // as the caller is concerned, so don't echo zod's field detail.
+      return reply.code(400).send({
+        error: "InvalidToken",
+        message: "That confirmation link isn't valid.",
+      });
+    }
+    const result = await this.service.confirmTenantSignup({
+      token: parsed.data.token,
+    });
+    if (result.ok) return reply.code(201).send(result);
+
+    switch (result.kind) {
+      case "InvalidToken":
+      case "Expired":
+        return reply
+          .code(400)
+          .send({ error: result.kind, message: result.message });
+      case "AlreadyUsed":
+      case "SlugTaken":
+        return reply
+          .code(409)
+          .send({ error: result.kind, message: result.message });
+      case "ModeDisabled":
         return reply
           .code(501)
           .send({ error: result.kind, message: result.message });
