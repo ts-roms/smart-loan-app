@@ -13,12 +13,19 @@ import { appUrl, btnPrimary, container, inputStyle } from "../App";
  * evaluate without standing up a server should be able to, in one
  * form, without waiting on a sales reply.
  *
- * Two states: the form, and the credentials panel. That panel is the
- * only time the bootstrap password is ever shown — the server hashes
- * it and can't reproduce it — so it's deliberately hard to click past.
+ * Two states: the form, and "check your email". Nothing is created
+ * here — the workspace is built on /signup/confirm, once the link in
+ * that email is clicked. A mistyped address therefore costs an
+ * expiring row rather than a live tenant nobody can reach.
  */
 
-interface SignupSuccess {
+interface SignupRequested {
+  adminEmail: string;
+  expiresAt: string;
+}
+
+/** Shape returned by /public/signup/confirm once a tenant exists. */
+export interface SignupSuccess {
   slug: string;
   name: string;
   adminEmail: string;
@@ -46,7 +53,7 @@ export function Signup() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<SignupSuccess | null>(null);
+  const [sent, setSent] = useState<SignupRequested | null>(null);
 
   const effectiveSlug = slugTouched ? slug : slugify(name);
 
@@ -74,7 +81,7 @@ export function Signup() {
         setError(message);
         return;
       }
-      setDone(body as SignupSuccess);
+      setSent(body as SignupRequested);
     } catch {
       setError("Couldn't reach the server. Check your connection and retry.");
     } finally {
@@ -82,7 +89,7 @@ export function Signup() {
     }
   };
 
-  if (done) return <Credentials result={done} />;
+  if (sent) return <CheckYourEmail sent={sent} />;
 
   return (
     <section style={{ padding: "64px 24px", ...container, maxWidth: 620 }}>
@@ -98,8 +105,9 @@ export function Signup() {
         }}
       >
         We&apos;ll set up a private workspace for your cooperative — your own
-        database, your own members, nobody else&apos;s data in it. Ready in
-        about a minute, free for 30 days.
+        database, your own members, nobody else&apos;s data in it. Free for 30
+        days. We&apos;ll email you a link to confirm, then it&apos;s ready in
+        about a minute.
       </p>
       <p
         style={{
@@ -163,7 +171,7 @@ export function Signup() {
 
         <Field
           label="Your email"
-          hint="Your admin password is shown once on the next screen — this address is how we reach you afterwards."
+          hint="We send the confirmation link here, and this becomes your admin sign-in. Nothing is created until you click it."
         >
           <input
             style={inputStyle}
@@ -199,33 +207,65 @@ export function Signup() {
             cursor: busy ? "wait" : "pointer",
           }}
         >
-          {busy ? "Setting up your workspace…" : "Create my workspace"}
+          {busy ? "Sending…" : "Email me a confirmation link"}
         </button>
-        {busy && (
-          <p
-            style={{
-              fontSize: 13,
-              color: "var(--text-muted)",
-              margin: 0,
-              textAlign: "center",
-            }}
-          >
-            This takes up to a minute — we&apos;re building your database.
-            Don&apos;t close this tab.
-          </p>
-        )}
       </form>
     </section>
   );
 }
 
 /**
- * Post-signup credentials. The password is unrecoverable once this
- * page is gone, so it gets the loudest treatment on the site and the
- * sign-in link sits below it rather than above — clicking through
- * before copying is the mistake worth designing against.
+ * Terminal state for step 1. Deliberately says nothing about whether
+ * the address exists or was already used — the server doesn't tell us,
+ * and repeating a guess back would make this a way to probe addresses.
  */
-function Credentials({ result }: { result: SignupSuccess }) {
+function CheckYourEmail({ sent }: { sent: SignupRequested }) {
+  return (
+    <section style={{ padding: "64px 24px", ...container, maxWidth: 620 }}>
+      <h1 style={{ fontSize: 32, margin: "0 0 12px", letterSpacing: -0.6 }}>
+        Check your email
+      </h1>
+      <p
+        style={{
+          color: "var(--text-dim)",
+          fontSize: 15,
+          lineHeight: 1.6,
+          margin: "0 0 20px",
+        }}
+      >
+        We sent a confirmation link to{" "}
+        <strong style={{ color: "var(--text)" }}>{sent.adminEmail}</strong>.
+        Click it and your workspace is built — about a minute — and you&apos;ll
+        get your sign-in details on the page that follows.
+      </p>
+      <p
+        style={{
+          color: "var(--text-muted)",
+          fontSize: 13,
+          lineHeight: 1.6,
+          margin: "0 0 8px",
+        }}
+      >
+        The link expires {new Date(sent.expiresAt).toLocaleString()}. Nothing
+        has been created yet, so if you mistyped the address just{" "}
+        <Link to="/signup">start again</Link> — the unused request expires on
+        its own.
+      </p>
+      <p style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>
+        Nothing arrived? Check spam, then <Link to="/contact">tell us</Link>.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * Post-provisioning credentials, shown on /signup/confirm. The password
+ * is unrecoverable once this page is gone, so it gets the loudest
+ * treatment on the site and the sign-in link sits below it rather than
+ * above — clicking through before copying is the mistake worth
+ * designing against.
+ */
+export function Credentials({ result }: { result: SignupSuccess }) {
   const [copied, setCopied] = useState(false);
   const loginUrl = `${appUrl}/login?tenant=${result.slug}`;
 

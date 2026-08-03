@@ -2628,6 +2628,51 @@ enum LeadStatus {
   REJECTED // not a fit (spam, wrong product, etc.)
 }
 
+/// A self-serve cooperative signup that hasn't proved its email yet.
+///
+/// Self-serve signup provisions a Postgres schema, runs every migration
+/// against it, seeds it, and mints an admin whose password is shown
+/// exactly once. Doing that straight off an anonymous POST means a
+/// typo'd address produces a live tenant nobody can reach and nobody
+/// cleans up. So the signup lands here first and provisioning waits on
+/// a confirmed token.
+///
+/// Rows are disposable by design: unconfirmed ones expire, and the slug
+/// is NOT reserved while pending (see the note on `slug`).
+model PendingTenantSignup {
+  id String @id @default(uuid())
+
+  /// Desired schema name. Deliberately NOT unique and NOT a
+  /// reservation — two people may request the same slug, and whoever
+  /// confirms first gets it. Reserving on request would let anyone
+  /// squat every good name with unverifiable addresses, which is a
+  /// worse failure than the loser of a race seeing "already taken".
+  slug       String
+  name       String
+  adminEmail String
+  adminName  String
+
+  /// SHA-256 of the token in the confirmation link — same treatment as
+  /// RefreshToken. The plaintext exists only in the email; a database
+  /// leak must not hand anyone the ability to provision.
+  tokenHash String @unique
+
+  expiresAt  DateTime
+  /// Set when the token is redeemed. Kept rather than deleted so a
+  /// second click on the same link can say "already used" instead of
+  /// "invalid", and so support can see the signup happened.
+  consumedAt DateTime?
+  /// Slug actually provisioned on confirmation. Usually equals `slug`;
+  /// present so support can trace a pending row to its tenant.
+  tenantSlug String?
+
+  createdAt DateTime @default(now())
+
+  @@index([adminEmail])
+  /// Supports the sweep that deletes expired unconfirmed rows.
+  @@index([expiresAt])
+}
+
 // ─── Licensing ──────────────────────────────────────────────────────────────
 //
 // Persisted record of every license activation on this instance. The

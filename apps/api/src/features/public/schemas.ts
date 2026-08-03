@@ -75,3 +75,16 @@ export const signupTenantSchema = z.object({
   adminName: z.string().min(1).max(120),
 });
 export type SignupTenantInput = z.infer<typeof signupTenantSchema>;
+
+/**
+ * Body for the confirmation step. The token is 32 random bytes as hex,
+ * so the length is fixed — a bound here keeps anything absurd from
+ * reaching the hash function.
+ */
+export const confirmSignupSchema = z.object({
+  token: z
+    .string()
+    .length(64)
+    .regex(/^[a-f0-9]+$/, "Malformed token"),
+});
+export type ConfirmSignupInput = z.infer<typeof confirmSignupSchema>;
