@@ -4,9 +4,10 @@
   "private": true,
   "description": "Smart Loan — advanced loan application with credit scoring + KYC",
   "scripts": {
-    "dev": "nx run-many -t serve -p web api --parallel=2",
+    "dev": "nx run-many -t serve -p web api marketing --parallel=3",
     "dev:web": "nx serve web",
     "dev:api": "nx serve api",
+    "dev:marketing": "nx serve marketing",
     "build": "nx run-many -t build --all",
     "lint": "nx run-many -t lint --all",
     "test": "nx run-many -t test --all",

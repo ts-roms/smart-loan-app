@@ -152,17 +152,22 @@ is `api + web` together (the cooperative-staff console + the borrower
 portal). Marketing + platform are separate.
 
 ```bash
-# Both common surfaces — api + web (hot-reload, parallel)
+# api + web + marketing (hot-reload, parallel)
 pnpm dev
 
 # One at a time:
-pnpm dev:api       # Fastify API on :3001
-pnpm dev:web       # React/Vite officer + borrower SPA on :5173
+pnpm dev:api        # Fastify API on :3001
+pnpm dev:web        # React/Vite officer + borrower SPA on :5173
+pnpm dev:marketing  # Public marketing site on :5175
 
 # Vendor-side (multi-tenant SaaS only):
 pnpm --filter @loan/platform dev   # Platform console on :5174
-pnpm --filter @loan/marketing dev  # Public marketing site on :5175
 ```
+
+Marketing joins `pnpm dev` because it's a real entry point now, not a
+brochure: its sign-in links point at the app on :5173, and `/signup`
+posts to the API through Vite's `/public` proxy. Starting it separately
+meant those paths went untested during ordinary development.
 
 Open:
 
