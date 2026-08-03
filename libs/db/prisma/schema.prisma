@@ -113,9 +113,8 @@ enum GovernmentIdType {
 enum EmploymentStatus {
   EMPLOYED
   SELF_EMPLOYED
-  /// Project / contract worker — the FRD treats this similarly to
-  /// SELF_EMPLOYED for income verification but separates it so reports
-  /// can break it out.
+  /// Project / contract worker — treated like SELF_EMPLOYED for income
+  /// verification, but kept separate so reports can break it out.
   FREELANCE
   UNEMPLOYED
   RETIRED
@@ -174,7 +173,7 @@ model Customer {
   /// don't have one.
   suffix      String?
   dateOfBirth DateTime
-  /// Self-identified gender (FRD §1.4). Nullable for legacy rows;
+  /// Self-identified gender. Nullable for legacy rows;
   /// new applications collect it at registration.
   gender      Gender?
   /// Biological sex — collected separately because some compliance
@@ -524,7 +523,7 @@ model LoanProduct {
   /// recoveries. 0.45 is a typical PH NBFI baseline for unsecured retail.
   eclLgd        Decimal @default(0.45) @db.Decimal(6, 4)
 
-  // ── Lease-to-Own (FRD §3.5) ────────────────────────────────────────
+  // ── Lease-to-Own ───────────────────────────────────────────────────
   /// When true, applications create a LeaseAgreement at disburse. Vehicle
   /// title stays with the company until the borrower pays the residual.
   isLease                   Boolean  @default(false)
@@ -532,13 +531,13 @@ model LoanProduct {
   /// A LEASE_AUTO product with 600k principal + 0.10 = 60k buyout fee.
   /// Per-loan override is captured on LeaseAgreement at create time.
   residualValueFraction     Decimal? @db.Decimal(5, 4)
-  /// True when the product is restricted to company employees (FRD §3.5 —
+  /// True when the product is restricted to company employees (
   /// currently the case; non-employees come in a future phase).
   employeeOnly              Boolean  @default(false)
   /// Number of consecutive missed payments before non-employees lose
-  /// possession. FRD says 3.
+  /// possession. Defaults to 3.
   missedPaymentPullOutCount Int      @default(3)
-  /// Months between maintenance reminders (FRD §3.5 — every 6 months).
+  /// Months between maintenance reminders (every 6 months).
   maintenanceReminderMonths Int      @default(6)
 
   loans         LoanApplication[]
@@ -729,7 +728,7 @@ model LoanApplication {
   restructuredBy     LoanApplication? @relation("Restructure")
 
   /// True if the customer had a prior fully-paid loan when this application
-  /// was submitted (FRD §3.1 — "Repeat Loan"). Set automatically at apply
+  /// was submitted ("Repeat Loan"). Set automatically at apply
   /// time; treated as a hint by the underwriter, not a hard gate.
   isRepeat Boolean @default(false)
 
@@ -1922,7 +1921,7 @@ model BigBrotherAccount {
   @@index([periodFrom, periodTo])
 }
 
-// ─── Penalty waivers (FRD Phase A) ───────────────────────────────────────────
+// ─── Penalty waivers ─────────────────────────────────────────────────────────
 //
 // Officers may waive part or all of accrued late-fees as part of a settlement
 // negotiation. We snapshot the original accrued penalty at waive time, the
@@ -1954,7 +1953,7 @@ model PenaltyWaiver {
   @@index([loanId, waivedAt])
 }
 
-// ─── Annual / renewable documents (FRD §3.8) ─────────────────────────────────
+// ─── Annual / renewable documents ────────────────────────────────────────────
 //
 // Some loan types require docs that must be renewed annually — car insurance
 // for auto loans, real-property tax for mortgages, fire insurance, OR/CR
@@ -1987,9 +1986,9 @@ enum AnnualDocumentStatus {
   EXPIRED
 }
 
-// ─── Demand letters (FRD §3.6) ───────────────────────────────────────────────
+// ─── Demand letters ──────────────────────────────────────────────────────────
 //
-// Formal escalation when a loan is materially overdue. The FRD specifies
+// Formal escalation when a loan is materially overdue. Policy specifies
 // First (60+ days) and Final (90+ days) letters from the company itself, plus
 // Attorney variants when escalated to outside counsel. The batch flow:
 //
@@ -2020,7 +2019,7 @@ enum DemandLetterStatus {
   DRAFTED
   /// Reviewed + signed off by the appropriate signatory (Operations
   /// Manager for company variants; Lawyer for attorney variants) per
-  /// FRD §3.6.5 escalation matrix. Locked from edits.
+  /// the escalation matrix. Locked from edits.
   APPROVED
   /// Sent via email/SMS/post. Terminal-but-open.
   DISPATCHED
@@ -2044,7 +2043,7 @@ model DemandLetter {
   totalOwed     Decimal @db.Decimal(14, 2)
   daysOverdue   Int
 
-  /// Date the borrower must pay by per the letter (FRD: 7–15 days).
+  /// Date the borrower must pay by per the letter.
   paymentDeadline DateTime
 
   /// Rendered letter body — what the dispatcher sends. Captured at draft
@@ -2055,7 +2054,7 @@ model DemandLetter {
   draftedAt   DateTime @default(now())
   draftedById String
 
-  /// Approval gate (FRD §3.6.5). Set when status -> APPROVED.
+  /// Approval gate. Set when status -> APPROVED.
   approvedAt   DateTime?
   approvedById String?
   approvalNote String?   @db.VarChar(500)
@@ -2109,7 +2108,7 @@ model AnnualDocument {
   @@index([status])
 }
 
-// ─── Repossession (FRD §3.7) ─────────────────────────────────────────────────
+// ─── Repossession ────────────────────────────────────────────────────────────
 //
 // Workflow state machine when an auto-loan defaults beyond recovery via
 // demand letter. One active case per loan (enforced by unique constraint
@@ -2126,7 +2125,7 @@ enum RepossessionStatus {
   IDENTIFIED
   /// Branch Manager approval.
   BM_APPROVED
-  /// Credit Head approval (FRD: "Branch Manager → Credit Head → Legal").
+  /// Credit Head approval.
   CREDIT_HEAD_APPROVED
   /// Legal Department approval — agent can now be dispatched.
   LEGAL_APPROVED
@@ -2153,7 +2152,7 @@ model RepossessionCase {
   identifiedAt   DateTime @default(now())
   identifiedById String
 
-  // ── Approval chain (FRD §3.7 — Branch Manager → Credit Head → Legal) ──
+  // ── Approval chain (Branch Manager → Credit Head → Legal) ─────────────
   bmApprovedAt           DateTime?
   bmApprovedById         String?
   bmApprovalNote         String?
@@ -2170,7 +2169,7 @@ model RepossessionCase {
   agentAssignedAt   DateTime?
   agentAssignedById String?
 
-  // ── Vehicle recovery (FRD §3.7 — Inventory and Storage) ───────────────
+  // ── Vehicle recovery (Inventory and Storage) ──────────────────────────
   recoveredAt      DateTime?
   recoveredById    String?
   vehicleCondition String?   @db.VarChar(500)
@@ -2180,7 +2179,7 @@ model RepossessionCase {
   vehiclePhotos    String?
   storageLocation  String?
 
-  // ── Auction (FRD §3.7 — Disposal of Vehicle) ──────────────────────────
+  // ── Auction (Disposal of Vehicle) ─────────────────────────────────────
   auctionedAt           DateTime?
   auctionedById         String?
   /// "PUBLIC" / "DEALER" / etc.
@@ -2214,7 +2213,7 @@ model RepossessionCase {
   @@index([identifiedAt(sort: Desc)])
 }
 
-// ─── DORSI compliance (FRD §3.10) ────────────────────────────────────────────
+// ─── DORSI compliance ────────────────────────────────────────────────────────
 //
 // DORSI = Directors / Officers / Stockholders / Related Interests. Loans to
 // these parties are tightly capped:
@@ -2249,7 +2248,7 @@ model DorsiRecord {
   basis            String        @db.VarChar(500)
   /// False once the relationship ends (resigned, sold shares, etc.).
   active           Boolean       @default(true)
-  /// FRD §3.10.1 requires re-attestation on account renewal — admins
+  /// requires re-attestation on account renewal — admins
   /// stamp this when they confirm the record is still accurate.
   lastReviewedAt   DateTime?
   lastReviewedById String?
@@ -2361,7 +2360,7 @@ model SystemConfig {
   updatedBy   User?    @relation("SystemConfigUpdatedBy", fields: [updatedById], references: [id])
 }
 
-// ─── Lease-to-Own agreement (FRD §3.5) ───────────────────────────────────────
+// ─── Lease-to-Own agreement ──────────────────────────────────────────────────
 //
 // A hybrid auto-loan where the borrower leases the vehicle and pays a
 // residual at the end to take title. The standard LoanSchedule covers the
@@ -2402,7 +2401,7 @@ model LeaseAgreement {
   /// Title holder — flips to CUSTOMER after BUYOUT_COMPLETED.
   titleHolder               LeaseTitleHolder @default(COMPANY)
   /// True if the borrower is a company employee (employees can never be
-  /// pulled out per FRD; the pull-out flow is non-employee only).
+  /// pulled out; the pull-out flow is non-employee only).
   isEmployee                Boolean
   /// Consecutive missed payments counter (reset on payment).
   missedPaymentStreak       Int              @default(0)

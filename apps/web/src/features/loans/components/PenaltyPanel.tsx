@@ -27,7 +27,7 @@ import { AlertTriangle, Gavel, ScrollText } from "lucide-react";
 import { useState } from "react";
 
 /**
- * Penalty Panel — FRD §3.3.3 "Facility to Waive Penalties".
+ * Penalty Panel "Facility to Waive Penalties".
  *
  * Shows: total accrued late-fees, total waived-to-date, current outstanding.
  * Gated waive button opens a dialog (amount + reason) which posts a

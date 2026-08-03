@@ -74,28 +74,28 @@ export function buildJobDefinitions(
     {
       name: "annual-doc-status-refresh",
       description:
-        "FRD §3.8 — recompute annual-doc statuses (VALID / EXPIRING_SOON / EXPIRED) from current dates.",
+        "recompute annual-doc statuses (VALID / EXPIRING_SOON / EXPIRED) from current dates.",
       defaultCron: "0 0 * * *", // 00:00 every day
       fn: async () => annualDocs.refreshStatuses(),
     },
     {
       name: "annual-doc-expiry-reminders",
       description:
-        "FRD §3.8 — notify borrowers about renewable docs (insurance / RPT) expiring in the next 30 days, plus an escalation when already expired.",
+        "notify borrowers about renewable docs (insurance / RPT) expiring in the next 30 days, plus an escalation when already expired.",
       defaultCron: "0 8 * * *", // 08:00 every day
       fn: async () => sendAnnualDocReminders(prisma, notifications, annualDocs),
     },
     {
       name: "lease-end-of-term-notices",
       description:
-        "FRD §3.5.6 — fire 60-day end-of-term notice for active leases approaching their lease term end. Idempotent via LeaseAgreement.endOfTermNoticeSentAt.",
+        "fire 60-day end-of-term notice for active leases approaching their lease term end. Idempotent via LeaseAgreement.endOfTermNoticeSentAt.",
       defaultCron: "0 11 * * *", // 11:00 every day
       fn: async () => sendLeaseEndOfTermNotices(prisma, notifications, leases),
     },
     {
       name: "lease-maintenance-reminders",
       description:
-        "FRD §3.5.5 — fire 6-month maintenance reminder per active lease. Cadence is set per-product (maintenanceReminderMonths).",
+        "fire 6-month maintenance reminder per active lease. Cadence is set per-product (maintenanceReminderMonths).",
       defaultCron: "0 12 * * *", // 12:00 every day
       fn: async () =>
         sendLeaseMaintenanceReminders(prisma, notifications, leases),
@@ -103,7 +103,7 @@ export function buildJobDefinitions(
     {
       name: "lease-pull-out-warnings",
       description:
-        "FRD §3.5.4 — when a non-employee lease has missed-payment streak >= threshold-1, fire a pre-pull-out warning so they can cure before the next missed payment triggers vehicle recovery.",
+        "when a non-employee lease has missed-payment streak >= threshold-1, fire a pre-pull-out warning so they can cure before the next missed payment triggers vehicle recovery.",
       defaultCron: "0 13 * * *", // 13:00 every day
       fn: async () => sendLeasePullOutWarnings(prisma, notifications, leases),
     },
@@ -368,12 +368,12 @@ async function sendAnnualDocReminders(
   return { sent, skipped };
 }
 
-// ── Lease-to-Own jobs (FRD §3.5) ────────────────────────────────────
+// ── Lease-to-Own jobs ───────────────────────────────────────────────
 
 /**
  * Estimate the lease term end as `loan.disbursedAt + termMonths`. The
  * formal "lease term end" isn't a separate field — it's the same as the
- * loan's term end. We fire the FRD §3.5.6 notice when that date is
+ * loan's term end. We fire the notice when that date is
  * within 60 days from today.
  */
 async function sendLeaseEndOfTermNotices(
@@ -460,7 +460,7 @@ async function sendLeaseEndOfTermNotices(
 }
 
 /**
- * FRD §3.5.5 — 6-month (configurable per-product) maintenance reminder
+ * 6-month (configurable per-product) maintenance reminder
  * for active leases. We check `lastMaintenanceReminderAt` to avoid
  * sending too often, and use the product's `maintenanceReminderMonths`
  * for the cadence.
@@ -532,7 +532,7 @@ async function sendLeaseMaintenanceReminders(
 }
 
 /**
- * FRD §3.5.4 — pre-pull-out warning. We fire when a non-employee lease
+ * pre-pull-out warning. We fire when a non-employee lease
  * has missed-payment streak >= (threshold - 1) so the borrower gets a
  * final chance to cure before the next missed payment triggers actual
  * vehicle pull-out. Gated via lastPullOutWarningAt to avoid daily spam.

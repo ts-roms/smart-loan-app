@@ -9,7 +9,7 @@ import {
 } from "./dorsi-helpers";
 
 /**
- * Unit tests for the pure DORSI helpers (FRD §3.10).
+ * Unit tests for the pure DORSI helpers.
  *
  * These functions are the only piece of the DORSI feature that can run
  * without Prisma — the rest of the repository is integration-test

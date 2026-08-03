@@ -27,7 +27,7 @@ cooperative) or multi-tenant SaaS (a vendor running many).
   pull-out flow.
 - **Compliance.** AML/PEP/sanctions screening, DORSI register +
   utilization caps, annual document tracker (insurance / RPT
-  renewals), FRD-compliant audit trail.
+  renewals), a compliant audit trail.
 - **Borrower portal.** Self-service application, payment online,
   KYC submit (camera/upload), document download (agreement,
   statement, receipt with e-signature).

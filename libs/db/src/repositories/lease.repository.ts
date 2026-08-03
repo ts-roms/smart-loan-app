@@ -1,5 +1,5 @@
 /**
- * Lease-to-Own repository — FRD §3.5.
+ * Lease-to-Own repository.
  *
  * A lease agreement is auto-created when a loan with `product.isLease=true`
  * is disbursed. The standard amortization handles monthly rentals; this
@@ -162,7 +162,7 @@ export class LeaseRepository {
     }
     if (a.isEmployee) {
       throw new Error(
-        "Pull-out is non-employee-only per FRD §3.5. Use restructure / collections for employee leases.",
+        "Pull-out is non-employee-only. Use restructure / collections for employee leases.",
       );
     }
     return this.prisma.leaseAgreement.update({

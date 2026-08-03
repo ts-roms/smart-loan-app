@@ -1,5 +1,5 @@
 /**
- * Annual / renewable document hooks (FRD §3.8). Per-loan + cross-loan
+ * Annual / renewable document hooks. Per-loan + cross-loan
  * dashboard queries.
  */
 

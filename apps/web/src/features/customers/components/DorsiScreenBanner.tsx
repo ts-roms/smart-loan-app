@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 /**
- * DORSI auto-screen banner — FRD §3.10.1.
+ * DORSI auto-screen banner.
  *
  * Shown on the customer detail page. Runs a fuzzy name screen against
  * the active DORSI register and surfaces a banner when potential
@@ -94,8 +94,7 @@ export function DorsiScreenBanner({
         <AlertTriangle className="h-3 w-3 shrink-0" />
         <span>
           <strong>DORSI screening could not be completed.</strong> This is not a
-          clean result — FRD §3.10.1 still requires confirmation before
-          proceeding.
+          clean result still requires confirmation before proceeding.
         </span>
         <Button
           size="sm"
@@ -128,9 +127,7 @@ export function DorsiScreenBanner({
     >
       <div className="flex items-center gap-2 mb-1">
         <AlertTriangle className="h-3 w-3" />
-        <strong>
-          Potential DORSI match — FRD §3.10.1 requires confirmation.
-        </strong>
+        <strong>Potential DORSI match requires confirmation.</strong>
       </div>
       <ul className="space-y-1 mt-1">
         {matches.slice(0, 5).map((m) => (

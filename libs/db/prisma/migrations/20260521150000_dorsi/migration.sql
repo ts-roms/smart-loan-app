@@ -1,4 +1,4 @@
--- FRD §3.10 Phase D — DORSI compliance.
+- Phase D — DORSI compliance.
 --
 -- Adds:
 --   * DorsiCategory enum (Director / Officer / Stockholder / Related Interest)
@@ -7,7 +7,7 @@
 --   * SystemConfig singleton holding the company total equity used as
 --     the base for the 15% / 30% cap math.
 --
--- Note: spelled "DORSI" per stakeholder preference (FRD uses DOSRI). No
+-- Note: spelled "DORSI" per stakeholder preference. No
 -- company-brand naming is hard-coded in the schema; the equity value is
 -- configured at runtime through the SystemConfig table.
 

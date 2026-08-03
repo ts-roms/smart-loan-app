@@ -1,5 +1,5 @@
 /**
- * DORSI compliance repository — FRD §3.10.
+ * DORSI compliance repository.
  *
  * DORSI = Directors / Officers / Stockholders / Related Interests.
  *
@@ -165,13 +165,13 @@ export class DorsiRepository {
     return this.prisma.dorsiRecord.findUnique({ where: { customerId } });
   }
 
-  // ── Auto-screening (FRD §3.10.1) ────────────────────────────────────
+  // ── Auto-screening ──────────────────────────────────────────────────
 
   /**
    * Fuzzy name screen against the active DORSI register. Called at
-   * customer onboarding and at loan creation per FRD: "LMS must
-   * auto-screen and prompt manual confirmation if potential DORSI
-   * matches are found".
+   * customer onboarding and at loan creation: the system must
+   * auto-screen and prompt manual confirmation whenever potential
+   * DORSI matches are found.
    *
    * Strategy:
    *   - Lowercase + strip punctuation, split into tokens.

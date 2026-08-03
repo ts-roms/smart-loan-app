@@ -60,7 +60,7 @@ const CATEGORY_LABEL: Record<DorsiCategory, string> = {
 };
 
 /**
- * DORSI page — FRD §3.10. Three sections:
+ * DORSI page. Three sections:
  *   1. Utilization dashboard (aggregate gauge + threshold alerts)
  *   2. Register (active DORSI customers, tag/deactivate/review)
  *   3. System config (company total equity, the cap base)
@@ -83,11 +83,10 @@ export function DorsiPage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-white/55">
-            FRD §3.10 — loans to Directors / Officers / Stockholders / Related
-            Interests are capped at 15% of Company Total Equity in aggregate,
-            with no single DORSI borrower exceeding 30% of that aggregate cap.
-            Loans that would breach either cap require board approval before
-            disburse.
+            loans to Directors / Officers / Stockholders / Related Interests are
+            capped at 15% of Company Total Equity in aggregate, with no single
+            DORSI borrower exceeding 30% of that aggregate cap. Loans that would
+            breach either cap require board approval before disburse.
           </p>
         </CardContent>
       </Card>

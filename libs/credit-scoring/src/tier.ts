@@ -25,9 +25,9 @@ export const TIER_LABEL: Record<Tier, string> = {
   F: "Very poor",
 };
 
-// ─── Bureau-style buckets (FRD §3.9 alignment) ───────────────────────────────
+// ─── Bureau-style buckets (alignment) ────────────────────────────────────────
 //
-// The FRD uses 4 buckets instead of our 5-letter tiers. We expose both so
+// The bureau-style scale uses 4 buckets instead of our 5-letter tiers. We expose both so
 // the existing decisioning UI keeps its A–F tiers (used by per-tier pricing
 // + LTV configs) while customer-facing reports and the application form can
 // show the bureau-aligned label.

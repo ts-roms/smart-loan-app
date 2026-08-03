@@ -1,7 +1,7 @@
 /**
  * Demand-letter service — security-critical path coverage.
  *
- * Scope: FRD §3.6.5 escalation matrix on `approve()`. Two distinct
+ * Scope: the escalation matrix on `approve()`. Two distinct
  * gates that the layered refactor could silently break:
  *
  *   1. **Stage-gated permission** — attorney stages require
@@ -13,7 +13,7 @@
  *
  *   2. **Segregation of duties** — the drafter can never self-approve
  *      (even if they have both permission keys). A regression would
- *      collapse the two-person-rule that FRD §3.6.5 codifies.
+ *      collapse the two-person rule the escalation matrix codifies.
  *
  * Also covers the NotFound path so the controller's 404 mapping has
  * test coverage.
@@ -65,7 +65,7 @@ describe("DemandLetterService.approve — NotFound", () => {
   });
 });
 
-describe("DemandLetterService.approve — stage-gated permission (FRD §3.6.5)", () => {
+describe("DemandLetterService.approve — stage-gated permission", () => {
   it("ATTORNEY_FIRST requires dl_approve_legal, refuses company-only", async () => {
     const { service, repo, audit } = makeService({
       letter: {
@@ -91,7 +91,6 @@ describe("DemandLetterService.approve — stage-gated permission (FRD §3.6.5)",
     expect(result.kind).toBe("ForbiddenStagePerm");
     expect(result.message).toContain("ATTORNEY_FIRST");
     expect(result.message).toContain("collections.dl_approve_legal");
-    expect(result.message).toContain("FRD §3.6.5");
     expect(repo.approve).not.toHaveBeenCalled();
     expect(audit.record).not.toHaveBeenCalled();
   });

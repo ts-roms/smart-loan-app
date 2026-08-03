@@ -101,7 +101,7 @@ export class DorsiController {
   };
 
   /**
-   * FRD §3.10.1 auto-screen. The customer-onboarding flow calls this
+   * Auto-screen. The customer-onboarding flow calls this
    * with the new customer's full name; potential matches against the
    * active DORSI register are returned with a similarity score.
    */

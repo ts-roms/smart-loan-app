@@ -14,7 +14,7 @@ export const querySchema = z.object({
 export type ReportQuery = z.infer<typeof querySchema>;
 
 /**
- * Supported report types, mapped to FRD audit-clause sections in the
+ * Supported report types, mapped to audit-clause sections in the
  * route file. Validating the type set here means a typo in the URL
  * produces a 400, not a 404, which is closer to the truth (we know
  * what's supported; the user asked for something that's *not* it).

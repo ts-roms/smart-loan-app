@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Demand Letter schemas — FRD §3.6.
+ * Demand Letter schemas.
  *
  * Stage ladder: FIRST (60d) → FINAL (90d) → ATTORNEY_FIRST → ATTORNEY_FINAL.
  * Status ladder: DRAFTED → APPROVED → DISPATCHED → (RESPONDED | WAIVED).

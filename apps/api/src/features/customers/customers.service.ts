@@ -139,7 +139,7 @@ export class CustomerService {
   }
 
   /**
-   * Repeat-loan eligibility (FRD §3.1.1). A customer is eligible when
+   * Repeat-loan eligibility. A customer is eligible when
    * they have at least one CLOSED loan and no DEFAULTED / WRITTEN_OFF in
    * history. We return the full rollup so the application form can show
    * a "Repeat borrower" badge and pre-populate KYC re-use hints.
@@ -160,7 +160,7 @@ export class CustomerService {
     const lastClosedAt =
       loans.find((l) => l.status === "CLOSED")?.closedAt ?? null;
 
-    // FRD: "completed repayment of the previous loan (or be in good standing)"
+    // Policy: "completed repayment of the previous loan (or be in good standing)"
     const eligible = closedCount > 0 && writtenOff === 0 && defaulted === 0;
 
     return {

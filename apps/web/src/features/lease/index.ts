@@ -1,5 +1,5 @@
 /**
- * Public API of the lease feature (FRD §3.5).
+ * Public API of the lease feature.
  *
  * Two surfaces:
  *   - `LeaseQueuePage` — the cross-loan dashboard mounted at `/lease`.

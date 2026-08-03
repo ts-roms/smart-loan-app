@@ -1,5 +1,5 @@
 /**
- * Demand letter hooks (FRD §3.6). Candidate identification, batch draft,
+ * Demand letter hooks. Candidate identification, batch draft,
  * dispatch, and close (RESPONDED / WAIVED).
  */
 

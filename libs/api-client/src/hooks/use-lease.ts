@@ -1,5 +1,5 @@
 /**
- * Lease-to-Own hooks (FRD §3.5). Per-loan agreement state + the four
+ * Lease-to-Own hooks. Per-loan agreement state + the four
  * terminal transitions (buyout, pull-out, return, extend).
  */
 

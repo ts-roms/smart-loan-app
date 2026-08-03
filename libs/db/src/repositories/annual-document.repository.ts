@@ -1,5 +1,5 @@
 /**
- * Annual / renewable document tracker — FRD §3.8.
+ * Annual / renewable document tracker.
  *
  * For loan products that require insurance / RPT / OR-CR that must be
  * renewed annually, we track each submission with its `effectiveFrom`

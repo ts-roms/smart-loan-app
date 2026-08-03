@@ -1,5 +1,5 @@
 /**
- * Demand Letter API — FRD §3.6.
+ * Demand Letter API.
  *
  *   GET    /demand-letters/candidates?stage=FIRST  collections.demand_letter
  *   GET    /demand-letters?stage=&status=          collections.read
@@ -11,7 +11,7 @@
  *
  * Layered: routes → controller → service → repo + audit + notifications.
  * Approval has a stage-gated permission check + segregation-of-duties
- * rule in the service (FRD §3.6.5).
+ * rule in the service.
  *
  * Phase 2: per-request service wiring via `req.demandLetterServices`.
  */
@@ -84,7 +84,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
   );
 
   // The preHandler accepts EITHER permission — the service then narrows
-  // to the exact one required by the letter's stage (FRD §3.6.5).
+  // to the exact one required by the letter's stage.
   app.post<{ Params: { id: string } }>(
     "/:id/approve",
     {

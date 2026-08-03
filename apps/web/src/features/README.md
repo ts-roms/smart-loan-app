@@ -115,15 +115,15 @@ appear where the feature actually has something to put in them
 | Feature                                                              | pages | components | hooks | constants | notes                                                   |
 | -------------------------------------------------------------------- | :---: | :--------: | :---: | :-------: | ------------------------------------------------------- |
 | **loans**                                                            |   ✓   |     ✓      |   ✓   |     ✓     | reference implementation                                |
-| **lease**                                                            |   ✓   |     —      |   ✓   |     ✓     | FRD §3.5 — queue + per-loan panel in `loans/components` |
+| **lease**                                                            |   ✓   |     —      |   ✓   |     ✓     | Queue + per-loan panel in `loans/components`            |
 | **customers**                                                        |   ✓   |     ✓      |   —   |     ✓     | rich profile + ledger                                   |
 | **portal**                                                           |   ✓   |     —      |   —   |     —     | borrower-facing; reuses `LOAN_TYPE_LABELS` from `loans` |
 | **accounting**                                                       |   ✓   |     ✓      |   —   |     —     | 9 routed pages (dashboard, COA, journal, periods, etc.) |
 | **collections**                                                      |   ✓   |     ✓      |   —   |     —     | overdue queue + demand letters                          |
 | **cooperative**                                                      |   ✓   |     ✓      |   —   |     —     | 7-entity coop ledger UI                                 |
 | **delegations**                                                      |   ✓   |     ✓      |   —   |     —     | inline constants — single-page feature                  |
-| **dorsi**                                                            |   ✓   |     —      |   —   |     —     | FRD §3.10; inline label map                             |
-| **repossession**                                                     |   ✓   |     —      |   —   |     —     | FRD §3.7; inline label map                              |
+| **dorsi**                                                            |   ✓   |     —      |   —   |     —     | Inline label map                                        |
+| **repossession**                                                     |   ✓   |     —      |   —   |     —     | Inline label map                                        |
 | **kyc**                                                              |   ✓   |     ✓      |   —   |     —     | reviewer queue                                          |
 | **loan-products**                                                    |   ✓   |     ✓      |   —   |     —     | product editor                                          |
 | **reconciliation**                                                   |   ✓   |     ✓      |   —   |     —     | bank statement triage                                   |
@@ -134,7 +134,7 @@ appear where the feature actually has something to put in them
 | **messaging**                                                        |   —   |     ✓      |   —   |     —     | embedded panel on loan detail                           |
 | **help**                                                             |   ✓   |     ✓      |   —   |     —     | + `content.ts` (per-module FAQ)                         |
 | **dashboard**                                                        |   ✓   |     —      |   —   |     —     | KPIs + charts only                                      |
-| **compliance**                                                       |   ✓   |     —      |   —   |     —     | annual-docs cross-loan view (FRD §3.8)                  |
+| **compliance**                                                       |   ✓   |     —      |   —   |     —     | Annual-docs cross-loan view                             |
 | **auth, decisioning, ecl, jobs, payments, rbac, reports, screening** |   ✓   |     —      |   —   |     —     | minimal single-page features                            |
 
 The table isn't a checklist — it's a record of what's earned its

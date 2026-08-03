@@ -1,5 +1,5 @@
 /**
- * Pure helpers for the DORSI compliance feature (FRD §3.10).
+ * Pure helpers for the DORSI compliance feature.
  *
  * Lives in libs/db/src/lib/ rather than the repository so it can be
  * unit-tested without standing up Prisma or seeding a DB. The repo
@@ -9,8 +9,7 @@
  *   • Cap math — aggregate cap (15% of company equity) and individual
  *     cap (30% of aggregate). Single source of truth for these rates.
  *   • Name screening — fuzzy match against a list of active DORSI
- *     records, used at customer onboarding + loan creation per
- *     FRD §3.10.1.
+ *     records, used at customer onboarding and at loan creation.
  */
 
 export const AGGREGATE_CAP_RATE = 0.15;

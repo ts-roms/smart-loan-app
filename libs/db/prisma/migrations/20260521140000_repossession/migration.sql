@@ -1,4 +1,4 @@
--- FRD §3.7 Phase C — Repossession workflow.
+- Phase C — Repossession workflow.
 --
 -- Adds:
 --   * REPOSSESSION_AUCTION value to JournalSource so the auction

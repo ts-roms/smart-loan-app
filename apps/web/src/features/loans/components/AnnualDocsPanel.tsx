@@ -48,7 +48,7 @@ const TYPE_LABELS: Record<AnnualDocumentType, string> = {
 };
 
 /**
- * AnnualDocsPanel — FRD §3.8 surface on the loan detail page.
+ * AnnualDocsPanel surface on the loan detail page.
  *
  * Lists every renewable document (car insurance, RPT, OR/CR, fire
  * insurance) with its expiry-aware status badge. Officers with

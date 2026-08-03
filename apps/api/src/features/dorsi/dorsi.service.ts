@@ -8,7 +8,7 @@ import type {
 } from "./schemas";
 
 /**
- * DorsiService — application layer for FRD §3.10. The repository
+ * DorsiService — application layer for. The repository
  * (libs/db) owns storage + the utilization math; the service adds
  * audit-log writes around every state-changing operation so a single
  * place owns the "what happened, who did it" contract.

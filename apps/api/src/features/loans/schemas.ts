@@ -113,7 +113,7 @@ export const restructureSchema = z.object({
   purpose: z.string().max(200).optional(),
 });
 
-/** Officer waiver of late-fee / penalty (FRD §3.4). */
+/** Officer waiver of late-fee / penalty. */
 export const waivePenaltySchema = z.object({
   waivedAmount: z.number().positive(),
   reason: z.string().min(3).max(500),

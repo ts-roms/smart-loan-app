@@ -301,7 +301,7 @@ export function useRecordPayment() {
   });
 }
 
-// ─── Penalty waive (FRD Phase A) ─────────────────────────────────────
+// ─── Penalty waive ───────────────────────────────────────────────────
 
 export function useLoanPenalties(loanId: string | null) {
   return useQuery({

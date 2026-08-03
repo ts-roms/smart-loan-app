@@ -17,10 +17,10 @@ import type {
 } from "./schemas";
 
 /**
- * Demand-letter orchestration — FRD §3.6.
+ * Demand-letter orchestration.
  *
  * The reason this earns a service:
- *   1. Approval is stage-gated (FRD §3.6.5 escalation matrix) AND
+ *   1. Approval is stage-gated (escalation matrix) AND
  *      enforces segregation-of-duties (drafter ≠ approver). That logic
  *      doesn't belong in the HTTP shell.
  *   2. Batch draft injects a per-loan penalty lookup into the repo so
@@ -131,8 +131,8 @@ export class DemandLetterService {
     const letter = await this.repo.findById(args.id);
     if (!letter) return { ok: false, kind: "NotFound" };
 
-    // FRD §3.6.5: attorney stages require legal sign-off, earlier
-    // stages need company sign-off.
+    // Escalation matrix: attorney stages require legal sign-off,
+    // earlier stages need company sign-off.
     const requiredPerm =
       letter.stage === "ATTORNEY_FIRST" || letter.stage === "ATTORNEY_FINAL"
         ? "collections.dl_approve_legal"
@@ -141,7 +141,7 @@ export class DemandLetterService {
       return {
         ok: false,
         kind: "ForbiddenStagePerm",
-        message: `Stage ${letter.stage} requires permission ${requiredPerm} (FRD §3.6.5).`,
+        message: `Stage ${letter.stage} requires permission ${requiredPerm}.`,
       };
     }
 
@@ -150,8 +150,7 @@ export class DemandLetterService {
       return {
         ok: false,
         kind: "ForbiddenSelfApprove",
-        message:
-          "Drafter cannot self-approve (FRD §3.6.5 segregation of duties).",
+        message: "Drafter cannot self-approve (segregation of duties).",
       };
     }
 

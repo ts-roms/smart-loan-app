@@ -295,7 +295,7 @@ export class LoanRepository {
       const number = await this.nextApplicationNumber(tx);
       const initialStatus = (input.initialStatus ?? "SUBMITTED") as LoanStatus;
 
-      // FRD §3.1 — repeat-loan flag. True when this customer already has at
+      // Repeat-loan flag. True when this customer already has at
       // least one CLOSED loan and no DEFAULTED / WRITTEN_OFF in history.
       // Restructures keep their `restructuredFromId` link and don't count
       // here — they're a continuation of an existing line, not a new one.
@@ -479,7 +479,7 @@ export class LoanRepository {
         },
       });
 
-      // FRD §3.5 — Lease-to-Own: when the product is a lease, snapshot a
+      // Lease-to-Own: when the product is a lease, snapshot a
       // LeaseAgreement so the residual buyout + pull-out flows have somewhere
       // to attach. Employee scoping is inferred from the customer's
       // employmentStatus until we have a stronger "company employee" signal.
@@ -996,7 +996,7 @@ export class LoanRepository {
     });
   }
 
-  // ─── Penalty waive (FRD §3.3) ─────────────────────────────────────────
+  // ─── Penalty waive ────────────────────────────────────────────────────
   //
   // Daily LATE_FEE_ACCRUAL postings are Dr Loans Receivable / Cr Fee Income.
   // The sum of Fee Income credits across all LATE_FEE_ACCRUAL entries for

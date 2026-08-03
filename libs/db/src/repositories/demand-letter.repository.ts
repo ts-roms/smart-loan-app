@@ -1,5 +1,5 @@
 /**
- * Demand Letter repository — FRD §3.6.
+ * Demand Letter repository.
  *
  * Workflow:
  *   1. `identifyCandidates(stage)` returns loans overdue past the stage's
@@ -53,7 +53,7 @@ export interface DemandCandidate {
 export interface DraftBatchInput {
   loanIds: string[];
   stage: DemandLetterStage;
-  /// FRD: 7–15 days from issuance.
+  /// Policy: 7–15 days from issuance.
   paymentDeadlineDays?: number;
   draftedById: string;
 }
@@ -159,7 +159,7 @@ export class DemandLetterRepository {
 
   /**
    * Create DRAFTED letter rows for each loan id. Each row's body is
-   * rendered from the FRD template + snapshot amounts. Returns the
+   * rendered from the standard template + snapshot amounts. Returns the
    * created rows.
    */
   async draftBatch(
@@ -238,7 +238,7 @@ export class DemandLetterRepository {
   }
 
   /**
-   * Approve a drafted letter — FRD §3.6.5 escalation matrix. The route
+   * Approve a drafted letter escalation matrix. The route
    * layer gates this on the right signatory permission:
    *   - FIRST / FINAL          → collections.dl_approve_company
    *   - ATTORNEY_FIRST / FINAL → collections.dl_approve_legal
@@ -272,7 +272,7 @@ export class DemandLetterRepository {
     if (!letter) throw new Error("Demand letter not found");
     if (letter.status !== "APPROVED") {
       throw new Error(
-        `Cannot dispatch from status ${letter.status} — must be APPROVED first (FRD §3.6.5)`,
+        `Cannot dispatch from status ${letter.status} — must be APPROVED first`,
       );
     }
     return this.prisma.demandLetter.update({
@@ -321,7 +321,7 @@ const STAGE_TITLE: Record<DemandLetterStage, string> = {
 };
 
 /**
- * Render the letter body from the FRD §3.6 template. Plain text — the
+ * Render the letter body from the template. Plain text — the
  * downstream PDF renderer can wrap it in firm letterhead later.
  *
  * Pure function — exported for tests.

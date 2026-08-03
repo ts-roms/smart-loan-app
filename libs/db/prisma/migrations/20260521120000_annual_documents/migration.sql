@@ -1,4 +1,4 @@
--- FRD §3.8 Phase B — Annual Documentation tracker.
+- Phase B — Annual Documentation tracker.
 --
 -- Tracks renewable docs (car insurance, RPT, OR/CR, fire insurance) with
 -- expiry-aware status + reminder bookkeeping. Daily job scans for rows with

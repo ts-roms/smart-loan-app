@@ -1,4 +1,4 @@
-// Annual / renewable documents feature (FRD §3.8).
+// Annual / renewable documents feature.
 //
 // Two plugins exposed for the central registrar:
 //   • annualDocsLoanRoutes — per-loan endpoints mounted under /loans

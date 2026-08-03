@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 
 /**
  * Default debt-to-income ceiling for the "safe principal" hint. 50% is a
- * common PH cooperative threshold (FRD §3.4 implied). It's a *soft*
+ * common PH cooperative threshold (implied). It's a *soft*
  * guardrail — the officer can still submit a higher principal; the
  * decisioning engine has the final say.
  */
@@ -211,9 +211,7 @@ export function AffordabilityGuardrails({
             <div className="flex items-center gap-2 text-sm">
               <ShieldAlert className="h-4 w-4 text-amber-300" />
               <span className="font-medium">DORSI cap projection</span>
-              <span className="text-[10px] text-white/45 uppercase tracking-wider">
-                FRD §3.10
-              </span>
+              <span className="text-[10px] text-white/45 uppercase tracking-wider"></span>
             </div>
             <span
               className={`text-[10px] uppercase tracking-wider ${

@@ -24,8 +24,7 @@ import { useState } from "react";
 import { findArticle, TourButton } from "../../help";
 
 /**
- * Compliance Reports — FRD audit requirements across modules
- * (§3.1.5, §3.2.3, §3.3.7, §3.5.8, §3.7.7, §3.8.6, §3.9.4, §3.10.6).
+ * Compliance Reports — audit requirements across modules.
  *
  * Each card downloads a CSV from the /reports/:type endpoint. JSON is
  * also available by switching the format query param — useful for
@@ -39,7 +38,6 @@ interface ReportDef {
   cadence: string;
   needsDateRange: boolean;
   icon: typeof ShieldCheck;
-  frd: string;
 }
 
 const REPORTS: ReportDef[] = [
@@ -51,7 +49,6 @@ const REPORTS: ReportDef[] = [
     cadence: "Quarterly",
     needsDateRange: false,
     icon: ShieldCheck,
-    frd: "§3.10.6",
   },
   {
     type: "penalty-waivers",
@@ -61,7 +58,6 @@ const REPORTS: ReportDef[] = [
     cadence: "Monthly",
     needsDateRange: true,
     icon: Layers,
-    frd: "§3.3.7",
   },
   {
     type: "demand-letters",
@@ -71,7 +67,6 @@ const REPORTS: ReportDef[] = [
     cadence: "Monthly",
     needsDateRange: true,
     icon: ScrollText,
-    frd: "§3.6",
   },
   {
     type: "repossession-cases",
@@ -81,7 +76,6 @@ const REPORTS: ReportDef[] = [
     cadence: "Quarterly",
     needsDateRange: true,
     icon: ShieldAlert,
-    frd: "§3.7.7",
   },
   {
     type: "annual-docs",
@@ -91,7 +85,6 @@ const REPORTS: ReportDef[] = [
     cadence: "Quarterly",
     needsDateRange: false,
     icon: FileWarning,
-    frd: "§3.8.6",
   },
   {
     type: "ecl-movement",
@@ -101,7 +94,6 @@ const REPORTS: ReportDef[] = [
     cadence: "Monthly",
     needsDateRange: true,
     icon: Banknote,
-    frd: "§3.4.3",
   },
 ];
 
@@ -121,9 +113,9 @@ export function ReportsPage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-white/55">
-            FRD audit requirements rendered as exportable CSVs. Each card
-            downloads a snapshot — bring it into Excel / Google Sheets for
-            month-end + quarter-end reviews.
+            Audit requirements rendered as exportable CSVs. Each card downloads
+            a snapshot — bring it into Excel / Google Sheets for month-end +
+            quarter-end reviews.
           </p>
         </CardContent>
       </Card>
@@ -196,9 +188,6 @@ function ReportCard({ report }: { report: ReportDef }) {
             <Icon className="h-4 w-4 text-sky-300" />
             {report.title}
           </CardTitle>
-          <p className="text-[10px] text-white/45 mt-0.5">
-            FRD {report.frd} · {report.cadence}
-          </p>
         </div>
         <Badge variant="muted">{report.cadence}</Badge>
       </CardHeader>

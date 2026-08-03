@@ -31,7 +31,7 @@ import { useState } from "react";
  *   - useCustomer            : monthly income, KYC status
  *   - useCustomerScore       : credit score + tier (null pre-survey)
  *   - useCustomerSummary     : active loans, outstanding principal
- *   - useRepeatEligibility   : FRD §3.1.1 repeat-borrower eligibility
+ *   - useRepeatEligibility   : repeat-borrower eligibility
  *   - useDorsiForCustomer    : DORSI tag (null if not tagged)
  *
  * Surfacing rules ("traffic lights"):

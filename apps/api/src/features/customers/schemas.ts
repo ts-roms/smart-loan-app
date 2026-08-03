@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Customer registration schema — expanded for PH-standard borrower
- * onboarding (FRD §1.4). Includes conditional cross-field validation
+ * onboarding. Includes conditional cross-field validation
  * driven by `.superRefine`:
  *
  *   • civilStatus === MARRIED   → spouseName is required

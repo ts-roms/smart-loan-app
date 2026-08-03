@@ -1,5 +1,5 @@
 /**
- * DORSI compliance hooks (FRD §3.10). Register CRUD, utilization
+ * DORSI compliance hooks. Register CRUD, utilization
  * dashboard, loan-check preview, board approval, system config.
  */
 
@@ -98,7 +98,7 @@ export function useCheckDorsiLoan() {
   });
 }
 
-/** Fuzzy name screen against the active DORSI register (FRD §3.10.1). */
+/** Fuzzy name screen against the active DORSI register. */
 export interface DorsiNameMatch {
   recordId: string;
   customerId: string;
