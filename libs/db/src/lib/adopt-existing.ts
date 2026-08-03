@@ -372,16 +372,25 @@ async function runMigrateAgainstPublic(
   // with the un-overridden baseUrl (which by default has no schema
   // param, so Prisma migrates against `public`).
   const here = dirname(fileURLToPath(import.meta.url));
-  const schemaPath = resolve(here, "..", "..", "prisma", "schema.prisma");
-  const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
+  const packageRoot = resolve(here, "..", "..");
+  const schemaPath = resolve(packageRoot, "prisma", "schema.prisma");
+  // Windows needs a shell to run npx at all — see the fuller note in
+  // multi-tenant-migrate.ts, which spawns the same command. Without
+  // it this throws EINVAL.
+  const isWindows = process.platform === "win32";
 
   await new Promise<void>((resolveP, reject) => {
     const child = spawn(
-      npxCmd,
+      "npx",
       ["prisma", "migrate", "deploy", "--schema", schemaPath],
       {
         env: { ...process.env, DATABASE_URL: baseUrl },
         stdio: ["ignore", "pipe", "pipe"],
+        shell: isWindows,
+        // Run from @loan/db — the only package with prisma as a
+        // dependency, so the only place its bin resolves. See the
+        // fuller note in multi-tenant-migrate.ts.
+        cwd: packageRoot,
       },
     );
     const timer = setTimeout(
