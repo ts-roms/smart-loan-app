@@ -414,9 +414,21 @@ desktop and mobile and auto-updates new builds.
 
 ## Troubleshooting
 
-**Prisma can't find `DATABASE_URL` when running `migrate deploy`** — copy
-the root `.env` next to the schema: `cp .env libs/db/.env`. Prisma
-looks for env next to its schema, not at the repo root.
+**Prisma can't find `DATABASE_URL` when running `migrate deploy`** —
+Prisma looks for env next to its schema, not at the repo root, so a
+direct `npx prisma` from `libs/db` needs its own file:
+
+```bash
+cp libs/db/.env.example libs/db/.env
+```
+
+Copying the whole root `.env` across (`cp .env libs/db/.env`) also
+works, but leaves two copies of every setting with nothing keeping them
+in step — which is how that file ended up pointing at `:5432` while the
+dev container had always been on `:5433`, failing every direct prisma
+call with `P1001 Can't reach database server`. The template holds only
+`DATABASE_URL` for that reason. If you already have a full copy there,
+check its port matches the root.
 
 **`Command "prisma" not found`** — cascading error after a schema
 validation failure. Real cause is usually a bad `DATABASE_URL`.
