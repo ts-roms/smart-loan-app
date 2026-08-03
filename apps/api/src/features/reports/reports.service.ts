@@ -3,8 +3,7 @@ import { type DorsiRepository, type PrismaClient } from "@loan/db";
 import type { ReportType } from "./schemas";
 
 /**
- * Compliance reports — FRD audit requirements (§3.1.5, §3.2.3, §3.3.7,
- * §3.5.8, §3.7.7, §3.8.6, §3.9.4, §3.10.6).
+ * Compliance reports — the audit requirements across modules.
  *
  * One service, six report builders. The service owns:
  *   • date-range default rules (defaults to last 30 days)

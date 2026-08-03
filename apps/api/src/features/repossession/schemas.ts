@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Repossession request schemas — FRD §3.7.
+ * Repossession request schemas.
  *
  * The case moves through a fixed state machine:
  *   IDENTIFIED → BM_APPROVED → CREDIT_APPROVED → LEGAL_APPROVED →

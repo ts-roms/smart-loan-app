@@ -1,8 +1,8 @@
 /**
- * Repossession workflow repository — FRD §3.7.
+ * Repossession workflow repository.
  *
  * One active case per loan (enforced by unique constraint). The case
- * advances through the FRD-prescribed approval chain (BM → Credit Head
+ * advances through the prescribed approval chain (BM → Credit Head
  * → Legal) before an agent can be dispatched. Auction settlement posts
  * the proceeds + any deficiency to the GL.
  *

@@ -1,4 +1,4 @@
--- FRD Phase A — Penalty Waive facility.
+-- Phase A — Penalty Waive facility.
 --
 -- Adds:
 --   * PENALTY_WAIVE value to JournalSource so the reversing entry posted

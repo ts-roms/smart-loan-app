@@ -51,7 +51,7 @@ export function useCustomerSummary(id: string | null) {
 }
 
 /**
- * Per FRD §3.1.1 repeat-borrower eligibility. Returns null-safe data:
+ * Repeat-borrower eligibility. Returns null-safe data:
  * the endpoint resolves even for first-time customers (eligible: false,
  * closedLoansCount: 0). Used by the smart loan application bar to nudge
  * officers toward the repeat fast-path or warn about prior defaults.

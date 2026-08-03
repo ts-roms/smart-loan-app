@@ -25,7 +25,7 @@ defaults are deterministic mocks.
 - Disbursement → repayment schedule → installment-by-installment payment matching
 - Restructuring, write-offs, penalty waivers, repeat-loan fast path
 - Collections queue with notes, PTPs, late-fee accrual, demand letters
-  (FRD §3.6 escalation matrix), repossession (BM → Credit → Legal → Agent)
+  (escalation matrix), repossession (BM → Credit → Legal → Agent)
 - Lease-to-Own with end-of-term notices, maintenance reminders, pull-out workflow
 
 **Accounting + compliance**
@@ -34,7 +34,7 @@ defaults are deterministic mocks.
 - Period close / reopen, monthly interest accrual
 - Bank reconciliation with auto-match + manual attach
 - IFRS-9 ECL provisioning with stage breakdown
-- DORSI compliance (FRD §3.10) — cap math + board-approval gating
+- DORSI compliance — cap math + board-approval gating
 - Annual / renewable docs tracking with expiry reminders
 - 6 exportable compliance reports
 

@@ -1,6 +1,5 @@
 /**
- * Compliance reports — FRD audit requirements (§3.1.5, §3.2.3, §3.3.7,
- * §3.5.8, §3.7.7, §3.8.6, §3.9.4, §3.10.6).
+ * Compliance reports — the audit requirements across modules.
  *
  *   GET /reports/:type?from=&to=&format=json|csv
  *

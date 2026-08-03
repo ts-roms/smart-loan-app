@@ -32,7 +32,7 @@ export const configUpdateSchema = z.object({
 });
 
 /**
- * Auto-screen body — used at customer onboarding (FRD §3.10.1).
+ * Auto-screen body — used at customer onboarding.
  *
  * Validated by the controller via `safeParse`, so the failure shape is
  * the standard `{ error: "ValidationError", issues: [...] }`. The

@@ -78,7 +78,7 @@ const STATUS_VARIANT: Record<
 };
 
 /**
- * Demand Letters page — FRD §3.6 implementation.
+ * Demand Letters page.
  *
  * Top section: filter by stage, click Display to identify candidates,
  * tick-box selection + Generate to create DRAFTED rows.
@@ -169,10 +169,10 @@ export function DemandLettersPage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-white/55">
-            FRD §3.6 — formal escalation when a loan is materially overdue.
-            First letter at 60 days, Final at 90, attorney variants at 120 and
-            150. Generate in batches, dispatch individually, waive or mark
-            responded as cases resolve.
+            Formal escalation when a loan is materially overdue. First letter at
+            60 days, Final at 90, attorney variants at 120 and 150. Generate in
+            batches, dispatch individually, waive or mark responded as cases
+            resolve.
           </p>
         </CardContent>
       </Card>
@@ -382,7 +382,7 @@ function LetterRow({
     const note = await askPrompt({
       title: "Approve demand letter",
       message:
-        "FRD §3.6.5 — signing off as Operations Manager (or Lawyer for attorney variants). Optional note for the audit trail.",
+        "Signing off as Operations Manager (or Lawyer for attorney variants). Optional note for the audit trail.",
       label: "Approval note",
       placeholder: "Reviewed contents; approved for dispatch.",
       confirmLabel: "Approve",

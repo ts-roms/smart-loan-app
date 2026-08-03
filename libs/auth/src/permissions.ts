@@ -70,7 +70,7 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
   { key: "loans.write_off", label: "Write off", category: "Loans" },
   { key: "loans.waive_penalty", label: "Waive penalties", category: "Loans" },
   { key: "loans.docs_renew", label: "Manage annual docs", category: "Loans" },
-  // Repossession workflow (FRD §3.7) — split per approval step so RBAC
+  // Repossession workflow — split per approval step so RBAC
   // can route the chain to specific roles (BM / Credit Head / Legal).
   {
     key: "repossession.identify",
@@ -107,7 +107,7 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
     label: "Auction settlement",
     category: "Loans",
   },
-  // Lease-to-Own (FRD §3.5).
+  // Lease-to-Own.
   { key: "lease.read", label: "View lease agreements", category: "Loans" },
   { key: "lease.buyout", label: "Process residual buyout", category: "Loans" },
   {
@@ -181,7 +181,7 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
     label: "Draft demand letters",
     category: "Collections",
   },
-  // FRD §3.6.5 escalation matrix — distinct signatory perms for company
+  // Escalation matrix — distinct signatory perms for company
   // vs attorney variants. Drafters can't approve their own letters.
   {
     key: "collections.dl_approve_company",
@@ -289,7 +289,7 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
     category: "Admin",
   },
 
-  // DORSI compliance (FRD §3.10)
+  // DORSI compliance
   {
     key: "dorsi.read",
     label: "View DORSI register + dashboard",
@@ -410,7 +410,7 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
       "screening.run",
       /**
        * Read-only DORSI. The customer detail page auto-screens every
-       * borrower against the DORSI register (FRD §3.10.1) and the officer
+       * borrower against the DORSI register and the officer
        * is the one who has to confirm the result before originating —
        * without this the screen 403s and the banner cannot render, which
        * reads to the officer as "screened clean".

@@ -1,4 +1,4 @@
--- Face-match scoring (FRD differentiation: selfie ↔ ID similarity).
+-- Face-match scoring.
 -- All four columns are nullable so existing rows survive without
 -- backfill; new applications start NULL until an officer runs the
 -- match on the loan detail page.

@@ -9,7 +9,7 @@
 --
 -- All additions are nullable so existing rows survive untouched. A new
 -- `FREELANCE` value joins the EmploymentStatus enum for the gig-worker
--- bucket FRD §1.6 treats distinctly from SELF_EMPLOYED.
+-- bucket, which is reported distinctly from SELF_EMPLOYED.
 -- ──────────────────────────────────────────────────────────────────────
 
 -- New enums

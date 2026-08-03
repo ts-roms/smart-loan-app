@@ -74,7 +74,7 @@ const STATUS_VARIANT: Record<
 };
 
 /**
- * Repossession workflow page — FRD §3.7. Top: filter + identify card.
+ * Repossession workflow page. Top: filter + identify card.
  * Bottom: list of all active + closed cases, each row showing its
  * current state and the next-action button (gated by per-step perms).
  */
@@ -115,10 +115,10 @@ export function RepossessionPage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-white/55">
-            FRD §3.7 — formal vehicle recovery process. Each case advances
-            through BM → Credit Head → Legal approval before an agent is
-            dispatched. After recovery, the vehicle is auctioned and any
-            deficiency is booked to bad debt.
+            formal vehicle recovery process. Each case advances through BM →
+            Credit Head → Legal approval before an agent is dispatched. After
+            recovery, the vehicle is auctioned and any deficiency is booked to
+            bad debt.
           </p>
         </CardContent>
       </Card>

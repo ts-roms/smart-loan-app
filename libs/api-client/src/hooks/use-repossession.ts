@@ -1,5 +1,5 @@
 /**
- * Repossession workflow hooks (FRD §3.7).
+ * Repossession workflow hooks.
  *
  * The workflow has 9 state transitions; each gets its own mutation hook
  * for type-safe invalidation. The list / detail / outstanding queries

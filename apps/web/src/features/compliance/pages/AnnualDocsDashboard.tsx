@@ -36,7 +36,7 @@ const WINDOW_OPTIONS = [
 
 /**
  * AnnualDocsDashboard — cross-loan view of renewable documents expiring
- * soon (FRD §3.8.1 reporting requirement). Filter by horizon, group by
+ * soon (reporting requirement). Filter by horizon, group by
  * status, and trigger a manual status refresh on demand.
  */
 export function AnnualDocsDashboard() {
@@ -104,9 +104,9 @@ export function AnnualDocsDashboard() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-white/55">
-            FRD §3.8 — every loan's annual / renewable documentation tracked
-            here. The daily job sends reminders 30 days before expiry and an
-            escalation when a doc lapses.
+            every loan's annual / renewable documentation tracked here. The
+            daily job sends reminders 30 days before expiry and an escalation
+            when a doc lapses.
           </p>
         </CardContent>
       </Card>

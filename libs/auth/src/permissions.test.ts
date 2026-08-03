@@ -136,7 +136,7 @@ describe("least privilege", () => {
   });
 
   it("keeps DORSI write permissions out of every non-admin role", () => {
-    // Officers were granted dorsi.read so the FRD §3.10.1 auto-screen can
+    // Officers were granted dorsi.read so the auto-screen can
     // run for them, but tagging a customer as DORSI-related and recording
     // board approval must stay separated from origination.
     for (const role of DEFAULT_ROLES) {

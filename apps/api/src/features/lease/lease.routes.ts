@@ -1,5 +1,5 @@
 /**
- * Lease-to-Own API — FRD §3.5.
+ * Lease-to-Own API.
  *
  *   GET    /lease                       lease.read
  *   GET    /lease/:loanId               lease.read

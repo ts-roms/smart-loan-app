@@ -1,5 +1,5 @@
 /**
- * Repossession API — FRD §3.7.
+ * Repossession API.
  *
  * Each state transition is its own endpoint, gated by a distinct
  * permission so the chain (BM → Credit Head → Legal) can be routed to

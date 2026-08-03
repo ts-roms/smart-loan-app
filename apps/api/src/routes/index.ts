@@ -181,7 +181,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(eclRoutes, { prefix: "/ecl" });
   await app.register(cooperativeRoutes, { prefix: "/cooperative" });
   await app.register(auditRoutes, { prefix: "/audit" });
-  // Annual / renewable docs (FRD §3.8) — split into per-loan (mounted on
+  // Annual / renewable docs — split into per-loan (mounted on
   // /loans/:loanId/annual-docs) and cross-loan (/annual-docs/*) surfaces.
   await app.register(annualDocsLoanRoutes, { prefix: "/loans" });
   await app.register(annualDocsRoutes, { prefix: "/annual-docs" });

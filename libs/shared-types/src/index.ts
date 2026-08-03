@@ -510,7 +510,7 @@ export interface LoanApplication {
   property?: Property | null;
   product?: LoanProduct;
   applicationSelfieUrl: string | null;
-  /** FRD §3.1 — true when submitted by a customer with prior CLOSED loans. */
+  /** true when submitted by a customer with prior CLOSED loans. */
   isRepeat?: boolean;
   // Face-match (selfie ↔ ID) outputs. All four are null until an
   // officer runs the match on the loan detail page.
@@ -1213,7 +1213,7 @@ export interface PaymentIntent {
   createdById: string;
 }
 
-// ─── Lease-to-Own (FRD §3.5) ────────────────────────────────────────────────
+// ─── Lease-to-Own ───────────────────────────────────────────────────────────
 
 export type LeaseStatus =
   "ACTIVE" | "PULLED_OUT" | "BUYOUT_COMPLETED" | "RETURNED" | "EXTENDED";
@@ -1248,7 +1248,7 @@ export interface LeaseAgreementWithLoan extends LeaseAgreement {
   loan: { number: string; customerId: string };
 }
 
-// ─── DORSI compliance (FRD §3.10) ───────────────────────────────────────────
+// ─── DORSI compliance ───────────────────────────────────────────────────────
 
 export type DorsiCategory =
   "DIRECTOR" | "OFFICER" | "STOCKHOLDER" | "RELATED_INTEREST";
@@ -1325,7 +1325,7 @@ export interface SystemConfig {
   updatedById: string | null;
 }
 
-// ─── Repossession (FRD §3.7) ────────────────────────────────────────────────
+// ─── Repossession ───────────────────────────────────────────────────────────
 
 export type RepossessionStatus =
   | "IDENTIFIED"
@@ -1385,7 +1385,7 @@ export interface RepossessionCaseWithLoan extends RepossessionCase {
   loan: { number: string; customerId: string };
 }
 
-// ─── Demand letters (FRD §3.6) ──────────────────────────────────────────────
+// ─── Demand letters ─────────────────────────────────────────────────────────
 
 export type DemandLetterStage =
   "FIRST" | "FINAL" | "ATTORNEY_FIRST" | "ATTORNEY_FINAL";
@@ -1440,7 +1440,7 @@ export interface DemandCandidate {
   lastLetterAtStageAt: string | null;
 }
 
-// ─── Annual / renewable documents (FRD §3.8) ────────────────────────────────
+// ─── Annual / renewable documents ───────────────────────────────────────────
 
 export type AnnualDocumentType =
   "CAR_INSURANCE" | "OR_CR" | "RPT" | "FIRE_INSURANCE" | "OTHER";
@@ -1477,7 +1477,7 @@ export interface ExpiringAnnualDocument extends AnnualDocument {
   loan: { number: string; customerId: string };
 }
 
-// ─── Penalty waive (FRD Phase A) ────────────────────────────────────────────
+// ─── Penalty waive ──────────────────────────────────────────────────────────
 
 export interface LoanPenaltyTotals {
   originalPenalty: number;
@@ -1517,7 +1517,7 @@ export interface CustomerSummary {
 }
 
 /**
- * Returned by GET /customers/:id/repeat-eligibility. Per FRD §3.1.1, a
+ * Returned by GET /customers/:id/repeat-eligibility., a
  * customer qualifies for the repeat-borrower fast path when at least one
  * prior loan has closed cleanly (no defaults, no write-offs) and their
  * KYC pack is verified.

@@ -522,7 +522,7 @@ export async function loanRoutes(app: FastifyInstance) {
     },
   );
 
-  // ─── Penalty waive (FRD §3.3) ──────────────────────────────────────
+  // ─── Penalty waive ─────────────────────────────────────────────────
 
   /** Current accrued penalty + waived-to-date totals. */
   app.get<{ Params: { id: string } }>(

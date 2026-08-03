@@ -227,17 +227,17 @@ export const HELP_ARTICLES: HelpArticle[] = [
     id: "demand-letters",
     title: "Demand letters",
     category: "Servicing",
-    summary: "Batch-generate First / Final demand letters per FRD §3.6.",
+    summary: "Batch-generate First / Final demand letters.",
     route: "/collections/demand-letters",
     body:
       "Workflow: filter by stage (First 60d+, Final 90d+, Attorney variants), click Display to fetch candidates, tick rows to generate, then Generate creates DRAFTED letters.\n\n" +
-      "FRD §3.6.5 escalation matrix: drafters cannot self-approve. Operations Manager approves company letters; Lawyer approves Attorney variants. APPROVED letters can then be Dispatched — borrower gets a notification.\n\n" +
+      " escalation matrix: drafters cannot self-approve. Operations Manager approves company letters; Lawyer approves Attorney variants. APPROVED letters can then be Dispatched — borrower gets a notification.\n\n" +
       "View any letter's body in the right-side drawer. Mark RESPONDED when the borrower pays, or WAIVE if there's special handling.",
     tour: [
       t(
         '[data-tour="dl-stage"]',
         "Stage filter",
-        "FRD §3.6 thresholds: First at 60+ days, Final at 90+, Attorney variants at 120+ / 150+.",
+        " thresholds: First at 60+ days, Final at 90+, Attorney variants at 120+ / 150+.",
       ),
       t(
         '[data-tour="dl-display"]',
@@ -258,7 +258,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "Vehicle recovery state machine — BM → Credit → Legal → Agent.",
     route: "/repossession",
     body:
-      "One case per loan, advancing through the FRD-prescribed approval chain. Identify the loan, then push through Branch Manager → Credit Head → Legal approvals before an Agent can be dispatched.\n\n" +
+      "One case per loan, advancing through the prescribed approval chain. Identify the loan, then push through Branch Manager → Credit Head → Legal approvals before an Agent can be dispatched.\n\n" +
       "After Recovery, capture vehicle condition + mileage + storage location. Auction settlement applies proceeds against the loan; any deficiency is written off to bad debt.\n\n" +
       "Cases are cancellable at any pre-RECOVERED state (e.g. borrower pays at the last minute, restructure approved).",
     tour: [
@@ -354,7 +354,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "Director/Officer/Stockholder/Related-Interest tracking + caps.",
     route: "/compliance/dorsi",
     body:
-      "Per FRD §3.10: DORSI loans are capped at 15% of Company Total Equity in aggregate, with no single borrower exceeding 30% of that aggregate cap.\n\n" +
+      ": DORSI loans are capped at 15% of Company Total Equity in aggregate, with no single borrower exceeding 30% of that aggregate cap.\n\n" +
       "Tag known DORSI customers in the Register. The Utilization card shows real-time aggregate + per-borrower exposure with threshold alerts at 80% / 90% / 100%. Loans that would breach the cap require a recorded Board Approval before disburse.\n\n" +
       "Company Total Equity is configurable in the System Config card — set it each quarter from the latest balance sheet.",
     tour: [
@@ -382,7 +382,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "Track car insurance / RPT / OR-CR expiry with reminders.",
     route: "/compliance/annual-docs",
     body:
-      "Per FRD §3.8: annual docs (car insurance, real-property tax, fire insurance) must be renewed throughout the loan term. Capture each submission with effectiveFrom + expiresAt; status (VALID / EXPIRING_SOON / EXPIRED) is computed and refreshed nightly.\n\n" +
+      ": annual docs (car insurance, real-property tax, fire insurance) must be renewed throughout the loan term. Capture each submission with effectiveFrom + expiresAt; status (VALID / EXPIRING_SOON / EXPIRED) is computed and refreshed nightly.\n\n" +
       "The daily reminder job emails / SMSes the borrower 30 days before expiry and again on lapse. Filter the dashboard by window to spot what needs follow-up this week.",
     tour: [
       t(
@@ -404,7 +404,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summary: "Exportable CSVs for monthly + quarterly audits.",
     route: "/reports",
     body:
-      "Six reports keyed to the FRD audit clauses:\n\n" +
+      "Six reports keyed to the audit clauses:\n\n" +
       "· DORSI utilization (§3.10.6) — snapshot of per-borrower exposure\n" +
       "· Penalty waivers (§3.3.7) — original vs negotiated amounts + reason\n" +
       "· Demand letters (§3.6) — stage, status, approver, dispatcher\n" +
@@ -416,7 +416,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       t(
         '[data-tour="reports-grid"]',
         "Report cards",
-        "Each card is one FRD-mapped report. Date-range pickers appear where applicable; click Download CSV to grab a snapshot.",
+        "Each card is one report. Date-range pickers appear where applicable; click Download CSV to grab a snapshot.",
       ),
     ],
   },
@@ -684,7 +684,7 @@ export const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: "The demand letter Dispatch button is greyed out — why?",
-    a: "Per FRD §3.6.5, demand letters must be approved before dispatch — and the drafter can't self-approve. Have someone with collections.dl_approve_company (or dl_approve_legal for attorney variants) approve it first; the Dispatch button becomes available afterwards.",
+    a: ", demand letters must be approved before dispatch — and the drafter can't self-approve. Have someone with collections.dl_approve_company (or dl_approve_legal for attorney variants) approve it first; the Dispatch button becomes available afterwards.",
   },
   {
     q: 'What does the "Posted" badge mean?',

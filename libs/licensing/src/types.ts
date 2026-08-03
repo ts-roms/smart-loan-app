@@ -51,7 +51,7 @@ export const FEATURE_FLAGS = [
   "compliance.dorsi",
   "compliance.annual_docs",
   "compliance.reports",
-  // Intelligence (the FRD "differentiators")
+  // Intelligence (the "differentiators")
   "intel.ai_assistant",
   "intel.id_ocr",
   "intel.face_match",

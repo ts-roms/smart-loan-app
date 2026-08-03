@@ -57,7 +57,7 @@ export class KycRepository {
    * duplicate check below runs against the same snapshot used for the
    * insert.
    *
-   * Dedup rule (FRD §1.5 — "one active document of each type per
+   * Dedup rule ("one active document of each type per
    * customer"): if a submission of the same `(customerId, documentType)`
    * already exists in PENDING or VERIFIED state, the call rejects with
    * `KycDuplicateError`. REJECTED documents may be resubmitted — that's

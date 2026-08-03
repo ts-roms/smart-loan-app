@@ -45,7 +45,7 @@ import {
 import { useState } from "react";
 
 /**
- * Lease-to-Own panel — FRD §3.5. Renders on a loan detail page only when
+ * Lease-to-Own panel. Renders on a loan detail page only when
  * the loan has a LeaseAgreement attached. Shows residual + title holder +
  * missed-payment streak, plus the four terminal transitions (buyout,
  * pull-out, return, extend).
@@ -102,8 +102,7 @@ export function LeasePanel({ loanId }: { loanId: string }) {
           <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-100 flex items-center gap-2">
             <AlertTriangle className="h-3 w-3" />
             {l.missedPaymentStreak} consecutive missed payment(s). One more and
-            (for non-employees) the vehicle is eligible for pull-out per FRD
-            §3.5.
+            (for non-employees) the vehicle is eligible for pull-out.
           </div>
         )}
 

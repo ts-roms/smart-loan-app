@@ -1,4 +1,4 @@
--- FRD Phase A — Repeat-loan detection.
+-- Phase A — Repeat-loan detection.
 --
 -- Sets `isRepeat=true` on new applications whose customer already has a
 -- fully-paid prior loan, surfaced as a badge on the application form +

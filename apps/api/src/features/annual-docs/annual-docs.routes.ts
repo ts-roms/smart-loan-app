@@ -1,5 +1,5 @@
 /**
- * Annual / renewable document tracker — FRD §3.8.
+ * Annual / renewable document tracker.
  *
  *   GET  /loans/:loanId/annual-docs         loans.read
  *   POST /loans/:loanId/annual-docs         loans.docs_renew

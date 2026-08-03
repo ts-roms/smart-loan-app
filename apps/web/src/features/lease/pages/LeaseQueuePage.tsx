@@ -21,7 +21,7 @@ import { useLeases } from "../hooks";
 import { STATUS_LABEL, STATUS_VARIANT, TITLE_HOLDER_LABEL } from "../constants";
 
 /**
- * Lease-to-Own queue — FRD §3.5 cross-loan view.
+ * Lease-to-Own queue cross-loan view.
  *
  * Read-only list. State transitions (buyout / pull-out / return / extend)
  * happen on the per-loan detail page via `LeasePanel`, so this page
@@ -62,11 +62,10 @@ export function LeaseQueuePage() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-white/55">
-            FRD §3.5 — agreements are created automatically when a lease-product
-            loan is disbursed. Operators monitor active units, follow up on
-            pull-outs, and close out via buyout, return, or extension. State
-            transitions happen on the loan detail page; this view is for
-            at-a-glance triage.
+            agreements are created automatically when a lease-product loan is
+            disbursed. Operators monitor active units, follow up on pull-outs,
+            and close out via buyout, return, or extension. State transitions
+            happen on the loan detail page; this view is for at-a-glance triage.
           </p>
         </CardContent>
       </Card>

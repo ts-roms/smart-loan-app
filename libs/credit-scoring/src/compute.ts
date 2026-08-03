@@ -30,7 +30,7 @@ export interface CreditScoreResult {
   score: number;
   /** Internal 5-letter tier used by per-tier pricing and LTV configs. */
   tier: Tier;
-  /** Bureau-style 4-bucket label (FRD §3.9: Excellent/Good/Fair/Poor). */
+  /** Bureau-style 4-bucket label (: Excellent/Good/Fair/Poor). */
   bucket: BureauBucket;
   /** Sum of every factor's points before scaling. */
   rawScore: number;
