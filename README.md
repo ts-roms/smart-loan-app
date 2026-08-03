@@ -152,22 +152,25 @@ is `api + web` together (the cooperative-staff console + the borrower
 portal). Marketing + platform are separate.
 
 ```bash
-# api + web + marketing (hot-reload, parallel)
+# Every surface — api + web + marketing + platform (hot-reload, parallel)
 pnpm dev
 
 # One at a time:
 pnpm dev:api        # Fastify API on :3001
 pnpm dev:web        # React/Vite officer + borrower SPA on :5173
+pnpm dev:platform   # Vendor platform console on :5174
 pnpm dev:marketing  # Public marketing site on :5175
-
-# Vendor-side (multi-tenant SaaS only):
-pnpm --filter @loan/platform dev   # Platform console on :5174
 ```
 
-Marketing joins `pnpm dev` because it's a real entry point now, not a
-brochure: its sign-in links point at the app on :5173, and `/signup`
-posts to the API through Vite's `/public` proxy. Starting it separately
-meant those paths went untested during ordinary development.
+`pnpm dev` starts all four because they're linked, not independent: the
+marketing header signs in against the app on :5173, its footer links to
+the platform console on :5174, and `/signup` posts to the API through
+Vite's `/public` proxy. When a surface had to be started by hand, the
+links between them went untested during ordinary development — and a
+dead link is invisible until someone clicks it.
+
+The platform console is only meaningful with `MULTI_TENANT=true`; it
+still boots without it, just with nothing to administer.
 
 Open:
 
