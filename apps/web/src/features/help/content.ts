@@ -405,12 +405,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
     route: "/reports",
     body:
       "Six reports keyed to the audit clauses:\n\n" +
-      "· DORSI utilization (§3.10.6) — snapshot of per-borrower exposure\n" +
-      "· Penalty waivers (§3.3.7) — original vs negotiated amounts + reason\n" +
-      "· Demand letters (§3.6) — stage, status, approver, dispatcher\n" +
-      "· Repossession cases (§3.7.7) — full state-machine timeline + auction proceeds\n" +
-      "· Annual docs compliance (§3.8.6) — % valid / expiring / expired\n" +
-      "· ECL movement (§3.4.3) — per-run stage breakdown + delta\n\n" +
+      "· DORSI utilization — snapshot of per-borrower exposure\n" +
+      "· Penalty waivers — original vs negotiated amounts + reason\n" +
+      "· Demand letters — stage, status, approver, dispatcher\n" +
+      "· Repossession cases — full state-machine timeline + auction proceeds\n" +
+      "· Annual docs compliance — % valid / expiring / expired\n" +
+      "· ECL movement — per-run stage breakdown + delta\n\n" +
       "Each downloads as a CSV with a date-range filter where applicable. Pull into Excel / Sheets for review.",
     tour: [
       t(

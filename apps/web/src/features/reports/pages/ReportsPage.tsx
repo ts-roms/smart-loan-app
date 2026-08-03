@@ -24,8 +24,7 @@ import { useState } from "react";
 import { findArticle, TourButton } from "../../help";
 
 /**
- * Compliance Reports — audit requirements across modules
- * (§3.1.5, §3.2.3, §3.3.7, §3.5.8, §3.7.7, §3.8.6, §3.9.4, §3.10.6).
+ * Compliance Reports — audit requirements across modules.
  *
  * Each card downloads a CSV from the /reports/:type endpoint. JSON is
  * also available by switching the format query param — useful for
@@ -189,7 +188,6 @@ function ReportCard({ report }: { report: ReportDef }) {
             <Icon className="h-4 w-4 text-sky-300" />
             {report.title}
           </CardTitle>
-          <p className="text-[10px] text-white/45 mt-0.5">{report.cadence}</p>
         </div>
         <Badge variant="muted">{report.cadence}</Badge>
       </CardHeader>
