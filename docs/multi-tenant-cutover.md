@@ -85,6 +85,31 @@ What it does, in order:
 5. **`prisma migrate deploy`** against `tenant_<slug>` too — idempotent;
    catches the case where the previous deploy hadn't pulled the newest
    migrations.
+
+   > **`0_init` was edited on 2026-08-03 to make this step work at all.**
+   > It qualified every object as `"public"."Thing"`, so deploying it
+   > into a tenant schema tried to create types that already existed in
+   > `public` and died with `42710 type "CreditTier" already exists`.
+   > The 70 qualifiers were removed so the file follows the connection's
+   > `search_path`, which is what the other 48 migrations already did.
+   >
+   > The file's checksum therefore changed. Prisma 7.9 does not verify
+   > checksums of already-applied migrations during `migrate deploy` or
+   > `migrate status` — both report clean against a database that
+   > applied the old text — so no action is required to keep an existing
+   > install working. To clear the drift anyway (recommended, in case a
+   > later Prisma reinstates the check):
+   >
+   > ```sql
+   > UPDATE _prisma_migrations
+   >    SET checksum = 'f0f7886b79a85f2f9431cd723596b8ceb061976d91101a37e6ecb7fa6ab4d9fb'
+   >  WHERE migration_name = '0_init';
+   > ```
+   >
+   > Nothing about the _applied_ schema changes — the SQL is identical
+   > apart from the qualifier, and `public` remains the target when the
+   > connection points there.
+
 6. **Bootstrap rows**: inserts the `Tenant` row for the adopted slug
    and a `PlatformUser` (PLATFORM_ADMIN) with the email + name you
    supplied. A temp password is generated and printed to the CLI

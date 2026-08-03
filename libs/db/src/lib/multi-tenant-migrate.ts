@@ -180,7 +180,8 @@ export function migrateTenantSchema(
   // Resolve the schema.prisma path relative to this source file.
   // libs/db/src/lib/multi-tenant-migrate.ts → libs/db/prisma/schema.prisma
   const here = dirname(fileURLToPath(import.meta.url));
-  const schemaPath = resolve(here, "..", "..", "prisma", "schema.prisma");
+  const packageRoot = resolve(here, "..", "..");
+  const schemaPath = resolve(packageRoot, "prisma", "schema.prisma");
 
   const logLine =
     opts.logLine ??
@@ -194,18 +195,36 @@ export function migrateTenantSchema(
     // alternative (`pnpm exec prisma ...`) would couple the runner
     // to pnpm being on PATH inside the runtime image.
     //
-    // On Windows the binary is `npx.cmd` — Node's spawn handles
-    // that automatically only on shell:true. We don't need a shell
-    // (no globbing, no operators) so we resolve the right name
-    // ourselves for cross-platform safety.
-    const npxCmd = process.platform === "win32" ? "npx.cmd" : "npx";
+    // Windows needs a shell here. Since the fix for CVE-2024-27980
+    // (Node 18.20.2 / 20.12.2) spawn refuses to run a .cmd or .bat
+    // directly — it throws EINVAL — and `npx` on Windows is `npx.cmd`.
+    // Naming the .cmd explicitly used to be the workaround; it isn't
+    // one any more, and without a shell tenant provisioning fails on
+    // every Windows host.
+    //
+    // Under a shell, pass the plain name and let PATHEXT resolve it:
+    // spawning "npx.cmd" through cmd.exe re-quotes badly enough that
+    // the arguments arrive mangled. Node quotes the args array itself
+    // in shell mode, so paths with spaces need no help from us.
+    const isWindows = process.platform === "win32";
 
     const child = spawn(
-      npxCmd,
+      "npx",
       ["prisma", "migrate", "deploy", "--schema", schemaPath],
       {
         env: { ...process.env, DATABASE_URL: tenantUrl },
         stdio: ["ignore", "pipe", "pipe"],
+        shell: isWindows,
+        /**
+         * Run from @loan/db, which is the only package that depends on
+         * prisma — under pnpm's isolated layout its bin exists at
+         * libs/db/node_modules/.bin and nowhere else. The caller is
+         * whoever triggered provisioning (the API, cwd apps/api), and
+         * `npx prisma` resolved from there finds nothing and reports
+         * "prisma is not recognized". Nothing about that is
+         * Windows-specific.
+         */
+        cwd: packageRoot,
       },
     );
 
