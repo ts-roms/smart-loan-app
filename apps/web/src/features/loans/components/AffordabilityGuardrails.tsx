@@ -125,17 +125,17 @@ export function AffordabilityGuardrails({
   return (
     <div className="space-y-2">
       {/* Affordability strip */}
-      <div className="rounded-md border border-white/10 bg-white/[0.02] p-3 space-y-2">
+      <div className="rounded-md border border-default bg-surface-2 p-3 space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-sm">
-            <Wallet className="h-4 w-4 text-sky-300" />
+            <Wallet className="h-4 w-4 text-info" />
             <span className="font-medium">Affordability</span>
-            <span className="text-[10px] text-white/45 uppercase tracking-wider">
+            <span className="text-[10px] text-fg-subtle uppercase tracking-wider">
               · DTI ceiling {(dtiCeiling * 100).toFixed(0)}%
             </span>
           </div>
           {income === 0 && (
-            <span className="text-[10px] text-amber-300 inline-flex items-center gap-1">
+            <span className="text-[10px] text-warning inline-flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" />
               No income on file
             </span>
@@ -174,7 +174,7 @@ export function AffordabilityGuardrails({
           />
         </div>
         {exceedsSafe && (
-          <div className="flex items-start gap-1.5 text-[11px] text-rose-200">
+          <div className="flex items-start gap-1.5 text-[11px] text-danger">
             <TrendingDown className="h-3 w-3 mt-0.5 shrink-0" />
             <span>
               Principal exceeds the safe ceiling at{" "}
@@ -188,7 +188,7 @@ export function AffordabilityGuardrails({
           </div>
         )}
         {!exceedsSafe && dti > 0 && dti <= 0.3 && (
-          <div className="text-[11px] text-emerald-200">
+          <div className="text-[11px] text-success">
             DTI is comfortable — borrower has{" "}
             <strong className="font-mono">
               {formatMoney(maxSafePrincipal - principal)}
@@ -204,20 +204,20 @@ export function AffordabilityGuardrails({
           className={`rounded-md border p-3 space-y-2 ${
             dorsiResult.status === "BOARD_REQUIRED"
               ? "border-amber-400/30 bg-amber-500/[0.08]"
-              : "border-white/10 bg-white/[0.02]"
+              : "border-default bg-surface-2"
           }`}
         >
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-sm">
-              <ShieldAlert className="h-4 w-4 text-amber-300" />
+              <ShieldAlert className="h-4 w-4 text-warning" />
               <span className="font-medium">DORSI cap projection</span>
-              <span className="text-[10px] text-white/45 uppercase tracking-wider"></span>
+              <span className="text-[10px] text-fg-subtle uppercase tracking-wider"></span>
             </div>
             <span
               className={`text-[10px] uppercase tracking-wider ${
                 dorsiResult.status === "BOARD_REQUIRED"
-                  ? "text-amber-300"
-                  : "text-emerald-300"
+                  ? "text-warning"
+                  : "text-success"
               }`}
             >
               {dorsiResult.status === "BOARD_REQUIRED"
@@ -264,7 +264,7 @@ export function AffordabilityGuardrails({
             />
           </div>
           {dorsiResult.message && (
-            <p className="text-[11px] text-white/70">{dorsiResult.message}</p>
+            <p className="text-[11px] text-fg">{dorsiResult.message}</p>
           )}
         </div>
       )}
@@ -284,21 +284,21 @@ function MiniMetric({
   hint?: string;
 }) {
   const toneClass = {
-    info: "text-white/85",
-    good: "text-emerald-300",
-    warn: "text-amber-300",
-    bad: "text-rose-300",
+    info: "text-fg",
+    good: "text-success",
+    warn: "text-warning",
+    bad: "text-danger",
   }[tone];
   return (
-    <div className="rounded border border-white/5 bg-white/[0.02] px-2 py-1.5">
-      <div className="text-[9px] uppercase tracking-wider text-white/45">
+    <div className="rounded border border-default bg-surface-2 px-2 py-1.5">
+      <div className="text-[9px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className={`text-xs font-medium font-mono ${toneClass}`}>
         {value}
       </div>
       {hint && (
-        <div className="text-[9px] text-white/35 mt-0.5 truncate">{hint}</div>
+        <div className="text-[9px] text-fg-subtle mt-0.5 truncate">{hint}</div>
       )}
     </div>
   );

@@ -74,7 +74,7 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
     <div className="rounded-md border border-sky-400/20 bg-sky-500/[0.04] p-3 space-y-3">
       <div className="flex items-start gap-2">
         <div className="h-8 w-8 shrink-0 rounded-md border border-sky-400/30 bg-sky-500/10 flex items-center justify-center">
-          <Sparkles className="h-4 w-4 text-sky-300" />
+          <Sparkles className="h-4 w-4 text-info" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium">
@@ -83,7 +83,7 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
               Beta · runs locally
             </Badge>
           </div>
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             Drop a clear photo of the customer's gov't ID. We'll extract the
             name, date of birth, and ID number into the form below. The image
             never leaves your browser.
@@ -100,10 +100,8 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
             onReject={(reason) => toast.error(reason)}
             label={
               <>
-                <span className="font-medium text-sky-300">
-                  Drop an ID image
-                </span>
-                <span className="text-white/55"> or click to browse</span>
+                <span className="font-medium text-info">Drop an ID image</span>
+                <span className="text-fg-muted"> or click to browse</span>
               </>
             }
             hint="JPG / PNG / WebP up to 5 MB"
@@ -114,10 +112,10 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
             document, not themselves. The same `onFiles` handler then
             runs OCR on the captured frame.
           */}
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-white/40">
-            <span className="flex-1 h-px bg-white/10" />
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-fg-subtle">
+            <span className="flex-1 h-px bg-surface-3" />
             or
-            <span className="flex-1 h-px bg-white/10" />
+            <span className="flex-1 h-px bg-surface-3" />
           </div>
           <Button
             type="button"
@@ -133,14 +131,14 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
       )}
 
       {running && (
-        <div className="rounded-md border border-white/10 bg-white/[0.02] p-4 text-center text-xs text-white/65 flex flex-col items-center gap-2">
-          <Loader2 className="h-5 w-5 animate-spin text-sky-300" />
+        <div className="rounded-md border border-default bg-surface-2 p-4 text-center text-xs text-fg-muted flex flex-col items-center gap-2">
+          <Loader2 className="h-5 w-5 animate-spin text-info" />
           <span>Running OCR — first run downloads ~3 MB of language data.</span>
         </div>
       )}
 
       {error && (
-        <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-rose-200 flex items-start gap-2">
+        <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-danger flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
             <div className="font-medium">OCR failed</div>
@@ -148,7 +146,7 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
             <button
               type="button"
               onClick={() => setError(null)}
-              className="mt-2 text-sky-300 hover:underline text-[11px]"
+              className="mt-2 text-info hover:underline text-[11px]"
             >
               Try another image
             </button>
@@ -168,15 +166,15 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
               <img
                 src={result.previewUrl}
                 alt="ID preview"
-                className="rounded border border-white/15 object-cover w-full max-h-[120px]"
+                className="rounded border border-default object-cover w-full max-h-[120px]"
               />
             </a>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between flex-wrap gap-1">
-                <span className="text-[10px] uppercase tracking-wider text-white/45">
+                <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
                   Extracted fields
                 </span>
-                <span className="text-[10px] text-white/55 font-mono">
+                <span className="text-[10px] text-fg-muted font-mono">
                   confidence {result.confidence.toFixed(0)}%
                 </span>
               </div>
@@ -208,7 +206,7 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
             <button
               type="button"
               onClick={() => setShowRaw((s) => !s)}
-              className="text-[10px] text-sky-300 hover:underline"
+              className="text-[10px] text-info hover:underline"
             >
               {showRaw ? "Hide" : "Show"} raw OCR text
             </button>
@@ -237,7 +235,7 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
           </div>
 
           {showRaw && (
-            <pre className="rounded border border-white/10 bg-black/40 p-2 text-[10px] text-white/70 max-h-40 overflow-auto whitespace-pre-wrap font-mono">
+            <pre className="rounded border border-default bg-black/40 p-2 text-[10px] text-fg max-h-40 overflow-auto whitespace-pre-wrap font-mono">
               {result.text || "(empty)"}
             </pre>
           )}
@@ -267,13 +265,13 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
 function ExtractedField({ label, value }: { label: string; value?: string }) {
   return (
     <div className="flex items-baseline gap-2 text-xs">
-      <span className="text-white/45 w-24 shrink-0">{label}</span>
+      <span className="text-fg-subtle w-24 shrink-0">{label}</span>
       {value ? (
-        <span className="font-mono text-white/85 truncate" title={value}>
+        <span className="font-mono text-fg truncate" title={value}>
           {value}
         </span>
       ) : (
-        <span className="text-white/30 italic">
+        <span className="text-fg-subtle italic">
           <ScanLine className="h-3 w-3 inline mr-0.5" />
           not found
         </span>

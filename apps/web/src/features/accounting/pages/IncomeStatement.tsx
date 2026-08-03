@@ -23,14 +23,14 @@ export function IncomeStatementPage() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Income statement</CardTitle>
         <div className="flex items-center gap-2 text-sm">
-          <label className="text-white/55">From</label>
+          <label className="text-fg-muted">From</label>
           <DatePicker
             value={from}
             onChange={setFrom}
             max={to}
             className="h-9 w-44"
           />
-          <label className="text-white/55">To</label>
+          <label className="text-fg-muted">To</label>
           <DatePicker
             value={to}
             onChange={setTo}
@@ -43,7 +43,7 @@ export function IncomeStatementPage() {
         {report.isLoading ? (
           <SkeletonCard />
         ) : !report.data ? (
-          <p className="text-sm text-white/55">No data.</p>
+          <p className="text-sm text-fg-muted">No data.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Section
@@ -57,15 +57,13 @@ export function IncomeStatementPage() {
               rows={report.data.expense.rows}
               total={report.data.expense.total}
             />
-            <div className="md:col-span-2 border-t border-white/10 pt-3 flex items-center justify-between">
-              <div className="text-sm uppercase tracking-wider text-white/55">
+            <div className="md:col-span-2 border-t border-default pt-3 flex items-center justify-between">
+              <div className="text-sm uppercase tracking-wider text-fg-muted">
                 Net income
               </div>
               <div
                 className={`text-xl font-semibold font-mono ${
-                  report.data.netIncome >= 0
-                    ? "text-emerald-300"
-                    : "text-rose-300"
+                  report.data.netIncome >= 0 ? "text-success" : "text-danger"
                 }`}
               >
                 {formatMoney(report.data.netIncome)}
@@ -91,25 +89,25 @@ function Section({
 }) {
   return (
     <div>
-      <h3 className="text-xs uppercase tracking-wider text-white/45 mb-2">
+      <h3 className="text-xs uppercase tracking-wider text-fg-subtle mb-2">
         {title}
       </h3>
-      <ul className="divide-y divide-white/5 text-sm">
+      <ul className="divide-y divide-default text-sm">
         {rows.length === 0 && (
-          <li className="py-2 text-white/45">No activity.</li>
+          <li className="py-2 text-fg-subtle">No activity.</li>
         )}
         {rows.map((r) => (
           <li key={r.code} className="flex justify-between py-1.5">
             <span>
-              <span className="font-mono text-white/55 mr-2">{r.code}</span>
+              <span className="font-mono text-fg-muted mr-2">{r.code}</span>
               {r.name}
             </span>
             <span className="font-mono">{formatMoney(r.amount)}</span>
           </li>
         ))}
-        <li className="flex justify-between py-2 border-t border-white/10 font-semibold mt-1">
+        <li className="flex justify-between py-2 border-t border-default font-semibold mt-1">
           <span>Total {title.toLowerCase()}</span>
-          <span className={`font-mono ${positive ? "text-emerald-300" : ""}`}>
+          <span className={`font-mono ${positive ? "text-success" : ""}`}>
             {formatMoney(total)}
           </span>
         </li>

@@ -68,12 +68,12 @@ export function ScreeningPage() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ShieldAlert className="h-4 w-4 text-amber-300" />
+          <ShieldAlert className="h-4 w-4 text-warning" />
           AML watchlist
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-xs text-white/55">
+        <p className="text-xs text-fg-muted">
           Entries here cause exact-name (or partial-name) matches when customers
           are screened. Real deployments replace this with a vendor API; the
           internal list is still useful for hard-blocks (e.g. known fraudsters,
@@ -129,10 +129,10 @@ export function ScreeningPage() {
         {list.isLoading ? (
           <SkeletonCard />
         ) : (list.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">No entries yet.</p>
+          <p className="text-sm text-fg-muted">No entries yet.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">List</th>
                 <th className="py-2 px-2">Name</th>
@@ -141,9 +141,9 @@ export function ScreeningPage() {
                 <th className="py-2 px-2 text-right" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(list.data ?? []).map((w) => (
-                <tr key={w.id} className="hover:bg-white/[0.03]">
+                <tr key={w.id} className="hover:bg-hover">
                   <td className="py-2 px-2">
                     <Badge
                       variant={w.list === "SANCTIONS" ? "danger" : "warning"}
@@ -152,10 +152,10 @@ export function ScreeningPage() {
                     </Badge>
                   </td>
                   <td className="py-2 px-2">{w.fullName}</td>
-                  <td className="py-2 px-2 text-white/65 text-xs">
+                  <td className="py-2 px-2 text-fg-muted text-xs">
                     {w.aliases.join(", ")}
                   </td>
-                  <td className="py-2 px-2 text-white/65 text-xs">
+                  <td className="py-2 px-2 text-fg-muted text-xs">
                     {w.reason ?? "—"}
                   </td>
                   <td className="py-2 px-2 text-right">
@@ -163,7 +163,7 @@ export function ScreeningPage() {
                       <button
                         type="button"
                         onClick={() => remove.mutate(w.id)}
-                        className="text-white/55 hover:text-rose-300"
+                        className="text-fg-muted hover:text-danger"
                         title="Remove"
                       >
                         <Trash2 className="h-3 w-3" />

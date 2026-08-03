@@ -76,13 +76,13 @@ export function ChartOfAccountsPage() {
         {accounts.isLoading ? (
           <SkeletonCard />
         ) : (accounts.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No accounts yet. Click "Seed defaults" to install the standard
             chart.
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Code</th>
                 <th className="py-2 px-2">Name</th>
@@ -91,14 +91,14 @@ export function ChartOfAccountsPage() {
                 <th className="py-2 px-2">System</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(accounts.data ?? []).map((a) => (
-                <tr key={a.id} className="hover:bg-white/[0.03]">
+                <tr key={a.id} className="hover:bg-hover">
                   <td className="py-2 px-2 font-mono">{a.code}</td>
                   <td className="py-2 px-2">
                     {a.name}
                     {a.description && (
-                      <div className="text-xs text-white/45">
+                      <div className="text-xs text-fg-subtle">
                         {a.description}
                       </div>
                     )}
@@ -106,7 +106,7 @@ export function ChartOfAccountsPage() {
                   <td className="py-2 px-2">
                     <Badge variant={typeVariant(a.type)}>{a.type}</Badge>
                   </td>
-                  <td className="py-2 px-2 text-white/65">{a.normalBalance}</td>
+                  <td className="py-2 px-2 text-fg-muted">{a.normalBalance}</td>
                   <td className="py-2 px-2">
                     {a.system ? <Badge variant="muted">system</Badge> : null}
                   </td>
@@ -274,7 +274,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );

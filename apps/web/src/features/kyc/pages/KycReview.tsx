@@ -49,14 +49,14 @@ export function KycReviewPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <FileCheck2 className="h-4 w-4 text-emerald-300" />
+          <FileCheck2 className="h-4 w-4 text-success" />
           KYC review queue
         </CardTitle>
         <TourButton tourId="kyc" steps={findArticle("kyc")?.tour ?? []} />
       </CardHeader>
       <CardContent>
         {pending.length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             All customers are verified or rejected.{" "}
           </p>
         ) : (
@@ -110,24 +110,24 @@ function CustomerKycBlock({ customer }: { customer: Customer }) {
   };
 
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.02] p-3 space-y-2">
+    <div className="rounded-md border border-default bg-surface-2 p-3 space-y-2">
       <div className="flex items-center justify-between">
         <KycInspectorLink
           customerId={customer.id}
           customerName={`${customer.firstName} ${customer.lastName}`}
         >
-          <span className="text-sm font-medium text-sky-300 hover:underline">
+          <span className="text-sm font-medium text-info hover:underline">
             {customer.firstName} {customer.lastName}
           </span>
         </KycInspectorLink>
-        <div className="text-xs text-white/45">{customer.phone}</div>
+        <div className="text-xs text-fg-subtle">{customer.phone}</div>
       </div>
       {docs.isLoading ? (
-        <p className="text-xs text-white/55">Loading docs…</p>
+        <p className="text-xs text-fg-muted">Loading docs…</p>
       ) : (docs.data ?? []).length === 0 ? (
-        <p className="text-xs text-white/55">No documents submitted yet.</p>
+        <p className="text-xs text-fg-muted">No documents submitted yet.</p>
       ) : (
-        <ul className="divide-y divide-white/5">
+        <ul className="divide-y divide-default">
           {(docs.data ?? []).map((d) => (
             <li
               key={d.id}
@@ -137,13 +137,13 @@ function CustomerKycBlock({ customer }: { customer: Customer }) {
                 <div className="font-medium">
                   {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
                 </div>
-                <div className="text-xs text-white/45">
+                <div className="text-xs text-fg-subtle">
                   {formatDateTime(d.submittedAt)} ·{" "}
                   <a
                     href={d.documentUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sky-300 hover:underline inline-flex items-center gap-0.5"
+                    className="text-info hover:underline inline-flex items-center gap-0.5"
                   >
                     view <ExternalLink className="h-3 w-3" />
                   </a>

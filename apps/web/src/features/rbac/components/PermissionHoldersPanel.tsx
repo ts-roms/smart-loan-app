@@ -48,37 +48,37 @@ export function PermissionHoldersPanel() {
     <Card data-tour="permission-holders-panel">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ShieldQuestion className="h-4 w-4 text-sky-300" />
+          <ShieldQuestion className="h-4 w-4 text-info" />
           Who has permission…?
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-xs text-white/55">
+        <p className="text-xs text-fg-muted">
           Reverse lookup. Pick a permission key to see every role + active
           delegation that currently grants it, plus the deduped count of unique
           users who hold it right now.
         </p>
 
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-white/45" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-fg-subtle" />
           <input
             type="text"
             placeholder="Search by key, label, or description…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full pl-7 pr-3 py-1.5 text-sm bg-white/5 border border-white/10 rounded-md outline-none focus:border-sky-400/40"
+            className="w-full pl-7 pr-3 py-1.5 text-sm bg-surface-2 border border-default rounded-md outline-none focus:border-sky-400/40"
           />
         </div>
 
         {permissions.isLoading ? (
           <SkeletonLine />
         ) : (
-          <div className="max-h-60 overflow-y-auto rounded-md border border-white/5 divide-y divide-white/5">
+          <div className="max-h-60 overflow-y-auto rounded-md border border-default divide-y divide-default">
             {Object.entries(groups)
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([category, rows]) => (
                 <div key={category} className="px-2 py-1">
-                  <div className="text-[10px] uppercase tracking-wider text-white/45 py-1">
+                  <div className="text-[10px] uppercase tracking-wider text-fg-subtle py-1">
                     {category}
                   </div>
                   <div className="space-y-0.5">
@@ -87,21 +87,19 @@ export function PermissionHoldersPanel() {
                         type="button"
                         key={p.key}
                         onClick={() => setSelectedKey(p.key)}
-                        className={`w-full text-left px-2 py-1 rounded text-xs hover:bg-white/[0.04] ${
-                          selectedKey === p.key
-                            ? "bg-sky-400/10 text-sky-200"
-                            : ""
+                        className={`w-full text-left px-2 py-1 rounded text-xs hover:bg-hover ${
+                          selectedKey === p.key ? "bg-sky-400/10 text-info" : ""
                         }`}
                       >
                         <span className="font-mono">{p.key}</span>
-                        <span className="ml-2 text-white/55">{p.label}</span>
+                        <span className="ml-2 text-fg-muted">{p.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
               ))}
             {Object.keys(groups).length === 0 && (
-              <p className="text-xs text-white/45 px-3 py-2">
+              <p className="text-xs text-fg-subtle px-3 py-2">
                 No permissions match "{query}".
               </p>
             )}
@@ -133,7 +131,7 @@ function HoldersResult({
   if (isLoading) return <SkeletonLine />;
   if (errorMsg) {
     return (
-      <div className="text-xs text-rose-300 bg-rose-500/5 border border-rose-500/20 rounded px-3 py-2">
+      <div className="text-xs text-danger bg-rose-500/5 border border-rose-500/20 rounded px-3 py-2">
         {errorMsg}
       </div>
     );
@@ -141,18 +139,18 @@ function HoldersResult({
   if (!payload) return null;
 
   return (
-    <div className="space-y-3 rounded-md border border-white/10 bg-white/[0.02] p-3">
+    <div className="space-y-3 rounded-md border border-default bg-surface-2 p-3">
       <div>
-        <div className="font-mono text-xs text-sky-200">
+        <div className="font-mono text-xs text-info">
           {payload.permission.key}
         </div>
         <div className="text-sm">{payload.permission.label}</div>
         {payload.permission.description && (
-          <div className="text-xs text-white/55 mt-0.5">
+          <div className="text-xs text-fg-muted mt-0.5">
             {payload.permission.description}
           </div>
         )}
-        <div className="mt-2 text-xs text-white/55">
+        <div className="mt-2 text-xs text-fg-muted">
           {payload.totalActiveUsers}{" "}
           {payload.totalActiveUsers === 1 ? "user" : "users"} hold this right
           now (deduped across roles + active delegations).
@@ -160,11 +158,11 @@ function HoldersResult({
       </div>
 
       <div>
-        <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">
+        <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">
           Direct roles
         </div>
         {payload.directRoles.length === 0 ? (
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             No role grants this permission directly.
           </p>
         ) : (
@@ -179,9 +177,9 @@ function HoldersResult({
                   <Badge variant={r.system ? "muted" : "success"}>
                     {r.system ? "system" : "custom"}
                   </Badge>
-                  <span className="text-white/70">{r.name}</span>
+                  <span className="text-fg">{r.name}</span>
                 </span>
-                <span className="text-white/55 tabular-nums">
+                <span className="text-fg-muted tabular-nums">
                   {r.userCount} {r.userCount === 1 ? "user" : "users"}
                 </span>
               </li>
@@ -191,21 +189,21 @@ function HoldersResult({
       </div>
 
       <div>
-        <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">
+        <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">
           Active delegations
         </div>
         {payload.delegations.length === 0 ? (
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             No active delegation grants this permission.
           </p>
         ) : (
           <ul className="space-y-1">
             {payload.delegations.map((d) => (
               <li key={d.id} className="text-xs">
-                <span className="text-white/70">{d.delegateName}</span>
-                <span className="text-white/40"> ← </span>
-                <span className="text-white/55">{d.delegatorName}</span>
-                <span className="text-white/40 ml-2">
+                <span className="text-fg">{d.delegateName}</span>
+                <span className="text-fg-subtle"> ← </span>
+                <span className="text-fg-muted">{d.delegatorName}</span>
+                <span className="text-fg-subtle ml-2">
                   until {new Date(d.endsAt).toLocaleDateString()}
                 </span>
                 {!d.viaExplicit && (

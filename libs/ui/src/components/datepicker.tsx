@@ -70,10 +70,10 @@ export function DatePicker({
           type="button"
           disabled={disabled}
           className={cn(
-            "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-left",
-            "hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60",
+            "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-default bg-surface-2 px-3 py-2 text-sm text-left",
+            "hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60",
             "disabled:cursor-not-allowed disabled:opacity-50",
-            selected ? "text-white" : "text-white/45",
+            selected ? "text-fg" : "text-fg-subtle",
             className,
           )}
         >
@@ -92,7 +92,7 @@ export function DatePicker({
                   e.stopPropagation();
                   onChange("");
                 }}
-                className="rounded-sm p-0.5 text-white/55 hover:text-white hover:bg-white/[0.08]"
+                className="rounded-sm p-0.5 text-fg-muted hover:text-fg hover:bg-hover"
               >
                 <X className="h-3 w-3" />
               </span>

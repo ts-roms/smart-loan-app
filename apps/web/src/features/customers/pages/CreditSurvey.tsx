@@ -70,27 +70,27 @@ export function CreditSurveyPage() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Gauge className="h-4 w-4 text-sky-300" />
+          <Gauge className="h-4 w-4 text-info" />
           Credit-scoring survey · {customer.data?.firstName}{" "}
           {customer.data?.lastName}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-white/55">
+        <p className="text-sm text-fg-muted">
           Answer all questions honestly. The score combines your responses with
           any prior loan history we have on file to produce a single credit
           grade between 300 and 850.
         </p>
 
         {result ? (
-          <div className="rounded-md border border-white/10 bg-white/[0.04] p-6 text-center space-y-2">
-            <div className="text-xs uppercase tracking-wider text-white/55">
+          <div className="rounded-md border border-default bg-surface-2 p-6 text-center space-y-2">
+            <div className="text-xs uppercase tracking-wider text-fg-muted">
               Final score
             </div>
             <div className="text-5xl font-semibold tracking-tight">
               {result.score}
             </div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
               300 — 850 scale
             </div>
             <div className="flex items-center justify-center gap-2 pt-2">
@@ -98,19 +98,19 @@ export function CreditSurveyPage() {
                 <span
                   className={
                     result.bucket === "EXCELLENT"
-                      ? "text-emerald-300"
+                      ? "text-success"
                       : result.bucket === "GOOD"
-                        ? "text-sky-300"
+                        ? "text-info"
                         : result.bucket === "FAIR"
-                          ? "text-amber-300"
-                          : "text-rose-300"
+                          ? "text-warning"
+                          : "text-danger"
                   }
                 >
                   {result.bucket.charAt(0) +
                     result.bucket.slice(1).toLowerCase()}
                 </span>
               )}
-              <span className="text-white/45 text-xs">
+              <span className="text-fg-subtle text-xs">
                 · Tier {result.tier}
               </span>
             </div>
@@ -169,7 +169,7 @@ function QuestionView({
     <div className="space-y-1.5">
       <div className="text-sm font-medium">{question.label}</div>
       {question.help && (
-        <div className="text-xs text-white/45">{question.help}</div>
+        <div className="text-xs text-fg-subtle">{question.help}</div>
       )}
 
       {question.kind === "choice" && (
@@ -185,7 +185,7 @@ function QuestionView({
                   "rounded-md border px-3 py-1.5 text-sm transition-colors " +
                   (active
                     ? "border-sky-400/50 bg-sky-500/15 text-sky-100"
-                    : "border-white/15 bg-white/[0.04] hover:bg-white/[0.08]")
+                    : "border-default bg-surface-2 hover:bg-hover")
                 }
               >
                 {o.label}
@@ -222,7 +222,7 @@ function QuestionView({
                   "rounded-md border px-4 py-1.5 text-sm transition-colors " +
                   (active
                     ? "border-sky-400/50 bg-sky-500/15 text-sky-100"
-                    : "border-white/15 bg-white/[0.04] hover:bg-white/[0.08]")
+                    : "border-default bg-surface-2 hover:bg-hover")
                 }
               >
                 {o.label}

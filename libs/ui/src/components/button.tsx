@@ -9,10 +9,10 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-sky-500 text-slate-950 hover:bg-sky-400",
-        outline: "border border-white/15 bg-white/[0.04] hover:bg-white/[0.08]",
-        ghost: "hover:bg-white/[0.06]",
+        outline: "border border-default bg-surface-2 hover:bg-hover",
+        ghost: "hover:bg-hover",
         destructive: "bg-rose-500 text-white hover:bg-rose-400",
-        secondary: "bg-white/[0.06] hover:bg-white/[0.10]",
+        secondary: "bg-surface-3 hover:bg-hover",
       },
       size: {
         default: "h-10 px-4 py-2",

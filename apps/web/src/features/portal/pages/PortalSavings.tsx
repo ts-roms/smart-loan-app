@@ -31,7 +31,7 @@ export function PortalSavings() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle className="flex items-center gap-2">
-            <PiggyBank className="h-4 w-4 text-sky-300" />
+            <PiggyBank className="h-4 w-4 text-info" />
             My savings
           </CardTitle>
           {(txns.data ?? []).length > 0 && (
@@ -65,13 +65,13 @@ export function PortalSavings() {
           {txns.isLoading ? (
             <SkeletonCard />
           ) : (txns.data ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">
+            <p className="text-sm text-fg-muted">
               No savings transactions yet. Talk to an officer at the branch to
               make your first deposit.
             </p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Date</th>
                   <th className="py-2 px-2">Type</th>
@@ -79,10 +79,10 @@ export function PortalSavings() {
                   <th className="py-2 px-2">Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {(txns.data ?? []).map((t) => (
-                  <tr key={t.id} className="hover:bg-white/[0.03]">
-                    <td className="py-2 px-2 text-xs text-white/65">
+                  <tr key={t.id} className="hover:bg-hover">
+                    <td className="py-2 px-2 text-xs text-fg-muted">
                       {formatDate(t.txnDate)}
                     </td>
                     <td className="py-2 px-2">
@@ -94,15 +94,13 @@ export function PortalSavings() {
                     </td>
                     <td
                       className={`py-2 px-2 text-right font-mono ${
-                        t.kind === "DEPOSIT"
-                          ? "text-emerald-300"
-                          : "text-rose-300"
+                        t.kind === "DEPOSIT" ? "text-success" : "text-danger"
                       }`}
                     >
                       {t.kind === "DEPOSIT" ? "+" : "−"}
                       {formatMoney(Number(t.amount))}
                     </td>
-                    <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+                    <td className="py-2 px-2 text-xs text-fg-muted max-w-xs truncate">
                       {t.notes ?? "—"}
                     </td>
                   </tr>
@@ -126,13 +124,13 @@ function RollupCard({
   tone: "info" | "good" | "bad";
 }) {
   const toneClass = {
-    info: "text-white/85",
-    good: "text-emerald-300",
-    bad: "text-rose-300",
+    info: "text-fg",
+    good: "text-success",
+    bad: "text-danger",
   }[tone];
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.02] p-3">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-3">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className={`text-base font-semibold font-mono ${toneClass}`}>

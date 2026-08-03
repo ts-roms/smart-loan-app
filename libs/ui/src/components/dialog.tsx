@@ -34,7 +34,7 @@ export const DialogContent = forwardRef<
       onPointerDownOutside={(e) => e.preventDefault()}
       onInteractOutside={(e) => e.preventDefault()}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border border-white/10 bg-slate-950/90 backdrop-blur-xl p-6 shadow-2xl rounded-lg",
+        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border border-default bg-slate-950/90 backdrop-blur-xl p-6 shadow-2xl rounded-lg",
         "data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out",
         className,
       )}

@@ -80,12 +80,12 @@ export function NotificationBell() {
         <button
           type="button"
           aria-label="Notifications"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-white/70 hover:text-white hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 transition"
+          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-fg hover:text-fg hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 transition"
         >
           <Bell className="h-4 w-4" />
           {unseen > 0 && (
             <span
-              className="absolute top-1.5 right-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white ring-2 ring-slate-950"
+              className="absolute top-1.5 right-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-fg ring-2 ring-slate-950"
               aria-label={`${unseen} unseen`}
             >
               {unseen > 9 ? "9+" : unseen}
@@ -97,17 +97,17 @@ export function NotificationBell() {
         align="end"
         className="min-w-[20rem] max-w-[22rem] p-0"
       >
-        <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-default">
           <div className="text-sm font-medium">Notifications</div>
-          <div className="text-[10px] uppercase tracking-wider text-white/45">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
             {unseen > 0 ? `${unseen} unseen` : "all caught up"}
           </div>
         </div>
         <div className="max-h-80 overflow-y-auto">
           {notifs.isLoading ? (
-            <div className="px-3 py-4 text-xs text-white/55">Loading…</div>
+            <div className="px-3 py-4 text-xs text-fg-muted">Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-white/55">
+            <div className="px-3 py-6 text-center text-xs text-fg-muted">
               No notifications yet.
             </div>
           ) : (
@@ -121,19 +121,19 @@ export function NotificationBell() {
                 <div
                   key={n.id}
                   className={cn(
-                    "px-3 py-2 text-xs border-b border-white/[0.04] last:border-b-0",
+                    "px-3 py-2 text-xs border-b border-default last:border-b-0",
                     fresh && "bg-sky-500/[0.04]",
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="font-medium text-white/85">
+                    <div className="font-medium text-fg">
                       {EVENT_LABELS[n.event] ?? n.event}
                     </div>
-                    <div className="text-[10px] text-white/45 whitespace-nowrap">
+                    <div className="text-[10px] text-fg-subtle whitespace-nowrap">
                       {relativeTime(n.createdAt)}
                     </div>
                   </div>
-                  <div className="text-white/55 truncate mt-0.5">
+                  <div className="text-fg-muted truncate mt-0.5">
                     <span className="font-mono text-[10px] uppercase">
                       {n.channel}
                     </span>
@@ -141,7 +141,7 @@ export function NotificationBell() {
                     {n.recipient}
                   </div>
                   {n.subject && (
-                    <div className="text-white/65 truncate mt-0.5">
+                    <div className="text-fg-muted truncate mt-0.5">
                       {n.subject}
                     </div>
                   )}
@@ -154,7 +154,7 @@ export function NotificationBell() {
         <DropdownMenuItem asChild>
           <Link
             to="/notifications"
-            className="cursor-pointer justify-center text-sky-300 hover:text-sky-200"
+            className="cursor-pointer justify-center text-info hover:text-info"
           >
             View all notifications
           </Link>

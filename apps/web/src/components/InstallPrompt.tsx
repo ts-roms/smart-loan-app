@@ -22,11 +22,11 @@ export function InstallPrompt({
     >
       <div className="flex items-start gap-3">
         <div className="h-9 w-9 shrink-0 rounded-md border border-sky-400/30 bg-sky-500/10 flex items-center justify-center">
-          <Download className="h-4 w-4 text-sky-300" />
+          <Download className="h-4 w-4 text-info" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold">Install SmartLoan</div>
-          <p className="text-xs text-white/65 mt-0.5">
+          <p className="text-xs text-fg-muted mt-0.5">
             Add it to your home screen for quicker access. Opens in its own
             window — no browser chrome.
           </p>
@@ -35,7 +35,7 @@ export function InstallPrompt({
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss install prompt"
-          className="text-white/45 hover:text-white/85 -mr-1 -mt-1"
+          className="text-fg-subtle hover:text-fg -mr-1 -mt-1"
         >
           <X className="h-4 w-4" />
         </button>

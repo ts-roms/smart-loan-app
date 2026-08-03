@@ -19,6 +19,19 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="SmartLoan" />
     <title>SmartLoan</title>
+    <!--
+      Apply the stored theme before the first paint. React mounts a few
+      hundred ms later; without this, a dark-theme user sees a white
+      flash on every load. Kept inline and tiny on purpose — it must run
+      before the stylesheet paints, so it can't be an imported module.
+      Mirrors storedTheme() in src/providers/theme.tsx.
+    -->
+    <script>
+      try {
+        if (localStorage.getItem("loan.theme") === "dark")
+          document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

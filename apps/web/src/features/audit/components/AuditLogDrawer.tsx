@@ -49,7 +49,7 @@ export function AuditLogTrigger() {
         <button
           type="button"
           aria-label="Open audit log"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-white/70 hover:bg-white/[0.06] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-fg hover:bg-hover hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
         >
           <ScrollText className="h-4 w-4" />
         </button>
@@ -86,7 +86,7 @@ function AuditLogInspector() {
     <>
       <DrawerHeader>
         <div className="flex items-start gap-2">
-          <ScrollText className="h-5 w-5 mt-0.5 text-sky-300" />
+          <ScrollText className="h-5 w-5 mt-0.5 text-info" />
           <div className="flex-1 min-w-0">
             <DrawerTitle>Audit log</DrawerTitle>
             <DrawerDescription>
@@ -119,7 +119,7 @@ function AuditLogInspector() {
           <div>
             <Label>Actor</Label>
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-white/45" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-fg-subtle" />
               <Input
                 value={actorSearch}
                 onChange={(e) => setActorSearch(e.target.value)}
@@ -138,11 +138,11 @@ function AuditLogInspector() {
             <SkeletonLine />
           </div>
         ) : filtered.length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No events match the current filters.
           </p>
         ) : (
-          <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+          <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
             {filtered.map((e) => (
               <AuditEventRowView key={e.id} event={e} />
             ))}
@@ -172,7 +172,7 @@ function AuditEventRowView({ event }: { event: AuditEventRow }) {
             <div className="font-medium truncate">
               {event.actorName ?? event.actorEmail ?? "—"}
             </div>
-            <div className="text-[10px] text-white/45 truncate">
+            <div className="text-[10px] text-fg-subtle truncate">
               {event.actorEmail ?? "—"}
             </div>
           </div>
@@ -182,7 +182,7 @@ function AuditEventRowView({ event }: { event: AuditEventRow }) {
         </Badge>
       </div>
 
-      <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-white/45">
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-fg-subtle">
         <span>{formatDateTime(event.createdAt)}</span>
         {event.targetType && (
           <span className="font-mono truncate">
@@ -196,13 +196,13 @@ function AuditEventRowView({ event }: { event: AuditEventRow }) {
         <button
           type="button"
           onClick={() => setExpanded((x) => !x)}
-          className="mt-1.5 text-[10px] text-sky-300 hover:text-sky-200"
+          className="mt-1.5 text-[10px] text-info hover:text-info"
         >
           {expanded ? "Hide payload" : "Show payload"}
         </button>
       )}
       {expanded && hasPayload && (
-        <pre className="mt-1 max-h-48 overflow-auto rounded bg-black/40 p-2 text-[10px] text-white/65">
+        <pre className="mt-1 max-h-48 overflow-auto rounded bg-black/40 p-2 text-[10px] text-fg-muted">
           {JSON.stringify(event.payload, null, 2)}
         </pre>
       )}

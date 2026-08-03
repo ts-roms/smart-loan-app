@@ -43,7 +43,7 @@ export function PortalLoanDetail() {
 
   if (loan.isLoading) return <SkeletonCard />;
   if (!loan.data)
-    return <p className="text-sm text-white/55">Loan not found.</p>;
+    return <p className="text-sm text-fg-muted">Loan not found.</p>;
   const l = loan.data;
   const payable = ["DISBURSED", "ACTIVE"].includes(l.status);
 
@@ -69,13 +69,13 @@ export function PortalLoanDetail() {
           </div>
           {l.purpose && (
             <p className="text-sm mt-3">
-              <span className="text-white/55">Purpose: </span>
+              <span className="text-fg-muted">Purpose: </span>
               {l.purpose}
             </p>
           )}
           {l.decisionReason && (
-            <p className="text-sm mt-3 text-rose-300">
-              <span className="text-white/55">Reason: </span>
+            <p className="text-sm mt-3 text-danger">
+              <span className="text-fg-muted">Reason: </span>
               {l.decisionReason}
             </p>
           )}
@@ -155,8 +155,8 @@ function PortalSignaturePanel({
   };
 
   return (
-    <div className="mt-6 border-t border-white/10 pt-4 space-y-2">
-      <div className="text-xs uppercase tracking-wider text-white/55 flex items-center gap-1">
+    <div className="mt-6 border-t border-default pt-4 space-y-2">
+      <div className="text-xs uppercase tracking-wider text-fg-muted flex items-center gap-1">
         <Pen className="h-3 w-3" />
         Your signature on the loan agreement
       </div>
@@ -165,9 +165,9 @@ function PortalSignaturePanel({
           <img
             src={borrowerSignatureUrl}
             alt="your signature"
-            className="h-16 bg-white rounded p-1 border border-white/10"
+            className="h-16 bg-white rounded p-1 border border-default"
           />
-          <div className="text-xs text-white/55">
+          <div className="text-xs text-fg-muted">
             <Badge variant="success">Signed</Badge>
             {borrowerSignedAt && (
               <div className="mt-1">
@@ -182,7 +182,7 @@ function PortalSignaturePanel({
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-white/65">
+          <p className="text-sm text-fg-muted">
             Please sign your loan agreement. Your signature will be embedded in
             the official document.
           </p>
@@ -279,7 +279,7 @@ function PayNowButton({ loanId }: { loanId: string }) {
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/55">Status</span>
+                  <span className="text-fg-muted">Status</span>
                   <Badge
                     variant={
                       intent.data?.status === "PAID" ? "success" : "warning"
@@ -297,12 +297,12 @@ function PayNowButton({ loanId }: { loanId: string }) {
                     href={intent.data?.paymentUrl ?? "#"}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center h-9 px-2 rounded-md border border-white/15 hover:bg-white/[0.06]"
+                    className="inline-flex items-center justify-center h-9 px-2 rounded-md border border-default hover:bg-hover"
                   >
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
-                <p className="text-xs text-white/45">
+                <p className="text-xs text-fg-subtle">
                   Open the link to complete payment via the provider.
                 </p>
                 <DialogFooter>
@@ -378,7 +378,7 @@ function Info({
 }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div>{children ?? "—"}</div>

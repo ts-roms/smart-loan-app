@@ -4,15 +4,21 @@
 
 @layer base {
   /*
-   * Theme — "warm dark, refined" tuned for long-session readability AND
-   * a more professional, modern visual hierarchy.
+   * Theme tokens — light is the default, dark is opt-in via
+   * `data-theme="dark"` on <html> (set by the ThemeProvider).
+   *
+   * There is deliberately NO `prefers-color-scheme` rule. The product
+   * ships light; someone whose OS is dark should still see the light
+   * console until they choose otherwise, and a demo shouldn't depend
+   * on the presenter's laptop settings. The toggle is the only input.
    *
    * Tier surfaces (Linear / Vercel-style):
    *   --surface-1   the page background plate beneath cards
-   *   --surface-2   the default card body — lifted ~3% above background
-   *   --surface-3   elevated card (hero KPI, modal, popover) — lifted ~6%
-   * Borders use the same hue family at slightly higher lightness so they
-   * never look like harsh white lines on dark.
+   *   --surface-2   the default card body
+   *   --surface-3   elevated card (hero KPI, modal, popover)
+   * In dark these step UP in lightness; in light they step DOWN toward
+   * white, so surface-3 is the brightest thing on a dark page and the
+   * cleanest white on a light one. Either way "3 sits above 1".
    *
    * Semantic status colors:
    *   --success / --warning / --danger / --info
@@ -21,40 +27,113 @@
    * etc., so a future palette tweak is a one-file change.
    *
    * Foreground hierarchy:
-   *   --foreground            body text, 88% L  (WCAG AAA against bg)
-   *   --foreground-muted      secondary text, 65% L
-   *   --foreground-subtle     tertiary text / metadata, 50% L
+   *   --foreground            body text
+   *   --foreground-muted      secondary text
+   *   --foreground-subtle     tertiary text / metadata
    * Use these instead of `text-white/45`, `text-white/55` etc. so opacity
-   * is no longer doing two jobs (hierarchy + accessibility).
+   * is no longer doing two jobs (hierarchy + accessibility) — and so the
+   * same markup works on both palettes. A `text-white/55` label is
+   * invisible on a light background; `text-fg-subtle` is correct on both.
+   *
+   * Interaction + separators:
+   *   --hover     row/button hover wash — a tint of the foreground, so
+   *               it darkens on light and lightens on dark
+   *   --divider   table row rules; softer than --border
    */
   :root {
+    color-scheme: light;
+
+    /* Surfaces — white cards on a faintly warm grey plate. */
+    --background: 220 20% 97%;
+    --surface-1: 220 20% 98%;
+    --surface-2: 0 0% 100%;
+    --surface-3: 0 0% 100%;
+
+    /* Foreground tiers. Calibrated against surface-1 (the sidebar and
+     * page plate) rather than pure white — subtle at 48% cleared AA on
+     * white but measured 4.32:1 on the sidebar, which is where most of
+     * the small uppercase section labels actually live. */
+    --foreground: 222 24% 12%;
+    --foreground-muted: 220 10% 38%;
+    --foreground-subtle: 220 9% 44%;
+    --muted: 220 16% 94%;
+    --muted-foreground: 220 10% 40%;
+
+    /* Borders + inputs */
+    --border: 220 15% 88%;
+    --border-strong: 220 14% 78%;
+    --input: 220 15% 88%;
+    --ring: 199 89% 42%;
+
+    /* Brand accent — same sky family, darkened for contrast on white.
+     * 42% measured 3.66:1 as link text, so it goes to 36%: this token is
+     * used as a foreground ("View analytics", "All loans") far more than
+     * as a fill, and a fill can afford to be lighter than text can. */
+    --primary: 199 92% 36%;
+    --primary-soft: 199 92% 36% / 0.10;
+    --primary-foreground: 0 0% 100%;
+
+    /* Semantic statuses — darkened so they stay legible as TEXT on
+     * white, not just as fills. The -soft tints stay light. */
+    --success: 152 62% 30%;
+    --success-soft: 152 62% 30% / 0.10;
+    --warning: 32 90% 36%;
+    --warning-soft: 32 90% 36% / 0.12;
+    --danger: 0 68% 45%;
+    --danger-soft: 0 68% 45% / 0.10;
+    --info: 217 75% 45%;
+    --info-soft: 217 75% 45% / 0.10;
+
+    --hover: 222 24% 12% / 0.045;
+    --divider: 220 15% 91%;
+
+    /* Body-gradient alphas + the elevation recipe. See `body` and
+     * `.card-elevated` below — on white, depth comes from a soft grey
+     * shadow rather than a black one and an inner top highlight. */
+    --glow-a: 0.05;
+    --glow-b: 0.03;
+    --elev-highlight: 0 0% 100% / 0;
+    --elev-hairline: 220 15% 88% / 1;
+    --elev-shadow: 220 20% 40% / 0.10;
+    --glass-bg: 222 24% 12% / 0.025;
+    --glass-border: 220 15% 88% / 1;
+
+    /* Legacy alias — keep so existing `bg-destructive` calls still work */
+    --destructive: 0 68% 45%;
+    --destructive-foreground: 0 0% 100%;
+  }
+
+  /*
+   * Dark — the original "warm dark, refined" palette, unchanged apart
+   * from the two new tokens. Kept intact so switching back is exactly
+   * the console people already know.
+   */
+  :root[data-theme="dark"] {
     color-scheme: dark;
 
-    /* Surfaces */
     --background: 222 16% 7%;          /* deeper plate so cards stand out */
     --surface-1: 220 14% 10%;          /* page surface */
     --surface-2: 220 13% 13%;          /* default card */
     --surface-3: 220 12% 16%;          /* elevated card */
 
-    /* Foreground tiers */
     --foreground: 213 18% 92%;
     --foreground-muted: 215 14% 65%;
-    --foreground-subtle: 215 12% 48%;
+    /* Was 48%, which measured 3.64:1 on surface-2 — under AA. 56% still
+     * left 4.43:1 on the lighter dashboard cards, so 59%. Pre-existing
+     * shortfall, found by the contrast sweep while adding light. */
+    --foreground-subtle: 215 12% 59%;
     --muted: 220 12% 18%;
     --muted-foreground: 215 14% 65%;
 
-    /* Borders + inputs */
     --border: 217 14% 20%;
     --border-strong: 217 14% 28%;
     --input: 217 14% 20%;
     --ring: 199 78% 60%;
 
-    /* Brand accent — sky family, lightly desaturated */
     --primary: 199 78% 60%;
     --primary-soft: 199 78% 60% / 0.12;
     --primary-foreground: 220 30% 10%;
 
-    /* Semantic statuses */
     --success: 152 60% 52%;
     --success-soft: 152 60% 52% / 0.12;
     --warning: 38 92% 62%;
@@ -64,7 +143,17 @@
     --info: 217 80% 65%;
     --info-soft: 217 80% 65% / 0.12;
 
-    /* Legacy alias — keep so existing `bg-destructive` calls still work */
+    --hover: 0 0% 100% / 0.06;
+    --divider: 217 14% 20%;
+
+    --glow-a: 0.06;
+    --glow-b: 0.04;
+    --elev-highlight: 0 0% 100% / 0.04;
+    --elev-hairline: 0 0% 0% / 0.4;
+    --elev-shadow: 0 0% 0% / 0.5;
+    --glass-bg: 0 0% 100% / 0.04;
+    --glass-border: 0 0% 100% / 0.10;
+
     --destructive: 0 70% 60%;
     --destructive-foreground: 213 18% 92%;
   }
@@ -79,10 +168,14 @@
      * subtle focal centre without ever competing with content. Opacity is
      * intentionally below the perception threshold for most viewers —
      * you should feel it more than see it.
+     *
+     * The alphas are driven by variables because the same 0.06 that reads
+     * as a faint glow on near-black reads as a visible blue-grey stain on
+     * near-white. Light halves them.
      */
     background:
-      radial-gradient(900px 480px at 8% -10%, hsl(var(--primary) / 0.06), transparent 60%),
-      radial-gradient(700px 420px at 100% 110%, hsl(265 80% 60% / 0.04), transparent 55%),
+      radial-gradient(900px 480px at 8% -10%, hsl(var(--primary) / var(--glow-a)), transparent 60%),
+      radial-gradient(700px 420px at 100% 110%, hsl(265 80% 60% / var(--glow-b)), transparent 55%),
       hsl(var(--background));
     color: hsl(var(--foreground));
     /* Stylistic alternates Inter exposes — tighter alt for `cv02`, single-
@@ -130,24 +223,43 @@
   /* Tabular figures — flip on for any container holding numbers. */
   .tabular { font-variant-numeric: tabular-nums; }
 
-  /* Glass surfaces — kept for compat with existing call sites. */
+  /* Hover wash for rows and ghost buttons — replaces `hover:bg-white/5`,
+   * which tints the wrong way on a light background. */
+  .bg-hover { background-color: hsl(var(--hover)); }
+  .hover\:bg-hover:hover { background-color: hsl(var(--hover)); }
+
+  /* Table row separators — lighter than --border so dense tables don't
+   * turn into a grid of lines. Replaces `divide-white/10`. */
+  .divide-default > :not([hidden]) ~ :not([hidden]) {
+    border-color: hsl(var(--divider));
+  }
+  .border-divider { border-color: hsl(var(--divider)); }
+
+  /* Glass surfaces — kept for compat with existing call sites. Tinted
+   * via variables so the wash darkens on light and lightens on dark
+   * rather than always being white-on-something. */
   .glass {
-    @apply bg-white/[0.04] border border-white/10 backdrop-blur-md;
+    background-color: hsl(var(--glass-bg));
+    border: 1px solid hsl(var(--glass-border));
+    @apply backdrop-blur-md;
   }
   .glass-strong {
-    @apply bg-white/[0.06] border border-white/15 backdrop-blur-md;
+    background-color: hsl(var(--glass-bg));
+    border: 1px solid hsl(var(--border-strong));
+    @apply backdrop-blur-md;
   }
 
-  /* Elevated card — adds a 1px inner highlight along the top edge so the
-   * card looks lit from above. Stripe / Linear / Vercel all use this
-   * trick to suggest depth without a heavy shadow. */
+  /* Elevated card — a 1px inner highlight along the top edge so the card
+   * looks lit from above. Stripe / Linear / Vercel all use this trick to
+   * suggest depth without a heavy shadow. On light there's no highlight
+   * to give (white on white); depth comes from the shadow alone. */
   .card-elevated {
     background-color: hsl(var(--surface-3));
     border: 1px solid hsl(var(--border));
     box-shadow:
-      inset 0 1px 0 0 hsl(0 0% 100% / 0.04),
-      0 1px 0 0 hsl(0 0% 0% / 0.4),
-      0 20px 40px -20px hsl(0 0% 0% / 0.5);
+      inset 0 1px 0 0 hsl(var(--elev-highlight)),
+      0 1px 0 0 hsl(var(--elev-hairline)),
+      0 20px 40px -20px hsl(var(--elev-shadow));
   }
 
   /* Section header divider used between dashboard groups. The label sits

@@ -112,10 +112,10 @@ export function UsersPage() {
         {users.isLoading ? (
           <SkeletonCard />
         ) : (users.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">No users.</p>
+          <p className="text-sm text-fg-muted">No users.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Name / Email</th>
                 <th className="py-2 px-2">Primary role</th>
@@ -125,12 +125,12 @@ export function UsersPage() {
                 <th />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(users.data ?? []).map((u) => (
-                <tr key={u.id} className="hover:bg-white/[0.03] align-top">
+                <tr key={u.id} className="hover:bg-hover align-top">
                   <td className="py-2 px-2">
                     <div>{u.name}</div>
-                    <div className="text-xs text-white/45">{u.email}</div>
+                    <div className="text-xs text-fg-subtle">{u.email}</div>
                   </td>
                   <td className="py-2 px-2">
                     <Badge variant="muted">{u.primaryRole}</Badge>
@@ -138,7 +138,7 @@ export function UsersPage() {
                   <td className="py-2 px-2">
                     <div className="flex flex-wrap gap-1">
                       {u.roles.length === 0 ? (
-                        <span className="text-xs text-white/45">none</span>
+                        <span className="text-xs text-fg-subtle">none</span>
                       ) : (
                         u.roles.map((r) => {
                           // Self-lockout: don't show the X on your own ADMIN
@@ -160,8 +160,8 @@ export function UsersPage() {
                               key={r.key}
                               className={
                                 expired
-                                  ? "inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.02] px-2 py-0.5 text-xs opacity-50 line-through"
-                                  : "inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-xs"
+                                  ? "inline-flex items-center gap-1 rounded-full border border-default bg-surface-2 px-2 py-0.5 text-xs opacity-50 line-through"
+                                  : "inline-flex items-center gap-1 rounded-full border border-default bg-surface-2 px-2 py-0.5 text-xs"
                               }
                               title={
                                 expiry
@@ -173,13 +173,13 @@ export function UsersPage() {
                             >
                               <span
                                 className={
-                                  r.system ? "text-sky-300" : "text-emerald-300"
+                                  r.system ? "text-info" : "text-success"
                                 }
                               >
                                 {r.name}
                               </span>
                               {expiry && (
-                                <span className="text-[10px] text-amber-300/90">
+                                <span className="text-[10px] text-warning/90">
                                   {expired ? "expired" : "until"}{" "}
                                   {formatDate(r.expiresAt)}
                                 </span>
@@ -190,7 +190,7 @@ export function UsersPage() {
                                   onClick={() =>
                                     onUnassign(u.id, r.key, r.system)
                                   }
-                                  className="text-white/45 hover:text-rose-300"
+                                  className="text-fg-subtle hover:text-danger"
                                   title={
                                     r.system
                                       ? `Remove system role ${r.name}`
@@ -211,7 +211,7 @@ export function UsersPage() {
                       {u.active ? "Active" : "Inactive"}
                     </Badge>
                   </td>
-                  <td className="py-2 px-2 text-xs text-white/55">
+                  <td className="py-2 px-2 text-xs text-fg-muted">
                     {formatDate(u.createdAt)}
                   </td>
                   <td className="py-2 px-2 text-right">
@@ -325,7 +325,7 @@ function AssignRoleDialog({
           <DialogTitle>Assign a role</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="rounded-md border border-white/10 bg-white/[0.02] p-3 space-y-2">
+          <div className="rounded-md border border-default bg-surface-2 p-3 space-y-2">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -342,13 +342,13 @@ function AssignRoleDialog({
                   value={expiry}
                   onChange={(e) => setExpiry(e.target.value)}
                 />
-                <p className="text-[10px] text-white/45">
+                <p className="text-[10px] text-fg-subtle">
                   After this instant the role stops conferring permissions. The
                   assignment row stays in place for audit; you can re-assign to
                   extend.
                 </p>
                 {expiryInPast && (
-                  <p className="text-[10px] text-rose-300">
+                  <p className="text-[10px] text-danger">
                     Expiry must be in the future.
                   </p>
                 )}
@@ -362,7 +362,7 @@ function AssignRoleDialog({
                 type="button"
                 disabled={temporary && (expiresAtIso === null || expiryInPast)}
                 onClick={() => onPick(userId, r.key, expiresAtIso)}
-                className="w-full text-left rounded-md border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] disabled:opacity-40 disabled:cursor-not-allowed px-3 py-2 text-sm"
+                className="w-full text-left rounded-md border border-default bg-surface-2 hover:bg-hover disabled:opacity-40 disabled:cursor-not-allowed px-3 py-2 text-sm"
               >
                 <div className="flex items-center justify-between">
                   <span>{r.name}</span>
@@ -371,11 +371,11 @@ function AssignRoleDialog({
                   </Badge>
                 </div>
                 {r.description && (
-                  <div className="text-xs text-white/45 mt-0.5">
+                  <div className="text-xs text-fg-subtle mt-0.5">
                     {r.description}
                   </div>
                 )}
-                <div className="text-xs text-white/35 mt-0.5">
+                <div className="text-xs text-fg-subtle mt-0.5">
                   {r.permissionCount} permission
                   {r.permissionCount === 1 ? "" : "s"}
                 </div>
@@ -476,7 +476,7 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
                 autoComplete="new-password"
                 placeholder="8+ characters"
               />
-              <p className="text-[10px] text-white/45">
+              <p className="text-[10px] text-fg-subtle">
                 Communicate this to the user out-of-band. Recommend they change
                 it on first login.
               </p>
@@ -506,7 +506,7 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
                   onChange={(e) => set("customerId", e.target.value)}
                   placeholder="UUID — leave blank to link later"
                 />
-                <p className="text-[10px] text-white/45">
+                <p className="text-[10px] text-fg-subtle">
                   Required for portal access. Find the id on the customer detail
                   page.
                 </p>

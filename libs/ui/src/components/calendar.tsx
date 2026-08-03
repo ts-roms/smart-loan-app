@@ -39,30 +39,30 @@ export function Calendar({
         // Top nav arrows
         nav: "flex items-center gap-1",
         button_previous: cn(
-          "absolute left-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white transition",
+          "absolute left-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-default bg-surface-2 hover:bg-hover text-fg hover:text-fg transition",
         ),
         button_next: cn(
-          "absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white transition",
+          "absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-default bg-surface-2 hover:bg-hover text-fg hover:text-fg transition",
         ),
         // Weekday headings + day cells
         month_grid: "w-full border-collapse",
         weekdays: "flex",
         weekday:
-          "w-9 text-[10px] uppercase tracking-wider text-white/45 font-normal",
+          "w-9 text-[10px] uppercase tracking-wider text-fg-subtle font-normal",
         week: "flex w-full mt-1",
         day: "h-9 w-9 text-center text-sm p-0 relative",
         day_button: cn(
-          "h-9 w-9 inline-flex items-center justify-center rounded-md font-normal text-white/85",
-          "hover:bg-white/[0.08] hover:text-white",
+          "h-9 w-9 inline-flex items-center justify-center rounded-md font-normal text-fg",
+          "hover:bg-hover hover:text-fg",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60",
           "aria-selected:opacity-100",
         ),
         selected:
           "[&_button]:bg-sky-500 [&_button]:text-slate-950 [&_button]:hover:bg-sky-400 [&_button]:hover:text-slate-950",
         today:
-          "[&_button]:border [&_button]:border-sky-400/60 [&_button]:text-white",
-        outside: "[&_button]:text-white/35",
-        disabled: "[&_button]:text-white/25 [&_button]:cursor-not-allowed",
+          "[&_button]:border [&_button]:border-sky-400/60 [&_button]:text-fg",
+        outside: "[&_button]:text-fg-subtle",
+        disabled: "[&_button]:text-fg-subtle [&_button]:cursor-not-allowed",
         hidden: "invisible",
         ...classNames,
       }}

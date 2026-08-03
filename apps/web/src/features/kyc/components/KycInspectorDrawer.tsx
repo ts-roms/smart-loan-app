@@ -59,7 +59,7 @@ export function KycInspectorLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="text-left hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="text-left hover:text-info focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
           aria-label="Inspect KYC pack"
         >
           {children}
@@ -126,14 +126,14 @@ function KycInspector({
     <>
       <DrawerHeader>
         <div className="flex items-start gap-2">
-          <FileCheck2 className="h-5 w-5 mt-0.5 text-emerald-300" />
+          <FileCheck2 className="h-5 w-5 mt-0.5 text-success" />
           <div className="flex-1 min-w-0">
             <DrawerTitle>{customerName ?? "KYC pack"}</DrawerTitle>
             <DrawerDescription>
               {items.length} document{items.length === 1 ? "" : "s"} ·{" "}
-              <span className="text-amber-300">{pendingCount} pending</span> ·{" "}
-              <span className="text-emerald-300">{verifiedCount} verified</span>{" "}
-              · <span className="text-rose-300">{rejectedCount} rejected</span>
+              <span className="text-warning">{pendingCount} pending</span> ·{" "}
+              <span className="text-success">{verifiedCount} verified</span> ·{" "}
+              <span className="text-danger">{rejectedCount} rejected</span>
             </DrawerDescription>
           </div>
         </div>
@@ -141,19 +141,19 @@ function KycInspector({
 
       <DrawerBody>
         {/* AML screening */}
-        <div className="rounded-md border border-white/10 bg-white/[0.03] p-2.5">
-          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-white/45 mb-1">
+        <div className="rounded-md border border-default bg-surface-2 p-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-fg-subtle mb-1">
             {aml.data?.status === "CLEAR" ? (
-              <ShieldCheck className="h-3 w-3 text-emerald-300" />
+              <ShieldCheck className="h-3 w-3 text-success" />
             ) : (
-              <ShieldAlert className="h-3 w-3 text-amber-300" />
+              <ShieldAlert className="h-3 w-3 text-warning" />
             )}
             AML / sanctions screen
           </div>
           {aml.isLoading ? (
             <SkeletonLine />
           ) : !aml.data ? (
-            <p className="text-xs text-white/55">No screening on file.</p>
+            <p className="text-xs text-fg-muted">No screening on file.</p>
           ) : (
             <>
               <div className="flex items-center gap-2">
@@ -169,14 +169,14 @@ function KycInspector({
                 >
                   {aml.data.status}
                 </Badge>
-                <span className="text-[10px] text-white/55">
+                <span className="text-[10px] text-fg-muted">
                   {formatDateTime(aml.data.screenedAt)} · {aml.data.provider}
                 </span>
               </div>
               {(aml.data.matches?.length ?? 0) > 0 && (
                 <ul className="mt-1.5 space-y-1">
                   {aml.data.matches!.map((m, i) => (
-                    <li key={i} className="text-[10px] text-white/65">
+                    <li key={i} className="text-[10px] text-fg-muted">
                       <span className="font-mono">{m.list}</span> ·{" "}
                       {m.matchedName} · score {m.score.toFixed(2)}
                       {m.reason ? ` · ${m.reason}` : ""}
@@ -195,9 +195,9 @@ function KycInspector({
             <SkeletonLine />
           </div>
         ) : items.length === 0 ? (
-          <p className="text-sm text-white/55">No documents submitted yet.</p>
+          <p className="text-sm text-fg-muted">No documents submitted yet.</p>
         ) : (
-          <ul className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+          <ul className="rounded-md border border-default bg-surface-2 divide-y divide-default">
             {items.map((d) => (
               <li key={d.id} className="p-2.5 text-sm">
                 <div className="flex items-start justify-between gap-2">
@@ -205,13 +205,13 @@ function KycInspector({
                     <div className="font-medium">
                       {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
                     </div>
-                    <div className="text-[10px] text-white/45 flex items-center gap-1 mt-0.5">
+                    <div className="text-[10px] text-fg-subtle flex items-center gap-1 mt-0.5">
                       {formatDateTime(d.submittedAt)} ·{" "}
                       <a
                         href={d.documentUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sky-300 hover:underline inline-flex items-center gap-0.5"
+                        className="text-info hover:underline inline-flex items-center gap-0.5"
                       >
                         view <ExternalLink className="h-3 w-3" />
                       </a>
@@ -230,7 +230,7 @@ function KycInspector({
                   </Badge>
                 </div>
                 {d.reason && (
-                  <div className="mt-1 text-[10px] text-rose-300">
+                  <div className="mt-1 text-[10px] text-danger">
                     Rejected: {d.reason}
                   </div>
                 )}

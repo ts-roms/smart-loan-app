@@ -103,7 +103,7 @@ export function ReportsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Gavel className="h-4 w-4 text-sky-300" />
+            <Gavel className="h-4 w-4 text-info" />
             Compliance reports
           </CardTitle>
           <TourButton
@@ -112,7 +112,7 @@ export function ReportsPage() {
           />
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             Audit requirements rendered as exportable CSVs. Each card downloads
             a snapshot — bring it into Excel / Google Sheets for month-end +
             quarter-end reviews.
@@ -185,14 +185,14 @@ function ReportCard({ report }: { report: ReportDef }) {
       <CardHeader className="flex flex-row items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Icon className="h-4 w-4 text-sky-300" />
+            <Icon className="h-4 w-4 text-info" />
             {report.title}
           </CardTitle>
         </div>
         <Badge variant="muted">{report.cadence}</Badge>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-white/65 mb-3">{report.description}</p>
+        <p className="text-xs text-fg-muted mb-3">{report.description}</p>
         {report.needsDateRange && (
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div>

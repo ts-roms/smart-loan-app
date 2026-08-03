@@ -108,7 +108,7 @@ export function LoanDetailPage() {
 
   if (loan.isLoading) return <SkeletonCard />;
   if (!loan.data)
-    return <p className="text-sm text-white/55">Loan not found.</p>;
+    return <p className="text-sm text-fg-muted">Loan not found.</p>;
   const l = loan.data;
 
   const canDecide = user?.role === "ADMIN" || user?.role === "LOAN_OFFICER";
@@ -215,8 +215,8 @@ export function LoanDetailPage() {
         {l.vehicle && <CollateralPanel kind="VEHICLE" v={l.vehicle} />}
         {l.property && <CollateralPanel kind="PROPERTY" p={l.property} />}
         {l.applicationSelfieUrl && (
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-wider text-white/45 mb-2">
+          <div className="rounded-md border border-default bg-surface-2 p-3">
+            <div className="text-xs uppercase tracking-wider text-fg-subtle mb-2">
               Application selfie
             </div>
             <a
@@ -227,7 +227,7 @@ export function LoanDetailPage() {
               <img
                 src={l.applicationSelfieUrl}
                 alt="application selfie"
-                className="h-32 rounded-md border border-white/15 object-cover"
+                className="h-32 rounded-md border border-default object-cover"
               />
             </a>
           </div>
@@ -254,13 +254,13 @@ export function LoanDetailPage() {
         <LoanAssistantPanel loanId={l.id} />
         {l.purpose && (
           <div className="text-sm">
-            <span className="text-white/55">Purpose: </span>
+            <span className="text-fg-muted">Purpose: </span>
             {l.purpose}
           </div>
         )}
         {l.decisionReason && (
-          <div className="text-sm text-rose-300">
-            <span className="text-white/55">Reason: </span>
+          <div className="text-sm text-danger">
+            <span className="text-fg-muted">Reason: </span>
             {l.decisionReason}
           </div>
         )}
@@ -300,7 +300,7 @@ export function LoanDetailPage() {
         )}
 
         {canDecide && decisionPending && (
-          <div className="flex gap-2 border-t border-white/10 pt-3">
+          <div className="flex gap-2 border-t border-default pt-3">
             <Button onClick={onApprove} disabled={decide.isPending}>
               {kycComplete ? "Approve" : "Approve (override KYC)"}
             </Button>
@@ -314,7 +314,7 @@ export function LoanDetailPage() {
           </div>
         )}
         {canDisburse && (
-          <div className="border-t border-white/10 pt-3">
+          <div className="border-t border-default pt-3">
             <Button onClick={onDisburse} disabled={disburse.isPending}>
               {disburse.isPending ? "Disbursing…" : "Disburse funds"}
             </Button>
@@ -322,7 +322,7 @@ export function LoanDetailPage() {
         )}
 
         {["ACTIVE", "DISBURSED"].includes(l.status) && canDecide && (
-          <div className="border-t border-white/10 pt-3 flex flex-wrap gap-2">
+          <div className="border-t border-default pt-3 flex flex-wrap gap-2">
             <CloseEarlyButton loanId={l.id} />
             <RestructureButton
               loanId={l.id}
@@ -333,9 +333,9 @@ export function LoanDetailPage() {
         )}
 
         {canPay && (
-          <div className="border-t border-white/10 pt-3 space-y-3">
+          <div className="border-t border-default pt-3 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="text-xs uppercase tracking-wider text-white/55">
+              <div className="text-xs uppercase tracking-wider text-fg-muted">
                 Record payment
               </div>
               <PayOnlineButton loanId={l.id} />
@@ -387,7 +387,7 @@ function Info({
 }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className="text-sm">{children ?? "—"}</div>
@@ -404,7 +404,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );
@@ -420,27 +420,27 @@ function KycChecklist({ status }: { status: KycValidationResult }) {
           : "border-amber-400/20 bg-amber-500/5"
       }`}
     >
-      <div className="text-xs uppercase tracking-wider text-white/55 mb-2 flex items-center justify-between">
+      <div className="text-xs uppercase tracking-wider text-fg-muted mb-2 flex items-center justify-between">
         <span>KYC requirements for this loan</span>
         <Badge variant={isComplete ? "success" : "warning"}>
           {status.status}
         </Badge>
       </div>
       {status.missing.length === 0 && status.rejected.length === 0 ? (
-        <div className="text-sm text-emerald-300">
+        <div className="text-sm text-success">
           All required documents verified.
         </div>
       ) : (
         <ul className="space-y-1 text-sm">
           {status.rejected.map((d) => (
             <li key={`r-${d}`} className="flex items-center gap-2">
-              <span className="text-rose-300">✗</span>
+              <span className="text-danger">✗</span>
               <span>{DOC_LABELS[d]} — rejected</span>
             </li>
           ))}
           {status.missing.map((d) => (
             <li key={`m-${d}`} className="flex items-center gap-2">
-              <span className="text-amber-300">○</span>
+              <span className="text-warning">○</span>
               <span>{DOC_LABELS[d]} — missing</span>
             </li>
           ))}
@@ -479,8 +479,8 @@ function CollateralPanel(
     { kind: "VEHICLE"; v: VehicleData } | { kind: "PROPERTY"; p: PropertyData },
 ) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-xs uppercase tracking-wider text-white/45 mb-2 flex items-center justify-between">
+    <div className="rounded-md border border-default bg-surface-2 p-3">
+      <div className="text-xs uppercase tracking-wider text-fg-subtle mb-2 flex items-center justify-between">
         <span>
           {props.kind === "VEHICLE"
             ? "Vehicle collateral"
@@ -592,7 +592,7 @@ function CloseEarlyButton({ loanId }: { loanId: string }) {
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-white/65">
+                <p className="text-sm text-fg-muted">
                   The system computes the remaining principal + the product's
                   pre-termination fee. Enter the settlement amount the customer
                   is paying.
@@ -677,7 +677,7 @@ function RestructureButton({
               <DialogTitle>Restructure loan</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              <p className="text-sm text-white/65">
+              <p className="text-sm text-fg-muted">
                 The original loan is marked RESTRUCTURED and a new loan replaces
                 it. If new principal &gt; remaining, the difference is disbursed
                 as a top-up; if smaller, the gap is booked as a partial
@@ -784,7 +784,7 @@ function WriteOffButton({ loanId }: { loanId: string }) {
             </DialogHeader>
             <div className="space-y-3">
               <div className="rounded-md border border-rose-400/30 bg-rose-500/5 p-3 text-sm">
-                <strong className="text-rose-300">Terminal action.</strong> The
+                <strong className="text-danger">Terminal action.</strong> The
                 remaining principal is posted as Bad Debt Expense and the loan
                 is closed. Cannot be undone (only reversed via a journal entry).
               </div>
@@ -866,7 +866,7 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
             </DialogHeader>
             {!intentId ? (
               <div className="space-y-3">
-                <p className="text-sm text-white/65">
+                <p className="text-sm text-fg-muted">
                   Generate a payment link. Customer opens the link, pays via the
                   provider, and the loan payment is posted automatically when
                   the webhook fires.
@@ -893,7 +893,7 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/55">Status</span>
+                  <span className="text-fg-muted">Status</span>
                   <Badge
                     variant={
                       intent.data?.status === "PAID" ? "success" : "warning"
@@ -903,7 +903,7 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
                   </Badge>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-white/55">Payment URL</label>
+                  <label className="text-xs text-fg-muted">Payment URL</label>
                   <div className="flex gap-2">
                     <Input value={intent.data?.paymentUrl ?? ""} readOnly />
                     <Button variant="outline" size="sm" onClick={copyLink}>
@@ -913,12 +913,12 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
                       href={intent.data?.paymentUrl ?? "#"}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center h-9 px-2 rounded-md border border-white/15 hover:bg-white/[0.06]"
+                      className="inline-flex items-center justify-center h-9 px-2 rounded-md border border-default hover:bg-hover"
                     >
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   </div>
-                  <p className="text-xs text-white/45">
+                  <p className="text-xs text-fg-subtle">
                     Sandbox: opening the URL marks the intent PAID and
                     auto-posts the payment.
                   </p>
@@ -995,8 +995,8 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
   };
 
   return (
-    <div className="border-t border-white/10 pt-3 space-y-4">
-      <div className="text-xs uppercase tracking-wider text-white/55 flex items-center gap-1">
+    <div className="border-t border-default pt-3 space-y-4">
+      <div className="text-xs uppercase tracking-wider text-fg-muted flex items-center gap-1">
         <Phone className="h-3 w-3" />
         Collections
       </div>
@@ -1004,7 +1004,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Notes */}
         <div className="space-y-2">
-          <div className="text-xs text-white/55">Activity log</div>
+          <div className="text-xs text-fg-muted">Activity log</div>
           <form onSubmit={onAddNote} className="space-y-2">
             <div className="flex gap-2">
               <Select
@@ -1037,17 +1037,17 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
             </div>
           </form>
           {notes.isLoading ? (
-            <p className="text-xs text-white/45">Loading…</p>
+            <p className="text-xs text-fg-subtle">Loading…</p>
           ) : (notes.data ?? []).length === 0 ? (
-            <p className="text-xs text-white/45">No notes yet.</p>
+            <p className="text-xs text-fg-subtle">No notes yet.</p>
           ) : (
             <ul className="space-y-1 max-h-48 overflow-auto pr-1">
               {(notes.data ?? []).map((n) => (
                 <li
                   key={n.id}
-                  className="rounded-md border border-white/10 bg-white/[0.02] p-2 text-xs"
+                  className="rounded-md border border-default bg-surface-2 p-2 text-xs"
                 >
-                  <div className="flex items-center justify-between text-white/45">
+                  <div className="flex items-center justify-between text-fg-subtle">
                     <Badge variant="muted">{n.type}</Badge>
                     <span>{formatDate(n.createdAt)}</span>
                   </div>
@@ -1060,7 +1060,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
 
         {/* Promises to pay */}
         <div className="space-y-2">
-          <div className="text-xs text-white/55 flex items-center gap-1">
+          <div className="text-xs text-fg-muted flex items-center gap-1">
             <MessageSquare className="h-3 w-3" />
             Promises to pay
           </div>
@@ -1095,49 +1095,49 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
             </Button>
           </form>
           {promises.isLoading ? (
-            <p className="text-xs text-white/45">Loading…</p>
+            <p className="text-xs text-fg-subtle">Loading…</p>
           ) : (promises.data ?? []).length === 0 ? (
-            <p className="text-xs text-white/45">No promises yet.</p>
+            <p className="text-xs text-fg-subtle">No promises yet.</p>
           ) : (
             <ul className="space-y-1 max-h-48 overflow-auto pr-1">
               {(promises.data ?? []).map((p) => (
                 <li
                   key={p.id}
-                  className="rounded-md border border-white/10 bg-white/[0.02] p-2 text-xs space-y-1"
+                  className="rounded-md border border-default bg-surface-2 p-2 text-xs space-y-1"
                 >
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-mono">
                         {formatMoney(Number(p.amount))}
                       </span>{" "}
-                      <span className="text-white/45">
+                      <span className="text-fg-subtle">
                         by {formatDate(p.promisedDate)}
                       </span>
                     </div>
                     <Badge variant={ptpVariant(p.status)}>{p.status}</Badge>
                   </div>
-                  {p.note && <div className="text-white/55">{p.note}</div>}
+                  {p.note && <div className="text-fg-muted">{p.note}</div>}
                   {p.status === "PROMISED" && (
                     <div className="flex gap-1 pt-1">
                       <button
                         type="button"
-                        className="text-emerald-300 hover:underline"
+                        className="text-success hover:underline"
                         onClick={() => onResolve(p.id, "HONORED")}
                       >
                         Honored
                       </button>
-                      <span className="text-white/30">·</span>
+                      <span className="text-fg-subtle">·</span>
                       <button
                         type="button"
-                        className="text-rose-300 hover:underline"
+                        className="text-danger hover:underline"
                         onClick={() => onResolve(p.id, "BROKEN")}
                       >
                         Broken
                       </button>
-                      <span className="text-white/30">·</span>
+                      <span className="text-fg-subtle">·</span>
                       <button
                         type="button"
-                        className="text-white/55 hover:underline"
+                        className="text-fg-muted hover:underline"
                         onClick={() => onResolve(p.id, "CANCELLED")}
                       >
                         Cancel
@@ -1218,8 +1218,8 @@ function DocumentsPanel({
   };
 
   return (
-    <div className="border-t border-white/10 pt-3">
-      <div className="text-xs uppercase tracking-wider text-white/55 mb-2 flex items-center gap-1">
+    <div className="border-t border-default pt-3">
+      <div className="text-xs uppercase tracking-wider text-fg-muted mb-2 flex items-center gap-1">
         <FileText className="h-3 w-3" />
         Documents
       </div>
@@ -1272,7 +1272,7 @@ function DocumentsPanel({
         )}
       </div>
       {!hasSig && (showAgreement || showStatement) && (
-        <p className="text-[10px] text-white/45 mt-2">
+        <p className="text-[10px] text-fg-subtle mt-2">
           Tip: save a signature in{" "}
           <a className="underline" href="/settings">
             My settings
@@ -1314,13 +1314,13 @@ function PaymentsPanel({
     }
   };
   return (
-    <div className="border-t border-white/10 pt-3">
-      <div className="text-xs uppercase tracking-wider text-white/55 mb-2 flex items-center gap-1">
+    <div className="border-t border-default pt-3">
+      <div className="text-xs uppercase tracking-wider text-fg-muted mb-2 flex items-center gap-1">
         <Receipt className="h-3 w-3" />
         Payments ({payments.length})
       </div>
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+        <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
           <tr>
             <th className="py-1 px-2">Paid on</th>
             <th className="py-1 px-2">OR #</th>
@@ -1329,14 +1329,14 @@ function PaymentsPanel({
             <th />
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-default">
           {payments.map((p) => (
-            <tr key={p.id} className="hover:bg-white/[0.03]">
+            <tr key={p.id} className="hover:bg-hover">
               <td className="py-1.5 px-2 text-xs">{formatDate(p.paidOn)}</td>
               <td className="py-1.5 px-2 font-mono text-xs">
                 {p.id.slice(0, 8).toUpperCase()}
               </td>
-              <td className="py-1.5 px-2 text-xs text-white/65">
+              <td className="py-1.5 px-2 text-xs text-fg-muted">
                 {p.reference ?? "—"}
               </td>
               <td className="py-1.5 px-2 text-right font-mono">
@@ -1347,7 +1347,7 @@ function PaymentsPanel({
                   <button
                     type="button"
                     onClick={() => onReceipt(p.id)}
-                    className="text-white/55 hover:text-sky-300"
+                    className="text-fg-muted hover:text-info"
                     title="Download receipt"
                   >
                     <Download className="h-3 w-3" />
@@ -1356,7 +1356,7 @@ function PaymentsPanel({
                     <button
                       type="button"
                       onClick={() => onReceipt(p.id, true)}
-                      className="text-white/55 hover:text-sky-300"
+                      className="text-fg-muted hover:text-info"
                       title="Download with my signature"
                     >
                       <Pen className="h-3 w-3" />
@@ -1430,8 +1430,8 @@ function SignaturesPanel({
     upload.isPending || signOfficer.isPending || signBorrower.isPending;
 
   return (
-    <div className="border-t border-white/10 pt-3">
-      <div className="text-xs uppercase tracking-wider text-white/55 mb-2 flex items-center gap-1">
+    <div className="border-t border-default pt-3">
+      <div className="text-xs uppercase tracking-wider text-fg-muted mb-2 flex items-center gap-1">
         <Pen className="h-3 w-3" />
         E-signatures
       </div>
@@ -1485,7 +1485,7 @@ function SignaturesPanel({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="mt-1 text-[10px] text-white/55">
+                <p className="mt-1 text-[10px] text-fg-muted">
                   Pin a delegation here to record on the loan that this
                   signature was made under proxy authority.
                 </p>
@@ -1515,8 +1515,8 @@ function SignatureSlot({
   onCapture: () => void;
 }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.02] p-3">
-      <div className="text-xs uppercase tracking-wider text-white/45 mb-2 flex items-center justify-between">
+    <div className="rounded-md border border-default bg-surface-2 p-3">
+      <div className="text-xs uppercase tracking-wider text-fg-subtle mb-2 flex items-center justify-between">
         <span>{label}</span>
         <Badge variant={url ? "success" : "muted"}>
           {url ? "Signed" : "Not signed"}
@@ -1527,10 +1527,10 @@ function SignatureSlot({
           <img
             src={url}
             alt={`${label} signature`}
-            className="h-16 bg-white rounded p-1 border border-white/10"
+            className="h-16 bg-white rounded p-1 border border-default"
           />
           {signedAt && (
-            <div className="text-[10px] text-white/45">
+            <div className="text-[10px] text-fg-subtle">
               on {formatDate(signedAt)}
             </div>
           )}

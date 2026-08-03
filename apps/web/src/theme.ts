@@ -30,13 +30,20 @@
  *     iOS Safari chrome)
  */
 
+/*
+ * These track the LIGHT palette, which is what the product ships and
+ * therefore what an install banner, a cold PWA launch, or the offline
+ * page should look like. Someone running the dark theme sees a
+ * one-frame light status bar on launch; the alternative — a dark
+ * status bar above a light app — is worse and affects everyone.
+ */
 export const themeColors = {
-  /** Page / app background. HSL: 220 13% 9%. */
-  background: "#14171c",
-  /** Body / primary text. HSL: 213 18% 88%. */
-  foreground: "#dbe1e8",
-  /** Brand accent — links, focus rings, primary buttons. HSL: 199 70% 62%. */
-  primary: "#54b6e8",
+  /** Page / app background. HSL: 220 20% 97%. */
+  background: "#f6f7f9",
+  /** Body / primary text. HSL: 222 24% 12%. */
+  foreground: "#171c26",
+  /** Brand accent — links, focus rings, primary buttons. HSL: 199 89% 42%. */
+  primary: "#0b93cb",
 } as const;
 
 export type ThemeColorName = keyof typeof themeColors;

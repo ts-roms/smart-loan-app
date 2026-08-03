@@ -184,7 +184,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
             <DialogHeader>
               <DialogTitle>{state.options.title}</DialogTitle>
               {state.options.message && (
-                <DialogDescription className="text-white/70">
+                <DialogDescription className="text-fg">
                   {state.options.message}
                 </DialogDescription>
               )}

@@ -218,7 +218,7 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
           </div>
 
           {product && (
-            <div className="text-xs text-white/55 -mt-1">
+            <div className="text-xs text-fg-muted -mt-1">
               Range: {formatMoney(Number(product.minPrincipal))}–
               {formatMoney(Number(product.maxPrincipal))} ·{" "}
               {product.minTermMonths}–{product.maxTermMonths} months ·{" "}
@@ -331,12 +331,12 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
             />
           )}
 
-          <div className="rounded-md border border-white/10 p-3 space-y-2">
-            <div className="text-xs uppercase tracking-wider text-white/45 flex items-center gap-1">
+          <div className="rounded-md border border-default p-3 space-y-2">
+            <div className="text-xs uppercase tracking-wider text-fg-subtle flex items-center gap-1">
               <Camera className="h-3 w-3" />
               Application selfie
             </div>
-            <p className="text-xs text-white/55">
+            <p className="text-xs text-fg-muted">
               Live capture of the borrower for face-match against the ID on
               file. Optional but strongly recommended for fraud signal.
             </p>
@@ -354,8 +354,8 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
           </div>
 
           {quote.data && (
-            <div className="rounded-md border border-white/10 bg-white/[0.04] p-3 text-sm space-y-2">
-              <div className="flex items-center justify-between text-xs uppercase tracking-wider text-white/45">
+            <div className="rounded-md border border-default bg-surface-2 p-3 text-sm space-y-2">
+              <div className="flex items-center justify-between text-xs uppercase tracking-wider text-fg-subtle">
                 <span>Quote</span>
                 <span>
                   {quote.data.method === "FLAT"
@@ -383,7 +383,7 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
                 )}
               </div>
               {quote.data.fees.total > 0 && (
-                <div className="border-t border-white/10 pt-2 grid grid-cols-4 gap-2">
+                <div className="border-t border-default pt-2 grid grid-cols-4 gap-2">
                   <Stat
                     label="Processing fee"
                     value={formatMoney(quote.data.fees.processing)}
@@ -405,7 +405,7 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
               {ltv != null &&
                 product?.maxLoanToValue != null &&
                 ltv > Number(product.maxLoanToValue) && (
-                  <div className="text-xs text-rose-300">
+                  <div className="text-xs text-danger">
                     LTV exceeds product ceiling of{" "}
                     {(Number(product.maxLoanToValue) * 100).toFixed(0)}%.
                   </div>
@@ -493,8 +493,8 @@ function VehicleFieldset({
   productCode: string;
 }) {
   return (
-    <fieldset className="rounded-md border border-white/10 p-3 space-y-3">
-      <legend className="px-1 text-xs uppercase tracking-wider text-white/45">
+    <fieldset className="rounded-md border border-default p-3 space-y-3">
+      <legend className="px-1 text-xs uppercase tracking-wider text-fg-subtle">
         {productCode === "MOTORCYCLE" ? "Motorcycle" : "Vehicle"} collateral
       </legend>
       <div className="grid grid-cols-3 gap-3">
@@ -566,8 +566,8 @@ function PropertyFieldset({
   onChange: (next: PropertyInput) => void;
 }) {
   return (
-    <fieldset className="rounded-md border border-white/10 p-3 space-y-3">
-      <legend className="px-1 text-xs uppercase tracking-wider text-white/45">
+    <fieldset className="rounded-md border border-default p-3 space-y-3">
+      <legend className="px-1 text-xs uppercase tracking-wider text-fg-subtle">
         Property collateral
       </legend>
       <div className="grid grid-cols-3 gap-3">
@@ -658,7 +658,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );
@@ -667,7 +667,7 @@ function Field({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className="font-mono">{value}</div>

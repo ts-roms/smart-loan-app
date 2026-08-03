@@ -106,14 +106,14 @@ export function SignaturePad({
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-white/55">{label}</div>
+      <div className="text-xs text-fg-muted">{label}</div>
       <canvas
         ref={canvasRef}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
-        className="block rounded-md border border-white/15 touch-none bg-white"
+        className="block rounded-md border border-default touch-none bg-white"
         style={{ height }}
       />
       <div className="flex justify-between items-center">

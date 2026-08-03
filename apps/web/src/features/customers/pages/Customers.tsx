@@ -44,7 +44,7 @@ export function CustomersPage() {
           />
           <Link
             to="/customers/bulk"
-            className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/[0.06] px-3 py-1.5 text-sm hover:bg-white/[0.10]"
+            className="inline-flex items-center gap-1 rounded-md border border-default bg-surface-3 px-3 py-1.5 text-sm hover:bg-hover"
           >
             <FileSpreadsheet className="h-4 w-4" />
             Bulk import
@@ -61,12 +61,12 @@ export function CustomersPage() {
             <SkeletonCard /> <SkeletonCard /> <SkeletonCard />
           </div>
         ) : (customers.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No customers yet. Add one to get started.
           </p>
         ) : (
           <table className="w-full text-sm" data-tour="customers-table">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Reference</th>
                 <th className="py-2 px-2">Name</th>
@@ -75,9 +75,9 @@ export function CustomersPage() {
                 <th className="py-2 px-2">KYC</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(customers.data ?? []).map((c) => (
-                <tr key={c.id} className="hover:bg-white/[0.03]">
+                <tr key={c.id} className="hover:bg-hover">
                   {/* Human reference — shown as the leftmost column so it's
                       the primary handle for an operator scanning the list. */}
                   <td className="py-2 px-2 font-mono text-xs text-fg-muted">
@@ -85,7 +85,7 @@ export function CustomersPage() {
                   </td>
                   <td className="py-2 px-2">
                     <CustomerSummaryLink customerId={c.number}>
-                      <span className="text-sky-300 hover:underline">
+                      <span className="text-info hover:underline">
                         {c.firstName} {c.lastName}
                       </span>
                     </CustomerSummaryLink>

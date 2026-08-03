@@ -50,6 +50,7 @@ import { LicenseBanner } from "../features/settings";
 import { AuditLogTrigger } from "../features/audit";
 import { HelpTrigger } from "../features/help";
 import { NotificationBell } from "../features/notifications";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface NavItem {
   to: string;
@@ -444,6 +445,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       */}
       <main className="flex-1 min-w-0 h-full overflow-y-auto">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b border-default bg-background/85 backdrop-blur-xl px-6">
+          <ThemeToggle />
           <span data-tour="navbar-help">
             <HelpTrigger />
           </span>
@@ -472,10 +474,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   <div className="text-sm font-medium truncate">
                     {user?.name ?? "—"}
                   </div>
-                  <div className="text-xs text-white/55 truncate">
+                  <div className="text-xs text-fg-muted truncate">
                     {user?.email}
                   </div>
-                  <div className="text-[10px] uppercase tracking-wider text-sky-300/80 mt-0.5">
+                  <div className="text-[10px] uppercase tracking-wider text-info/80 mt-0.5">
                     {user?.role}
                   </div>
                 </div>
@@ -504,7 +506,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   signOut();
                   void navigate("/login");
                 }}
-                className="text-rose-300 focus:text-rose-200"
+                className="text-danger focus:text-danger"
               >
                 <LogOut className="h-4 w-4" />
                 Log out

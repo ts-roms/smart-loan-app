@@ -77,7 +77,7 @@ export function DorsiScreenBanner({
         </span>
         <Link
           to="/compliance/dorsi"
-          className="ml-auto text-sky-300 hover:underline"
+          className="ml-auto text-info hover:underline"
         >
           View register →
         </Link>
@@ -138,11 +138,11 @@ export function DorsiScreenBanner({
             <span>
               <Link
                 to={`/customers/${m.customerId}`}
-                className="text-sky-300 hover:underline"
+                className="text-info hover:underline"
               >
                 {m.customerName}
               </Link>{" "}
-              · {m.category} · <span className="text-white/65">{m.reason}</span>
+              · {m.category} · <span className="text-fg-muted">{m.reason}</span>
             </span>
             <Badge variant={m.similarity >= 0.85 ? "danger" : "warning"}>
               {(m.similarity * 100).toFixed(0)}%

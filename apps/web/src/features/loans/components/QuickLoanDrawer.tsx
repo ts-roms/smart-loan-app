@@ -43,7 +43,7 @@ export function QuickLoanLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="text-left text-sky-300 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="text-left text-info hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
           aria-label="Quick-view loan"
         >
           {children}
@@ -80,7 +80,7 @@ function QuickLoanInspector({ id }: { id: string }) {
           <DrawerTitle>Loan</DrawerTitle>
         </DrawerHeader>
         <DrawerBody>
-          <p className="text-sm text-white/55">Loan not found.</p>
+          <p className="text-sm text-fg-muted">Loan not found.</p>
         </DrawerBody>
       </>
     );
@@ -105,7 +105,7 @@ function QuickLoanInspector({ id }: { id: string }) {
     <>
       <DrawerHeader>
         <div className="flex items-start gap-2">
-          <CreditCard className="h-5 w-5 mt-0.5 text-sky-300" />
+          <CreditCard className="h-5 w-5 mt-0.5 text-info" />
           <div className="flex-1 min-w-0">
             <DrawerTitle className="font-mono">{l.number}</DrawerTitle>
             <DrawerDescription>
@@ -147,18 +147,18 @@ function QuickLoanInspector({ id }: { id: string }) {
         {/* Next due */}
         {nextDue && (
           <div className="rounded-md border border-sky-400/30 bg-sky-500/10 p-3 text-xs">
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-200/80 mb-1">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-info/80 mb-1">
               <CalendarClock className="h-3 w-3" />
               Next due
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-white">{formatDate(nextDue.dueDate)}</div>
-                <div className="text-[10px] text-white/55">
+                <div className="text-fg">{formatDate(nextDue.dueDate)}</div>
+                <div className="text-[10px] text-fg-muted">
                   Installment #{nextDue.installmentNo}
                 </div>
               </div>
-              <div className="font-mono font-semibold text-white">
+              <div className="font-mono font-semibold text-fg">
                 {formatMoney(Number(nextDue.totalDue))}
               </div>
             </div>
@@ -168,25 +168,25 @@ function QuickLoanInspector({ id }: { id: string }) {
         {/* Recent payments */}
         {lastPayments.length > 0 && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5 flex items-center gap-1">
               <Coins className="h-3 w-3" />
               Recent payments
             </div>
-            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+            <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
               {lastPayments.map((p) => (
                 <div
                   key={p.id}
                   className="px-2.5 py-1.5 text-xs flex items-center justify-between"
                 >
-                  <div className="text-white/65">
+                  <div className="text-fg-muted">
                     {formatDate(p.paidOn)}
                     {p.reference && (
-                      <span className="ml-1 font-mono text-[10px] text-white/45">
+                      <span className="ml-1 font-mono text-[10px] text-fg-subtle">
                         {p.reference}
                       </span>
                     )}
                   </div>
-                  <div className="font-mono font-semibold text-emerald-300">
+                  <div className="font-mono font-semibold text-success">
                     {formatMoney(Number(p.amount))}
                   </div>
                 </div>
@@ -198,10 +198,10 @@ function QuickLoanInspector({ id }: { id: string }) {
         {/* Decision reason */}
         {l.decisionReason && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">
               Decision reason
             </div>
-            <p className="text-xs text-white/75">{l.decisionReason}</p>
+            <p className="text-xs text-fg">{l.decisionReason}</p>
           </div>
         )}
       </DrawerBody>
@@ -223,8 +223,8 @@ function QuickLoanInspector({ id }: { id: string }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className="font-mono text-sm mt-0.5">{value}</div>

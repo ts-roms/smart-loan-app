@@ -159,7 +159,7 @@ export function DemandLettersPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <MailWarning className="h-4 w-4 text-amber-300" />
+            <MailWarning className="h-4 w-4 text-warning" />
             Demand letters
           </CardTitle>
           <TourButton
@@ -168,7 +168,7 @@ export function DemandLettersPage() {
           />
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             Formal escalation when a loan is materially overdue. First letter at
             60 days, Final at 90, attorney variants at 120 and 150. Generate in
             batches, dispatch individually, waive or mark responded as cases
@@ -215,14 +215,14 @@ export function DemandLettersPage() {
           </CardHeader>
           <CardContent>
             {!candidatesVisible ? (
-              <p className="text-sm text-white/55">
+              <p className="text-sm text-fg-muted">
                 Click Display to fetch loans eligible for a {STAGE_LABEL[stage]}{" "}
                 demand letter.
               </p>
             ) : candidates.isLoading ? (
               <SkeletonCard />
             ) : (candidates.data ?? []).length === 0 ? (
-              <p className="text-sm text-white/55">
+              <p className="text-sm text-fg-muted">
                 No loans currently meet the {STAGE_LABEL[stage]} threshold.
                 Either nothing is overdue past the window, or every candidate
                 already has an active letter at this stage.
@@ -230,7 +230,7 @@ export function DemandLettersPage() {
             ) : (
               <>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-white/65">
+                  <span className="text-xs text-fg-muted">
                     {candidates.data!.length} candidate(s) · {selected.size}{" "}
                     selected
                   </span>
@@ -251,7 +251,7 @@ export function DemandLettersPage() {
                   </div>
                 </div>
                 <table className="w-full text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+                  <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                     <tr>
                       <th className="py-2 px-2 w-8"></th>
                       <th className="py-2 px-2">Loan</th>
@@ -261,9 +261,9 @@ export function DemandLettersPage() {
                       <th className="py-2 px-2">Last letter</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-default">
                     {candidates.data!.map((c) => (
-                      <tr key={c.loanId} className="hover:bg-white/[0.03]">
+                      <tr key={c.loanId} className="hover:bg-hover">
                         <td className="py-2 px-2">
                           <input
                             type="checkbox"
@@ -275,7 +275,7 @@ export function DemandLettersPage() {
                         <td className="py-2 px-2 font-mono text-xs">
                           <Link
                             to={`/loans/${c.loanNumber}`}
-                            className="text-sky-300 hover:underline"
+                            className="text-info hover:underline"
                           >
                             {c.loanNumber}
                           </Link>
@@ -284,10 +284,10 @@ export function DemandLettersPage() {
                         <td className="py-2 px-2 text-right font-mono">
                           {formatMoney(c.totalOwed)}
                         </td>
-                        <td className="py-2 px-2 text-right text-rose-300 font-mono">
+                        <td className="py-2 px-2 text-right text-danger font-mono">
                           {c.daysOverdue}
                         </td>
-                        <td className="py-2 px-2 text-[10px] text-white/55">
+                        <td className="py-2 px-2 text-[10px] text-fg-muted">
                           {c.lastLetterAtStageAt
                             ? formatDate(c.lastLetterAtStageAt)
                             : "—"}
@@ -334,12 +334,12 @@ export function DemandLettersPage() {
           {letters.isLoading ? (
             <SkeletonCard />
           ) : (letters.data ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">
+            <p className="text-sm text-fg-muted">
               No letters at this stage yet.
             </p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Loan</th>
                   <th className="py-2 px-2">Stage</th>
@@ -350,7 +350,7 @@ export function DemandLettersPage() {
                   <th className="py-2 px-2 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {letters.data!.map((l) => (
                   <LetterRow key={l.id} letter={l} canManage={canManage} />
                 ))}
@@ -464,11 +464,11 @@ function LetterRow({
 
   return (
     <>
-      <tr className="hover:bg-white/[0.03]">
+      <tr className="hover:bg-hover">
         <td className="py-2 px-2 font-mono text-xs">
           <Link
             to={`/loans/${letter.loan.number}`}
-            className="text-sky-300 hover:underline"
+            className="text-info hover:underline"
           >
             {letter.loan.number}
           </Link>
@@ -485,7 +485,7 @@ function LetterRow({
         <td className="py-2 px-2">
           <Badge variant={STATUS_VARIANT[letter.status]}>{letter.status}</Badge>
         </td>
-        <td className="py-2 px-2 text-[10px] text-white/55">
+        <td className="py-2 px-2 text-[10px] text-fg-muted">
           {formatDateTime(letter.draftedAt)}
         </td>
         <td className="py-2 px-2 text-right">
@@ -568,7 +568,7 @@ function LetterDrawer({
           </DrawerDescription>
         </DrawerHeader>
         <DrawerBody>
-          <pre className="whitespace-pre-wrap text-xs text-white/85 font-sans leading-relaxed">
+          <pre className="whitespace-pre-wrap text-xs text-fg font-sans leading-relaxed">
             {letter.body}
           </pre>
         </DrawerBody>

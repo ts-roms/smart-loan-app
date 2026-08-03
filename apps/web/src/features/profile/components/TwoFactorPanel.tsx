@@ -105,7 +105,7 @@ export function TwoFactorPanel() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Lock className="h-4 w-4 text-sky-300" />
+          <Lock className="h-4 w-4 text-info" />
           Two-factor authentication
         </CardTitle>
       </CardHeader>
@@ -116,12 +116,12 @@ export function TwoFactorPanel() {
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Badge variant="success">Enabled</Badge>
-              <span className="text-xs text-white/55">
+              <span className="text-xs text-fg-muted">
                 {status.data.recoveryCodesRemaining} recovery code
                 {status.data.recoveryCodesRemaining === 1 ? "" : "s"} remaining
               </span>
             </div>
-            <p className="text-xs text-white/55">
+            <p className="text-xs text-fg-muted">
               Sign-in to this account requires a 6-digit code from your
               authenticator app. Lost your device? Use one of your recovery
               codes at login (each is single-use).
@@ -138,7 +138,7 @@ export function TwoFactorPanel() {
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-xs text-white/55">
+            <p className="text-xs text-fg-muted">
               Add a second factor to your sign-in. After enabling, every login
               will ask for a 6-digit code from your TOTP app (Google
               Authenticator, Authy, 1Password, etc.).
@@ -159,18 +159,18 @@ export function TwoFactorPanel() {
               <DialogTitle>Set up two-factor</DialogTitle>
             </DialogHeader>
             <div className="space-y-3 text-sm">
-              <p className="text-white/65">
+              <p className="text-fg-muted">
                 Scan this URI as a QR code in your authenticator app, or paste
                 the secret directly. Then enter the 6-digit code your app shows
                 to confirm.
               </p>
-              <div className="rounded-md border border-white/10 bg-white/[0.03] p-2 space-y-2">
+              <div className="rounded-md border border-default bg-surface-2 p-2 space-y-2">
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider text-white/45">
+                  <Label className="text-[10px] uppercase tracking-wider text-fg-subtle">
                     otpauth URI
                   </Label>
                   <div className="flex items-center gap-2">
-                    <code className="font-mono text-[10px] text-white/70 truncate flex-1">
+                    <code className="font-mono text-[10px] text-fg truncate flex-1">
                       {setupData.otpauth}
                     </code>
                     <Button
@@ -183,11 +183,11 @@ export function TwoFactorPanel() {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider text-white/45">
+                  <Label className="text-[10px] uppercase tracking-wider text-fg-subtle">
                     Secret (manual entry)
                   </Label>
                   <div className="flex items-center gap-2">
-                    <code className="font-mono text-xs text-white">
+                    <code className="font-mono text-xs text-fg">
                       {setupData.secret}
                     </code>
                     <Button
@@ -236,14 +236,14 @@ export function TwoFactorPanel() {
             <DialogHeader>
               <DialogTitle>Save your recovery codes</DialogTitle>
             </DialogHeader>
-            <p className="text-sm text-white/65">
+            <p className="text-sm text-fg-muted">
               These are single-use. Keep them somewhere safe — if you lose your
               authenticator device, they're how you sign back in.
-              <span className="text-rose-300 block mt-1">
+              <span className="text-danger block mt-1">
                 We won't show them again.
               </span>
             </p>
-            <div className="grid grid-cols-2 gap-2 rounded-md border border-white/10 bg-white/[0.03] p-3 font-mono text-sm">
+            <div className="grid grid-cols-2 gap-2 rounded-md border border-default bg-surface-2 p-3 font-mono text-sm">
               {recoveryCodes.map((c) => (
                 <div key={c} className="text-center tracking-wider">
                   {c}

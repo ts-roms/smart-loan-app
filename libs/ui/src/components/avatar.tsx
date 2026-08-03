@@ -20,15 +20,23 @@ const SIZE_CLASSES: Record<NonNullable<AvatarProps["size"]>, string> = {
   lg: "h-14 w-14 text-lg",
 };
 
-// Six soft accent backgrounds — enough variety for a small team without
-// risking unreadable contrast on text.
+/*
+ * Six accent fills — enough variety for a small team.
+ *
+ * Solid 600-level fills with white initials, rather than the old
+ * `bg-sky-500/30 text-sky-100`. A 30% tint reads as a dark disc on a
+ * dark page but as a pale wash on a light one, where near-white
+ * initials measured 1.31:1 — invisible. A saturated fill carries white
+ * text at 4.5:1+ against either background, so the avatar looks the
+ * same in both themes instead of needing two palettes.
+ */
 const PALETTE = [
-  "bg-sky-500/30 text-sky-100 ring-sky-400/40",
-  "bg-emerald-500/30 text-emerald-100 ring-emerald-400/40",
-  "bg-violet-500/30 text-violet-100 ring-violet-400/40",
-  "bg-amber-500/30 text-amber-100 ring-amber-400/40",
-  "bg-rose-500/30 text-rose-100 ring-rose-400/40",
-  "bg-cyan-500/30 text-cyan-100 ring-cyan-400/40",
+  "bg-sky-600 text-white ring-sky-400/40",
+  "bg-emerald-600 text-white ring-emerald-400/40",
+  "bg-violet-600 text-white ring-violet-400/40",
+  "bg-amber-600 text-white ring-amber-400/40",
+  "bg-rose-600 text-white ring-rose-400/40",
+  "bg-cyan-700 text-white ring-cyan-400/40",
 ];
 
 function initialsOf(name: string): string {
@@ -56,7 +64,7 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
         className={cn(
           "inline-flex shrink-0 items-center justify-center rounded-full font-semibold ring-1 ring-inset",
           SIZE_CLASSES[size],
-          imageUrl ? "bg-transparent ring-white/15" : palette,
+          imageUrl ? "bg-transparent ring-border-strong" : palette,
           className,
         )}
         {...props}

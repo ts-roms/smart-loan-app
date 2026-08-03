@@ -51,10 +51,10 @@ export function JobsPage() {
           {jobs.isLoading ? (
             <SkeletonCard />
           ) : (jobs.data ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">No jobs registered.</p>
+            <p className="text-sm text-fg-muted">No jobs registered.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Name</th>
                   <th className="py-2 px-2">Cron</th>
@@ -64,17 +64,17 @@ export function JobsPage() {
                   <th className="py-2 px-2 text-right" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {(jobs.data ?? []).map((j) => (
                   <tr
                     key={j.id}
                     onClick={() => setSelected(j.name)}
-                    className={`hover:bg-white/[0.03] cursor-pointer ${selected === j.name ? "bg-white/[0.05]" : ""}`}
+                    className={`hover:bg-hover cursor-pointer ${selected === j.name ? "bg-surface-3" : ""}`}
                   >
                     <td className="py-2 px-2">
                       <div className="font-medium">{j.name}</div>
                       {j.description && (
-                        <div className="text-xs text-white/45">
+                        <div className="text-xs text-fg-subtle">
                           {j.description}
                         </div>
                       )}
@@ -122,10 +122,10 @@ export function JobsPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 px-2 text-xs text-white/65">
+                    <td className="py-2 px-2 text-xs text-fg-muted">
                       {j.nextRunAt ? formatDateTime(j.nextRunAt) : "—"}
                     </td>
-                    <td className="py-2 px-2 text-xs text-white/65">
+                    <td className="py-2 px-2 text-xs text-fg-muted">
                       {j.lastRunAt ? formatDateTime(j.lastRunAt) : "never"}
                     </td>
                     <td className="py-2 px-2">
@@ -142,7 +142,7 @@ export function JobsPage() {
                           <button
                             type="button"
                             title={j.enabled ? "Pause" : "Resume"}
-                            className="text-white/55 hover:text-sky-300"
+                            className="text-fg-muted hover:text-info"
                             onClick={async () => {
                               try {
                                 await setEnabled.mutateAsync({
@@ -161,7 +161,7 @@ export function JobsPage() {
                           <button
                             type="button"
                             title="Run now"
-                            className="text-white/55 hover:text-emerald-300"
+                            className="text-fg-muted hover:text-success"
                             onClick={async () => {
                               try {
                                 const r = await run.mutateAsync(j.name);
@@ -204,10 +204,10 @@ function JobRuns({ name }: { name: string }) {
         {runs.isLoading ? (
           <SkeletonCard />
         ) : (runs.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">No runs yet.</p>
+          <p className="text-sm text-fg-muted">No runs yet.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Started</th>
                 <th className="py-2 px-2">Status</th>
@@ -216,14 +216,14 @@ function JobRuns({ name }: { name: string }) {
                 <th className="py-2 px-2">Source</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(runs.data ?? []).map((r) => {
                 const duration = r.finishedAt
                   ? `${((new Date(r.finishedAt).getTime() - new Date(r.startedAt).getTime()) / 1000).toFixed(2)}s`
                   : "—";
                 return (
-                  <tr key={r.id} className="hover:bg-white/[0.03]">
-                    <td className="py-2 px-2 text-xs text-white/65">
+                  <tr key={r.id} className="hover:bg-hover">
+                    <td className="py-2 px-2 text-xs text-fg-muted">
                       {formatDateTime(r.startedAt)}
                     </td>
                     <td className="py-2 px-2">
@@ -240,7 +240,7 @@ function JobRuns({ name }: { name: string }) {
                       </Badge>
                     </td>
                     <td className="py-2 px-2 text-xs">{duration}</td>
-                    <td className="py-2 px-2 text-xs text-white/65 max-w-[40ch]">
+                    <td className="py-2 px-2 text-xs text-fg-muted max-w-[40ch]">
                       <div className="truncate">
                         {r.error ?? (r.result ? JSON.stringify(r.result) : "—")}
                       </div>

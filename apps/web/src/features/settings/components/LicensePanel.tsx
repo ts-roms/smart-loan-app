@@ -86,7 +86,7 @@ export function LicensePanel() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
         <CardTitle className="flex items-center gap-2">
-          <KeySquare className="h-4 w-4 text-sky-300" />
+          <KeySquare className="h-4 w-4 text-info" />
           License
         </CardTitle>
         {data?.status && <StatusBadge status={data.status} />}
@@ -95,7 +95,7 @@ export function LicensePanel() {
         {isLoading ? (
           <SkeletonLine className="h-16" />
         ) : error ? (
-          <p className="text-sm text-rose-300">
+          <p className="text-sm text-danger">
             Could not load license status: {error.message}
           </p>
         ) : data?.status === "ACTIVE" ? (
@@ -105,7 +105,7 @@ export function LicensePanel() {
         )}
 
         {canManage && (
-          <div className="space-y-2 border-t border-white/10 pt-4">
+          <div className="space-y-2 border-t border-default pt-4">
             <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
               {data?.status === "ACTIVE" ? "Replace or extend" : "Activate"}
             </div>
@@ -114,7 +114,7 @@ export function LicensePanel() {
               onChange={(e) => setTokenInput(e.target.value)}
               rows={4}
               placeholder="Paste your SMARTLOAN-LIC-v1... token here"
-              className="w-full font-mono text-xs rounded-md border border-white/15 bg-white/[0.04] p-2"
+              className="w-full font-mono text-xs rounded-md border border-default bg-surface-2 p-2"
               spellCheck={false}
             />
             <div className="flex gap-2">
@@ -213,7 +213,7 @@ function ActiveLicenseSummary({
         />
       </div>
       {data.notes && (
-        <div className="text-xs text-fg-muted border-l-2 border-white/10 pl-2">
+        <div className="text-xs text-fg-muted border-l-2 border-default pl-2">
           {data.notes}
         </div>
       )}
@@ -243,7 +243,7 @@ function InactiveLicenseMessage({
   if (!status) return null;
   return (
     <div className="rounded-md border border-amber-300/20 bg-amber-300/[0.04] p-3 text-sm">
-      <div className="font-medium text-amber-200 mb-1">
+      <div className="font-medium text-warning mb-1">
         {status.status === "EXPIRED" && "License expired"}
         {status.status === "TAMPERED" && "License signature invalid"}
         {status.status === "NO_KEY" && "License key not configured"}
@@ -273,9 +273,7 @@ function Field({
       </div>
       <div
         className={
-          highlight === "amber"
-            ? "text-sm text-amber-200 font-medium"
-            : "text-sm"
+          highlight === "amber" ? "text-sm text-warning font-medium" : "text-sm"
         }
       >
         {value}

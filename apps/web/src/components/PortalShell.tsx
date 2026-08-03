@@ -19,6 +19,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/auth";
+import { ThemeToggle } from "./ThemeToggle";
 
 /**
  * Borrower-facing chrome. Lighter than the officer DashboardShell — no
@@ -62,8 +63,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
     // Same sticky-sidebar pattern as the officer DashboardShell — viewport
     // height locked, only the main column scrolls.
     <div className="h-screen flex overflow-hidden">
-      <aside className="w-60 shrink-0 border-r border-white/10 bg-white/[0.02] backdrop-blur-md flex flex-col h-full">
-        <div className="px-4 py-5 border-b border-white/10">
+      <aside className="w-60 shrink-0 border-r border-default bg-surface-2 backdrop-blur-md flex flex-col h-full">
+        <div className="px-4 py-5 border-b border-default">
           <div className="flex items-center gap-2">
             {/* Configured logo (PNG/SVG) or default glyph. Sized to
                 match the dashboard shell so an admin who uploads a
@@ -76,14 +77,14 @@ export function PortalShell({ children }: { children: ReactNode }) {
                   className="max-h-full max-w-full object-contain"
                 />
               ) : (
-                <Wallet className="h-4 w-4 text-sky-300" />
+                <Wallet className="h-4 w-4 text-info" />
               )}
             </div>
             <span className="text-lg font-semibold tracking-tight truncate">
               {brandName}
             </span>
           </div>
-          <div className="text-[11px] uppercase tracking-wider text-white/40 mt-1 truncate">
+          <div className="text-[11px] uppercase tracking-wider text-fg-subtle mt-1 truncate">
             {brandTagline}
           </div>
         </div>
@@ -137,8 +138,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
                 cn(
                   "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
                   isActive
-                    ? "bg-white/[0.08] text-white"
-                    : "text-white/70 hover:bg-white/[0.04] hover:text-white",
+                    ? "bg-surface-3 text-fg"
+                    : "text-fg hover:bg-hover hover:text-fg",
                 )
               }
             >
@@ -148,23 +149,26 @@ export function PortalShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <div className="border-t border-white/10 px-3 py-3 space-y-2">
+        <div className="border-t border-default px-3 py-3 space-y-2">
           <div className="text-xs">
             <div className="font-medium truncate">{user?.name ?? "—"}</div>
-            <div className="text-white/45 truncate">{user?.email}</div>
-            <div className="text-[10px] uppercase tracking-wider text-sky-300/80 mt-0.5">
+            <div className="text-fg-subtle truncate">{user?.email}</div>
+            <div className="text-[10px] uppercase tracking-wider text-info/80 mt-0.5">
               Borrower
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={handleSignOut}
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={handleSignOut}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </Button>
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 

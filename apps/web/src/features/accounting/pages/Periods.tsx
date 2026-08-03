@@ -109,13 +109,13 @@ export function PeriodsPage() {
         {periods.isLoading ? (
           <SkeletonCard />
         ) : sorted.length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No periods yet. They auto-create the first time a journal entry hits
             a new month.
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Period</th>
                 <th className="py-2 px-2">Status</th>
@@ -123,7 +123,7 @@ export function PeriodsPage() {
                 <th />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {sorted.map((p) => (
                 <PeriodRow
                   key={p.id}
@@ -162,14 +162,14 @@ function PeriodRow({
   onReopen: () => void;
 }) {
   return (
-    <tr className="hover:bg-white/[0.03]">
+    <tr className="hover:bg-hover">
       <td className="py-2 px-2 font-mono">{labelFor(period)}</td>
       <td className="py-2 px-2">
         <Badge variant={period.status === "CLOSED" ? "muted" : "success"}>
           {period.status}
         </Badge>
       </td>
-      <td className="py-2 px-2 text-xs text-white/55">
+      <td className="py-2 px-2 text-xs text-fg-muted">
         {period.closedAt ? formatDate(period.closedAt) : "—"}
       </td>
       <td className="py-2 px-2 text-right">

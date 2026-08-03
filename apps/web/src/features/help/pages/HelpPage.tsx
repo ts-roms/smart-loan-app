@@ -36,18 +36,18 @@ export function HelpPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-sky-300" />
+            <BookOpen className="h-4 w-4 text-info" />
             Help & FAQ
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-white/65 mb-3">
+          <p className="text-sm text-fg-muted mb-3">
             Per-module guides + a cross-cutting FAQ. Most pages also have a
             "Take a tour" button in the top right — interactive walk-through
             highlighting the key controls.
           </p>
           <div className="relative max-w-xl">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/45" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-subtle" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -69,7 +69,7 @@ export function HelpPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {filtered.length === 0 ? (
-              <p className="text-sm text-white/55">
+              <p className="text-sm text-fg-muted">
                 Nothing matched. Try a different keyword or scroll through the
                 modules below.
               </p>
@@ -106,8 +106,8 @@ export function HelpPage() {
           <ul className="space-y-4">
             {FAQ.map((item, i) => (
               <li key={i}>
-                <h3 className="text-sm font-medium text-white">{item.q}</h3>
-                <p className="text-sm text-white/65 mt-1 whitespace-pre-line">
+                <h3 className="text-sm font-medium text-fg">{item.q}</h3>
+                <p className="text-sm text-fg-muted mt-1 whitespace-pre-line">
                   {item.a}
                 </p>
               </li>
@@ -127,23 +127,23 @@ function ArticleBlock({
   return (
     <article
       id={article.id}
-      className="rounded-md border border-white/10 bg-white/[0.02] p-3"
+      className="rounded-md border border-default bg-surface-2 p-3"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-sm font-medium text-white">{article.title}</h3>
-          <p className="text-xs text-white/55 mt-0.5">{article.summary}</p>
+          <h3 className="text-sm font-medium text-fg">{article.title}</h3>
+          <p className="text-xs text-fg-muted mt-0.5">{article.summary}</p>
         </div>
         {article.route && (
           <Link
             to={article.route}
-            className="inline-flex items-center gap-1 text-xs text-sky-300 hover:underline shrink-0"
+            className="inline-flex items-center gap-1 text-xs text-info hover:underline shrink-0"
           >
             Open module <ExternalLink className="h-3 w-3" />
           </Link>
         )}
       </div>
-      <p className="text-xs text-white/75 mt-2 whitespace-pre-line leading-relaxed">
+      <p className="text-xs text-fg mt-2 whitespace-pre-line leading-relaxed">
         {article.body}
       </p>
     </article>

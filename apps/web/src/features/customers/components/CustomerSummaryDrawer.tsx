@@ -49,7 +49,7 @@ export function CustomerSummaryLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="text-left hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="text-left hover:text-info focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
           aria-label="Open customer summary"
         >
           {children}
@@ -86,7 +86,7 @@ function CustomerSummaryInspector({ customerId }: { customerId: string }) {
           <DrawerTitle>Customer</DrawerTitle>
         </DrawerHeader>
         <DrawerBody>
-          <p className="text-sm text-white/55">Customer not found.</p>
+          <p className="text-sm text-fg-muted">Customer not found.</p>
         </DrawerBody>
       </>
     );
@@ -107,7 +107,7 @@ function CustomerSummaryInspector({ customerId }: { customerId: string }) {
     <>
       <DrawerHeader>
         <div className="flex items-start gap-2">
-          <UserCircle className="h-5 w-5 mt-0.5 text-sky-300" />
+          <UserCircle className="h-5 w-5 mt-0.5 text-info" />
           <div className="flex-1 min-w-0">
             {/* Reference number leads — that's how operators identify
                 the row in conversation and audit notes. */}
@@ -129,8 +129,8 @@ function CustomerSummaryInspector({ customerId }: { customerId: string }) {
       <DrawerBody>
         {/* KYC + employment */}
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-white/45">
+          <div className="rounded-md border border-default bg-surface-2 p-2">
+            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-fg-subtle">
               <ShieldCheck className="h-3 w-3" />
               KYC
             </div>
@@ -150,14 +150,14 @@ function CustomerSummaryInspector({ customerId }: { customerId: string }) {
               </Badge>
             </div>
           </div>
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-            <div className="text-[10px] uppercase tracking-wider text-white/45">
+          <div className="rounded-md border border-default bg-surface-2 p-2">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
               Employment
             </div>
-            <div className="text-xs text-white mt-1">
+            <div className="text-xs text-fg mt-1">
               {customer.employmentStatus}
             </div>
-            <div className="text-[10px] text-white/55 truncate">
+            <div className="text-[10px] text-fg-muted truncate">
               {customer.employerName ?? "—"}
             </div>
           </div>
@@ -173,27 +173,27 @@ function CustomerSummaryInspector({ customerId }: { customerId: string }) {
         {/* Active loans list */}
         {activeLoans.length > 0 && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5 flex items-center gap-1">
               <CreditCard className="h-3 w-3" />
               Active loans
             </div>
-            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+            <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
               {activeLoans.map((l) => (
                 <Link
                   key={l.id}
                   to={`/loans/${l.number}`}
-                  className="px-2.5 py-1.5 text-xs flex items-center justify-between hover:bg-white/[0.03]"
+                  className="px-2.5 py-1.5 text-xs flex items-center justify-between hover:bg-hover"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-mono text-sky-300">{l.number}</span>
+                    <span className="font-mono text-info">{l.number}</span>
                     <LoanStatusBadge status={l.status} />
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-mono text-white/65">
+                    <span className="font-mono text-fg-muted">
                       {formatMoney(Number(l.principal))}
                     </span>
                     {l.disbursedAt && (
-                      <span className="text-[10px] text-white/45">
+                      <span className="text-[10px] text-fg-subtle">
                         {formatDate(l.disbursedAt)}
                       </span>
                     )}
@@ -206,10 +206,10 @@ function CustomerSummaryInspector({ customerId }: { customerId: string }) {
 
         {/* Address */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">
             Address
           </div>
-          <p className="text-xs text-white/75">
+          <p className="text-xs text-fg">
             {customer.address}, {customer.city}
             {customer.province ? `, ${customer.province}` : ""}
             {customer.postalCode ? ` ${customer.postalCode}` : ""}
@@ -234,8 +234,8 @@ function CustomerSummaryInspector({ customerId }: { customerId: string }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className="font-mono text-sm mt-0.5">{value}</div>

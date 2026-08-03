@@ -14,7 +14,7 @@ export const DropdownMenuContent = forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 min-w-[10rem] overflow-hidden rounded-md border border-white/10 bg-slate-950/95 backdrop-blur-xl p-1 shadow-2xl",
+        "z-50 min-w-[10rem] overflow-hidden rounded-md border border-default bg-slate-950/95 backdrop-blur-xl p-1 shadow-2xl",
         className,
       )}
       {...props}
@@ -30,7 +30,7 @@ export const DropdownMenuItem = forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition focus:bg-white/[0.06]",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition focus:bg-surface-3",
       className,
     )}
     {...props}
@@ -44,7 +44,7 @@ export const DropdownMenuLabel = ({
 }: HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "px-2 py-1.5 text-xs uppercase tracking-wider text-white/45",
+      "px-2 py-1.5 text-xs uppercase tracking-wider text-fg-subtle",
       className,
     )}
     {...props}
@@ -57,7 +57,7 @@ export const DropdownMenuSeparator = forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 my-1 h-px bg-white/10", className)}
+    className={cn("-mx-1 my-1 h-px bg-surface-3", className)}
     {...props}
   />
 ));

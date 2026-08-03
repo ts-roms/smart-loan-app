@@ -80,14 +80,14 @@ export function PortalProfile() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <UserCircle className="h-4 w-4 text-sky-300" />
+            <UserCircle className="h-4 w-4 text-info" />
             My profile
           </CardTitle>
         </CardHeader>
         <CardContent>
           {/* Read-only identity block. These fields don't have inputs
               because changing them requires officer re-verification. */}
-          <div className="rounded-md border border-white/10 bg-white/[0.02] p-3 mb-4 space-y-2">
+          <div className="rounded-md border border-default bg-surface-2 p-3 mb-4 space-y-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="text-sm font-medium">
                 {c.firstName} {c.lastName}
@@ -114,7 +114,7 @@ export function PortalProfile() {
                 value={`₱${Number(c.monthlyIncome).toLocaleString()}`}
               />
             </div>
-            <p className="text-[10px] text-white/45 flex items-center gap-1 pt-1 border-t border-white/5">
+            <p className="text-[10px] text-fg-subtle flex items-center gap-1 pt-1 border-t border-default">
               <Lock className="h-3 w-3" />
               These fields require a branch visit to update. Visit your
               cooperative office with the supporting documents.
@@ -200,10 +200,10 @@ export function PortalProfile() {
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
-      <div className="font-mono text-white/85 truncate">{value}</div>
+      <div className="font-mono text-fg truncate">{value}</div>
     </div>
   );
 }

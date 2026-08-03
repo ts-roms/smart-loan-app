@@ -95,12 +95,12 @@ export function CompleteProfilePage() {
       <Card className="w-full max-w-3xl mx-auto">
         <CardHeader>
           <CardTitle>Complete your profile</CardTitle>
-          <p className="text-sm text-white/55 mt-1">
+          <p className="text-sm text-fg-muted mt-1">
             We need a few details before you can apply for a loan. This is a
             one-time step.
           </p>
           {user && (
-            <p className="text-xs text-white/40 mt-2">
+            <p className="text-xs text-fg-subtle mt-2">
               Signed in as {user.email} ·{" "}
               <button
                 type="button"
@@ -345,7 +345,7 @@ function Section({
 }) {
   return (
     <section>
-      <div className="flex items-center gap-2 mb-3 text-xs uppercase tracking-wide text-white/50">
+      <div className="flex items-center gap-2 mb-3 text-xs uppercase tracking-wide text-fg-subtle">
         <Icon className="h-3.5 w-3.5" />
         {title}
       </div>
@@ -369,10 +369,10 @@ function Field({
     <label className="space-y-1 block">
       <span className="text-sm">
         {label}
-        {required && <span className="text-sky-300"> *</span>}
+        {required && <span className="text-info"> *</span>}
       </span>
       {children}
-      {hint && <span className="text-[11px] text-white/40 block">{hint}</span>}
+      {hint && <span className="text-[11px] text-fg-subtle block">{hint}</span>}
     </label>
   );
 }
@@ -395,7 +395,7 @@ function SelectField({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-white/[0.04] border border-white/15 rounded-md px-3 py-2 text-sm"
+      className="w-full bg-surface-2 border border-default rounded-md px-3 py-2 text-sm"
     >
       {options.map(([v, label]) => (
         <option key={v} value={v} className="bg-slate-900">

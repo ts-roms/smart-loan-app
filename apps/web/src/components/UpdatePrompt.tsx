@@ -32,11 +32,11 @@ export function UpdatePrompt({
     >
       <div className="flex items-start gap-3">
         <div className="h-9 w-9 shrink-0 rounded-md border border-emerald-400/30 bg-emerald-500/10 flex items-center justify-center">
-          <RefreshCw className="h-4 w-4 text-emerald-300" />
+          <RefreshCw className="h-4 w-4 text-success" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold">New version available</div>
-          <p className="text-xs text-white/65 mt-0.5">
+          <p className="text-xs text-fg-muted mt-0.5">
             Reload to get the latest features and fixes. Save in-progress work
             first — unsaved changes will be lost.
           </p>
@@ -45,7 +45,7 @@ export function UpdatePrompt({
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss update prompt"
-          className="text-white/45 hover:text-white/85 -mr-1 -mt-1"
+          className="text-fg-subtle hover:text-fg -mr-1 -mt-1"
         >
           <X className="h-4 w-4" />
         </button>

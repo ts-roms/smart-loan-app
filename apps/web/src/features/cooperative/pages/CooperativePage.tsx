@@ -105,7 +105,7 @@ export function CooperativePage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-sky-300" />
+            <Users className="h-4 w-4 text-info" />
             Cooperative modules
           </CardTitle>
           <TourButton
@@ -114,12 +114,12 @@ export function CooperativePage() {
           />
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-white/55 mb-3">
+          <p className="text-xs text-fg-muted mb-3">
             Member dues, savings, fund movements, expenses, and external capital
             — every entry auto-posts to the general ledger.
           </p>
           <div
-            className="flex flex-wrap gap-1 border-b border-white/10 pb-2"
+            className="flex flex-wrap gap-1 border-b border-default pb-2"
             data-tour="coop-tabs"
           >
             {TABS.map((t) => (
@@ -130,8 +130,8 @@ export function CooperativePage() {
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors",
                   tab === t.key
-                    ? "bg-sky-500/15 text-white border border-sky-400/30"
-                    : "text-white/65 hover:bg-white/[0.04] hover:text-white border border-transparent",
+                    ? "bg-sky-500/15 text-fg border border-sky-400/30"
+                    : "text-fg-muted hover:bg-hover hover:text-fg border border-transparent",
                 )}
               >
                 <t.icon className="h-3 w-3" />
@@ -222,7 +222,7 @@ function ContributionsTab() {
       empty={(list.data ?? []).length === 0}
     >
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+        <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
           <tr>
             <th className="py-2 px-2">Date</th>
             <th className="py-2 px-2">Member</th>
@@ -234,14 +234,14 @@ function ContributionsTab() {
             <th className="py-2 px-2">Posted</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-default">
           {(list.data ?? []).map((c) => {
             const t =
               Number(c.capitalBuildUp) +
               Number(c.mortuaryFund) +
               Number(c.emergencyFund);
             return (
-              <tr key={c.id} className="hover:bg-white/[0.03]">
+              <tr key={c.id} className="hover:bg-hover">
                 <td className="py-2 px-2 text-xs">
                   {formatDate(c.contributedAt)}
                 </td>
@@ -262,7 +262,7 @@ function ContributionsTab() {
                 <td className="py-2 px-2 text-right font-mono font-semibold">
                   {formatMoney(t)}
                 </td>
-                <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+                <td className="py-2 px-2 text-xs text-fg-muted max-w-xs truncate">
                   {c.notes ?? "—"}
                 </td>
                 <td className="py-2 px-2">
@@ -312,11 +312,9 @@ function ContributionsTab() {
                   onChange={setEmergency}
                 />
               </div>
-              <div className="text-xs text-white/55">
+              <div className="text-xs text-fg-muted">
                 Total:{" "}
-                <span className="font-mono text-white">
-                  {formatMoney(total)}
-                </span>{" "}
+                <span className="font-mono text-fg">{formatMoney(total)}</span>{" "}
                 — books DR Cash, CR each bucket.
               </div>
               <div>
@@ -393,7 +391,7 @@ function SavingsTab() {
       empty={(list.data ?? []).length === 0}
     >
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+        <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
           <tr>
             <th className="py-2 px-2">Date</th>
             <th className="py-2 px-2">Member</th>
@@ -403,9 +401,9 @@ function SavingsTab() {
             <th className="py-2 px-2">Posted</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-default">
           {(list.data ?? []).map((s) => (
-            <tr key={s.id} className="hover:bg-white/[0.03]">
+            <tr key={s.id} className="hover:bg-hover">
               <td className="py-2 px-2 text-xs">{formatDate(s.txnDate)}</td>
               <td className="py-2 px-2">
                 <MemberLedgerLink customerId={s.customerId}>
@@ -418,11 +416,11 @@ function SavingsTab() {
                 </Badge>
               </td>
               <td
-                className={`py-2 px-2 text-right font-mono ${s.kind === "DEPOSIT" ? "text-emerald-300" : "text-rose-300"}`}
+                className={`py-2 px-2 text-right font-mono ${s.kind === "DEPOSIT" ? "text-success" : "text-danger"}`}
               >
                 {formatMoney(Number(s.amount))}
               </td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+              <td className="py-2 px-2 text-xs text-fg-muted max-w-xs truncate">
                 {s.notes ?? "—"}
               </td>
               <td className="py-2 px-2">
@@ -553,7 +551,7 @@ function FundsTab() {
       empty={(list.data ?? []).length === 0}
     >
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+        <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
           <tr>
             <th className="py-2 px-2">Date</th>
             <th className="py-2 px-2">Member</th>
@@ -564,9 +562,9 @@ function FundsTab() {
             <th className="py-2 px-2">Posted</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-default">
           {(list.data ?? []).map((f) => (
-            <tr key={f.id} className="hover:bg-white/[0.03]">
+            <tr key={f.id} className="hover:bg-hover">
               <td className="py-2 px-2 text-xs">{formatDate(f.txnDate)}</td>
               <td className="py-2 px-2">
                 {f.customerId ? (
@@ -574,17 +572,17 @@ function FundsTab() {
                     {nameOf(f.customerId)}
                   </MemberLedgerLink>
                 ) : (
-                  <span className="text-white/45">—</span>
+                  <span className="text-fg-subtle">—</span>
                 )}
               </td>
               <td className="py-2 px-2 font-mono text-xs">{f.sourceOfFunds}</td>
-              <td className="py-2 px-2 font-mono text-[10px] text-white/65">
+              <td className="py-2 px-2 font-mono text-[10px] text-fg-muted">
                 {f.transactionRef ?? "—"}
               </td>
-              <td className="py-2 px-2 text-right font-mono text-emerald-300">
+              <td className="py-2 px-2 text-right font-mono text-success">
                 {formatMoney(Number(f.amount))}
               </td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+              <td className="py-2 px-2 text-xs text-fg-muted max-w-xs truncate">
                 {f.notes ?? "—"}
               </td>
               <td className="py-2 px-2">
@@ -703,7 +701,7 @@ function WithdrawalsTab() {
       empty={(list.data ?? []).length === 0}
     >
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+        <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
           <tr>
             <th className="py-2 px-2">Date</th>
             <th className="py-2 px-2">Member</th>
@@ -713,9 +711,9 @@ function WithdrawalsTab() {
             <th className="py-2 px-2">Posted</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-default">
           {(list.data ?? []).map((w) => (
-            <tr key={w.id} className="hover:bg-white/[0.03]">
+            <tr key={w.id} className="hover:bg-hover">
               <td className="py-2 px-2 text-xs">{formatDate(w.txnDate)}</td>
               <td className="py-2 px-2">
                 {w.customerId ? (
@@ -723,14 +721,14 @@ function WithdrawalsTab() {
                     {nameOf(w.customerId)}
                   </MemberLedgerLink>
                 ) : (
-                  <span className="text-white/45">—</span>
+                  <span className="text-fg-subtle">—</span>
                 )}
               </td>
               <td className="py-2 px-2 font-mono text-xs">{w.sourceOfFunds}</td>
-              <td className="py-2 px-2 text-right font-mono text-rose-300">
+              <td className="py-2 px-2 text-right font-mono text-danger">
                 {formatMoney(Number(w.amount))}
               </td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+              <td className="py-2 px-2 text-xs text-fg-muted max-w-xs truncate">
                 {w.notes ?? "—"}
               </td>
               <td className="py-2 px-2">
@@ -846,7 +844,7 @@ function ExpensesTab() {
       empty={(list.data ?? []).length === 0}
     >
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+        <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
           <tr>
             <th className="py-2 px-2">Date</th>
             <th className="py-2 px-2">Type</th>
@@ -857,12 +855,12 @@ function ExpensesTab() {
             <th className="py-2 px-2">Posted</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-default">
           {(list.data ?? []).map((e) => (
-            <tr key={e.id} className="hover:bg-white/[0.03]">
+            <tr key={e.id} className="hover:bg-hover">
               <td className="py-2 px-2 text-xs">{formatDate(e.txnDate)}</td>
               <td className="py-2 px-2">{e.type}</td>
-              <td className="py-2 px-2 text-right font-mono text-rose-300">
+              <td className="py-2 px-2 text-right font-mono text-danger">
                 {formatMoney(Number(e.amount))}
               </td>
               <td className="py-2 px-2 font-mono text-xs">{e.sourceOfFunds}</td>
@@ -870,10 +868,10 @@ function ExpensesTab() {
                 {e.isRecurring ? (
                   <Badge variant="muted">Recurring</Badge>
                 ) : (
-                  <span className="text-xs text-white/45">—</span>
+                  <span className="text-xs text-fg-subtle">—</span>
                 )}
               </td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+              <td className="py-2 px-2 text-xs text-fg-muted max-w-xs truncate">
                 {e.notes ?? "—"}
               </td>
               <td className="py-2 px-2">
@@ -937,7 +935,7 @@ function ExpensesTab() {
                   onChange={(e) => setNotes(e.target.value)}
                 />
               </div>
-              <p className="text-[10px] text-white/45">
+              <p className="text-[10px] text-fg-subtle">
                 Attachment uploads can be added once the document feature is
                 wired in — for now, paste receipt URLs into Notes.
               </p>
@@ -1007,7 +1005,7 @@ function OtherIncomeTab() {
       empty={(list.data ?? []).length === 0}
     >
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+        <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
           <tr>
             <th className="py-2 px-2">Date</th>
             <th className="py-2 px-2">Type</th>
@@ -1017,16 +1015,16 @@ function OtherIncomeTab() {
             <th className="py-2 px-2">Posted</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-default">
           {(list.data ?? []).map((o) => (
-            <tr key={o.id} className="hover:bg-white/[0.03]">
+            <tr key={o.id} className="hover:bg-hover">
               <td className="py-2 px-2 text-xs">{formatDate(o.txnDate)}</td>
               <td className="py-2 px-2">{o.type}</td>
-              <td className="py-2 px-2 text-right font-mono text-emerald-300">
+              <td className="py-2 px-2 text-right font-mono text-success">
                 {formatMoney(Number(o.amount))}
               </td>
               <td className="py-2 px-2 font-mono text-xs">{o.sourceTo}</td>
-              <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+              <td className="py-2 px-2 text-xs text-fg-muted max-w-xs truncate">
                 {o.notes ?? "—"}
               </td>
               <td className="py-2 px-2">
@@ -1153,7 +1151,7 @@ function BigBrotherTab() {
       empty={(list.data ?? []).length === 0}
     >
       <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+        <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
           <tr>
             <th className="py-2 px-2">Name</th>
             <th className="py-2 px-2">Account</th>
@@ -1163,9 +1161,9 @@ function BigBrotherTab() {
             <th className="py-2 px-2">Posted</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-default">
           {(list.data ?? []).map((b) => (
-            <tr key={b.id} className="hover:bg-white/[0.03]">
+            <tr key={b.id} className="hover:bg-hover">
               <td className="py-2 px-2">{b.name}</td>
               <td className="py-2 px-2 font-mono text-xs">{b.account}</td>
               <td className="py-2 px-2 text-right font-mono">
@@ -1244,7 +1242,7 @@ function BigBrotherTab() {
                   onChange={(e) => setNotes(e.target.value)}
                 />
               </div>
-              <p className="text-[10px] text-white/45">
+              <p className="text-[10px] text-fg-subtle">
                 Books DR Cash, CR Big Brother Capital (liability). Convert to
                 equity at period-end via a manual journal entry if the deal is a
                 grant.
@@ -1307,7 +1305,7 @@ function ListCard({
         ) : (
           <>
             {empty && (
-              <p className="text-sm text-white/55 mb-3">
+              <p className="text-sm text-fg-muted mb-3">
                 Nothing yet — click <strong>New</strong> to record the first
                 row.
               </p>

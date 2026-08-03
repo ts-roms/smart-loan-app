@@ -81,12 +81,12 @@ export function FaceMatchPanel({ loan }: FaceMatchPanelProps) {
   };
 
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3 space-y-2">
+    <div className="rounded-md border border-default bg-surface-2 p-3 space-y-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 text-sm">
-          <ScanFace className="h-4 w-4 text-sky-300" />
+          <ScanFace className="h-4 w-4 text-info" />
           <span className="font-medium">Face match</span>
-          <span className="text-[10px] uppercase tracking-wider text-white/45">
+          <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
             · selfie ↔ ID · client-local
           </span>
         </div>
@@ -144,7 +144,7 @@ export function FaceMatchPanel({ loan }: FaceMatchPanelProps) {
       )}
 
       {hasScore && (
-        <div className="flex items-center justify-between gap-2 text-[10px] text-white/45 border-t border-white/5 pt-2">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-fg-subtle border-t border-default pt-2">
           <span>
             Model:{" "}
             <span className="font-mono">{loan.selfieMatchModel ?? "—"}</span> ·
@@ -170,12 +170,12 @@ export function FaceMatchPanel({ loan }: FaceMatchPanelProps) {
       )}
 
       {error && (
-        <div className="flex items-start gap-1.5 text-[11px] text-rose-200 border-t border-rose-400/30 pt-2">
+        <div className="flex items-start gap-1.5 text-[11px] text-danger border-t border-rose-400/30 pt-2">
           <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
           <span>
             {error}{" "}
             {error.includes("models") && (
-              <span className="text-white/55">
+              <span className="text-fg-muted">
                 · Model weights couldn't be reached. See{" "}
                 <code className="font-mono">
                   apps/web/src/lib/face-match.ts
@@ -188,7 +188,7 @@ export function FaceMatchPanel({ loan }: FaceMatchPanelProps) {
       )}
 
       {!hasScore && !error && (
-        <p className="text-[10px] text-white/45">
+        <p className="text-[10px] text-fg-subtle">
           Compares the application selfie to the customer's VERIFIED ID photo
           using face-api.js. The compute runs in your browser — neither image
           leaves the machine. Only the resulting similarity score is persisted.
@@ -223,13 +223,13 @@ function Metric({
 }) {
   const toneClass =
     tone === "good"
-      ? "text-emerald-300"
+      ? "text-success"
       : tone === "bad"
-        ? "text-rose-300"
-        : "text-white/85";
+        ? "text-danger"
+        : "text-fg";
   return (
-    <div className="rounded border border-white/5 bg-white/[0.02] px-2 py-1.5">
-      <div className="text-[9px] uppercase tracking-wider text-white/45">
+    <div className="rounded border border-default bg-surface-2 px-2 py-1.5">
+      <div className="text-[9px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className={`text-xs font-medium font-mono ${toneClass}`}>

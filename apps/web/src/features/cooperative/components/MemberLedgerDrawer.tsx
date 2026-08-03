@@ -42,7 +42,7 @@ export function MemberLedgerLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="text-left hover:text-sky-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="text-left hover:text-info focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
           aria-label="Open member ledger"
         >
           {children}
@@ -79,7 +79,7 @@ function MemberLedgerInspector({ customerId }: { customerId: string }) {
           <DrawerTitle>Member ledger</DrawerTitle>
         </DrawerHeader>
         <DrawerBody>
-          <p className="text-sm text-white/55">Member not found.</p>
+          <p className="text-sm text-fg-muted">Member not found.</p>
         </DrawerBody>
       </>
     );
@@ -94,7 +94,7 @@ function MemberLedgerInspector({ customerId }: { customerId: string }) {
     <>
       <DrawerHeader>
         <div className="flex items-start gap-2">
-          <UserCircle className="h-5 w-5 mt-0.5 text-sky-300" />
+          <UserCircle className="h-5 w-5 mt-0.5 text-info" />
           <div className="flex-1 min-w-0">
             <DrawerTitle>{fullName}</DrawerTitle>
             <DrawerDescription>
@@ -111,7 +111,7 @@ function MemberLedgerInspector({ customerId }: { customerId: string }) {
       <DrawerBody>
         {/* Totals */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5 flex items-center gap-1">
             <HandCoins className="h-3 w-3" />
             Lifetime contributions
           </div>
@@ -120,14 +120,14 @@ function MemberLedgerInspector({ customerId }: { customerId: string }) {
             <Stat label="Mortuary" value={formatMoney(totals.mortuaryFund)} />
             <Stat label="Emergency" value={formatMoney(totals.emergencyFund)} />
           </div>
-          <div className="text-[10px] text-white/45 mt-1">
+          <div className="text-[10px] text-fg-subtle mt-1">
             Across {totals.contributionsCount} contribution
             {totals.contributionsCount === 1 ? "" : "s"}
           </div>
         </div>
 
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5 flex items-center gap-1">
             <PiggyBank className="h-3 w-3" />
             Savings balance
           </div>
@@ -153,10 +153,10 @@ function MemberLedgerInspector({ customerId }: { customerId: string }) {
         {/* Recent activity */}
         {recentContributions.length > 0 && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5">
               Recent contributions
             </div>
-            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+            <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
               {recentContributions.slice(0, 8).map((c) => {
                 const total =
                   Number(c.capitalBuildUp) +
@@ -167,7 +167,7 @@ function MemberLedgerInspector({ customerId }: { customerId: string }) {
                     key={c.id}
                     className="px-2.5 py-1.5 text-xs flex items-center justify-between"
                   >
-                    <div className="text-white/65">
+                    <div className="text-fg-muted">
                       {formatDate(c.contributedAt)}
                     </div>
                     <div className="font-mono font-semibold">
@@ -182,17 +182,17 @@ function MemberLedgerInspector({ customerId }: { customerId: string }) {
 
         {recentSavings.length > 0 && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5">
               Recent savings
             </div>
-            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+            <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
               {recentSavings.slice(0, 8).map((s) => (
                 <div
                   key={s.id}
                   className="px-2.5 py-1.5 text-xs flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-white/65">
+                    <span className="text-fg-muted">
                       {formatDate(s.txnDate)}
                     </span>
                     <Badge variant={s.kind === "DEPOSIT" ? "success" : "muted"}>
@@ -200,7 +200,7 @@ function MemberLedgerInspector({ customerId }: { customerId: string }) {
                     </Badge>
                   </div>
                   <div
-                    className={`font-mono ${s.kind === "DEPOSIT" ? "text-emerald-300" : "text-rose-300"}`}
+                    className={`font-mono ${s.kind === "DEPOSIT" ? "text-success" : "text-danger"}`}
                   >
                     {formatMoney(Number(s.amount))}
                   </div>
@@ -239,17 +239,17 @@ function Stat({
 }) {
   const color =
     accent === "emerald"
-      ? "text-emerald-300"
+      ? "text-success"
       : accent === "rose"
-        ? "text-rose-300"
-        : "text-white";
+        ? "text-danger"
+        : "text-fg";
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className={`font-mono text-sm mt-0.5 ${color}`}>{value}</div>
-      {sub && <div className="text-[10px] text-white/45 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-fg-subtle mt-0.5">{sub}</div>}
     </div>
   );
 }

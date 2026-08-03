@@ -65,7 +65,7 @@ export function AnnualDocsDashboard() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-sky-300" />
+            <ShieldCheck className="h-4 w-4 text-info" />
             Renewable documents
           </CardTitle>
           <div className="flex items-center gap-2">
@@ -77,7 +77,7 @@ export function AnnualDocsDashboard() {
               data-tour="annualdocs-window"
               value={days}
               onChange={(e) => setDays(Number(e.target.value))}
-              className="text-xs bg-white/[0.04] border border-white/15 rounded-md px-2 py-1"
+              className="text-xs bg-surface-2 border border-default rounded-md px-2 py-1"
             >
               {WINDOW_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -103,7 +103,7 @@ export function AnnualDocsDashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             every loan's annual / renewable documentation tracked here. The
             daily job sends reminders 30 days before expiry and an escalation
             when a doc lapses.
@@ -118,14 +118,14 @@ export function AnnualDocsDashboard() {
           {expired.length > 0 && (
             <DocsCard
               title="Expired"
-              icon={<FileWarning className="h-4 w-4 text-rose-300" />}
+              icon={<FileWarning className="h-4 w-4 text-danger" />}
               rows={expired}
               accent="rose"
             />
           )}
           <DocsCard
             title={`Expiring within ${days} days`}
-            icon={<ShieldCheck className="h-4 w-4 text-amber-300" />}
+            icon={<ShieldCheck className="h-4 w-4 text-warning" />}
             rows={expiringSoon}
             accent="amber"
           />
@@ -156,10 +156,10 @@ function DocsCard({
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <p className="text-sm text-white/55">Nothing here — good standing.</p>
+          <p className="text-sm text-fg-muted">Nothing here — good standing.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Loan</th>
                 <th className="py-2 px-2">Type</th>
@@ -169,13 +169,13 @@ function DocsCard({
                 <th className="py-2 px-2">Reminders</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {rows.map((r) => (
-                <tr key={r.id} className="hover:bg-white/[0.03]">
+                <tr key={r.id} className="hover:bg-hover">
                   <td className="py-2 px-2 font-mono text-xs">
                     <Link
                       to={`/loans/${r.loan.number}`}
-                      className="text-sky-300 hover:underline"
+                      className="text-info hover:underline"
                     >
                       {r.loan.number}
                     </Link>
@@ -194,7 +194,7 @@ function DocsCard({
                       {r.status === "EXPIRED" ? "Expired" : "Expiring soon"}
                     </Badge>
                   </td>
-                  <td className="py-2 px-2 text-xs text-white/55">
+                  <td className="py-2 px-2 text-xs text-fg-muted">
                     {r.reminderCount > 0 ? `${r.reminderCount} sent` : "—"}
                   </td>
                 </tr>

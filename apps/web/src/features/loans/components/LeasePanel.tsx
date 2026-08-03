@@ -78,7 +78,7 @@ export function LeasePanel({ loanId }: { loanId: string }) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-sm flex items-center gap-2">
-          <Car className="h-4 w-4 text-sky-300" />
+          <Car className="h-4 w-4 text-info" />
           Lease agreement
         </CardTitle>
         <div className="flex items-center gap-2">
@@ -129,8 +129,8 @@ export function LeasePanel({ loanId }: { loanId: string }) {
         {l.status === "BUYOUT_COMPLETED" && (
           <div className="rounded-md border border-emerald-400/30 bg-emerald-400/10 p-2.5 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-white/85">
-                <CheckCircle2 className="inline h-3 w-3 mr-1 text-emerald-300" />
+              <span className="text-fg">
+                <CheckCircle2 className="inline h-3 w-3 mr-1 text-success" />
                 Buyout completed ·{" "}
                 {formatMoney(Number(l.buyoutPaidAmount ?? 0))} on{" "}
                 {l.buyoutAt ? formatDateTime(l.buyoutAt) : ""}
@@ -145,7 +145,7 @@ export function LeasePanel({ loanId }: { loanId: string }) {
         )}
 
         {l.closedReason && (
-          <div className="text-[10px] text-white/55">
+          <div className="text-[10px] text-fg-muted">
             Closure reason: {l.closedReason}
           </div>
         )}
@@ -307,7 +307,7 @@ function BuyoutDialog({
           <DialogTitle>Residual buyout</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             Borrower pays the residual fee to take title. Posts a Dr Cash / Cr
             Lease Income entry, marks the lease as BUYOUT_COMPLETED, and closes
             the loan.
@@ -347,14 +347,14 @@ function Stat({
   sub?: string;
   accent?: "rose";
 }) {
-  const color = accent === "rose" ? "text-rose-300" : "text-white";
+  const color = accent === "rose" ? "text-danger" : "text-fg";
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className={cn("font-mono text-sm mt-0.5", color)}>{value}</div>
-      {sub && <div className="text-[10px] text-white/45 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-fg-subtle mt-0.5">{sub}</div>}
     </div>
   );
 }

@@ -76,13 +76,13 @@ export function DorsiPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Scale className="h-4 w-4 text-sky-300" />
+            <Scale className="h-4 w-4 text-info" />
             DORSI compliance
           </CardTitle>
           <TourButton tourId="dorsi" steps={findArticle("dorsi")?.tour ?? []} />
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             loans to Directors / Officers / Stockholders / Related Interests are
             capped at 15% of Company Total Equity in aggregate, with no single
             DORSI borrower exceeding 30% of that aggregate cap. Loans that would
@@ -129,7 +129,7 @@ function UtilizationCard() {
               alert === "breach"
                 ? "border-rose-400/40 bg-rose-400/10 text-rose-100"
                 : alert === "critical"
-                  ? "border-rose-400/30 bg-rose-400/[0.06] text-rose-200"
+                  ? "border-rose-400/30 bg-rose-400/[0.06] text-danger"
                   : "border-amber-400/40 bg-amber-400/10 text-amber-100",
             )}
           >
@@ -163,25 +163,25 @@ function UtilizationCard() {
         {/* Utilization gauge */}
         <div>
           <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-white/55">
+            <span className="text-fg-muted">
               Aggregate outstanding · {formatMoney(u.data.aggregateOutstanding)}
             </span>
             <span
               className={cn(
                 "font-mono",
                 aggPct >= 1
-                  ? "text-rose-300"
+                  ? "text-danger"
                   : aggPct >= 0.9
-                    ? "text-rose-200"
+                    ? "text-danger"
                     : aggPct >= 0.8
-                      ? "text-amber-200"
-                      : "text-emerald-300",
+                      ? "text-warning"
+                      : "text-success",
               )}
             >
               {(aggPct * 100).toFixed(1)}%
             </span>
           </div>
-          <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+          <div className="h-2 rounded-full bg-surface-3 overflow-hidden">
             <div
               className={cn(
                 "h-full transition-all",
@@ -201,11 +201,11 @@ function UtilizationCard() {
         {/* Per-borrower breakdown */}
         {u.data.perBorrower.length > 0 && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5">
               Per-borrower exposure ({u.data.perBorrower.length})
             </div>
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Borrower</th>
                   <th className="py-2 px-2">Category</th>
@@ -213,13 +213,13 @@ function UtilizationCard() {
                   <th className="py-2 px-2 text-right">Utilization</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {u.data.perBorrower.map((b) => (
-                  <tr key={b.customerId} className="hover:bg-white/[0.03]">
+                  <tr key={b.customerId} className="hover:bg-hover">
                     <td className="py-2 px-2 text-xs">
                       <Link
                         to={`/customers/${b.customerNumber}`}
-                        className="text-sky-300 hover:underline"
+                        className="text-info hover:underline"
                       >
                         {b.customerName}
                       </Link>
@@ -239,10 +239,10 @@ function UtilizationCard() {
                       className={cn(
                         "py-2 px-2 text-right font-mono text-xs",
                         b.utilizationPct >= 1
-                          ? "text-rose-300"
+                          ? "text-danger"
                           : b.utilizationPct >= 0.8
-                            ? "text-amber-300"
-                            : "text-emerald-300",
+                            ? "text-warning"
+                            : "text-success",
                       )}
                     >
                       {(b.utilizationPct * 100).toFixed(1)}%
@@ -316,10 +316,10 @@ function RegisterCard({ perms }: { perms: Set<string> }) {
         {register.isLoading ? (
           <SkeletonCard />
         ) : (register.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">No active DORSI records.</p>
+          <p className="text-sm text-fg-muted">No active DORSI records.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Customer</th>
                 <th className="py-2 px-2">Category</th>
@@ -331,13 +331,13 @@ function RegisterCard({ perms }: { perms: Set<string> }) {
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {register.data!.map((r) => (
-                <tr key={r.id} className="hover:bg-white/[0.03]">
+                <tr key={r.id} className="hover:bg-hover">
                   <td className="py-2 px-2 text-xs">
                     <Link
                       to={`/customers/${r.customer.number}`}
-                      className="text-sky-300 hover:underline"
+                      className="text-info hover:underline"
                     >
                       {r.customer.firstName} {r.customer.lastName}
                     </Link>
@@ -348,13 +348,13 @@ function RegisterCard({ perms }: { perms: Set<string> }) {
                   <td className="py-2 px-2">
                     <Badge variant="muted">{CATEGORY_LABEL[r.category]}</Badge>
                   </td>
-                  <td className="py-2 px-2 text-xs text-white/75 max-w-xs truncate">
+                  <td className="py-2 px-2 text-xs text-fg max-w-xs truncate">
                     {r.basis}
                   </td>
-                  <td className="py-2 px-2 text-[10px] text-white/55">
+                  <td className="py-2 px-2 text-[10px] text-fg-muted">
                     {formatDateTime(r.taggedAt)}
                   </td>
-                  <td className="py-2 px-2 text-[10px] text-white/55">
+                  <td className="py-2 px-2 text-[10px] text-fg-muted">
                     {r.lastReviewedAt ? formatDate(r.lastReviewedAt) : "—"}
                   </td>
                   {perms.has("dorsi.tag") && (
@@ -465,13 +465,13 @@ function ConfigCard() {
           </div>
         ) : (
           <>
-            <div className="text-xs text-white/55 mb-1">
+            <div className="text-xs text-fg-muted mb-1">
               Company total equity
             </div>
-            <div className="font-mono text-2xl text-white">
+            <div className="font-mono text-2xl text-fg">
               {formatMoney(cfg.data?.companyTotalEquity ?? 0)}
             </div>
-            <p className="text-[10px] text-white/45 mt-2">
+            <p className="text-[10px] text-fg-subtle mt-2">
               Base for the 15% aggregate DORSI cap and the 30% individual cap.
               Update on the books each quarter so the caps stay in sync with the
               latest balance sheet.
@@ -511,8 +511,8 @@ function TagDialog({ onClose }: { onClose: () => void }) {
           <DialogTitle>Tag DORSI customer</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-xs text-white/55 inline-flex items-center gap-1">
-            <ShieldAlert className="h-3 w-3 text-amber-300" />
+          <p className="text-xs text-fg-muted inline-flex items-center gap-1">
+            <ShieldAlert className="h-3 w-3 text-warning" />
             Tagged customers count toward the 15% aggregate cap and the 30%
             individual cap. Re-tag an existing record to update category or
             basis.
@@ -583,12 +583,12 @@ function Stat({
   sub?: string;
 }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-3">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className="font-mono text-sm mt-1">{value}</div>
-      {sub && <div className="text-[10px] text-white/45 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-fg-subtle mt-0.5">{sub}</div>}
     </div>
   );
 }

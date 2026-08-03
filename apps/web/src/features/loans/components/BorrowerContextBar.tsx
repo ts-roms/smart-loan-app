@@ -69,7 +69,7 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
 
   if (loading) {
     return (
-      <div className="rounded-md border border-white/10 bg-white/[0.03] p-3 text-xs text-white/55">
+      <div className="rounded-md border border-default bg-surface-2 p-3 text-xs text-fg-muted">
         Loading borrower context…
       </div>
     );
@@ -77,7 +77,7 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
 
   if (!c) {
     return (
-      <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-rose-200">
+      <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-danger">
         Customer not found.
       </div>
     );
@@ -93,18 +93,18 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
   const tier = s?.tier ?? null;
 
   return (
-    <div className="rounded-md border border-white/10 bg-gradient-to-br from-sky-500/[0.04] to-white/[0.02] p-3 space-y-2.5">
+    <div className="rounded-md border border-default bg-gradient-to-br from-sky-500/[0.04] to-white/[0.02] p-3 space-y-2.5">
       {/* Identity row */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="h-8 w-8 rounded-md border border-sky-400/30 bg-sky-500/10 flex items-center justify-center shrink-0">
-            <User className="h-4 w-4 text-sky-300" />
+            <User className="h-4 w-4 text-info" />
           </div>
           <div className="min-w-0">
             <div className="text-sm font-medium truncate">
               {c.firstName} {c.lastName}
             </div>
-            <div className="text-[10px] text-white/55 truncate">
+            <div className="text-[10px] text-fg-muted truncate">
               {c.phone} · {c.employmentStatus.replace("_", " ").toLowerCase()}
             </div>
           </div>
@@ -179,12 +179,12 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
       </div>
 
       {/* Identity + employment — collapsed by default, see note above */}
-      <div className="border-t border-white/5 pt-2">
+      <div className="border-t border-default pt-2">
         <button
           type="button"
           onClick={() => setShowDetails((v) => !v)}
           aria-expanded={showDetails}
-          className="flex items-center gap-1 text-[11px] text-white/60 hover:text-white/85 transition-colors"
+          className="flex items-center gap-1 text-[11px] text-fg-muted hover:text-fg transition-colors"
         >
           {showDetails ? (
             <ChevronDown className="h-3 w-3" />
@@ -243,7 +243,7 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
 
       {/* Smart hints — concise, actionable, never blocking */}
       {(kycRejected || hasPriorDefault || isDorsi || !kycVerified || !tier) && (
-        <div className="space-y-1 border-t border-white/5 pt-2">
+        <div className="space-y-1 border-t border-default pt-2">
           {kycRejected && (
             <Hint tone="bad" icon={XCircle}>
               KYC REJECTED — fix the rejection reason and re-submit docs before
@@ -297,14 +297,14 @@ function Metric({
   tone: "info" | "good" | "warn" | "bad";
 }) {
   const toneClass = {
-    info: "text-white/85",
-    good: "text-emerald-300",
-    warn: "text-amber-300",
-    bad: "text-rose-300",
+    info: "text-fg",
+    good: "text-success",
+    warn: "text-warning",
+    bad: "text-danger",
   }[tone];
   return (
-    <div className="rounded-md border border-white/5 bg-white/[0.02] px-2 py-1.5">
-      <div className="text-[9px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 px-2 py-1.5">
+      <div className="text-[9px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className={`text-xs font-medium font-mono ${toneClass}`}>
@@ -324,10 +324,10 @@ function DetailGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-white/5 bg-white/[0.02] px-2.5 py-2">
+    <div className="rounded-md border border-default bg-surface-2 px-2.5 py-2">
       <div className="flex items-center gap-1.5 mb-1.5">
-        <Icon className="h-3 w-3 text-white/45" />
-        <span className="text-[9px] uppercase tracking-wider text-white/45">
+        <Icon className="h-3 w-3 text-fg-subtle" />
+        <span className="text-[9px] uppercase tracking-wider text-fg-subtle">
           {title}
         </span>
       </div>
@@ -356,10 +356,10 @@ function Field({
   if (!shown) return null;
   return (
     <div className="flex items-baseline gap-2 text-[11px] leading-snug">
-      <dt className="text-white/45 shrink-0 w-[86px]">{label}</dt>
+      <dt className="text-fg-subtle shrink-0 w-[86px]">{label}</dt>
       <dd
         className={`font-mono min-w-0 break-words ${
-          tone === "warn" ? "text-amber-300" : "text-white/85"
+          tone === "warn" ? "text-warning" : "text-fg"
         }`}
       >
         {shown}
@@ -378,9 +378,9 @@ function Hint({
   children: React.ReactNode;
 }) {
   const map = {
-    good: "text-emerald-200",
-    warn: "text-amber-200",
-    bad: "text-rose-200",
+    good: "text-success",
+    warn: "text-warning",
+    bad: "text-danger",
   };
   return (
     <div

@@ -82,10 +82,10 @@ export function LoanMessagePanel({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
-          <MessageSquare className="h-4 w-4 text-sky-300" />
+          <MessageSquare className="h-4 w-4 text-info" />
           Messages
           {rows.length > 0 && (
-            <span className="text-[10px] uppercase tracking-wider text-white/45 ml-1">
+            <span className="text-[10px] uppercase tracking-wider text-fg-subtle ml-1">
               {rows.length} message{rows.length === 1 ? "" : "s"}
             </span>
           )}
@@ -94,12 +94,12 @@ export function LoanMessagePanel({
       <CardContent className="space-y-3">
         <div
           ref={scrollRef}
-          className="max-h-72 overflow-y-auto space-y-2 rounded-md border border-white/10 bg-white/[0.02] p-3"
+          className="max-h-72 overflow-y-auto space-y-2 rounded-md border border-default bg-surface-2 p-3"
         >
           {messages.isLoading ? (
-            <p className="text-xs text-white/55">Loading…</p>
+            <p className="text-xs text-fg-muted">Loading…</p>
           ) : rows.length === 0 ? (
-            <p className="text-xs text-white/55 text-center py-4">
+            <p className="text-xs text-fg-muted text-center py-4">
               No messages yet. Start the conversation —
               {perspective === "OFFICER"
                 ? " the borrower will see it in their portal."
@@ -117,11 +117,11 @@ export function LoanMessagePanel({
                     className={cn(
                       "max-w-[80%] rounded-lg px-3 py-2 text-xs",
                       mine
-                        ? "bg-sky-500/15 text-white border border-sky-400/30"
-                        : "bg-white/[0.05] text-white/85 border border-white/10",
+                        ? "bg-sky-500/15 text-fg border border-sky-400/30"
+                        : "bg-surface-3 text-fg border border-default",
                     )}
                   >
-                    <div className="text-[10px] uppercase tracking-wider text-white/45 mb-0.5">
+                    <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-0.5">
                       {m.authorRole === "OFFICER" ? "Officer" : "Borrower"} ·{" "}
                       {relativeTime(m.createdAt)}
                     </div>
@@ -149,7 +149,7 @@ export function LoanMessagePanel({
             rows={2}
             maxLength={2000}
             placeholder={`Message as ${user?.name ?? perspective.toLowerCase()}…`}
-            className="flex-1 resize-none rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
+            className="flex-1 resize-none rounded-md border border-default bg-surface-2 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40"
           />
           <Button
             type="submit"
