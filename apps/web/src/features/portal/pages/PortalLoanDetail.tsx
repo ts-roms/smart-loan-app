@@ -36,6 +36,7 @@ import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { downloadPdf } from "../../../lib/download-pdf";
 import { SignaturePad } from "../../../components/SignaturePad";
+import { LoanLedgerPanel } from "../../loans";
 import { LoanMessagePanel } from "../../messaging";
 
 export function PortalLoanDetail() {
@@ -118,6 +119,11 @@ export function PortalLoanDetail() {
               borrowerSignedAt={l.borrowerSignedAt}
             />
           )}
+          {/* The borrower's own copy of the schedule — same component
+              and same payload the officer sees on /loans/:id, so the
+              two can't disagree about what's due or what's been
+              credited. Self-hides until disbursement generates it. */}
+          <LoanLedgerPanel rows={l.schedule ?? []} principal={l.principal} />
         </CardContent>
       </Card>
 

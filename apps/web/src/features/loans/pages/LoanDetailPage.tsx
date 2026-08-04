@@ -56,6 +56,7 @@ import { AnnualDocsPanel } from "../components/AnnualDocsPanel";
 import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
 import { FaceMatchPanel } from "../components/FaceMatchPanel";
 import { LeasePanel } from "../components/LeasePanel";
+import { LoanLedgerPanel } from "../components/LoanLedgerPanel";
 import { DOC_LABELS, TYPE_LABELS } from "../constants";
 import { LoanMessagePanel } from "../../messaging";
 import { AssistantPanel, useExplainDecision } from "../../assistant";
@@ -289,6 +290,10 @@ export function LoanDetailPage() {
         <LeasePanel loanId={l.id} />
         <PenaltyPanel loanId={l.id} />
         <AnnualDocsPanel loanId={l.id} />
+        {/* Schedule before payments: what was owed reads first, what
+            came in reads against it. The panel self-hides when there is
+            no schedule, i.e. before disbursement. */}
+        <LoanLedgerPanel rows={l.schedule ?? []} principal={l.principal} />
         {l.payments && l.payments.length > 0 && (
           <PaymentsPanel loanId={l.id} payments={l.payments} />
         )}

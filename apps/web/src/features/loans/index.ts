@@ -18,6 +18,12 @@ export { LoanDraftsPage } from "./pages/LoanDraftsPage";
 // (e.g. a dashboard widget showing a loan's status).
 export { LoanStatusBadge } from "./components/StatusBadge";
 export { QuickLoanLink } from "./components/QuickLoanDrawer";
+// The member portal renders the same ledger against the same payload —
+// the portal loan endpoint reuses findByIdOrNumber, so the schedule
+// shape is identical. Sharing the component is what keeps a borrower's
+// view of their schedule and an officer's from drifting apart.
+export { LoanLedgerPanel, ledgerTotals } from "./components/LoanLedgerPanel";
+export type { LedgerRow } from "./components/LoanLedgerPanel";
 
 // Display labels — useful when another feature renders a loan reference
 // (e.g. a notification referring to a loan by product). Constants are
