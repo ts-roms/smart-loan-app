@@ -179,7 +179,7 @@ export function UsersPage() {
                                 {r.name}
                               </span>
                               {expiry && (
-                                <span className="text-[10px] text-warning/90">
+                                <span className="text-[10px] text-warning">
                                   {expired ? "expired" : "until"}{" "}
                                   {formatDate(r.expiresAt)}
                                 </span>

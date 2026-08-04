@@ -49,7 +49,7 @@ export function BankLineLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-warning/80 hover:text-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="inline-flex items-center gap-1 text-warning hover:text-warning focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
           aria-label="Inspect bank line"
         >
           {children}

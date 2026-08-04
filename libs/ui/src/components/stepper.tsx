@@ -110,7 +110,7 @@ export function Stepper({
                     <span
                       className={cn(
                         "text-[10px] truncate max-w-[12rem]",
-                        isActive ? "text-info/80" : "text-fg-subtle",
+                        isActive ? "text-info" : "text-fg-subtle",
                       )}
                     >
                       {step.hint}

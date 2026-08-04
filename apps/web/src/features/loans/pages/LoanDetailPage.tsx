@@ -1460,7 +1460,7 @@ function SignaturesPanel({
             </DialogHeader>
             {openPad === "officer" && eligibleDelegations.length > 0 && (
               <div className="mb-2 rounded-md border border-amber-400/40 bg-amber-400/10 p-2 text-xs">
-                <label className="block mb-1 text-amber-100">
+                <label className="block mb-1 text-warning">
                   Sign under delegation (optional)
                 </label>
                 <Select

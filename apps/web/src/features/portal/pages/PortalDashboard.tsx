@@ -236,7 +236,7 @@ function LedgerCell({
   }[tone];
   return (
     <div className="rounded-md border border-default bg-surface-2 p-3 flex items-start gap-2">
-      <Icon className="h-4 w-4 text-success/70 mt-0.5 shrink-0" />
+      <Icon className="h-4 w-4 text-success mt-0.5 shrink-0" />
       <div className="min-w-0">
         <div className="text-[10px] uppercase tracking-wider text-fg-subtle truncate">
           {label}

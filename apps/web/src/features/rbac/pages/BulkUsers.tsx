@@ -335,7 +335,7 @@ export function BulkUsersPage() {
         </div>
 
         {!canSubmit && (
-          <div className="text-xs text-warning/90">
+          <div className="text-xs text-warning">
             Only ADMIN users may import staff accounts in bulk. Ask an admin to
             run this for you, or use the per-user create form on the Users page.
           </div>

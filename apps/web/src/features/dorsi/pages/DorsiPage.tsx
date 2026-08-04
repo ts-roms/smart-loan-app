@@ -127,10 +127,10 @@ function UtilizationCard() {
             className={cn(
               "rounded-md border px-3 py-2 text-xs flex items-center gap-2",
               alert === "breach"
-                ? "border-rose-400/40 bg-rose-400/10 text-rose-100"
+                ? "border-rose-400/40 bg-rose-400/10 text-danger"
                 : alert === "critical"
                   ? "border-rose-400/30 bg-rose-400/[0.06] text-danger"
-                  : "border-amber-400/40 bg-amber-400/10 text-amber-100",
+                  : "border-amber-400/40 bg-amber-400/10 text-warning",
             )}
           >
             <AlertTriangle className="h-3 w-3" />

@@ -23,18 +23,25 @@ const SIZE_CLASSES: Record<NonNullable<AvatarProps["size"]>, string> = {
 /*
  * Six accent fills — enough variety for a small team.
  *
- * Solid 600-level fills with white initials, rather than the old
- * `bg-sky-500/30 text-sky-100`. A 30% tint reads as a dark disc on a
+ * Saturated fills with white initials, rather than the old
+ * 30%-tint-plus-pale-text pairing. A 30% tint reads as a dark disc on a
  * dark page but as a pale wash on a light one, where near-white
- * initials measured 1.31:1 — invisible. A saturated fill carries white
- * text at 4.5:1+ against either background, so the avatar looks the
- * same in both themes instead of needing two palettes.
+ * initials measured 1.31:1 — invisible. A solid fill carries white
+ * text against either background, so the avatar looks the same in both
+ * themes instead of needing two palettes.
+ *
+ * The shade is per-hue, not a uniform step: white on Tailwind's 600
+ * level ranges from 3.19:1 (amber) to 5.7:1 (violet), because those
+ * shades are picked to look evenly saturated, not evenly bright. Sky,
+ * emerald and amber need 700 to clear AA; violet and rose don't.
+ * Measured, not eyeballed — amber-600 shipped briefly and put the
+ * Admin avatar at 3.19:1.
  */
 const PALETTE = [
-  "bg-sky-600 text-white ring-sky-400/40",
-  "bg-emerald-600 text-white ring-emerald-400/40",
+  "bg-sky-700 text-white ring-sky-400/40",
+  "bg-emerald-700 text-white ring-emerald-400/40",
   "bg-violet-600 text-white ring-violet-400/40",
-  "bg-amber-600 text-white ring-amber-400/40",
+  "bg-amber-700 text-white ring-amber-400/40",
   "bg-rose-600 text-white ring-rose-400/40",
   "bg-cyan-700 text-white ring-cyan-400/40",
 ];

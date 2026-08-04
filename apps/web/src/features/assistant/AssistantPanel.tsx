@@ -137,7 +137,7 @@ export function AssistantPanel({
 
       {/* Status notice when not configured / not ready */}
       {ping.data && !isAvailable && (
-        <div className="rounded-md border border-amber-400/30 bg-amber-500/10 p-2 text-[11px] text-amber-100">
+        <div className="rounded-md border border-amber-400/30 bg-amber-500/10 p-2 text-[11px] text-warning">
           {ping.data.message}
         </div>
       )}

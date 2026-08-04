@@ -92,14 +92,14 @@ export function LeasePanel({ loanId }: { loanId: string }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {l.status === "PULLED_OUT" && (
-          <div className="rounded-md border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-xs text-rose-100 flex items-center gap-2">
+          <div className="rounded-md border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-xs text-danger flex items-center gap-2">
             <AlertTriangle className="h-3 w-3" />
             Vehicle pulled out — drive the recovery via the Repossession
             workflow. Reason: {l.pullOutReason}
           </div>
         )}
         {l.status === "ACTIVE" && l.missedPaymentStreak >= 2 && (
-          <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-100 flex items-center gap-2">
+          <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
             <AlertTriangle className="h-3 w-3" />
             {l.missedPaymentStreak} consecutive missed payment(s). One more and
             (for non-employees) the vehicle is eligible for pull-out.

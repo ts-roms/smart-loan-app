@@ -66,19 +66,25 @@
     --ring: 199 89% 42%;
 
     /* Brand accent — same sky family, darkened for contrast on white.
-     * 42% measured 3.66:1 as link text, so it goes to 36%: this token is
-     * used as a foreground ("View analytics", "All loans") far more than
-     * as a fill, and a fill can afford to be lighter than text can. */
-    --primary: 199 92% 36%;
-    --primary-soft: 199 92% 36% / 0.10;
+     * This token is used as a foreground ("View analytics", filter
+     * pills) far more than as a fill, and a fill can afford to be
+     * lighter than text can. Walked down twice against measurements:
+     * 42% was 3.66:1 as link text on white, 36% was 4.12:1 as pill text
+     * on its own soft tint. 32% clears both. */
+    --primary: 199 92% 32%;
+    --primary-soft: 199 92% 32% / 0.10;
     --primary-foreground: 0 0% 100%;
 
     /* Semantic statuses — darkened so they stay legible as TEXT on
      * white, not just as fills. The -soft tints stay light. */
     --success: 152 62% 30%;
     --success-soft: 152 62% 30% / 0.10;
-    --warning: 32 90% 36%;
-    --warning-soft: 32 90% 36% / 0.12;
+    /* 36% cleared AA on white but measured 3.99:1 as badge text on its
+     * own tint — the account-type chips use a heavier wash than the
+     * banners do. Amber is the worst case here: it's the lightest hue
+     * at any given lightness value. */
+    --warning: 32 92% 31%;
+    --warning-soft: 32 92% 31% / 0.12;
     --danger: 0 68% 45%;
     --danger-soft: 0 68% 45% / 0.10;
     --info: 217 75% 45%;
@@ -138,10 +144,15 @@
     --success-soft: 152 60% 52% / 0.12;
     --warning: 38 92% 62%;
     --warning-soft: 38 92% 62% / 0.12;
-    --danger: 0 70% 60%;
-    --danger-soft: 0 70% 60% / 0.12;
-    --info: 217 80% 65%;
-    --info-soft: 217 80% 65% / 0.12;
+    /* 60% measured 3.77:1 as badge text on its own tint — the DEFAULTED
+     * and EXPENSE chips. Pre-existing; red is the hue that loses the
+     * most contrast for a given lightness. */
+    --danger: 0 78% 71%;
+    --danger-soft: 0 78% 71% / 0.12;
+    /* 65% measured 4.33:1 on the `bg-sky-500/15` active pills (filter
+     * chips, wizard steps), which are a heavier wash than --info-soft. */
+    --info: 217 85% 72%;
+    --info-soft: 217 85% 72% / 0.12;
 
     --hover: 0 0% 100% / 0.06;
     --divider: 217 14% 20%;

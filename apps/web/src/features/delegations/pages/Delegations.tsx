@@ -498,7 +498,7 @@ function StatusChip({
       className={cn(
         "rounded-full px-2.5 py-1 text-xs font-medium border transition-colors",
         active
-          ? "border-sky-400/60 bg-sky-500/15 text-sky-100"
+          ? "border-sky-400/60 bg-sky-500/15 text-info"
           : `border-transparent ring-1 ${toneRing} text-fg hover:text-fg`,
       )}
     >
@@ -518,7 +518,7 @@ function ExpiringSoonBanner({
 }) {
   return (
     <div className="rounded-md border border-amber-400/30 bg-amber-500/10 p-3 space-y-2">
-      <div className="flex items-center gap-2 text-sm font-medium text-amber-100">
+      <div className="flex items-center gap-2 text-sm font-medium text-warning">
         <AlertTriangle className="h-4 w-4 text-warning" />
         {rows.length} delegation{rows.length === 1 ? "" : "s"} expiring in the
         next 48 hours

@@ -55,7 +55,7 @@ export function ProfilePage() {
                 <Mail className="h-3 w-3" />
                 {user.email}
               </div>
-              <div className="text-xs uppercase tracking-wider text-info/80 mt-1">
+              <div className="text-xs uppercase tracking-wider text-info mt-1">
                 {user.role}
               </div>
               {profile?.createdAt && (
