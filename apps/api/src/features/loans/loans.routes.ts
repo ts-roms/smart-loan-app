@@ -13,6 +13,7 @@ import {
   DelegationRepository,
   KycRepository,
   LoanDraftRepository,
+  LoanNotPayableError,
   LoanRepository,
   idOrNumberWhere,
 } from "@loan/db";
@@ -428,16 +429,30 @@ export async function loanRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      return reply.code(201).send(
-        await req.loanCtx!.loans.recordPayment(req.params.id, {
-          amount: parsed.data.amount,
-          paidOn: parsed.data.paidOn
-            ? new Date(parsed.data.paidOn)
-            : new Date(),
-          reference: parsed.data.reference,
-          recordedById: req.user.sub,
-        }),
-      );
+      try {
+        return reply.code(201).send(
+          await req.loanCtx!.loans.recordPayment(req.params.id, {
+            amount: parsed.data.amount,
+            paidOn: parsed.data.paidOn
+              ? new Date(parsed.data.paidOn)
+              : new Date(),
+            reference: parsed.data.reference,
+            recordedById: req.user.sub,
+          }),
+        );
+      } catch (err) {
+        // 409, not 400: the body is fine, the loan's state forbids it.
+        // Without this it surfaced as a 500, which reads as "the server
+        // broke" rather than "that loan hasn't been disbursed".
+        if (err instanceof LoanNotPayableError) {
+          return reply.code(409).send({
+            error: err.code,
+            message: err.message,
+            status: err.status,
+          });
+        }
+        throw err;
+      }
     },
   );
 

@@ -149,6 +149,49 @@ export interface WriteOffInput {
  * `LoanProduct` row to apply that product's fees, late-fee policy,
  * interest method, payment frequency, and pre-termination fee.
  */
+/**
+ * Statuses that can receive a payment: money has actually left the
+ * lender, so there is a receivable to settle.
+ *
+ * CLOSED and WRITTEN_OFF are in deliberately. A payment on a settled
+ * loan is booked to Customer Advances, and recovery on a written-off
+ * account is a real event — refusing either would lose money the
+ * borrower actually sent.
+ *
+ * Everything else is out because no funds were released: DRAFT,
+ * SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, CANCELLED. So is
+ * RESTRUCTURED — that loan was replaced, and its balance now lives on
+ * the successor, so a payment here would be credited against the wrong
+ * receivable.
+ */
+const PAYABLE_STATUSES: ReadonlySet<LoanStatus> = new Set<LoanStatus>([
+  "DISBURSED",
+  "ACTIVE",
+  "DEFAULTED",
+  "CLOSED",
+  "WRITTEN_OFF",
+]);
+
+/**
+ * A payment was recorded against a loan that cannot take one.
+ *
+ * Named so the HTTP layer can answer 409 rather than letting it surface
+ * as a 500 — the request was well-formed, the loan's state forbids it.
+ */
+export class LoanNotPayableError extends Error {
+  readonly code = "LOAN_NOT_PAYABLE" as const;
+  constructor(
+    readonly loanNumber: string,
+    readonly status: LoanStatus,
+  ) {
+    super(
+      `Loan ${loanNumber} is ${status} and cannot receive a payment — ` +
+        `funds have not been disbursed.`,
+    );
+    this.name = "LoanNotPayableError";
+  }
+}
+
 export class LoanRepository {
   private readonly accounting: AccountingRepository;
 
@@ -565,6 +608,15 @@ export class LoanRepository {
       });
       if (!loan) throw new Error("Loan not found");
       /*
+       * A loan that was never disbursed has no receivable to settle.
+       * Without this the payment was accepted, a journal entry posted,
+       * and the loan then CLOSED — see the schedule check further down —
+       * so money could be booked against an application nobody approved.
+       */
+      if (!PAYABLE_STATUSES.has(loan.status)) {
+        throw new LoanNotPayableError(loan.number, loan.status);
+      }
+      /*
        * Accepts a loan number as well as a UUID. Everything below this
        * lookup uses `loanId`, rebound to the row's real id — the later
        * update/delete clauses all key on it, so resolving only the lookup
@@ -633,13 +685,22 @@ export class LoanRepository {
         { postedById: input.recordedById, tx },
       );
 
-      const stillOpen = await tx.loanSchedule.count({
-        where: { loanId, paidInFullAt: null },
-      });
-      // Guard on the current status too: a stray payment against an already
-      // closed loan is all overpayment, and re-stamping `closedAt` would
-      // rewrite the real closure date.
-      if (stillOpen === 0 && loan.status !== "CLOSED") {
+      const [stillOpen, installments] = await Promise.all([
+        tx.loanSchedule.count({ where: { loanId, paidInFullAt: null } }),
+        tx.loanSchedule.count({ where: { loanId } }),
+      ]);
+      /*
+       * `stillOpen === 0` alone reads "every installment is settled", but
+       * it is equally true when there are NO installments — which is any
+       * loan whose schedule was never generated. That is what let a
+       * payment on an undisbursed loan close it. Requiring a non-empty
+       * schedule makes the two cases distinguishable.
+       *
+       * The status check is separate: a stray payment against an already
+       * closed loan is all overpayment, and re-stamping `closedAt` would
+       * rewrite the real closure date.
+       */
+      if (installments > 0 && stillOpen === 0 && loan.status !== "CLOSED") {
         await tx.loanApplication.update({
           where: { id: loanId },
           data: { status: "CLOSED", closedAt: new Date() },

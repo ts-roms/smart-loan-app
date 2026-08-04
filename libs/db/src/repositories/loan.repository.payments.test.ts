@@ -2,7 +2,7 @@ import { ACCOUNT_CODES, DEFAULT_CHART_OF_ACCOUNTS } from "@loan/accounting";
 import type { PrismaClient } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { LoanRepository } from "./loan.repository";
+import { LoanNotPayableError, LoanRepository } from "./loan.repository";
 
 /**
  * Regression tests for `LoanRepository.recordPayment`.
@@ -198,9 +198,24 @@ function makeClient(db: FakeDb): PrismaClient {
         Object.assign(row, data);
         return row;
       },
-      count: async ({ where }: { where: { loanId: string } }) =>
+      /*
+       * Honours the where clause instead of assuming it. This used to
+       * hard-code `paidInFullAt === null`, which was true of the only
+       * call that existed — so when recordPayment started ALSO counting
+       * total installments (to tell "no schedule" apart from "schedule
+       * fully paid") the stub answered the unpaid count for both, and
+       * loans stopped closing. A stub that ignores the query it is given
+       * can only stay correct by luck.
+       */
+      count: async ({
+        where,
+      }: {
+        where: { loanId: string; paidInFullAt?: null };
+      }) =>
         db.schedules.filter(
-          (s) => s.loanId === where.loanId && s.paidInFullAt === null,
+          (s) =>
+            s.loanId === where.loanId &&
+            (!("paidInFullAt" in where) || s.paidInFullAt === null),
         ).length,
     },
 
@@ -287,7 +302,11 @@ const OFFICER = "user-1";
 const DUE = new Date("2026-04-01");
 
 /** Seeds one ACTIVE loan with the given installments. */
-function seed(installments: Array<{ interest: number; principal: number }>): {
+function seed(
+  installments: Array<{ interest: number; principal: number }>,
+  /** Override for the payability tests; everything else is ACTIVE. */
+  status: FakeDb["loans"][number]["status"] = "ACTIVE",
+): {
   db: FakeDb;
   repo: LoanRepository;
 } {
@@ -295,7 +314,7 @@ function seed(installments: Array<{ interest: number; principal: number }>): {
   db.loans.push({
     id: LOAN_ID,
     number: LOAN_NUMBER,
-    status: "ACTIVE",
+    status,
     closedAt: null,
   });
   installments.forEach((inst, idx) => {
@@ -595,5 +614,82 @@ describe("recordPayment — identifier resolution", () => {
         recordedById: OFFICER,
       }),
     ).rejects.toThrow("Loan not found");
+  });
+});
+
+describe("recordPayment — a loan must be able to receive a payment", () => {
+  /*
+   * Regression. A payment against a never-disbursed loan used to be
+   * accepted, post a journal entry, and then CLOSE the loan: the
+   * auto-close asked "are there zero unsettled installments?", which is
+   * as true of a loan with no schedule as of one paid off. So money
+   * could be booked against an application nobody had approved.
+   */
+  const NEVER_DISBURSED = [
+    "DRAFT",
+    "SUBMITTED",
+    "UNDER_REVIEW",
+    "APPROVED",
+    "REJECTED",
+    "CANCELLED",
+    "RESTRUCTURED",
+  ] as const;
+
+  for (const status of NEVER_DISBURSED) {
+    it(`refuses a payment on a ${status} loan`, async () => {
+      // No schedule, which is the state that made this dangerous.
+      const { db, repo } = seed([], status);
+      await expect(
+        repo.recordPayment(LOAN_ID, {
+          amount: 1_000,
+          paidOn: new Date(2026, 3, 1),
+          recordedById: OFFICER,
+        }),
+      ).rejects.toThrow(LoanNotPayableError);
+
+      // Nothing partially applied: no payment row, no posting, and the
+      // status untouched — the throw has to leave the books clean.
+      expect(db.payments).toHaveLength(0);
+      expect(db.entries).toHaveLength(0);
+      expect(db.loans[0]!.status).toBe(status);
+      expect(db.loans[0]!.closedAt).toBeNull();
+    });
+  }
+
+  const PAYABLE = ["DISBURSED", "ACTIVE", "DEFAULTED", "WRITTEN_OFF"] as const;
+  for (const status of PAYABLE) {
+    it(`accepts a payment on a ${status} loan`, async () => {
+      const { db, repo } = seed([{ interest: 100, principal: 900 }], status);
+      await repo.recordPayment(LOAN_ID, {
+        amount: 500,
+        paidOn: new Date(2026, 3, 1),
+        recordedById: OFFICER,
+      });
+      expect(db.payments).toHaveLength(1);
+    });
+  }
+
+  it("does not close a payable loan that has no schedule", async () => {
+    // The other half of the bug: "no installments" is not "all paid".
+    const { db, repo } = seed([], "DISBURSED");
+    await repo.recordPayment(LOAN_ID, {
+      amount: 1_000,
+      paidOn: new Date(2026, 3, 1),
+      recordedById: OFFICER,
+    });
+    expect(db.payments).toHaveLength(1);
+    expect(db.loans[0]!.status).toBe("DISBURSED");
+    expect(db.loans[0]!.closedAt).toBeNull();
+  });
+
+  it("names the loan and its status in the error", async () => {
+    const { repo } = seed([], "SUBMITTED");
+    await expect(
+      repo.recordPayment(LOAN_ID, {
+        amount: 1_000,
+        paidOn: new Date(2026, 3, 1),
+        recordedById: OFFICER,
+      }),
+    ).rejects.toThrow(/LN-2026-000001 is SUBMITTED/);
   });
 });
