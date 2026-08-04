@@ -191,6 +191,8 @@ export class DorsiRepository {
     Array<{
       recordId: string;
       customerId: string;
+      /** Human reference, so callers can link without holding a UUID. */
+      customerNumber: string;
       customerName: string;
       category: DorsiCategory;
       similarity: number;
@@ -204,7 +206,12 @@ export class DorsiRepository {
       where: { active: true },
       include: {
         customer: {
-          select: { firstName: true, middleName: true, lastName: true },
+          select: {
+            number: true,
+            firstName: true,
+            middleName: true,
+            lastName: true,
+          },
         },
       },
     });
@@ -212,6 +219,7 @@ export class DorsiRepository {
     const matches: Array<{
       recordId: string;
       customerId: string;
+      customerNumber: string;
       customerName: string;
       category: DorsiCategory;
       similarity: number;
@@ -241,6 +249,7 @@ export class DorsiRepository {
         matches.push({
           recordId: r.id,
           customerId: r.customerId,
+          customerNumber: r.customer.number,
           customerName: dorsiName,
           category: r.category,
           similarity,

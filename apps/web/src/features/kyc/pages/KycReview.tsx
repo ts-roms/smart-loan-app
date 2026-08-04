@@ -114,6 +114,7 @@ function CustomerKycBlock({ customer }: { customer: Customer }) {
       <div className="flex items-center justify-between">
         <KycInspectorLink
           customerId={customer.id}
+          customerNumber={customer.number}
           customerName={`${customer.firstName} ${customer.lastName}`}
         >
           <span className="text-sm font-medium text-info hover:underline">
