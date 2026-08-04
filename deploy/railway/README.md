@@ -95,6 +95,11 @@ a human clicks, and a stale one sends new cooperatives to a dead link.
 `PORT` and `HOST` are deliberately absent — Railway injects `PORT`, and
 the config already defaults `HOST` to `::`.
 
+If an earlier setup left `HOST=0.0.0.0` on the service, DELETE it. It
+overrides the dual-stack default and the API becomes unreachable on the
+private network while still answering public traffic and reporting
+healthy — so every nginx proxy hop 502s and the API itself looks fine.
+
 The start command runs `prisma migrate deploy` before the server. It is
 idempotent, so it is safe on every boot and on every replica.
 
@@ -106,10 +111,10 @@ idempotent, so it is safe on every boot and on every replica.
 
 Variables:
 
-| Variable        | Value                                             |
-| --------------- | ------------------------------------------------- |
-| `API_UPSTREAM`  | `http://<api-service-name>.railway.internal:3001` |
-| `APP_BASE_PATH` | `/app/` — build-time, trailing slash required     |
+| Variable        | Value                                                   |
+| --------------- | ------------------------------------------------------- |
+| `API_UPSTREAM`  | `http://${{<api-service>.RAILWAY_PRIVATE_DOMAIN}}:8080` |
+| `APP_BASE_PATH` | `/app/` — build-time, trailing slash required           |
 
 `APP_BASE_PATH` is where the app is mounted on the public origin. It has
 to reach the BUILD: Vite inlines it into every asset URL, the PWA
@@ -121,10 +126,27 @@ Railway forwards service variables to automatically.
 
 Changing it later invalidates any installed PWA, because `scope` moves.
 
-The Dockerfile defaults `API_UPSTREAM` to `http://api.railway.internal:3001`,
-which is right when the API service is literally named `api`. Set it
-explicitly if you named it anything else — a wrong value fails as a 502
-from nginx, not as a build error.
+### Do not hand-write the private hostname
+
+Reference `RAILWAY_PRIVATE_DOMAIN` rather than typing the address, for
+both `API_UPSTREAM` here and `WEB_UPSTREAM` on marketing. Railway
+derives the private hostname from the SERVICE NAME, and not
+transparently — a service named `@loan/web` gets
+`loanweb.railway.internal`, not `web.railway.internal`. Guessing it
+produces a 502 with nothing in either service's logs, since the name
+never resolves and no connection is attempted.
+
+The Dockerfiles default to `api.railway.internal` /
+`web.railway.internal`, which are correct only if the services are
+literally named `api` and `web`. Treat those defaults as placeholders
+and set both variables explicitly. A wrong value fails as a 502 at
+request time, not as a build error, so nothing catches it earlier.
+
+You can read the real value with:
+
+```bash
+railway variables --service '<service>' --kv | grep RAILWAY_PRIVATE_DOMAIN
+```
 
 nginx resolves this per request rather than at startup, so the web
 service boots and serves the SPA even when the API is unreachable;
@@ -170,11 +192,15 @@ them only if you are hosting the vendor surfaces too.
 Marketing is the public edge, so it carries the domain and needs three
 more variables:
 
-| Variable            | Value                                             |
-| ------------------- | ------------------------------------------------- |
-| `WEB_UPSTREAM`      | `http://<web-service-name>.railway.internal:8080` |
-| `VITE_APP_URL`      | `/app` — build-time, NO trailing slash            |
-| `VITE_PLATFORM_URL` | the platform console's public URL, build-time     |
+| Variable            | Value                                                   |
+| ------------------- | ------------------------------------------------------- |
+| `WEB_UPSTREAM`      | `http://${{<web-service>.RAILWAY_PRIVATE_DOMAIN}}:8080` |
+| `VITE_APP_URL`      | `/app` — build-time, NO trailing slash                  |
+| `VITE_PLATFORM_URL` | the platform console's public URL, build-time           |
+
+See "Do not hand-write the private hostname" above — `WEB_UPSTREAM` is
+the other half of that trap, and a wrong one is exactly the 502 you get
+at `/app/…` while the root of the site works perfectly.
 
 `VITE_APP_URL` is a prefix that `/login` and `/register` get appended
 to, so `/app` yields `/app/login`. It takes an absolute URL too, if you
