@@ -40,16 +40,19 @@ import { DOC_TYPE_LABELS } from "../../customers/constants";
  * surface.
  *
  * Usage:
- *   <KycInspectorLink customerId={c.id} customerName={fullName}>
+ *   <KycInspectorLink customerId={c.id} customerNumber={c.number} …>
  *     {fullName}
  *   </KycInspectorLink>
  */
 export function KycInspectorLink({
   customerId,
+  customerNumber,
   customerName,
   children,
 }: {
   customerId: string;
+  /** Passed through to the drawer for its profile link — see below. */
+  customerNumber?: string;
   customerName?: string;
   children: ReactNode;
 }) {
@@ -66,7 +69,11 @@ export function KycInspectorLink({
         </button>
       </DrawerTrigger>
       <DrawerContent>
-        <KycInspector customerId={customerId} customerName={customerName} />
+        <KycInspector
+          customerId={customerId}
+          customerNumber={customerNumber}
+          customerName={customerName}
+        />
       </DrawerContent>
     </Drawer>
   );
@@ -74,9 +81,21 @@ export function KycInspectorLink({
 
 function KycInspector({
   customerId,
+  customerNumber,
   customerName,
 }: {
   customerId: string;
+  /**
+   * Human reference, used ONLY for the "Open customer profile" link.
+   *
+   * Deliberately separate from customerId rather than one
+   * accepts-either prop: this component also calls the screening and
+   * KYC-decide endpoints, and those still require a UUID
+   * (decideKycSchema is z.string().uuid()). Threading a number through
+   * a single prop would have sent one to both. Optional, so callers
+   * that only hold an id still work — the link just falls back to it.
+   */
+  customerNumber?: string;
   customerName?: string;
 }) {
   const docs = useKycForCustomer(customerId);
@@ -257,7 +276,7 @@ function KycInspector({
       <DrawerFooter>
         <Button variant="outline" asChild>
           <Link
-            to={`/customers/${customerId}`}
+            to={`/customers/${customerNumber ?? customerId}`}
             className="inline-flex items-center gap-1"
           >
             Open customer profile

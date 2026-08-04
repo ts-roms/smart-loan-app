@@ -46,6 +46,16 @@ async function main() {
     },
     update: {},
   });
+  const collector = await prisma.user.upsert({
+    where: { email: "collector@loan.local" },
+    create: {
+      email: "collector@loan.local",
+      name: "Collector",
+      role: "COLLECTOR",
+      passwordHash: await hashPassword("P@ssw0rd123"),
+    },
+    update: {},
+  });
 
   // Default chart of accounts — idempotent.
   const accounting = new AccountingRepository(prisma);
@@ -71,6 +81,7 @@ async function main() {
   console.log(`  ${admin.email}      / P@ssw0rd123  (${admin.role})`);
   console.log(`  ${officer.email}    / P@ssw0rd123  (${officer.role})`);
   console.log(`  ${accountant.email} / P@ssw0rd123  (${accountant.role})`);
+  console.log(`  ${collector.email}  / P@ssw0rd123  (${collector.role})`);
   console.log(
     `Chart of accounts: ${chart.created} created, ${chart.existing} already present.`,
   );

@@ -102,6 +102,8 @@ export function useCheckDorsiLoan() {
 export interface DorsiNameMatch {
   recordId: string;
   customerId: string;
+  /** Human reference — what the banner links to, so the URL is readable. */
+  customerNumber: string;
   customerName: string;
   category: DorsiCategory;
   similarity: number;

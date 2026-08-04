@@ -69,6 +69,10 @@ const CollectionsPage = lazyNamed(
   () => import("./features/collections"),
   "CollectionsPage",
 );
+const MyAccountsPage = lazyNamed(
+  () => import("./features/collections"),
+  "MyAccountsPage",
+);
 const DemandLettersPage = lazyNamed(
   () => import("./features/collections"),
   "DemandLettersPage",
@@ -285,6 +289,7 @@ export function App() {
           <Route path="/loans/:id" element={<LoanDetailPage />} />
           <Route path="/loan-products" element={<LoanProductsPage />} />
           <Route path="/collections" element={<CollectionsPage />} />
+          <Route path="/collections/my-accounts" element={<MyAccountsPage />} />
           <Route
             path="/collections/demand-letters"
             element={<DemandLettersPage />}

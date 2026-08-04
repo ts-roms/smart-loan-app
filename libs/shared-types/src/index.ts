@@ -96,14 +96,16 @@ export const USER_ROLES = [
   "ADMIN",
   "LOAN_OFFICER",
   "ACCOUNTANT",
+  "COLLECTOR",
   "CUSTOMER",
 ] as const;
 export type UserRole = (typeof USER_ROLES)[number];
-/** Staff (non-customer) — the four primary console personas combined. */
+/** Staff (non-customer) — the console personas combined. */
 export const STAFF_ROLES = [
   "ADMIN",
   "LOAN_OFFICER",
   "ACCOUNTANT",
+  "COLLECTOR",
 ] as const satisfies ReadonlyArray<UserRole>;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
@@ -1675,6 +1677,14 @@ export interface AuditEventFilter {
   take?: number;
 }
 
+/** The collector working an account, as the queue reports them. */
+export interface QueueAssignee {
+  collectorId: string;
+  collectorName: string;
+  assignedAt: string;
+  note: string | null;
+}
+
 export interface OverdueRow {
   id: string;
   number: string;
@@ -1686,6 +1696,29 @@ export interface OverdueRow {
   daysOverdue: number;
   outstanding: number;
   overdueCount: number;
+  /** Null when the account is still in the unassigned pool. */
+  assignee: QueueAssignee | null;
+}
+
+/**
+ * Whose accounts to list.
+ *   all         every delinquent account — the shared worklist
+ *   mine        the caller's own; resolved server-side from the token
+ *   unassigned  the pool a supervisor hands out from
+ */
+export type QueueScope = "all" | "mine" | "unassigned";
+
+export interface CollectorWorkload {
+  collectorId: string;
+  collectorName: string;
+  accounts: number;
+}
+
+export interface AssignableCollector {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
 }
 
 // ─── Approval chain (per-product workflow) ──────────────────────────────

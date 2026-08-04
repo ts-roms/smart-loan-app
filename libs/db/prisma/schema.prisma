@@ -15,6 +15,7 @@ enum UserRole {
   ADMIN // full access
   LOAN_OFFICER // approves/rejects loans, runs KYC
   ACCOUNTANT // records payments, reconciles
+  COLLECTOR // works assigned delinquent accounts
   CUSTOMER // self-serve borrower
 }
 
@@ -50,49 +51,51 @@ model User {
   totpRecoveryCodes String[] @default([])
 
   // What this user did across the system (auditable trail)
-  kycSubmissions          KycSubmission[]      @relation("KycSubmittedBy")
-  kycDecisions            KycSubmission[]      @relation("KycDecidedBy")
-  loanApplications        LoanApplication[]    @relation("LoanSubmittedBy")
-  loanDecisions           LoanApplication[]    @relation("LoanDecidedBy")
-  loanDisbursals          LoanApplication[]    @relation("LoanDisbursedBy")
-  loanPayments            LoanPayment[]        @relation("PaymentRecordedBy")
-  surveyResponses         SurveyResponse[]     @relation("SurveyComputedBy")
-  journalEntries          JournalEntry[]       @relation("JournalPostedBy")
-  collectionNotes         CollectionNote[]     @relation("CollectionNoteBy")
-  promisesToPay           PromiseToPay[]       @relation("PtpCreatedBy")
-  paymentIntents          PaymentIntent[]      @relation("PaymentIntentBy")
-  auditEvents             AuditEvent[]         @relation("AuditActor")
-  roleAssignments         UserRoleAssignment[] @relation("UserRoleAssignedTo")
-  delegationsGranted      Delegation[]         @relation("Delegator")
-  delegationsHeld         Delegation[]         @relation("Delegate")
-  loanApprovals           LoanApproval[]       @relation("LoanApprover")
-  refreshTokens           RefreshToken[]       @relation("UserRefreshTokens")
-  penaltyWaivers          PenaltyWaiver[]      @relation("PenaltyWaivedBy")
-  annualDocuments         AnnualDocument[]     @relation("AnnualDocSubmittedBy")
-  demandLettersDrafted    DemandLetter[]       @relation("DemandLetterDrafted")
-  demandLettersApproved   DemandLetter[]       @relation("DemandLetterApproved")
-  demandLettersDispatched DemandLetter[]       @relation("DemandLetterDispatched")
-  demandLettersWaived     DemandLetter[]       @relation("DemandLetterWaived")
-  reposIdentified         RepossessionCase[]   @relation("RepoIdentified")
-  reposBmApproved         RepossessionCase[]   @relation("RepoBmApproved")
-  reposCreditApproved     RepossessionCase[]   @relation("RepoCreditApproved")
-  reposLegalApproved      RepossessionCase[]   @relation("RepoLegalApproved")
-  reposAgentAssigned      RepossessionCase[]   @relation("RepoAgentAssigned")
-  reposRecovered          RepossessionCase[]   @relation("RepoRecovered")
-  reposAuctioned          RepossessionCase[]   @relation("RepoAuctioned")
-  reposCancelled          RepossessionCase[]   @relation("RepoCancelled")
-  dorsiTagged             DorsiRecord[]        @relation("DorsiTaggedBy")
-  dorsiReviewed           DorsiRecord[]        @relation("DorsiReviewedBy")
-  dorsiDeactivated        DorsiRecord[]        @relation("DorsiDeactivatedBy")
-  dorsiBoardApproved      DorsiBoardApproval[] @relation("DorsiBoardApprovedBy")
-  systemConfigUpdates     SystemConfig[]       @relation("SystemConfigUpdatedBy")
-  leaseBuyouts            LeaseAgreement[]     @relation("LeaseBuyoutBy")
-  leasePulledOut          LeaseAgreement[]     @relation("LeasePulledOutBy")
+  kycSubmissions            KycSubmission[]        @relation("KycSubmittedBy")
+  kycDecisions              KycSubmission[]        @relation("KycDecidedBy")
+  loanApplications          LoanApplication[]      @relation("LoanSubmittedBy")
+  loanDecisions             LoanApplication[]      @relation("LoanDecidedBy")
+  loanDisbursals            LoanApplication[]      @relation("LoanDisbursedBy")
+  loanPayments              LoanPayment[]          @relation("PaymentRecordedBy")
+  surveyResponses           SurveyResponse[]       @relation("SurveyComputedBy")
+  journalEntries            JournalEntry[]         @relation("JournalPostedBy")
+  collectionNotes           CollectionNote[]       @relation("CollectionNoteBy")
+  promisesToPay             PromiseToPay[]         @relation("PtpCreatedBy")
+  collectionAccounts        CollectionAssignment[] @relation("CollectionAssignedTo")
+  collectionAssignmentsMade CollectionAssignment[] @relation("CollectionAssignedBy")
+  paymentIntents            PaymentIntent[]        @relation("PaymentIntentBy")
+  auditEvents               AuditEvent[]           @relation("AuditActor")
+  roleAssignments           UserRoleAssignment[]   @relation("UserRoleAssignedTo")
+  delegationsGranted        Delegation[]           @relation("Delegator")
+  delegationsHeld           Delegation[]           @relation("Delegate")
+  loanApprovals             LoanApproval[]         @relation("LoanApprover")
+  refreshTokens             RefreshToken[]         @relation("UserRefreshTokens")
+  penaltyWaivers            PenaltyWaiver[]        @relation("PenaltyWaivedBy")
+  annualDocuments           AnnualDocument[]       @relation("AnnualDocSubmittedBy")
+  demandLettersDrafted      DemandLetter[]         @relation("DemandLetterDrafted")
+  demandLettersApproved     DemandLetter[]         @relation("DemandLetterApproved")
+  demandLettersDispatched   DemandLetter[]         @relation("DemandLetterDispatched")
+  demandLettersWaived       DemandLetter[]         @relation("DemandLetterWaived")
+  reposIdentified           RepossessionCase[]     @relation("RepoIdentified")
+  reposBmApproved           RepossessionCase[]     @relation("RepoBmApproved")
+  reposCreditApproved       RepossessionCase[]     @relation("RepoCreditApproved")
+  reposLegalApproved        RepossessionCase[]     @relation("RepoLegalApproved")
+  reposAgentAssigned        RepossessionCase[]     @relation("RepoAgentAssigned")
+  reposRecovered            RepossessionCase[]     @relation("RepoRecovered")
+  reposAuctioned            RepossessionCase[]     @relation("RepoAuctioned")
+  reposCancelled            RepossessionCase[]     @relation("RepoCancelled")
+  dorsiTagged               DorsiRecord[]          @relation("DorsiTaggedBy")
+  dorsiReviewed             DorsiRecord[]          @relation("DorsiReviewedBy")
+  dorsiDeactivated          DorsiRecord[]          @relation("DorsiDeactivatedBy")
+  dorsiBoardApproved        DorsiBoardApproval[]   @relation("DorsiBoardApprovedBy")
+  systemConfigUpdates       SystemConfig[]         @relation("SystemConfigUpdatedBy")
+  leaseBuyouts              LeaseAgreement[]       @relation("LeaseBuyoutBy")
+  leasePulledOut            LeaseAgreement[]       @relation("LeasePulledOutBy")
   /// Wizard drafts owned by this user. Cascade-delete because drafts
   /// are throwaway work-in-progress; nothing else references them.
-  loanDrafts              LoanDraft[]          @relation("LoanDraftAuthor")
-  licensesActivated       License[]            @relation("LicenseActivatedBy")
-  licensesRevoked         License[]            @relation("LicenseRevokedBy")
+  loanDrafts                LoanDraft[]            @relation("LoanDraftAuthor")
+  licensesActivated         License[]              @relation("LicenseActivatedBy")
+  licensesRevoked           License[]              @relation("LicenseRevokedBy")
 
   // A customer may have a linked self-serve User account
   customer   Customer? @relation("CustomerLogin", fields: [customerId], references: [id], onDelete: SetNull)
@@ -809,20 +812,21 @@ model LoanApplication {
   decidedBy   User?    @relation("LoanDecidedBy", fields: [decidedById], references: [id])
   disbursedBy User?    @relation("LoanDisbursedBy", fields: [disbursedById], references: [id])
 
-  schedule           LoanSchedule[]
-  payments           LoanPayment[]
-  collectionNotes    CollectionNote[]
-  promisesToPay      PromiseToPay[]
-  paymentIntents     PaymentIntent[]
-  coMakers           CoMaker[]
-  messages           LoanMessage[]
-  penaltyWaivers     PenaltyWaiver[]
-  annualDocuments    AnnualDocument[]
-  demandLetters      DemandLetter[]
-  repossessionCase   RepossessionCase?
-  dorsiBoardApproval DorsiBoardApproval?
-  leaseAgreement     LeaseAgreement?
-  approvals          LoanApproval[]
+  schedule             LoanSchedule[]
+  payments             LoanPayment[]
+  collectionNotes      CollectionNote[]
+  promisesToPay        PromiseToPay[]
+  paymentIntents       PaymentIntent[]
+  coMakers             CoMaker[]
+  messages             LoanMessage[]
+  penaltyWaivers       PenaltyWaiver[]
+  annualDocuments      AnnualDocument[]
+  demandLetters        DemandLetter[]
+  repossessionCase     RepossessionCase?
+  dorsiBoardApproval   DorsiBoardApproval?
+  collectionAssignment CollectionAssignment?
+  leaseAgreement       LeaseAgreement?
+  approvals            LoanApproval[]
 
   @@index([customerId, status])
   @@index([status, submittedAt])
@@ -1088,6 +1092,44 @@ model PromiseToPay {
 
   @@index([loanId, promisedDate])
   @@index([status])
+}
+
+/// Who owns a delinquent account.
+///
+/// The collections queue is derived, not stored — it's every active loan
+/// with an unpaid installment past due, recomputed on each request. That
+/// works as a shared worklist but gives nobody ownership: no "my
+/// accounts", no handover trail, nothing to measure a collector against.
+/// This is the missing piece, and it hangs off the loan rather than off a
+/// case record because there is no case record to hang it off.
+///
+/// `loanId` is unique: a loan has exactly one current owner. Reassignment
+/// overwrites the row rather than appending, and the audit log carries the
+/// history — duplicating it here would be a second, driftable record of
+/// the same event.
+///
+/// The row deliberately survives the account curing. A loan that falls
+/// behind again lands back with the collector who already knows it, and
+/// deleting on cure would throw that context away; the queue filters on
+/// delinquency anyway, so a cured account simply stops appearing.
+model CollectionAssignment {
+  id           String   @id @default(uuid())
+  loanId       String   @unique
+  /// User the account is assigned to. Not constrained to the COLLECTOR
+  /// role — officers and admins work accounts too, and a role check at
+  /// write time is the API's job, not the schema's.
+  collectorId  String
+  assignedById String
+  assignedAt   DateTime @default(now())
+  /// Optional handover context, e.g. "borrower speaks Ilocano" or
+  /// "escalated from Ana — promised to pay twice, broke both".
+  note         String?
+
+  loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  collector  User            @relation("CollectionAssignedTo", fields: [collectorId], references: [id], onDelete: Cascade)
+  assignedBy User            @relation("CollectionAssignedBy", fields: [assignedById], references: [id])
+
+  @@index([collectorId])
 }
 
 // ─── Payment gateway (provider-agnostic intents + webhook trail) ─────────────

@@ -2,8 +2,8 @@ import {
   logoutSession,
   useBranding,
   useEffectiveIdlePolicy,
+  useMyPermissions,
 } from "@loan/api-client";
-import type { UserRole } from "@loan/shared-types";
 import {
   Avatar,
   DropdownMenu,
@@ -28,6 +28,7 @@ import {
   FileSpreadsheet,
   Gauge,
   HandCoins,
+  Inbox,
   KeyRound,
   Layers,
   LogOut,
@@ -43,7 +44,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/auth";
 import { ActiveDelegationBanner } from "../features/delegations";
@@ -51,13 +52,27 @@ import { LicenseBanner } from "../features/settings";
 import { AuditLogTrigger } from "../features/audit";
 import { HelpTrigger } from "../features/help";
 import { NotificationBell } from "../features/notifications";
+import { Breadcrumbs } from "./Breadcrumbs";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface NavItem {
   to: string;
   label: string;
   icon: typeof Gauge;
-  roles?: ReadonlyArray<UserRole>;
+  /**
+   * Permission that reveals this entry. Omit for pages every signed-in
+   * staff user can reach.
+   *
+   * Deliberately the same key the API gates the route with. This used
+   * to be a list of UserRole values, which drifted the moment a role
+   * existed outside that four-value enum: the API resolves access from
+   * UserRoleAssignment → Role → RolePermission and never consults
+   * User.role, so a COLLECTOR — or any custom role an admin builds at
+   * /roles — was granted the endpoint and then shown no way to reach
+   * it. Naming the permission means the rail and the route agree by
+   * construction.
+   */
+  permission?: string;
 }
 
 interface NavSection {
@@ -68,8 +83,8 @@ interface NavSection {
 
 /**
  * Sidebar nav grouped by operational area. Each section's header only
- * renders when at least one item inside is visible to the current role —
- * so a customer never sees an empty "Administration" stub.
+ * renders when at least one item inside is visible to the current user —
+ * so a collector never sees an empty "Administration" stub.
  */
 const NAV_SECTIONS: NavSection[] = [
   {
@@ -78,25 +93,35 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Customers & loans",
     items: [
-      { to: "/customers", label: "Customers", icon: Users },
+      {
+        to: "/customers",
+        label: "Customers",
+        icon: Users,
+        permission: "customers.read",
+      },
       {
         to: "/customers/bulk",
         label: "Bulk import",
         icon: FileSpreadsheet,
-        roles: ["ADMIN", "LOAN_OFFICER"],
+        permission: "customers.write",
       },
       {
         to: "/kyc",
         label: "KYC review",
         icon: FileCheck2,
-        roles: ["ADMIN", "LOAN_OFFICER"],
+        permission: "kyc.read",
       },
-      { to: "/loans", label: "Loans", icon: CreditCard },
+      {
+        to: "/loans",
+        label: "Loans",
+        icon: CreditCard,
+        permission: "loans.read",
+      },
       {
         to: "/loan-products",
         label: "Loan products",
         icon: Package,
-        roles: ["ADMIN"],
+        permission: "products.read",
       },
     ],
   },
@@ -104,34 +129,40 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Servicing",
     items: [
       {
+        to: "/collections/my-accounts",
+        label: "My accounts",
+        icon: Inbox,
+        permission: "collections.read",
+      },
+      {
         to: "/collections",
         label: "Collections",
         icon: PhoneCall,
-        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
+        permission: "collections.read",
       },
       {
         to: "/collections/demand-letters",
         label: "Demand letters",
         icon: Mail,
-        roles: ["ADMIN", "LOAN_OFFICER"],
+        permission: "collections.demand_letter",
       },
       {
         to: "/repossession",
         label: "Repossession",
         icon: ShieldAlert,
-        roles: ["ADMIN", "LOAN_OFFICER"],
+        permission: "repossession.identify",
       },
       {
         to: "/lease",
         label: "Lease-to-Own",
         icon: Car,
-        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
+        permission: "lease.read",
       },
       {
         to: "/payments/bulk",
         label: "Bulk payments",
         icon: FileSpreadsheet,
-        roles: ["ADMIN", "ACCOUNTANT"],
+        permission: "payments.bulk",
       },
     ],
   },
@@ -142,25 +173,25 @@ const NAV_SECTIONS: NavSection[] = [
         to: "/accounting",
         label: "Accounting",
         icon: BookOpenCheck,
-        roles: ["ADMIN", "ACCOUNTANT"],
+        permission: "accounting.read",
       },
       {
         to: "/accounting/analytics",
         label: "Analytics",
         icon: BarChart3,
-        roles: ["ADMIN", "ACCOUNTANT", "LOAN_OFFICER"],
+        permission: "accounting.read",
       },
       {
         to: "/accounting/ecl",
         label: "ECL provisioning",
         icon: Layers,
-        roles: ["ADMIN", "ACCOUNTANT"],
+        permission: "accounting.read",
       },
       {
         to: "/reconciliation",
         label: "Bank reconciliation",
         icon: Banknote,
-        roles: ["ADMIN", "ACCOUNTANT"],
+        permission: "accounting.read",
       },
     ],
   },
@@ -171,7 +202,7 @@ const NAV_SECTIONS: NavSection[] = [
         to: "/cooperative",
         label: "Contributions & funds",
         icon: HandCoins,
-        roles: ["ADMIN", "ACCOUNTANT"],
+        permission: "coop.read",
       },
     ],
   },
@@ -182,62 +213,75 @@ const NAV_SECTIONS: NavSection[] = [
         to: "/decision-rules",
         label: "Decision rules",
         icon: ShieldCheck,
-        roles: ["ADMIN"],
+        permission: "admin.decision_rules",
       },
       {
         to: "/screening",
         label: "AML watchlist",
         icon: ShieldAlert,
-        roles: ["ADMIN", "LOAN_OFFICER"],
+        permission: "screening.read",
       },
       {
         to: "/compliance/annual-docs",
         label: "Renewable docs",
         icon: FileCheck2,
-        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
+        permission: "loans.docs_renew",
       },
       {
         to: "/compliance/dorsi",
         label: "DORSI compliance",
         icon: Layers,
-        roles: ["ADMIN", "ACCOUNTANT"],
+        permission: "dorsi.read",
       },
       {
         to: "/reports",
         label: "Reports",
         icon: BookOpenCheck,
-        roles: ["ADMIN", "ACCOUNTANT"],
+        permission: "reports.read",
       },
       {
         to: "/notifications",
         label: "Notifications",
         icon: Mail,
-        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
+        permission: "notifications.read",
       },
     ],
   },
   {
     label: "Administration",
     items: [
-      { to: "/users", label: "Users", icon: UserCog, roles: ["ADMIN"] },
+      {
+        to: "/users",
+        label: "Users",
+        icon: UserCog,
+        permission: "admin.users",
+      },
       {
         to: "/users/bulk",
         label: "Bulk users",
         icon: FileSpreadsheet,
-        roles: ["ADMIN"],
+        permission: "admin.users",
       },
-      { to: "/roles", label: "Roles", icon: KeyRound, roles: ["ADMIN"] },
       {
+        to: "/roles",
+        label: "Roles",
+        icon: KeyRound,
+        permission: "admin.roles",
+      },
+      {
+        // No gate: the page shows the caller's OWN delegations, and any
+        // staff user can hold one. Only /delegations/all is privileged,
+        // and that list isn't reachable from here. Matches what the old
+        // roles list meant — every staff role, no customer.
         to: "/delegations",
         label: "Delegations",
         icon: CalendarClock,
-        roles: ["ADMIN", "LOAN_OFFICER", "ACCOUNTANT"],
       },
       {
         to: "/jobs",
         label: "Jobs",
         icon: Clock,
-        roles: ["ADMIN", "ACCOUNTANT"],
+        permission: "jobs.read",
       },
     ],
   },
@@ -245,8 +289,21 @@ const NAV_SECTIONS: NavSection[] = [
   // Log out) — no need to duplicate it in the sidebar.
 ];
 
-function visibleItems(items: NavItem[], role: UserRole | undefined): NavItem[] {
-  return items.filter((n) => !n.roles || (role && n.roles.includes(role)));
+/**
+ * Entries the caller may actually reach.
+ *
+ * `perms` is undefined while /auth/me/permissions is in flight. That
+ * counts as "nothing granted yet", not "everything" — the rail fills in
+ * a beat later, whereas the optimistic reading flashes every admin
+ * entry at a collector on each page load.
+ */
+function visibleItems(
+  items: NavItem[],
+  perms: ReadonlySet<string> | undefined,
+): NavItem[] {
+  return items.filter(
+    (n) => !n.permission || (perms?.has(n.permission) ?? false),
+  );
 }
 
 /** Does `path` fall under `to` — the item itself or any route below it? */
@@ -269,16 +326,16 @@ function coversRoute(to: string, path: string): boolean {
  * parent staying lit. Longest-match satisfies both: a child claims the
  * route when one exists, otherwise the nearest ancestor keeps it.
  *
- * Scoped to items the role can actually see, so an item hidden by
- * `roles` never steals the highlight from the visible parent.
+ * Scoped to entries the caller can actually see, so one hidden by
+ * `permission` never steals the highlight from the visible parent.
  */
 function activeNavPath(
   path: string,
-  role: UserRole | undefined,
+  perms: ReadonlySet<string> | undefined,
 ): string | null {
   let best: string | null = null;
   for (const section of NAV_SECTIONS) {
-    for (const item of visibleItems(section.items, role)) {
+    for (const item of visibleItems(section.items, perms)) {
       if (
         coversRoute(item.to, path) &&
         (!best || item.to.length > best.length)
@@ -320,9 +377,17 @@ function NavItemLink({ item, active }: { item: NavItem; active: boolean }) {
 
 export function DashboardShell({ children }: { children: ReactNode }) {
   const { user, signOut, refreshToken } = useAuth();
-  const role = user?.role;
   const location = useLocation();
   const navigate = useNavigate();
+
+  // What the rail is allowed to show. Same source the API gates on, so
+  // a role built at /roles gets a nav that matches its real access
+  // instead of one derived from the four-value User.role enum.
+  const myPerms = useMyPermissions();
+  const permissions = useMemo(
+    () => (myPerms.data ? new Set(myPerms.data.permissions) : undefined),
+    [myPerms.data],
+  );
 
   // Live branding — the shell falls back to defaults until the hook
   // resolves so first paint never shows nothing. document.title syncs
@@ -339,7 +404,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
   // Exactly one nav item is lit at a time; everything else keys off it.
   const currentPath = location.pathname;
-  const activePath = activeNavPath(currentPath, role);
+  const activePath = activeNavPath(currentPath, permissions);
 
   // Find the section that item lives in so the matching accordion panel
   // opens by default — the user lands with their context already
@@ -442,7 +507,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
         <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
           {NAV_SECTIONS.map((section, idx) => {
-            const items = visibleItems(section.items, role);
+            const items = visibleItems(section.items, permissions);
             if (items.length === 0) return null;
 
             // Unsectioned (no label) — render the items directly. This is
@@ -612,6 +677,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <LicenseBanner />
         <div className="p-6 space-y-4">
           <ActiveDelegationBanner />
+          <Breadcrumbs variant="staff" />
           {children}
         </div>
       </main>

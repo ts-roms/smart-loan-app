@@ -1,6 +1,16 @@
-import { type CollectionsRepository } from "@loan/db";
+import {
+  idOrNumberWhere,
+  type CollectionsRepository,
+  type PrismaClient,
+} from "@loan/db";
 
-import type { NoteInput, PtpInput, ResolveInput } from "./schemas";
+import type {
+  AssignInput,
+  NoteInput,
+  PtpInput,
+  QueueScope,
+  ResolveInput,
+} from "./schemas";
 
 /**
  * Collections orchestration. Notes + PTPs + queue + the late-fee
@@ -18,10 +28,127 @@ export type AccrueResult =
   | { ok: false; kind: "AccrualFailed"; message: string };
 
 export class CollectionsService {
-  constructor(private readonly repo: CollectionsRepository) {}
+  constructor(
+    private readonly repo: CollectionsRepository,
+    /**
+     * Tenant-scoped user table. Assignment has to answer "is this a real,
+     * active user who may hold accounts", which is a User question the
+     * collections repo has no business owning.
+     */
+    private readonly users: PrismaClient["user"],
+    /**
+     * Tenant-scoped loans. Assignment names a loan in its URL and that
+     * identifier may be a loan number, so it has to be resolved before
+     * the assignment row can key on it.
+     */
+    private readonly loans: PrismaClient["loanApplication"],
+  ) {}
 
-  overdueQueue() {
+  /**
+   * The overdue queue, scoped.
+   *
+   * `actorId` is the authenticated caller, not a parameter the client
+   * chooses — "mine" means the person asking. See queueScopeSchema.
+   */
+  overdueQueue(args: { scope: QueueScope["scope"]; actorId: string }) {
+    if (args.scope === "mine") {
+      return this.repo.overdueQueue(new Date(), {
+        collectorId: args.actorId,
+      });
+    }
+    if (args.scope === "unassigned") {
+      return this.repo.overdueQueue(new Date(), { unassignedOnly: true });
+    }
     return this.repo.overdueQueue();
+  }
+
+  // ─── account ownership ────────────────────────────────────────────
+
+  /**
+   * Assign or reassign an account.
+   *
+   * Rejects an unknown or deactivated collector up front. Without the
+   * check the FK would still hold, but a deactivated user can be
+   * assigned work they can never sign in to do — the account then looks
+   * covered and is silently orphaned.
+   */
+  async assign(args: {
+    loanIdOrNumber: string;
+    input: AssignInput;
+    actorId: string;
+  }): Promise<
+    | { ok: true; value: Awaited<ReturnType<CollectionsRepository["assign"]>> }
+    | {
+        ok: false;
+        kind: "UnknownLoan" | "UnknownCollector" | "InactiveCollector";
+      }
+  > {
+    /*
+     * Resolve the loan first. It also accepts a number, and without this
+     * the assignment row would be written with whatever string arrived —
+     * a number then fails the foreign key and surfaces as a raw 500 with
+     * the Prisma error and a file path in the body.
+     */
+    const loan = await this.loans.findFirst({
+      where: idOrNumberWhere(args.loanIdOrNumber),
+      select: { id: true },
+    });
+    if (!loan) return { ok: false, kind: "UnknownLoan" };
+
+    /*
+     * `collector` is a UUID or an email — the schema accepts either, so
+     * pick the column by shape. Email is matched case-insensitively:
+     * addresses are stored as typed at signup, and someone reassigning
+     * from a script or a spreadsheet will not reproduce the casing.
+     */
+    const collector = await this.users.findFirst({
+      where: args.input.collector.includes("@")
+        ? { email: { equals: args.input.collector, mode: "insensitive" } }
+        : { id: args.input.collector },
+      select: { id: true, active: true },
+    });
+    if (!collector) return { ok: false, kind: "UnknownCollector" };
+    if (!collector.active) return { ok: false, kind: "InactiveCollector" };
+
+    return {
+      ok: true,
+      value: await this.repo.assign({
+        loanId: loan.id,
+        // The resolved id, never the caller's string — it may be an email.
+        collectorId: collector.id,
+        assignedById: args.actorId,
+        note: args.input.note,
+      }),
+    };
+  }
+
+  /** Returns false when the loan doesn't exist OR had no assignment —
+   *  both mean "there is nothing assigned", which is what DELETE asks
+   *  for, so the route reports 204 either way. */
+  async unassign(loanIdOrNumber: string) {
+    const loan = await this.loans.findFirst({
+      where: idOrNumberWhere(loanIdOrNumber),
+      select: { id: true },
+    });
+    if (!loan) return false;
+    return this.repo.unassign(loan.id);
+  }
+
+  workload() {
+    return this.repo.workloadByCollector();
+  }
+
+  /**
+   * Users who can hold accounts — for the assign picker. COLLECTOR and
+   * LOAN_OFFICER, since officers work their own delinquencies too, and
+   * only active ones.
+   */
+  assignableCollectors() {
+    return this.users.findMany({
+      where: { active: true, role: { in: ["COLLECTOR", "LOAN_OFFICER"] } },
+      select: { id: true, name: true, email: true, role: true },
+      orderBy: { name: "asc" },
+    });
   }
 
   // ─── notes ────────────────────────────────────────────────────────

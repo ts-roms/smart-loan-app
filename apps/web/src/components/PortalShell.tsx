@@ -20,6 +20,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/auth";
+import { Breadcrumbs } from "./Breadcrumbs";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -211,7 +212,10 @@ export function PortalShell({ children }: { children: ReactNode }) {
           </button>
           <span className="text-sm font-medium truncate">{brandName}</span>
         </div>
-        <div className="p-6 max-w-5xl mx-auto space-y-4">{children}</div>
+        <div className="p-6 max-w-5xl mx-auto space-y-4">
+          <Breadcrumbs variant="portal" />
+          {children}
+        </div>
       </main>
       <IdleWarningDialog state={idle} />
     </div>

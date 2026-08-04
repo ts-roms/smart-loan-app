@@ -118,7 +118,7 @@ export interface CreateUserInput {
   email: string;
   name: string;
   password: string;
-  role: "ADMIN" | "LOAN_OFFICER" | "ACCOUNTANT" | "CUSTOMER";
+  role: "ADMIN" | "LOAN_OFFICER" | "ACCOUNTANT" | "COLLECTOR" | "CUSTOMER";
   /** Required when role === 'CUSTOMER' to link to an existing customer row. */
   customerId?: string;
 }
@@ -127,7 +127,7 @@ export interface CreatedUser {
   id: string;
   email: string;
   name: string;
-  role: "ADMIN" | "LOAN_OFFICER" | "ACCOUNTANT" | "CUSTOMER";
+  role: "ADMIN" | "LOAN_OFFICER" | "ACCOUNTANT" | "COLLECTOR" | "CUSTOMER";
   active: boolean;
   createdAt: string;
   customerId: string | null;

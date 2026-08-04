@@ -32,14 +32,20 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
+import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { downloadPdf } from "../../../lib/download-pdf";
 import { SignaturePad } from "../../../components/SignaturePad";
+import { LoanLedgerPanel } from "../../loans";
 import { LoanMessagePanel } from "../../messaging";
 
 export function PortalLoanDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const loan = usePortalLoan(id);
+
+  // Breadcrumb label — before the early returns, so the hook order
+  // stays the same on the loading and loaded renders.
+  useCrumbTitle(loan.data?.number ?? null);
 
   if (loan.isLoading) return <SkeletonCard />;
   if (!loan.data)
@@ -113,6 +119,11 @@ export function PortalLoanDetail() {
               borrowerSignedAt={l.borrowerSignedAt}
             />
           )}
+          {/* The borrower's own copy of the schedule — same component
+              and same payload the officer sees on /loans/:id, so the
+              two can't disagree about what's due or what's been
+              credited. Self-hides until disbursement generates it. */}
+          <LoanLedgerPanel rows={l.schedule ?? []} principal={l.principal} />
         </CardContent>
       </Card>
 

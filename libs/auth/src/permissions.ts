@@ -198,6 +198,14 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
     label: "Dispatch demand letters",
     category: "Collections",
   },
+  // Ownership. Assigning is a supervisor act — a collector who can hand
+  // accounts to themselves can cherry-pick the easy ones — so it is
+  // deliberately NOT in the COLLECTOR role below.
+  {
+    key: "collections.assign",
+    label: "Assign accounts to collectors",
+    category: "Collections",
+  },
 
   // Payments
   {
@@ -405,6 +413,9 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
       "collections.demand_letter",
       "collections.dl_approve_company",
       "collections.dl_dispatch",
+      // Officers supervise collections per this role's description, so
+      // handing accounts out is theirs as well as the admin's.
+      "collections.assign",
       "reports.read",
       "screening.read",
       "screening.run",
@@ -460,6 +471,33 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
       "coop.expense",
       "coop.income",
       "coop.big_brother",
+    ],
+  },
+  {
+    key: "COLLECTOR",
+    name: "Collector",
+    description: "Works assigned delinquent accounts — calls, visits, PTPs.",
+    system: true,
+    permissions: [
+      // The queue and the accounts in it.
+      "collections.read",
+      "collections.note",
+      // A collector needs to open the account they're chasing: the loan
+      // itself, its schedule, and who the borrower is. Read-only —
+      // nothing here can decide, disburse, restructure or waive.
+      "loans.read",
+      "customers.read",
+      // Demand letters get DRAFTED by whoever is working the account.
+      // Approval and dispatch are separate permissions and stay with the
+      // Ops Manager and Lawyer — a collector cannot sign off their own
+      // letter, which is the whole point of the escalation matrix.
+      "collections.demand_letter",
+      // Recording money is the accountant's job. A collector who could
+      // post payments could paper over a shortfall on their own queue,
+      // so payments.record is deliberately absent — they mark a promise
+      // to pay and the cashier records the receipt.
+      "notifications.read",
+      "documents.download",
     ],
   },
   {

@@ -1,4 +1,11 @@
-export type UserRole = "ADMIN" | "LOAN_OFFICER" | "ACCOUNTANT" | "CUSTOMER";
+/**
+ * Mirrors the Prisma UserRole enum and USER_ROLES in @loan/shared-types.
+ * Duplicated rather than imported: @loan/auth is the lowest layer and
+ * takes no workspace dependencies, so a new role has to be added here
+ * too. Three places, and the typechecker catches two of them.
+ */
+export type UserRole =
+  "ADMIN" | "LOAN_OFFICER" | "ACCOUNTANT" | "COLLECTOR" | "CUSTOMER";
 
 export interface JwtPayload {
   sub: string;

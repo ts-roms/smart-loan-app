@@ -137,7 +137,7 @@ export function DorsiScreenBanner({
           >
             <span>
               <Link
-                to={`/customers/${m.customerId}`}
+                to={`/customers/${m.customerNumber}`}
                 className="text-info hover:underline"
               >
                 {m.customerName}

@@ -19,16 +19,26 @@ import { useAuth } from "./auth";
 export function ApiClientProvider({ children }: { children: ReactNode }) {
   const { token, refreshToken, applyRefresh, signOut } = useAuth();
 
-  // Keep refs to the current token/refreshToken values so the ApiClient
-  // callbacks (which are configured once) always read the latest values.
+  /*
+   * Keep refs to the current token/refreshToken so the ApiClient
+   * callbacks — configured once at mount — always read the latest
+   * values.
+   *
+   * Assigned during render, NOT in an effect. React runs child effects
+   * before parent ones, so a `useEffect` here landed after the newly
+   * mounted tree had already fired its queries: signing in mounted
+   * DashboardShell, which requested /auth/me/permissions while this ref
+   * still held the pre-login token, took a 401, and cached it. The
+   * sidebar renders from that response, so it came up nearly empty and
+   * — thanks to a 60s staleTime — stayed that way. Writing the ref
+   * during render means anything that renders after this point sees the
+   * new token. Safe as a plain latest-value mirror: idempotent, no
+   * subscription, nothing else reads it during render.
+   */
   const tokenRef = useRef(token);
   const refreshRef = useRef(refreshToken);
-  useEffect(() => {
-    tokenRef.current = token;
-  }, [token]);
-  useEffect(() => {
-    refreshRef.current = refreshToken;
-  }, [refreshToken]);
+  tokenRef.current = token;
+  refreshRef.current = refreshToken;
 
   const config = {
     baseUrl: "/api/v1",

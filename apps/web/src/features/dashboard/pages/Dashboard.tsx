@@ -28,6 +28,7 @@ import {
   Sparkline,
   cn,
 } from "@loan/ui";
+import { usePermission } from "../../../hooks/use-permission";
 import { formatMoney } from "@loan/shared-utils";
 import {
   Activity,
@@ -62,20 +63,39 @@ import { findArticle, TourButton } from "../../help";
  * from the semantic palette + tier surfaces + sparklines, not new libs.
  */
 export function DashboardPage() {
+  /*
+   * Four of the six queries below hit /accounting/reports/*, which takes
+   * accounting.read. A COLLECTOR doesn't hold it, so on every dashboard
+   * load they fired four requests that came straight back 403 and the
+   * cards then rendered ₱0 — indistinguishable from a portfolio with no
+   * money in it.
+   *
+   * Gating the queries stops the requests; the sections keyed off the
+   * same flag stop the misleading zeros. Customers, KYC and the recent
+   * activity rail need no accounting permission and stay for everyone.
+   */
+  const canSeeAccounting = usePermission("accounting.read");
+
   const customers = useCustomers();
   const loans = useLoans();
-  const summary = usePortfolioSummary();
-  const originations = useOriginations();
-  const vintages = useVintageCohorts();
-  const aging = useLoanPortfolio();
+  const summary = usePortfolioSummary(undefined, {
+    enabled: canSeeAccounting,
+  });
+  const originations = useOriginations({ enabled: canSeeAccounting });
+  const vintages = useVintageCohorts({ enabled: canSeeAccounting });
+  const aging = useLoanPortfolio(undefined, { enabled: canSeeAccounting });
 
+  // A disabled query never leaves `pending`, so it must not be waited on
+  // — including it here would hold the skeleton up forever for exactly
+  // the users whose queries are switched off.
   const anyLoading =
     customers.isLoading ||
     loans.isLoading ||
-    summary.isLoading ||
-    originations.isLoading ||
-    vintages.isLoading ||
-    aging.isLoading;
+    (canSeeAccounting &&
+      (summary.isLoading ||
+        originations.isLoading ||
+        vintages.isLoading ||
+        aging.isLoading));
 
   if (anyLoading) {
     return (
@@ -154,74 +174,92 @@ export function DashboardPage() {
       </div>
 
       {/* ── Hero KPI row ───────────────────────────────────────────── */}
+      {/*
+        Column count follows the number of tiles actually rendered.
+        Tailwind can't take a computed class name (JIT scans source
+        text), so the two layouts are named literals rather than built
+        from a variable.
+      */}
       <div
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3"
+        className={
+          canSeeAccounting
+            ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3"
+            : "grid grid-cols-1 sm:grid-cols-2 gap-3"
+        }
         data-tour="dashboard-stats"
       >
-        <HeroKpi
-          label="Total outstanding"
-          value={formatMoney(summary.data?.totalOutstanding ?? 0)}
-          icon={Wallet}
-          accent="primary"
-          delta={
-            <Delta
-              from={
-                summary.data?.totalOutstanding
-                  ? summary.data.totalOutstanding * 0.93
-                  : 0
+        {canSeeAccounting && (
+          <>
+            <HeroKpi
+              label="Total outstanding"
+              value={formatMoney(summary.data?.totalOutstanding ?? 0)}
+              icon={Wallet}
+              accent="primary"
+              delta={
+                <Delta
+                  from={
+                    summary.data?.totalOutstanding
+                      ? summary.data.totalOutstanding * 0.93
+                      : 0
+                  }
+                  to={summary.data?.totalOutstanding ?? 0}
+                />
               }
-              to={summary.data?.totalOutstanding ?? 0}
-            />
-          }
-          sparkValues={principalSeries.length >= 2 ? principalSeries : [0, 0]}
-          context={`Cash on hand · ${formatMoney(summary.data?.cash ?? 0)}`}
-        />
-        <HeroKpi
-          label="Originations (12 mo)"
-          value={String(originationsHistory.reduce((a, m) => a + m.count, 0))}
-          icon={TrendingUp}
-          accent="info"
-          delta={
-            <Delta
-              from={priorMonths(countSeries)}
-              to={recentMonths(countSeries)}
-            />
-          }
-          sparkValues={countSeries.length >= 2 ? countSeries : [0, 0]}
-          context={`${formatMoney(originationsHistory.reduce((a, m) => a + m.principal, 0))} principal`}
-        />
-        <HeroKpi
-          label="NPL ratio"
-          value={`${(nplRatio * 100).toFixed(2)}%`}
-          icon={AlertCircle}
-          accent={
-            nplRatio > 0.05
-              ? "danger"
-              : nplRatio > 0.025
-                ? "warning"
-                : "success"
-          }
-          delta={
-            <Delta
-              value={
-                nplTrend.length >= 2
-                  ? (nplTrend[nplTrend.length - 1]! - nplTrend[0]!) /
-                    Math.max(nplTrend[0]!, 0.001)
-                  : 0
+              sparkValues={
+                principalSeries.length >= 2 ? principalSeries : [0, 0]
               }
-              invert
+              context={`Cash on hand · ${formatMoney(summary.data?.cash ?? 0)}`}
             />
-          }
-          sparkValues={nplTrend}
-          context={`PAR90 · ${formatMoney(summary.data?.par90 ?? 0)}`}
-          sparkTone={
-            nplRatio > 0.05
-              ? "danger"
-              : nplRatio > 0.025
-                ? "warning"
-                : "success"
-          }
-        />
+            <HeroKpi
+              label="Originations (12 mo)"
+              value={String(
+                originationsHistory.reduce((a, m) => a + m.count, 0),
+              )}
+              icon={TrendingUp}
+              accent="info"
+              delta={
+                <Delta
+                  from={priorMonths(countSeries)}
+                  to={recentMonths(countSeries)}
+                />
+              }
+              sparkValues={countSeries.length >= 2 ? countSeries : [0, 0]}
+              context={`${formatMoney(originationsHistory.reduce((a, m) => a + m.principal, 0))} principal`}
+            />
+            <HeroKpi
+              label="NPL ratio"
+              value={`${(nplRatio * 100).toFixed(2)}%`}
+              icon={AlertCircle}
+              accent={
+                nplRatio > 0.05
+                  ? "danger"
+                  : nplRatio > 0.025
+                    ? "warning"
+                    : "success"
+              }
+              delta={
+                <Delta
+                  value={
+                    nplTrend.length >= 2
+                      ? (nplTrend[nplTrend.length - 1]! - nplTrend[0]!) /
+                        Math.max(nplTrend[0]!, 0.001)
+                      : 0
+                  }
+                  invert
+                />
+              }
+              sparkValues={nplTrend}
+              context={`PAR90 · ${formatMoney(summary.data?.par90 ?? 0)}`}
+              sparkTone={
+                nplRatio > 0.05
+                  ? "danger"
+                  : nplRatio > 0.025
+                    ? "warning"
+                    : "success"
+              }
+            />
+          </>
+        )}
         <HeroKpi
           label="Customers"
           value={String(totalCustomers)}
@@ -236,26 +274,36 @@ export function DashboardPage() {
       </div>
 
       {/* ── Secondary metric strip ─────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MicroKpi
-          label="Active loans"
-          value={String(summary.data?.activeLoans ?? 0)}
-          icon={CreditCard}
-          accent="primary"
-        />
-        <MicroKpi
-          label="Receivable"
-          value={formatMoney(summary.data?.receivable ?? 0)}
-          icon={DollarSign}
-          accent="info"
-        />
-        <MicroKpi
-          label="YTD originations"
-          value={String(summary.data?.originatedYtd.count ?? 0)}
-          icon={Activity}
-          accent="success"
-          sub={formatMoney(summary.data?.originatedYtd.principal ?? 0)}
-        />
+      <div
+        className={
+          canSeeAccounting
+            ? "grid grid-cols-2 md:grid-cols-4 gap-3"
+            : "grid grid-cols-1 gap-3"
+        }
+      >
+        {canSeeAccounting && (
+          <>
+            <MicroKpi
+              label="Active loans"
+              value={String(summary.data?.activeLoans ?? 0)}
+              icon={CreditCard}
+              accent="primary"
+            />
+            <MicroKpi
+              label="Receivable"
+              value={formatMoney(summary.data?.receivable ?? 0)}
+              icon={DollarSign}
+              accent="info"
+            />
+            <MicroKpi
+              label="YTD originations"
+              value={String(summary.data?.originatedYtd.count ?? 0)}
+              icon={Activity}
+              accent="success"
+              sub={formatMoney(summary.data?.originatedYtd.principal ?? 0)}
+            />
+          </>
+        )}
         <MicroKpi
           label="Pending KYC"
           value={String(pendingKyc)}
@@ -266,57 +314,62 @@ export function DashboardPage() {
       </div>
 
       {/* ── Portfolio at risk — donut + legend ─────────────────────── */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="space-y-0.5">
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-warning" />
-              Portfolio at risk
-            </CardTitle>
-            <p className="text-xs text-fg-muted">
-              Buckets are reported as a share of total outstanding principal.
-            </p>
-          </div>
-          <Link
-            to="/accounting/analytics"
-            className="text-xs text-primary hover:underline inline-flex items-center gap-1"
-          >
-            View analytics <ArrowUpRight className="h-3 w-3" />
-          </Link>
-        </CardHeader>
-        <CardContent>
-          <ParDonutAndLegend summary={summary.data} />
-        </CardContent>
-      </Card>
+      {canSeeAccounting && (
+        <>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div className="space-y-0.5">
+                <CardTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-warning" />
+                  Portfolio at risk
+                </CardTitle>
+                <p className="text-xs text-fg-muted">
+                  Buckets are reported as a share of total outstanding
+                  principal.
+                </p>
+              </div>
+              <Link
+                to="/accounting/analytics"
+                className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+              >
+                View analytics <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <ParDonutAndLegend summary={summary.data} />
+            </CardContent>
+          </Card>
 
-      {/* ── Originations chart (full width) ───────────────────────── */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="space-y-0.5">
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-primary" />
-              Originations · last 12 months
-            </CardTitle>
-            <p className="text-xs text-fg-muted">
-              {originationsHistory.reduce((a, m) => a + m.count, 0)} loans
-              {" · "}
-              {formatMoney(
-                originationsHistory.reduce((a, m) => a + m.principal, 0),
-              )}{" "}
-              principal
-            </p>
-          </div>
-          <Link
-            to="/loans"
-            className="text-xs text-primary hover:underline inline-flex items-center gap-1"
-          >
-            All loans <ArrowUpRight className="h-3 w-3" />
-          </Link>
-        </CardHeader>
-        <CardContent>
-          <OriginationsChart data={originationsHistory} />
-        </CardContent>
-      </Card>
+          {/* ── Originations chart (full width) ───────────────────────── */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div className="space-y-0.5">
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  Originations · last 12 months
+                </CardTitle>
+                <p className="text-xs text-fg-muted">
+                  {originationsHistory.reduce((a, m) => a + m.count, 0)} loans
+                  {" · "}
+                  {formatMoney(
+                    originationsHistory.reduce((a, m) => a + m.principal, 0),
+                  )}{" "}
+                  principal
+                </p>
+              </div>
+              <Link
+                to="/loans"
+                className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+              >
+                All loans <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <OriginationsChart data={originationsHistory} />
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       {/* ── Portfolio composition — Pie + Bar + Line ───────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -367,37 +420,39 @@ export function DashboardPage() {
       </div>
 
       {/* ── Aging + Vintage cohorts ───────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-warning" />
-              Aging breakdown
-            </CardTitle>
-            <p className="text-xs text-fg-muted">
-              Outstanding principal grouped by days past due.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <AgingChart aging={aging.data} />
-          </CardContent>
-        </Card>
+      {canSeeAccounting && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-warning" />
+                Aging breakdown
+              </CardTitle>
+              <p className="text-xs text-fg-muted">
+                Outstanding principal grouped by days past due.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <AgingChart aging={aging.data} />
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              Vintage cohorts
-            </CardTitle>
-            <p className="text-xs text-fg-muted">
-              Default rate by month-of-origination.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <VintageTable cohorts={vintages.data ?? []} />
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                Vintage cohorts
+              </CardTitle>
+              <p className="text-xs text-fg-muted">
+                Default rate by month-of-origination.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <VintageTable cohorts={vintages.data ?? []} />
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* ── Recent loan activity ──────────────────────────────────── */}
       <Card data-tour="dashboard-activity">

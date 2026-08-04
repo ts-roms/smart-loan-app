@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
+import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { SignaturePad } from "../../../components/SignaturePad";
 import { downloadPdf } from "../../../lib/download-pdf";
@@ -55,6 +56,7 @@ import { AnnualDocsPanel } from "../components/AnnualDocsPanel";
 import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
 import { FaceMatchPanel } from "../components/FaceMatchPanel";
 import { LeasePanel } from "../components/LeasePanel";
+import { LoanLedgerPanel } from "../components/LoanLedgerPanel";
 import { DOC_LABELS, TYPE_LABELS } from "../constants";
 import { LoanMessagePanel } from "../../messaging";
 import { AssistantPanel, useExplainDecision } from "../../assistant";
@@ -105,6 +107,10 @@ export function LoanDetailPage() {
   const askPrompt = usePrompt();
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentRef, setPaymentRef] = useState("");
+
+  // Breadcrumb label. Must run before the early returns below — it's a
+  // hook, and bailing first would change the hook order between renders.
+  useCrumbTitle(loan.data?.number ?? null);
 
   if (loan.isLoading) return <SkeletonCard />;
   if (!loan.data)
@@ -284,6 +290,10 @@ export function LoanDetailPage() {
         <LeasePanel loanId={l.id} />
         <PenaltyPanel loanId={l.id} />
         <AnnualDocsPanel loanId={l.id} />
+        {/* Schedule before payments: what was owed reads first, what
+            came in reads against it. The panel self-hides when there is
+            no schedule, i.e. before disbursement. */}
+        <LoanLedgerPanel rows={l.schedule ?? []} principal={l.principal} />
         {l.payments && l.payments.length > 0 && (
           <PaymentsPanel loanId={l.id} payments={l.payments} />
         )}
