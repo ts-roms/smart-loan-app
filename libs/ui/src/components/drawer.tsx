@@ -59,7 +59,7 @@ export const DrawerContent = forwardRef<
     >
       {children}
       <DialogPrimitive.Close
-        className="absolute right-3 top-3 rounded-md p-1 text-fg-muted hover:text-fg hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+        className="absolute right-3 top-3 rounded-md p-1 text-fg-muted hover:text-fg hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Close drawer"
       >
         <X className="h-4 w-4" />

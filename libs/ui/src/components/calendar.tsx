@@ -54,7 +54,7 @@ export function Calendar({
         day_button: cn(
           "h-9 w-9 inline-flex items-center justify-center rounded-md font-normal text-fg",
           "hover:bg-hover hover:text-fg",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           "aria-selected:opacity-100",
         ),
         selected:

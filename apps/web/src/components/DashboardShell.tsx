@@ -461,7 +461,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 type="button"
                 aria-label="Open profile menu"
                 data-tour="navbar-profile"
-                className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 transition"
+                className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring transition"
               >
                 <Avatar name={user?.name ?? "—"} size="md" />
               </button>

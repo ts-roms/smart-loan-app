@@ -43,7 +43,7 @@ export function QuickLoanLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="text-left text-info hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="text-left text-info hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
           aria-label="Quick-view loan"
         >
           {children}

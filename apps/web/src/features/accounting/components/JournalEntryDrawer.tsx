@@ -47,7 +47,7 @@ export function JournalEntryLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="text-left hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="text-left hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
           aria-label="Inspect journal entry"
         >
           {children}

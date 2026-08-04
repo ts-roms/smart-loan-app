@@ -35,7 +35,7 @@ export const SelectTrigger = forwardRef<
     className={cn(
       "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-default bg-surface-2 px-3 py-2 text-sm text-left text-fg",
       "placeholder:text-fg-subtle hover:bg-hover",
-      "focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60",
+      "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       "disabled:cursor-not-allowed disabled:opacity-50",
       // Truncate the selected value when it's longer than the trigger.
       "[&>span]:line-clamp-1 [&>span]:text-left",

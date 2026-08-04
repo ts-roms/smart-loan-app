@@ -49,7 +49,7 @@ export function AuditLogTrigger() {
         <button
           type="button"
           aria-label="Open audit log"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-fg hover:bg-hover hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-fg hover:bg-hover hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ScrollText className="h-4 w-4" />
         </button>
