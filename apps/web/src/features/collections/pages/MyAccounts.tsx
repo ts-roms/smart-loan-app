@@ -311,7 +311,7 @@ function AssignControl({ row }: { row: OverdueRow }) {
 
   const onPick = async (collectorId: string) => {
     try {
-      await assign.mutateAsync({ loanId: row.id, collectorId });
+      await assign.mutateAsync({ loanId: row.id, collector: collectorId });
       const name =
         collectors.data?.find((c) => c.id === collectorId)?.name ?? "collector";
       toast.success(`${row.number} → ${name}`);

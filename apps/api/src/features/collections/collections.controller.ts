@@ -48,13 +48,18 @@ export class CollectionsController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     const result = await req.collectionsServices!.collections.assign({
-      loanId: req.params.loanId,
+      loanIdOrNumber: req.params.loanId,
       input: parsed.data,
       actorId: req.user.sub,
     });
     if (!result.ok) {
-      // 422, not 404: the loan in the URL exists, it is the collector in
-      // the body that cannot take the work.
+      // 404 when the URL names nothing; 422 when the loan is real and
+      // it's the collector in the body that can't take the work.
+      if (result.kind === "UnknownLoan") {
+        return reply
+          .code(404)
+          .send({ error: "UnknownLoan", message: "No such loan." });
+      }
       return reply.code(422).send({
         error: result.kind,
         message:
@@ -70,12 +75,10 @@ export class CollectionsController {
     req: FastifyRequest<{ Params: { loanId: string } }>,
     reply: FastifyReply,
   ) => {
-    const removed = await req.collectionsServices!.collections.unassign(
-      req.params.loanId,
-    );
-    // 204 either way — unassigning an already-unassigned account leaves
-    // the world in the state the caller asked for.
-    return reply.code(204).send(removed ? undefined : undefined);
+    await req.collectionsServices!.collections.unassign(req.params.loanId);
+    // 204 either way — unassigning an account that had no assignment
+    // leaves the world in the state the caller asked for.
+    return reply.code(204).send();
   };
 
   // ─── notes ────────────────────────────────────────────────────────

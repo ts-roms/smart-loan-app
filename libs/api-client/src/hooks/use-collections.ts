@@ -64,13 +64,14 @@ export function useAssignAccount() {
   return useMutation({
     mutationFn: (input: {
       loanId: string;
-      collectorId: string;
+      /** A user id or an email — the endpoint accepts either. */
+      collector: string;
       note?: string;
     }) =>
       getApiClient().request(`/collections/loans/${input.loanId}/assignee`, {
         method: "PUT",
         body: JSON.stringify({
-          collectorId: input.collectorId,
+          collector: input.collector,
           note: input.note,
         }),
       }),

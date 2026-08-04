@@ -54,6 +54,7 @@ export async function collectionsRoutes(app: FastifyInstance) {
       collections: new CollectionsService(
         new CollectionsRepository(req.tenantCtx.prisma),
         req.tenantCtx.prisma.user,
+        req.tenantCtx.prisma.loanApplication,
       ),
     };
   });

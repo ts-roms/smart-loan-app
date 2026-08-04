@@ -1,4 +1,8 @@
-import { type CollectionsRepository, type PrismaClient } from "@loan/db";
+import {
+  idOrNumberWhere,
+  type CollectionsRepository,
+  type PrismaClient,
+} from "@loan/db";
 
 import type {
   AssignInput,
@@ -32,6 +36,12 @@ export class CollectionsService {
      * collections repo has no business owning.
      */
     private readonly users: PrismaClient["user"],
+    /**
+     * Tenant-scoped loans. Assignment names a loan in its URL and that
+     * identifier may be a loan number, so it has to be resolved before
+     * the assignment row can key on it.
+     */
+    private readonly loans: PrismaClient["loanApplication"],
   ) {}
 
   /**
@@ -63,15 +73,38 @@ export class CollectionsService {
    * covered and is silently orphaned.
    */
   async assign(args: {
-    loanId: string;
+    loanIdOrNumber: string;
     input: AssignInput;
     actorId: string;
   }): Promise<
     | { ok: true; value: Awaited<ReturnType<CollectionsRepository["assign"]>> }
-    | { ok: false; kind: "UnknownCollector" | "InactiveCollector" }
+    | {
+        ok: false;
+        kind: "UnknownLoan" | "UnknownCollector" | "InactiveCollector";
+      }
   > {
-    const collector = await this.users.findUnique({
-      where: { id: args.input.collectorId },
+    /*
+     * Resolve the loan first. It also accepts a number, and without this
+     * the assignment row would be written with whatever string arrived —
+     * a number then fails the foreign key and surfaces as a raw 500 with
+     * the Prisma error and a file path in the body.
+     */
+    const loan = await this.loans.findFirst({
+      where: idOrNumberWhere(args.loanIdOrNumber),
+      select: { id: true },
+    });
+    if (!loan) return { ok: false, kind: "UnknownLoan" };
+
+    /*
+     * `collector` is a UUID or an email — the schema accepts either, so
+     * pick the column by shape. Email is matched case-insensitively:
+     * addresses are stored as typed at signup, and someone reassigning
+     * from a script or a spreadsheet will not reproduce the casing.
+     */
+    const collector = await this.users.findFirst({
+      where: args.input.collector.includes("@")
+        ? { email: { equals: args.input.collector, mode: "insensitive" } }
+        : { id: args.input.collector },
       select: { id: true, active: true },
     });
     if (!collector) return { ok: false, kind: "UnknownCollector" };
@@ -80,16 +113,25 @@ export class CollectionsService {
     return {
       ok: true,
       value: await this.repo.assign({
-        loanId: args.loanId,
-        collectorId: args.input.collectorId,
+        loanId: loan.id,
+        // The resolved id, never the caller's string — it may be an email.
+        collectorId: collector.id,
         assignedById: args.actorId,
         note: args.input.note,
       }),
     };
   }
 
-  unassign(loanId: string) {
-    return this.repo.unassign(loanId);
+  /** Returns false when the loan doesn't exist OR had no assignment —
+   *  both mean "there is nothing assigned", which is what DELETE asks
+   *  for, so the route reports 204 either way. */
+  async unassign(loanIdOrNumber: string) {
+    const loan = await this.loans.findFirst({
+      where: idOrNumberWhere(loanIdOrNumber),
+      select: { id: true },
+    });
+    if (!loan) return false;
+    return this.repo.unassign(loan.id);
   }
 
   workload() {
