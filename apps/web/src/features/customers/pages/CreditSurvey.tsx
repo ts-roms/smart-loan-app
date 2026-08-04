@@ -52,8 +52,26 @@ export function CreditSurveyPage() {
   }, [answers, questions.data]);
 
   const onSubmit = async () => {
+    /*
+     * The record's id, NOT the `id` route param.
+     *
+     * Since customer URLs became readable, that param is usually a
+     * CUST- number — great in the address bar, rejected by this
+     * endpoint, which validates customerId as a uuid. Posting the param
+     * straight through failed with
+     *   {"error":"ValidationError","issues":[{"validation":"uuid",...}]}
+     *
+     * The rule this follows: a URL carries the identifier a human
+     * reads, a payload carries the one the system stores. The customer
+     * is already loaded here, so the real id costs nothing.
+     */
+    const customerId = customer.data?.id;
+    if (!customerId) {
+      toast.error("Customer not loaded yet — try again in a moment.");
+      return;
+    }
     try {
-      const res = await submit.mutateAsync({ customerId: id, answers });
+      const res = await submit.mutateAsync({ customerId, answers });
       const bucket = (
         res as { bucket?: "EXCELLENT" | "GOOD" | "FAIR" | "POOR" }
       ).bucket;
