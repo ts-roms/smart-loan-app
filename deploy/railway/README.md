@@ -99,25 +99,45 @@ The web probe deliberately does not proxy to the API. If it did, an API
 outage would fail the web service's healthcheck and roll back a
 perfectly good frontend deploy.
 
-## What is not deployed here
+### 4. platform and marketing (optional, vendor-side)
 
-The platform console (`apps/platform`) and marketing site
-(`apps/marketing`) are vendor-side apps. Add them as separate Railway
-services if you want them hosted; they are not part of a tenant install
-and neither config here builds them.
+Same shape as the web service — a Dockerfile each, `Config as code` at
+`deploy/railway/railway.platform.json` / `railway.marketing.json`, root
+directory `/`, and `API_UPSTREAM` pointing at the API.
+
+These are vendor-side apps, not part of a cooperative's install. Deploy
+them only if you are hosting the vendor surfaces too.
+
+They proxy DIFFERENT prefixes, because they talk to different mount
+points on the same API (see apps/api/src/app.ts):
+
+| Service   | Proxies                        | API mount                         |
+| --------- | ------------------------------ | --------------------------------- |
+| web       | `/api/v1`, `/uploads`, `/docs` | `registerRoutes`, at `/api/v1`    |
+| platform  | `/platform`                    | `platformRoutes`, at the API root |
+| marketing | `/public`                      | `publicRoutes`, at the API root   |
+
+That is why the config is `nginx.spa.conf.template` shared by all three
+plus a per-app `proxy-*.inc`: SPA serving, `$PORT` binding, caching and
+deferred upstream resolution are identical, only the forwarded prefixes
+differ. Each image includes only its own, so the console cannot
+accidentally proxy `/api/v1` and the tenant app cannot reach
+`/platform`.
 
 ## What was tested locally
 
 The web image was built and run against the real API before this landed:
 
-| Check                                          | Result                                                                             |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Template renders `${PORT}` / `${API_UPSTREAM}` | substituted; nginx's own `$uri`, `$host`, `$proxy_add_x_forwarded_for` left intact |
-| Boot with an unresolvable upstream             | container stays up, `/health.txt` 200, SPA 200, `/api/v1/*` 502                    |
-| Proxy against a live API                       | `/api/v1/health` identical through nginx and direct                                |
-| Path doubling                                  | a 404 body reports `/api/v1/nope-not-a-route`, not `/api/v1/api/v1/...`            |
-| SPA deep link                                  | `/loans/LN-2026-000001` falls back to index.html                                   |
-| Caching                                        | index.html `no-store`, hashed assets `immutable`                                   |
+| Check                                          | Result                                                                                 |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Template renders `${PORT}` / `${API_UPSTREAM}` | substituted; nginx's own `$uri`, `$host`, `$proxy_add_x_forwarded_for` left intact     |
+| Boot with an unresolvable upstream             | container stays up, `/health.txt` 200, SPA 200, `/api/v1/*` 502                        |
+| All three images build and serve               | web, platform and marketing: `/health.txt` 200, SPA 200                                |
+| Per-app proxy isolation                        | platform `/platform/tenants` → 401 from the API; its `/api/v1/*` falls back to the SPA |
+| Proxy against a live API                       | `/api/v1/health` identical through nginx and direct                                    |
+| Path doubling                                  | a 404 body reports `/api/v1/nope-not-a-route`, not `/api/v1/api/v1/...`                |
+| SPA deep link                                  | `/loans/LN-2026-000001` falls back to index.html                                       |
+| Caching                                        | index.html `no-store`, hashed assets `immutable`                                       |
 
 Two bugs were found and fixed that way. nginx refused to start on an
 unresolvable upstream, and the base image's resolver script is opt-in —

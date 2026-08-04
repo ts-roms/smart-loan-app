@@ -1,4 +1,4 @@
-# SmartLoan tenant web app — Railway image
+# SmartLoan platform console — Railway image
 #
 # Same two stages as deploy/docker/Dockerfile.web. It exists separately
 # rather than as a flag on that one because the runtime differs in three
@@ -26,20 +26,16 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc* package.json tsconfig.base.json ./
 COPY apps ./apps
 COPY libs ./libs
-# scripts/ carries ensure-prisma-client.mjs, which the app build
-# scripts invoke before tsc. Without it the build dies on
-# "Cannot find module '/app/scripts/ensure-prisma-client.mjs'".
-COPY scripts ./scripts
 
 RUN pnpm install --frozen-lockfile
 
-# The web app imports types from @loan/db, so the generated Prisma
-# client has to exist before tsc runs. Without it every prisma.*
-# expression resolves to `any` and the build fails on noImplicitAny with
-# errors that point at callsites rather than at the missing client.
+# The console imports types from @loan/db, so the generated Prisma
+# client has to exist before tsc runs — same reason as the tenant web
+# image. Without it every prisma.* type resolves to `any` and the build
+# fails on noImplicitAny.
 RUN pnpm --filter @loan/db prisma:generate
 
-RUN pnpm --filter @loan/web build
+RUN pnpm --filter @loan/platform build
 
 # ─── runtime ────────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runtime
@@ -53,7 +49,7 @@ COPY deploy/railway/nginx.spa.conf.template \
 # Proxy prefixes for THIS app. `.inc`, not `.conf`, so nginx.conf's
 # http-level `include conf.d/*.conf` doesn't also pull it in outside
 # the server block, where a bare `location` would be a syntax error.
-COPY deploy/railway/proxy-web.inc /etc/nginx/conf.d/proxy-web.inc
+COPY deploy/railway/proxy-platform.inc /etc/nginx/conf.d/proxy-platform.inc
 
 # Substitute ONLY these two. Left unset, envsubst replaces every $name
 # it finds — including nginx's own $uri, $host and
@@ -73,4 +69,4 @@ ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 # the service variables when the API service is named something else.
 ENV API_UPSTREAM=http://api.railway.internal:3001
 
-COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+COPY --from=builder /app/apps/platform/dist /usr/share/nginx/html
