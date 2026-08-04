@@ -122,10 +122,13 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://localhost:'+process.env.PORT+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# Boot. `prisma migrate deploy` is idempotent — running on every start
-# means a fresh container picks up new migrations automatically. Then
-# we hand off to the API.
+# Boot. Migrations run inside the `start` script rather than here, so
+# they happen on every production start path — this CMD, a Railway
+# startCommand, a Nixpacks-inferred start, or someone running
+# `pnpm --filter @loan/api start` by hand. Having them only in this CMD
+# is what let a Railway deploy come up against an empty database and
+# crash on "The table public.ScheduledJob does not exist".
 #
-# We don't seed in this command — the seed is for first-install only
-# and is run manually by the cooperative's operator (see deploy/README).
-CMD ["sh", "-c", "pnpm --filter @loan/db exec prisma migrate deploy && pnpm --filter @loan/api start"]
+# `prisma migrate deploy` is idempotent and takes an advisory lock, so
+# running it on every boot and from several replicas is safe.
+CMD ["sh", "-c", "pnpm --filter @loan/api start"]

@@ -1,4 +1,4 @@
-- Phase B — Demand Letter module.
+-- Phase B — Demand Letter module.
 --
 -- Adds:
 --   * DemandLetter table with stage + status enums.

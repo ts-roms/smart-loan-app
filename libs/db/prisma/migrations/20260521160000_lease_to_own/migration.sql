@@ -1,4 +1,4 @@
-- Phase E — Lease-to-Own product.
+-- Phase E — Lease-to-Own product.
 --
 -- Adds:
 --   * Lease-specific fields on LoanProduct (isLease, residualValueFraction,

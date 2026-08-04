@@ -5,7 +5,7 @@
     "dockerfilePath": "deploy/docker/Dockerfile.api"
   },
   "deploy": {
-    "startCommand": "pnpm --filter @loan/db exec prisma migrate deploy && pnpm --filter @loan/api start",
+    "startCommand": "pnpm --filter @loan/api start",
     "healthcheckPath": "/api/v1/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",

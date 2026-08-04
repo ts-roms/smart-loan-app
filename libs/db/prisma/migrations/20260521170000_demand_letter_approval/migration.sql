@@ -1,4 +1,4 @@
-- G3 — Demand Letter escalation matrix.
+-- G3 — Demand Letter escalation matrix.
 --
 -- Adds an APPROVED status between DRAFTED and DISPATCHED, plus three
 -- nullable approval-snapshot fields. The escalation chain (Credit

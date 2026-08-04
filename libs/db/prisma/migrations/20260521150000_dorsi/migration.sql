@@ -1,4 +1,4 @@
-- Phase D — DORSI compliance.
+-- Phase D — DORSI compliance.
 --
 -- Adds:
 --   * DorsiCategory enum (Director / Officer / Stockholder / Related Interest)
