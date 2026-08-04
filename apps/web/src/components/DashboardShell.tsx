@@ -44,7 +44,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/auth";
 import { ActiveDelegationBanner } from "../features/delegations";
 import { LicenseBanner } from "../features/settings";
@@ -249,27 +249,72 @@ function visibleItems(items: NavItem[], role: UserRole | undefined): NavItem[] {
   return items.filter((n) => !n.roles || (role && n.roles.includes(role)));
 }
 
-function NavItemLink({ item }: { item: NavItem }) {
-  return (
-    <NavLink
-      to={item.to}
-      end={item.to === "/"}
-      className={({ isActive }) =>
-        cn(
-          // Subtle active state: a vertical accent rule on the left edge
-          // plus a tinted surface. Looks more intentional than just a
-          // darker background.
-          "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
-          "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity",
-          isActive
-            ? "bg-surface-2 text-fg before:opacity-100"
-            : "text-fg-muted hover:bg-surface-2/60 hover:text-fg",
-        )
+/** Does `path` fall under `to` — the item itself or any route below it? */
+function coversRoute(to: string, path: string): boolean {
+  if (to === "/") return path === "/";
+  return path === to || path.startsWith(`${to}/`);
+}
+
+/**
+ * Which single nav item owns `path` — the longest `to` that covers it.
+ *
+ * NavLink's own `isActive` can't decide this: it lights up on any
+ * ancestor match, so `/collections/demand-letters` highlighted both
+ * "Collections" and "Demand letters" at once. Four pairs in this sidebar
+ * nest that way (collections, customers, users, accounting).
+ *
+ * `end` on every item would fix the double-highlight and break the
+ * common case instead — `/customers/:id`, `/loans/new` and the eight
+ * `/accounting/*` pages have no nav entry of their own and rely on the
+ * parent staying lit. Longest-match satisfies both: a child claims the
+ * route when one exists, otherwise the nearest ancestor keeps it.
+ *
+ * Scoped to items the role can actually see, so an item hidden by
+ * `roles` never steals the highlight from the visible parent.
+ */
+function activeNavPath(
+  path: string,
+  role: UserRole | undefined,
+): string | null {
+  let best: string | null = null;
+  for (const section of NAV_SECTIONS) {
+    for (const item of visibleItems(section.items, role)) {
+      if (
+        coversRoute(item.to, path) &&
+        (!best || item.to.length > best.length)
+      ) {
+        best = item.to;
       }
+    }
+  }
+  return best;
+}
+
+function NavItemLink({ item, active }: { item: NavItem; active: boolean }) {
+  return (
+    <Link
+      to={item.to}
+      // Plain Link, not NavLink: active state comes from activeNavPath,
+      // and NavLink would only ever set aria-current from its own match.
+      // With `end` that drops the marker on `/customers/:id` (parent lit,
+      // nothing announced); without it, it marks two items at once — the
+      // same bug, moved to the accessibility tree where it's harder to
+      // see. Setting it here keeps the visual and announced state equal.
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        // Subtle active state: a vertical accent rule on the left edge
+        // plus a tinted surface. Looks more intentional than just a
+        // darker background.
+        "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
+        "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity",
+        active
+          ? "bg-surface-2 text-fg before:opacity-100"
+          : "text-fg-muted hover:bg-surface-2/60 hover:text-fg",
+      )}
     >
       <item.icon className="h-4 w-4 shrink-0" />
       <span className="truncate">{item.label}</span>
-    </NavLink>
+    </Link>
   );
 }
 
@@ -292,19 +337,16 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     }
   }, [branding.data?.companyName]);
 
-  // Find the section the current route lives in so the matching accordion
-  // panel opens by default — the user lands with their context already
-  // expanded instead of having to click around for it.
+  // Exactly one nav item is lit at a time; everything else keys off it.
   const currentPath = location.pathname;
+  const activePath = activeNavPath(currentPath, role);
+
+  // Find the section that item lives in so the matching accordion panel
+  // opens by default — the user lands with their context already
+  // expanded instead of having to click around for it.
   const sectionWithRoute =
     NAV_SECTIONS.find(
-      (s) =>
-        s.label &&
-        s.items.some((i) =>
-          i.to === "/"
-            ? currentPath === "/"
-            : currentPath === i.to || currentPath.startsWith(`${i.to}/`),
-        ),
+      (s) => s.label && s.items.some((i) => i.to === activePath),
     )?.label ?? null;
 
   // Off-canvas nav state — only meaningful below the md breakpoint.
@@ -409,18 +451,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               return (
                 <div key={`section-${idx}`} className="space-y-0.5">
                   {items.map((n) => (
-                    <NavItemLink key={n.to} item={n} />
+                    <NavItemLink
+                      key={n.to}
+                      item={n}
+                      active={n.to === activePath}
+                    />
                   ))}
                 </div>
               );
             }
 
             const isOpen = openSection === section.label;
-            const hasActiveItem = items.some((i) =>
-              i.to === "/"
-                ? currentPath === "/"
-                : currentPath === i.to || currentPath.startsWith(`${i.to}/`),
-            );
+            const hasActiveItem = items.some((i) => i.to === activePath);
 
             return (
               <div key={section.label} className="space-y-0.5">
@@ -458,7 +500,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   <div className="min-h-0 overflow-hidden">
                     <div className="space-y-0.5 pb-1">
                       {items.map((n) => (
-                        <NavItemLink key={n.to} item={n} />
+                        <NavItemLink
+                          key={n.to}
+                          item={n}
+                          active={n.to === activePath}
+                        />
                       ))}
                     </div>
                   </div>
