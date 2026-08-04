@@ -1,4 +1,5 @@
 import type { UserRole } from "@loan/shared-types";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
   useCallback,
@@ -82,23 +83,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshRef.current = refreshToken;
   }, [refreshToken]);
 
-  const signIn = useCallback((payload: SignInPayload) => {
-    localStorage.setItem(TOKEN_KEY, payload.accessToken);
-    localStorage.setItem(REFRESH_KEY, payload.refreshToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(payload.user));
-    setToken(payload.accessToken);
-    setRefreshToken(payload.refreshToken);
-    setUser(payload.user);
-  }, []);
+  /*
+   * Who you are changes what every cached query means, so both sides of
+   * the session boundary wipe the react-query cache.
+   *
+   * Signing IN: queries that ran before the token existed are cached as
+   * 401 failures, and staleTime keeps them that way — /auth/me/permissions
+   * has a 60s staleTime, so the sidebar (which decides what to show from
+   * that response) came up almost empty for a minute after login, and the
+   * audit-log button stayed hidden the same way. Nothing refetches on its
+   * own because from the cache's point of view the answer is fresh.
+   *
+   * Signing OUT: without this, the next user to sign in on the same tab
+   * inherits the previous one's cached customers, loans and permissions
+   * until each query happens to go stale.
+   *
+   * clear() rather than invalidateQueries(): invalidation refetches
+   * everything still mounted, which on sign-out means firing a burst of
+   * authenticated requests with a token we just threw away.
+   */
+  const queryClient = useQueryClient();
+
+  const signIn = useCallback(
+    (payload: SignInPayload) => {
+      localStorage.setItem(TOKEN_KEY, payload.accessToken);
+      localStorage.setItem(REFRESH_KEY, payload.refreshToken);
+      localStorage.setItem(USER_KEY, JSON.stringify(payload.user));
+      queryClient.clear();
+      setToken(payload.accessToken);
+      setRefreshToken(payload.refreshToken);
+      setUser(payload.user);
+    },
+    [queryClient],
+  );
 
   const signOut = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(USER_KEY);
+    queryClient.clear();
     setToken(null);
     setRefreshToken(null);
     setUser(null);
-  }, []);
+  }, [queryClient]);
 
   const updateUser = useCallback((next: AuthUser) => {
     localStorage.setItem(USER_KEY, JSON.stringify(next));
