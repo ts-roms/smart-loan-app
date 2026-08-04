@@ -59,6 +59,19 @@ COPY deploy/railway/proxy-web.inc /etc/nginx/conf.d/proxy-web.inc
 # it finds — including nginx's own $uri, $host and
 # $proxy_add_x_forwarded_for — with empty strings, which produces a
 # config that starts cleanly and then misroutes.
+# Default port, so the image is self-sufficient.
+#
+# The template does `listen ${PORT}`, and envsubst turns an unset PORT
+# into an empty string — nginx then dies at startup with
+#   [emerg] host not found in "${PORT}" of the "listen" directive
+# and the container exits 1 before writing anything useful. On Railway
+# that surfaces as a FAILED deploy with no deploy logs at all, which
+# then silently falls back to the previous builder. Reproduced locally
+# by running this image with no PORT.
+#
+# A platform that injects PORT still wins — runtime env overrides ENV.
+ENV PORT=8080
+
 ENV NGINX_ENVSUBST_FILTER='^(PORT|API_UPSTREAM|NGINX_LOCAL_RESOLVERS)$'
 
 # Opt in to the base image populating NGINX_LOCAL_RESOLVERS from
