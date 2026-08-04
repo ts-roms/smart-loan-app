@@ -20,6 +20,19 @@ export const appUrl: string =
   "http://localhost:5173";
 
 /**
+ * Where the vendor's platform console lives. Same reasoning as
+ * `appUrl` — a separate deployment, so the link has to be absolute.
+ *
+ * This was hardcoded to the dev port, which meant the PUBLIC marketing
+ * site shipped a "Platform console" link pointing at
+ * http://localhost:5174 — dead for every visitor, and it silently
+ * advertises an internal surface. Set VITE_PLATFORM_URL at build time.
+ */
+export const platformUrl: string =
+  (import.meta.env.VITE_PLATFORM_URL as string | undefined) ??
+  "http://localhost:5174";
+
+/**
  * Marketing site shell. Header + footer wrap every page; routes
  * render in the middle. No auth — everything here is public.
  *
@@ -228,7 +241,7 @@ function Footer() {
             title="Company"
             links={[
               { label: "Contact", to: "/contact" },
-              { label: "Platform console", href: "http://localhost:5174" },
+              { label: "Platform console", href: platformUrl },
             ]}
           />
         </div>
