@@ -21,6 +21,10 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc* package.json tsconfig.base.json ./
 COPY apps ./apps
 COPY libs ./libs
+# scripts/ carries ensure-prisma-client.mjs, which the app build
+# scripts invoke before tsc. Without it the build dies on
+# "Cannot find module '/app/scripts/ensure-prisma-client.mjs'".
+COPY scripts ./scripts
 
 # Install + Prisma generate (the web app's TS imports types from
 # @loan/db, which requires the generated client to exist).
