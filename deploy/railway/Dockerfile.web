@@ -39,6 +39,21 @@ RUN pnpm install --frozen-lockfile
 # errors that point at callsites rather than at the missing client.
 RUN pnpm --filter @loan/db prisma:generate
 
+# Where the app is mounted on the public origin.
+#
+# Vite bakes this into every emitted URL — assets, manifest, sw.js — so
+# it has to be decided at BUILD time; a runtime service variable would
+# arrive long after the bundle is written. Feeds vite.config.ts's single
+# BASE constant, which in turn feeds the router basename via BASE_URL.
+#
+# Trailing slash required: Vite's `base` and the manifest's start_url
+# both want one, and "/app" (without) yields "/appassets/...".
+#
+# Default "/" keeps a plain `docker build` and the standalone
+# deployment serving from the root exactly as before.
+ARG APP_BASE_PATH=/
+ENV APP_BASE_PATH=$APP_BASE_PATH
+
 RUN pnpm --filter @loan/web build
 
 # ─── runtime ────────────────────────────────────────────────────────────
@@ -53,6 +68,9 @@ COPY deploy/railway/nginx.spa.conf.template \
 # Proxy prefixes for THIS app. `.inc`, not `.conf`, so nginx.conf's
 # http-level `include conf.d/*.conf` doesn't also pull it in outside
 # the server block, where a bare `location` would be a syntax error.
+COPY deploy/railway/proxy-api.inc /etc/nginx/conf.d/proxy-api.inc
+# Strips APP_BASE_PATH back off, so the document root stays root-shaped
+# whatever the app was built with. See the file for why.
 COPY deploy/railway/proxy-web.inc /etc/nginx/conf.d/proxy-web.inc
 
 # Substitute ONLY these two. Left unset, envsubst replaces every $name

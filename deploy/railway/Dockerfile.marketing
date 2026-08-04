@@ -62,6 +62,13 @@ COPY deploy/railway/nginx.spa.conf.template \
 # http-level `include conf.d/*.conf` doesn't also pull it in outside
 # the server block, where a bare `location` would be a syntax error.
 COPY deploy/railway/proxy-marketing.inc /etc/nginx/conf.d/proxy-marketing.inc
+# Marketing owns the root domain, so it is also the public edge: the API
+# prefixes and the /app mount both have to answer here. proxy-app is a
+# template because it interpolates ${WEB_UPSTREAM}; the entrypoint drops
+# it into conf.d/ as proxy-app.inc.
+COPY deploy/railway/proxy-api.inc /etc/nginx/conf.d/proxy-api.inc
+COPY deploy/railway/proxy-app.inc.template \
+     /etc/nginx/templates/proxy-app.inc.template
 
 # Substitute ONLY these two. Left unset, envsubst replaces every $name
 # it finds — including nginx's own $uri, $host and
@@ -80,7 +87,7 @@ COPY deploy/railway/proxy-marketing.inc /etc/nginx/conf.d/proxy-marketing.inc
 # A platform that injects PORT still wins — runtime env overrides ENV.
 ENV PORT=8080
 
-ENV NGINX_ENVSUBST_FILTER='^(PORT|API_UPSTREAM|NGINX_LOCAL_RESOLVERS)$'
+ENV NGINX_ENVSUBST_FILTER='^(PORT|API_UPSTREAM|WEB_UPSTREAM|NGINX_LOCAL_RESOLVERS)$'
 
 # Opt in to the base image populating NGINX_LOCAL_RESOLVERS from
 # /etc/resolv.conf. 15-local-resolvers.envsh returns early unless this is
@@ -93,5 +100,10 @@ ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 # Sensible default for the common single-environment setup. Override in
 # the service variables when the API service is named something else.
 ENV API_UPSTREAM=http://api.railway.internal:3001
+# The web service, for the /app mount. Same defaulting rationale as
+# API_UPSTREAM — override in the service variables if it isn't named
+# `web`. The port is the one nginx binds inside that container
+# (Dockerfile.web's ENV PORT), not the public 443.
+ENV WEB_UPSTREAM=http://web.railway.internal:8080
 
 COPY --from=builder /app/apps/marketing/dist /usr/share/nginx/html

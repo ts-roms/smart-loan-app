@@ -13,6 +13,28 @@ import { themeColors } from "./src/theme";
  * those need an env var, and we want compile-time constants. Plain
  * string replace covers it.
  */
+/*
+ * Rewrites the root-absolute asset links in index.html to sit under the
+ * configured base.
+ *
+ * Vite rewrites `src="/src/main.tsx"` for us but leaves hand-written
+ * `href="/favicon.svg"` alone. Mounted at /app behind the marketing
+ * host, those resolve against the ROOT — i.e. the marketing service —
+ * and 404. Same reason the manifest's icon srcs are template strings.
+ */
+function baseAbsoluteLinks(base: string): Plugin {
+  return {
+    name: "smartloan-base-absolute-links",
+    enforce: "post",
+    transformIndexHtml(html) {
+      if (base === "/") return html;
+      return html
+        .replace(/href="\/favicon\.svg"/g, `href="${base}favicon.svg"`)
+        .replace(/href="\/icons\//g, `href="${base}icons/`);
+    },
+  };
+}
+
 function injectThemeTokens(): Plugin {
   return {
     name: "smartloan-inject-theme-tokens",
@@ -27,10 +49,28 @@ function injectThemeTokens(): Plugin {
 
 // Resolve `@/*` to apps/web/src/* — matches the path alias in tsconfig.json
 // so feature imports look like `from '@/features/loans'` from anywhere.
+/*
+ * Where this app is mounted, as a build-time constant.
+ *
+ * Deployed, the tenant app sits under /app on the shared hostname —
+ * marketing owns the root. Locally it stays at / so `pnpm dev` and the
+ * e2e flows are unchanged.
+ *
+ * ONE value feeds Vite's `base`, the router's basename (via
+ * import.meta.env.BASE_URL) and the PWA's scope/start_url/fallback.
+ * They have to agree: a service worker whose scope doesn't match the
+ * page it controls silently stops controlling it, and a navigateFallback
+ * outside the base serves the wrong document — both failure modes this
+ * app has already been bitten by.
+ */
+const BASE = process.env.APP_BASE_PATH ?? "/";
+
 export default defineConfig({
+  base: BASE,
   plugins: [
     react(),
     injectThemeTokens(),
+    baseAbsoluteLinks(BASE),
     /*
      * PWA — makes SmartLoan installable (desktop icon, standalone
      * window, splash screen). Auto-update strategy: the service worker
@@ -64,8 +104,8 @@ export default defineConfig({
         orientation: "any",
         // Start at root so the installed app drops the user on the
         // dashboard (or login if not signed in).
-        start_url: "/",
-        scope: "/",
+        start_url: BASE,
+        scope: BASE,
         // Edge / Chrome show the description + screenshots when
         // promoting the install banner. Keeping it lean for now.
         categories: ["finance", "business", "productivity"],
@@ -77,13 +117,13 @@ export default defineConfig({
         // PNGs and you swap the entries below to image/png.
         icons: [
           {
-            src: "/icons/icon.svg",
+            src: `${BASE}icons/icon.svg`,
             sizes: "any",
             type: "image/svg+xml",
             purpose: "any",
           },
           {
-            src: "/icons/icon-maskable.svg",
+            src: `${BASE}icons/icon-maskable.svg`,
             sizes: "any",
             type: "image/svg+xml",
             purpose: "maskable",
@@ -113,7 +153,7 @@ export default defineConfig({
          * offline.html stays precached as the pre-install cold-start
          * fallback, but it is deliberately NOT the navigation target.
          */
-        navigateFallback: "/index.html",
+        navigateFallback: `${BASE}index.html`,
         // Never hand API or upload requests the HTML shell — they must
         // fail as requests so the client's error handling sees them.
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],

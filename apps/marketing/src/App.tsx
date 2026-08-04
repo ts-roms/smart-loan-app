@@ -8,12 +8,21 @@ import { Signup } from "./pages/Signup";
 import { SignupConfirm } from "./pages/SignupConfirm";
 
 /**
- * Where the tenant app lives. The marketing site and the app are
- * separate deployments (different ports in dev, usually different
- * hosts in production), so every "sign in" link has to be absolute.
+ * Where the tenant app lives, as a prefix that `/login` and `/register`
+ * get appended to.
  *
- * Set VITE_APP_URL at build time; the fallback is the dev server the
- * repo's `pnpm dev` starts.
+ * Absolute or relative, both work, and which one you want depends on how
+ * it is deployed:
+ *
+ *   "/app"                    one public origin — marketing serves the
+ *                             root and forwards /app/ to the web
+ *                             service. This is the Railway setup; see
+ *                             deploy/railway/proxy-app.inc.template.
+ *   "https://app.example.com" the two sites on separate hostnames.
+ *
+ * Set VITE_APP_URL at build time — Vite inlines it, so a runtime
+ * variable is far too late. The fallback is the dev server `pnpm dev`
+ * starts, where the two really are separate origins.
  */
 export const appUrl: string =
   (import.meta.env.VITE_APP_URL as string | undefined) ??
