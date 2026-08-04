@@ -439,20 +439,37 @@ function RoleDialog({
                         {perms.length}
                       </span>
                     </label>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 pl-5">
+                    {/*
+                      One column until there's room for two. At 375px the
+                      two-column version gave each cell ~150px, and since
+                      neither span could shrink or truncate, the key and
+                      the label were crushed into an 18px stack of single
+                      characters sitting on top of each other.
+
+                      `min-w-0` is the load-bearing part: a flex item
+                      defaults to min-width:auto, which refuses to shrink
+                      below its content, so `truncate` alone does nothing
+                      inside a flex row.
+                    */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 pl-5">
                       {perms.map((p) => (
                         <label
                           key={p.key}
-                          className="flex items-center gap-2 text-xs cursor-pointer"
-                          title={p.description ?? undefined}
+                          className="flex items-center gap-2 text-xs cursor-pointer min-w-0"
+                          title={p.description ?? `${p.key} — ${p.label}`}
                         >
                           <input
                             type="checkbox"
+                            className="shrink-0"
                             checked={selected.has(p.key)}
                             onChange={() => togglePerm(p.key)}
                           />
-                          <span className="font-mono text-fg">{p.key}</span>
-                          <span className="text-fg-subtle">{p.label}</span>
+                          <span className="font-mono text-fg truncate">
+                            {p.key}
+                          </span>
+                          <span className="text-fg-subtle truncate">
+                            {p.label}
+                          </span>
                         </label>
                       ))}
                     </div>

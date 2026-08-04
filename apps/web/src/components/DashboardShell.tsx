@@ -32,6 +32,7 @@ import {
   Layers,
   LogOut,
   Mail,
+  Menu,
   Package,
   PhoneCall,
   Settings,
@@ -306,6 +307,15 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         ),
     )?.label ?? null;
 
+  // Off-canvas nav state — only meaningful below the md breakpoint.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Navigating from the drawer should close it; otherwise the overlay
+  // stays over the page you just asked for.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [currentPath]);
+
   const [openSection, setOpenSection] = useState<string | null>(
     sectionWithRoute,
   );
@@ -337,9 +347,30 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     // sidebar and header don't scroll with the page. Each interior region
     // (sidebar nav, main content) owns its own scroll instead.
     <div className="h-screen flex overflow-hidden bg-background">
+      {/*
+        Below md the sidebar slides over the content instead of sitting
+        beside it. At 375px a fixed 240px rail left `main` with 135px,
+        and after the page's own padding the inner panels were down to
+        ~16px — narrow enough that the permission list on /roles rendered
+        each key one character per line, stacked on its own label. No
+        amount of truncation helps a 16px column; the rail has to go.
+      */}
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavOpen(false)}
+          className="fixed inset-0 z-40 bg-foreground/40 md:hidden"
+        />
+      )}
       <aside
         data-tour="nav-sidebar"
-        className="w-60 shrink-0 border-r border-default bg-surface-1/80 backdrop-blur-md flex flex-col h-full"
+        className={cn(
+          "w-60 shrink-0 border-r border-default bg-surface-1/80 backdrop-blur-md flex flex-col h-full",
+          // Off-canvas on small screens, in-flow from md up.
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full",
+        )}
       >
         <div className="px-4 py-5 border-b border-default">
           <div className="flex items-center gap-2.5">
@@ -444,7 +475,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         only this column scrolls.
       */}
       <main className="flex-1 min-w-0 h-full overflow-y-auto">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b border-default bg-background/85 backdrop-blur-xl px-6">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-default bg-background/85 backdrop-blur-xl px-4 md:px-6">
+          {/* Only route to the nav once the rail is off-canvas. */}
+          <button
+            type="button"
+            aria-label="Open navigation"
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen(true)}
+            className="md:hidden grid h-9 w-9 place-items-center rounded-md text-fg-muted hover:bg-hover hover:text-fg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="flex-1" />
           <ThemeToggle />
           <span data-tour="navbar-help">
             <HelpTrigger />

@@ -11,13 +11,14 @@ import {
   Gauge,
   HandCoins,
   LogOut,
+  Menu,
   PiggyBank,
   Plus,
   UserCircle,
   Wallet,
 } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/auth";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -29,6 +30,14 @@ import { ThemeToggle } from "./ThemeToggle";
 export function PortalShell({ children }: { children: ReactNode }) {
   const { user, signOut, refreshToken } = useAuth();
   const navigate = useNavigate();
+  // Off-canvas nav state — only meaningful below md.
+  const [navOpen, setNavOpen] = useState(false);
+  const { pathname } = useLocation();
+  // Tapping a link should close the drawer; otherwise the scrim stays
+  // over the page you just asked for.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
   const handleSignOut = () => {
     if (refreshToken) void logoutSession(refreshToken).catch(() => {});
     signOut();
@@ -63,7 +72,24 @@ export function PortalShell({ children }: { children: ReactNode }) {
     // Same sticky-sidebar pattern as the officer DashboardShell — viewport
     // height locked, only the main column scrolls.
     <div className="h-screen flex overflow-hidden">
-      <aside className="w-60 shrink-0 border-r border-default bg-surface-2 backdrop-blur-md flex flex-col h-full">
+      {/* Same off-canvas treatment as the staff shell — a fixed 240px
+          rail leaves a phone with 135px of content. Borrowers are the
+          likeliest of all our users to be on one. */}
+      {navOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setNavOpen(false)}
+          className="fixed inset-0 z-40 bg-foreground/40 md:hidden"
+        />
+      )}
+      <aside
+        className={cn(
+          "w-60 shrink-0 border-r border-default bg-surface-2 backdrop-blur-md flex flex-col h-full",
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
+          navOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
         <div className="px-4 py-5 border-b border-default">
           <div className="flex items-center gap-2">
             {/* Configured logo (PNG/SVG) or default glyph. Sized to
@@ -173,6 +199,18 @@ export function PortalShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 h-full overflow-y-auto">
+        <div className="md:hidden sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-default bg-background/85 backdrop-blur-xl px-3">
+          <button
+            type="button"
+            aria-label="Open navigation"
+            aria-expanded={navOpen}
+            onClick={() => setNavOpen(true)}
+            className="grid h-9 w-9 place-items-center rounded-md text-fg-muted hover:bg-hover hover:text-fg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <span className="text-sm font-medium truncate">{brandName}</span>
+        </div>
         <div className="p-6 max-w-5xl mx-auto space-y-4">{children}</div>
       </main>
       <IdleWarningDialog state={idle} />

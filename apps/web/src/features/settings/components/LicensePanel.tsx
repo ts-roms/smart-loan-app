@@ -222,9 +222,19 @@ function ActiveLicenseSummary({
           <summary className="cursor-pointer text-fg-subtle">
             Unlocked features ({data.features.length})
           </summary>
-          <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 pl-2 pt-1">
+          {/*
+            Feature flags are dotted keys with no spaces, so they can't
+            wrap — in two columns on a phone they collapsed into a
+            single-character-wide stack. One column until there's room,
+            and truncate with the full key on hover.
+          */}
+          <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 pl-2 pt-1">
             {data.features.map((f) => (
-              <code key={f} className="text-[10px] text-fg-muted">
+              <code
+                key={f}
+                title={f}
+                className="text-[10px] text-fg-muted truncate min-w-0"
+              >
                 {f}
               </code>
             ))}
