@@ -83,9 +83,15 @@ jobs:
       - name: Typecheck all packages
         run: pnpm typecheck
 
-  # ── Build the web bundle (catches Vite/tsc breaks that typecheck misses) ─
+  # ── Builds (catch tsc/Vite breaks the typecheck job doesn't) ──────────
+  #
+  # Both builds need the generated Prisma client. Without it every
+  # `prisma.*` expression resolves to `any`, and the API build fails with
+  # a wall of TS7006 "implicitly has an 'any' type" on callbacks over
+  # query results — which says nothing about the real cause. Same reason
+  # the typecheck and lint jobs generate first.
   build:
-    name: Build web
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -99,10 +105,16 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Generate Prisma client (web depends on @loan/db types)
+      - name: Generate Prisma client (both builds depend on @loan/db types)
         run: pnpm --filter @loan/db exec prisma generate
       - name: Build web
         run: pnpm --filter @loan/web build
+      # The API "build" is a --noEmit typecheck against its own
+      # tsconfig.app.json, which is a narrower project than the one the
+      # typecheck job runs. Building it here means a clean-environment
+      # break surfaces in CI rather than in someone's Docker build.
+      - name: Build api
+        run: pnpm --filter @loan/api build
 
   # ── Lint ──────────────────────────────────────────────────────────────
   # Type-aware rules, so this needs the generated Prisma client like the
