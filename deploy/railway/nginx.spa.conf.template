@@ -29,6 +29,19 @@
 
 server {
     listen ${PORT};
+    # Also on IPv6, because Railway's private network is IPv6-only.
+    #
+    # Public traffic arrives via Railway's edge over IPv4 and the line
+    # above is enough for it — which is why a service can look perfectly
+    # healthy and still be unreachable at <name>.railway.internal. That
+    # matters here: marketing proxies /app/ to the web service over
+    # exactly that private address, and with only the IPv4 listen the
+    # hop fails with 111 Connection refused while both services report
+    # healthy.
+    #
+    # Two lines rather than one: nginx defaults [::] listeners to
+    # ipv6only=on, so the v6 socket does not also accept v4.
+    listen [::]:${PORT};
     server_name _;
 
     # Resolve the API upstream per request, not once at startup.

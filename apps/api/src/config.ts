@@ -54,7 +54,21 @@ export const config = {
 
   // ── HTTP ───────────────────────────────────────────────────────────
   port: num("PORT", 3001),
-  host: str("HOST", "0.0.0.0"),
+  /**
+   * `::`, not `0.0.0.0` — dual-stack rather than IPv4-only.
+   *
+   * Node binds `::` with ipv6Only off, so this still accepts IPv4
+   * connections; it is strictly more permissive than the old default,
+   * and `localhost:3001` in dev is unaffected.
+   *
+   * The reason it has to be: Railway's private network is IPv6-only.
+   * Bound to 0.0.0.0 the API answers public traffic through Railway's
+   * edge and looks entirely healthy, while every request from another
+   * service to api.railway.internal is refused — so the nginx front-
+   * ends' /api/v1 and /public proxies fail with no signal on the API
+   * side at all.
+   */
+  host: str("HOST", "::"),
   webOrigin: str("WEB_ORIGIN", "http://localhost:5173"),
   /**
    * Where the marketing site is served. Distinct from `webOrigin` —

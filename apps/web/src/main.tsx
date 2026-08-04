@@ -19,7 +19,17 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
+    {/*
+      basename comes from Vite's BASE_URL, which is the `base` set in
+      vite.config.ts — so the router and the built asset paths can't
+      disagree. Deployed that is "/app/", locally "/".
+
+      Trailing slash stripped: BASE_URL always ends in one, and
+      react-router expects a basename without it ("/app"). "/" becomes
+      "" , which react-router treats as no basename at all — correct
+      for local dev.
+    */}
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>
       {/* Outermost of the app providers: everything below can read the
           theme, and nothing it renders depends on auth or data. */}
       <ThemeProvider>

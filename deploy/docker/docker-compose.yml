@@ -68,6 +68,11 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-loan}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-smart_loan}}
       # HTTP
       PORT: "3001"
+      # Pinned to IPv4, overriding the app's `::` default. Compose's
+      # default bridge is IPv4-only, so dual-stack buys nothing here,
+      # and some hosts run with IPv6 disabled entirely — where binding
+      # `::` fails outright. The `::` default exists for platforms whose
+      # private network is IPv6-only; see deploy/railway/README.md.
       HOST: "0.0.0.0"
       WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in .env to your public URL}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-}

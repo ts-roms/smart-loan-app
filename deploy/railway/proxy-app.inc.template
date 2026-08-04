@@ -1,0 +1,41 @@
+# /app → the tenant web service. Marketing-image only.
+#
+# This is what makes one hostname serve both sites: marketing owns the
+# root domain and hands everything under /app/ to the web service, so
+# there is a single public origin instead of three.
+#
+# A .template, not a plain .inc, because it needs ${WEB_UPSTREAM}
+# substituted. The base image's entrypoint envsubsts
+# /etc/nginx/templates/*.template into /etc/nginx/conf.d/ minus the
+# .template suffix — so this lands as conf.d/proxy-app.inc and gets
+# picked up by the `include conf.d/proxy-*.inc` in the server block,
+# same as the hand-written ones.
+
+# Deferred lookup, for the same reason the template does this for the
+# API: a literal hostname is resolved while nginx parses the config and
+# a miss is fatal, so marketing would refuse to start any time it booted
+# before the web service existed. The resolver itself is declared in
+# nginx.spa.conf.template.
+set $web_upstream ${WEB_UPSTREAM};
+
+# Two blocks, not one `location /app`. A bare /app prefix also matches
+# /apple-touch-icon.png and anything else that merely starts with those
+# four characters, which would hand marketing's own files to the web
+# service.
+location = /app {
+    return 301 /app/;
+}
+
+location /app/ {
+    # The prefix is passed through rather than stripped. The web image
+    # strips it itself (proxy-web.inc), which keeps the two ways of
+    # reaching the app — through this proxy, or on the web service's own
+    # domain — behaving identically.
+    #
+    # Cache-Control is deliberately NOT overridden here: the web service
+    # already sends no-store for the SPA shell and immutable for the
+    # hashed assets, and a blanket header at this hop would flatten that
+    # distinction and re-download every bundle on every navigation.
+    proxy_pass $web_upstream;
+    proxy_http_version 1.1;
+}
