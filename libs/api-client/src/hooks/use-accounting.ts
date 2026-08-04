@@ -165,7 +165,10 @@ export function useBalanceSheet(asOf?: string) {
   });
 }
 
-export function useLoanPortfolio(asOf?: string) {
+export function useLoanPortfolio(
+  asOf?: string,
+  opts: { enabled?: boolean } = {},
+) {
   const qs = asOf ? `?asOf=${encodeURIComponent(asOf)}` : "";
   return useQuery({
     queryKey: accountingKeys.loanPortfolio(asOf),
@@ -173,6 +176,9 @@ export function useLoanPortfolio(asOf?: string) {
       getApiClient().get<AgingReport>(
         `/accounting/reports/loan-portfolio${qs}`,
       ),
+    // See QueryToggle in use-ops: suppressed for callers without
+    // accounting.read rather than firing and taking a 403.
+    enabled: opts.enabled ?? true,
   });
 }
 

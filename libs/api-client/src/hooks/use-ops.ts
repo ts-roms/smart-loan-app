@@ -193,7 +193,16 @@ export function useDeleteWatchlistEntry() {
 
 // ─── Analytics ──────────────────────────────────────────────────────
 
-export function usePortfolioSummary(asOf?: string) {
+/**
+ * Lets a caller suppress the request entirely — for gating on a
+ * permission the caller may not hold. Without it these fire regardless
+ * and 403 on every page load for anyone outside accounting.
+ */
+export interface QueryToggle {
+  enabled?: boolean;
+}
+
+export function usePortfolioSummary(asOf?: string, opts: QueryToggle = {}) {
   const qs = asOf ? `?asOf=${encodeURIComponent(asOf)}` : "";
   return useQuery({
     queryKey: ["analytics", "portfolio-summary", asOf ?? ""],
@@ -201,24 +210,27 @@ export function usePortfolioSummary(asOf?: string) {
       getApiClient().get<PortfolioSummary>(
         `/accounting/reports/portfolio-summary${qs}`,
       ),
+    enabled: opts.enabled ?? true,
   });
 }
 
-export function useOriginations() {
+export function useOriginations(opts: QueryToggle = {}) {
   return useQuery({
     queryKey: ["analytics", "originations"],
     queryFn: () =>
       getApiClient().get<OriginationMonth[]>(
         "/accounting/reports/originations",
       ),
+    enabled: opts.enabled ?? true,
   });
 }
 
-export function useVintageCohorts() {
+export function useVintageCohorts(opts: QueryToggle = {}) {
   return useQuery({
     queryKey: ["analytics", "vintage"],
     queryFn: () =>
       getApiClient().get<VintageCohort[]>("/accounting/reports/vintage"),
+    enabled: opts.enabled ?? true,
   });
 }
 

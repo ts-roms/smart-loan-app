@@ -2,7 +2,6 @@ import {
   useAssignAccount,
   useAssignableCollectors,
   useCollectorWorkload,
-  useMyPermissions,
   useOverdueQueue,
   useUnassignAccount,
 } from "@loan/api-client";
@@ -28,6 +27,7 @@ import { useSearchParams } from "react-router-dom";
 
 // Direct import (not via ../../customers barrel) to avoid Rollup's
 // cross-chunk circular-dep warning — see the note in Collections.tsx.
+import { usePermission } from "../../../hooks/use-permission";
 import { CustomerSummaryLink } from "../../customers/components/CustomerSummaryDrawer";
 import { CollectionsCaseLink } from "../components/CollectionsCaseDrawer";
 
@@ -75,10 +75,7 @@ function severityVariant(days: number): "muted" | "warning" | "danger" {
  * splitting them means looking at two screens to make one decision.
  */
 export function MyAccountsPage() {
-  const perms = useMyPermissions();
-  const canAssign = (perms.data?.permissions ?? []).includes(
-    "collections.assign",
-  );
+  const canAssign = usePermission("collections.assign");
 
   /*
    * Scope lives in the URL, not component state.
