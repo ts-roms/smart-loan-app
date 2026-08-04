@@ -15,7 +15,7 @@ export function SkeletonCard({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "rounded-lg border border-white/10 bg-white/[0.03] p-4 space-y-3 animate-pulse",
+        "rounded-lg border border-default bg-surface-2 p-4 space-y-3 animate-pulse",
         className,
       )}
     >

@@ -160,7 +160,7 @@ export function PortalApply() {
           </Field>
 
           {product && (
-            <div className="text-xs text-white/55">
+            <div className="text-xs text-fg-muted">
               Range: {formatMoney(Number(product.minPrincipal))}–
               {formatMoney(Number(product.maxPrincipal))} ·{" "}
               {product.minTermMonths}–{product.maxTermMonths} months ·{" "}
@@ -218,8 +218,8 @@ export function PortalApply() {
           </Field>
 
           {collateralKind === "VEHICLE" && (
-            <fieldset className="rounded-md border border-white/10 p-3 space-y-3">
-              <legend className="px-1 text-xs uppercase tracking-wider text-white/45">
+            <fieldset className="rounded-md border border-default p-3 space-y-3">
+              <legend className="px-1 text-xs uppercase tracking-wider text-fg-subtle">
                 {productCode === "MOTORCYCLE" ? "Motorcycle" : "Vehicle"}
               </legend>
               <div className="grid grid-cols-3 gap-3">
@@ -272,8 +272,8 @@ export function PortalApply() {
           )}
 
           {collateralKind === "PROPERTY" && (
-            <fieldset className="rounded-md border border-white/10 p-3 space-y-3">
-              <legend className="px-1 text-xs uppercase tracking-wider text-white/45">
+            <fieldset className="rounded-md border border-default p-3 space-y-3">
+              <legend className="px-1 text-xs uppercase tracking-wider text-fg-subtle">
                 Property
               </legend>
               <Field label="Address">
@@ -313,12 +313,12 @@ export function PortalApply() {
             </fieldset>
           )}
 
-          <div className="rounded-md border border-white/10 p-3 space-y-2">
-            <div className="text-xs uppercase tracking-wider text-white/45 flex items-center gap-1">
+          <div className="rounded-md border border-default p-3 space-y-2">
+            <div className="text-xs uppercase tracking-wider text-fg-subtle flex items-center gap-1">
               <Camera className="h-3 w-3" />
               Selfie verification
             </div>
-            <p className="text-xs text-white/55">
+            <p className="text-xs text-fg-muted">
               Take a live photo so we can match it to your ID on file.
             </p>
             <FileUpload
@@ -333,8 +333,8 @@ export function PortalApply() {
           </div>
 
           {quote.data && (
-            <div className="rounded-md border border-white/10 bg-white/[0.04] p-3 text-sm">
-              <div className="text-xs uppercase tracking-wider text-white/45 mb-1">
+            <div className="rounded-md border border-default bg-surface-2 p-3 text-sm">
+              <div className="text-xs uppercase tracking-wider text-fg-subtle mb-1">
                 Quote
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -380,7 +380,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );
@@ -388,7 +388,7 @@ function Field({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className="font-mono">{value}</div>

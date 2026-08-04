@@ -216,7 +216,7 @@ export function SelfieCapture({
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Camera className="h-4 w-4 text-sky-300" />
+            <Camera className="h-4 w-4 text-info" />
             {title}
           </DialogTitle>
         </DialogHeader>
@@ -226,7 +226,7 @@ export function SelfieCapture({
           captured still. Keeping it in one box avoids layout-shift when
           the user toggles between "Capture" and "Retake".
         */}
-        <div className="relative aspect-video w-full overflow-hidden rounded-md border border-white/10 bg-black">
+        <div className="relative aspect-video w-full overflow-hidden rounded-md border border-default bg-black">
           {/* Live preview */}
           <video
             ref={videoRef}
@@ -253,26 +253,26 @@ export function SelfieCapture({
           {/* State overlay — requesting / error */}
           {status === "requesting" && (
             <Overlay>
-              <Loader2 className="h-6 w-6 animate-spin text-sky-300" />
+              <Loader2 className="h-6 w-6 animate-spin text-info" />
               <span>Opening camera…</span>
             </Overlay>
           )}
           {status === "error" && (
             <Overlay tone="error">
-              <AlertCircle className="h-6 w-6 text-rose-300" />
+              <AlertCircle className="h-6 w-6 text-danger" />
               <span className="max-w-sm">{error}</span>
             </Overlay>
           )}
           {/* Captured badge */}
           {status === "captured" && (
-            <div className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 px-2 py-1 text-[10px] uppercase tracking-wider text-emerald-300">
+            <div className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 px-2 py-1 text-[10px] uppercase tracking-wider text-success">
               <CheckCircle2 className="h-3 w-3" />
               Captured
             </div>
           )}
         </div>
 
-        <p className="text-[11px] text-white/45">
+        <p className="text-[11px] text-fg-subtle">
           Position your face inside the frame, make sure lighting is even, and
           remove sunglasses or anything covering your face.
         </p>
@@ -372,9 +372,7 @@ function Overlay({
     <div
       className={cn(
         "absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-center px-4",
-        tone === "info"
-          ? "bg-black/40 text-white/80"
-          : "bg-black/70 text-white",
+        tone === "info" ? "bg-black/40 text-fg" : "bg-black/70 text-fg",
       )}
     >
       {children}

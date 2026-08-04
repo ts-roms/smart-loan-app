@@ -51,7 +51,7 @@ export const DrawerContent = forwardRef<
         void e;
       }}
       className={cn(
-        "fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-white/10 bg-slate-950/95 backdrop-blur-xl shadow-2xl flex flex-col",
+        "fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-default bg-surface-3 backdrop-blur-xl shadow-2xl flex flex-col",
         "data-[state=open]:animate-drawer-in-right data-[state=closed]:animate-drawer-out-right",
         className,
       )}
@@ -59,7 +59,7 @@ export const DrawerContent = forwardRef<
     >
       {children}
       <DialogPrimitive.Close
-        className="absolute right-3 top-3 rounded-md p-1 text-white/55 hover:text-white hover:bg-white/[0.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+        className="absolute right-3 top-3 rounded-md p-1 text-fg-muted hover:text-fg hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Close drawer"
       >
         <X className="h-4 w-4" />
@@ -75,7 +75,7 @@ export const DrawerHeader = ({
 }: HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "shrink-0 border-b border-white/10 px-5 py-4 pr-12",
+      "shrink-0 border-b border-default px-5 py-4 pr-12",
       "flex flex-col gap-1",
       className,
     )}
@@ -99,7 +99,7 @@ export const DrawerFooter = ({
 }: HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "shrink-0 border-t border-white/10 px-5 py-3 flex items-center justify-end gap-2",
+      "shrink-0 border-t border-default px-5 py-3 flex items-center justify-end gap-2",
       className,
     )}
     {...props}
@@ -127,7 +127,7 @@ export const DrawerDescription = forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-xs text-white/55", className)}
+    className={cn("text-xs text-fg-muted", className)}
     {...props}
   />
 ));

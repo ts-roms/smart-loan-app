@@ -56,7 +56,7 @@ export function CollectionsPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <PhoneCall className="h-4 w-4 text-amber-300" />
+          <PhoneCall className="h-4 w-4 text-warning" />
           Collections queue
         </CardTitle>
         <div className="flex items-center gap-2">
@@ -80,10 +80,10 @@ export function CollectionsPage() {
         {queue.isLoading ? (
           <SkeletonCard />
         ) : (queue.data ?? []).length === 0 ? (
-          <p className="text-sm text-emerald-300">No overdue loans. </p>
+          <p className="text-sm text-success">No overdue loans. </p>
         ) : (
           <table className="w-full text-sm" data-tour="collections-table">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Loan</th>
                 <th className="py-2 px-2">Type</th>
@@ -94,9 +94,9 @@ export function CollectionsPage() {
                 <th className="py-2 px-2">Severity</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(queue.data ?? []).map((l) => (
-                <tr key={l.id} className="hover:bg-white/[0.03]">
+                <tr key={l.id} className="hover:bg-hover">
                   <td className="py-2 px-2 font-mono">
                     <CollectionsCaseLink id={l.id}>
                       {l.number}
@@ -109,7 +109,7 @@ export function CollectionsPage() {
                   </td>
                   <td className="py-2 px-2">
                     <CustomerSummaryLink customerId={l.customerId}>
-                      <span className="text-white/85 hover:text-sky-300">
+                      <span className="text-fg hover:text-info">
                         {l.customerName}
                       </span>
                     </CustomerSummaryLink>

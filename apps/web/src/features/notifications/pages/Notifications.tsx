@@ -50,10 +50,10 @@ export function NotificationsPage() {
         {notifs.isLoading ? (
           <SkeletonCard />
         ) : (notifs.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">No notifications sent yet.</p>
+          <p className="text-sm text-fg-muted">No notifications sent yet.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">When</th>
                 <th className="py-2 px-2">Event</th>
@@ -63,10 +63,10 @@ export function NotificationsPage() {
                 <th className="py-2 px-2">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(notifs.data ?? []).map((n) => (
-                <tr key={n.id} className="hover:bg-white/[0.03] align-top">
-                  <td className="py-2 px-2 text-xs text-white/65">
+                <tr key={n.id} className="hover:bg-hover align-top">
+                  <td className="py-2 px-2 text-xs text-fg-muted">
                     {formatDateTime(n.createdAt)}
                   </td>
                   <td className="py-2 px-2 text-xs">
@@ -78,7 +78,7 @@ export function NotificationsPage() {
                     <div className="text-xs font-medium truncate">
                       {n.subject ?? ""}
                     </div>
-                    <div className="text-xs text-white/55 truncate">
+                    <div className="text-xs text-fg-muted truncate">
                       {n.body}
                     </div>
                   </td>
@@ -95,9 +95,7 @@ export function NotificationsPage() {
                       {n.status}
                     </Badge>
                     {n.error && (
-                      <div className="text-xs text-rose-300 mt-1">
-                        {n.error}
-                      </div>
+                      <div className="text-xs text-danger mt-1">{n.error}</div>
                     )}
                   </td>
                 </tr>
@@ -189,7 +187,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );

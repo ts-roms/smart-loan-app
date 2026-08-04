@@ -47,7 +47,7 @@ export function JournalEntryLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="text-left hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="text-left hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
           aria-label="Inspect journal entry"
         >
           {children}
@@ -120,7 +120,7 @@ function JournalEntryInspector({
           <DrawerTitle>Journal entry</DrawerTitle>
         </DrawerHeader>
         <DrawerBody>
-          <p className="text-sm text-white/55">Entry not found.</p>
+          <p className="text-sm text-fg-muted">Entry not found.</p>
         </DrawerBody>
       </>
     );
@@ -136,7 +136,7 @@ function JournalEntryInspector({
     <>
       <DrawerHeader>
         <div className="flex items-start gap-2">
-          <ScrollText className="h-4 w-4 mt-1 text-sky-300" />
+          <ScrollText className="h-4 w-4 mt-1 text-info" />
           <div className="flex-1 min-w-0">
             <DrawerTitle className="font-mono">{e.number}</DrawerTitle>
             <DrawerDescription>
@@ -154,67 +154,67 @@ function JournalEntryInspector({
       <DrawerBody>
         {/* Source + reversal state */}
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-            <div className="text-[10px] uppercase tracking-wider text-white/45">
+          <div className="rounded-md border border-default bg-surface-2 p-2">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
               Source
             </div>
             <div className="font-mono mt-0.5">{e.source}</div>
             {e.sourceRefId && (
-              <div className="text-[10px] text-white/55 mt-1 truncate">
+              <div className="text-[10px] text-fg-muted mt-1 truncate">
                 {e.sourceRefType} ·{" "}
                 <span className="font-mono">{e.sourceRefId.slice(0, 8)}</span>
               </div>
             )}
           </div>
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-            <div className="text-[10px] uppercase tracking-wider text-white/45">
+          <div className="rounded-md border border-default bg-surface-2 p-2">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
               Reversal
             </div>
             {reversed ? (
               <>
                 <Badge variant="muted">Reversed</Badge>
-                <div className="text-[10px] text-white/55 mt-1 font-mono">
+                <div className="text-[10px] text-fg-muted mt-1 font-mono">
                   by {e.reversedById?.slice(0, 8)}
                 </div>
               </>
             ) : (
-              <span className="text-white/55">Not reversed</span>
+              <span className="text-fg-muted">Not reversed</span>
             )}
           </div>
         </div>
 
         {e.memo && (
           <div className="text-xs">
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">
               Memo
             </div>
-            <div className="text-white/85">{e.memo}</div>
+            <div className="text-fg">{e.memo}</div>
           </div>
         )}
 
         {/* Lines */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5">
             Lines
           </div>
           <table className="w-full text-xs">
-            <thead className="text-left text-[10px] uppercase tracking-wider text-white/45">
+            <thead className="text-left text-[10px] uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-1.5 px-2">Account</th>
                 <th className="py-1.5 px-2 text-right">Debit</th>
                 <th className="py-1.5 px-2 text-right">Credit</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(e.lines ?? []).map((l) => (
                 <tr key={l.id} className="align-top">
                   <td className="py-1.5 px-2">
-                    <div className="font-mono text-[10px] text-white/65">
+                    <div className="font-mono text-[10px] text-fg-muted">
                       {l.account?.code}
                     </div>
                     <div>{l.account?.name ?? "—"}</div>
                     {l.memo && (
-                      <div className="text-[10px] text-white/45 mt-0.5">
+                      <div className="text-[10px] text-fg-subtle mt-0.5">
                         {l.memo}
                       </div>
                     )}
@@ -227,8 +227,8 @@ function JournalEntryInspector({
                   </td>
                 </tr>
               ))}
-              <tr className="bg-white/[0.03] font-semibold">
-                <td className="py-1.5 px-2 text-[10px] uppercase tracking-wider text-white/55">
+              <tr className="bg-surface-2 font-semibold">
+                <td className="py-1.5 px-2 text-[10px] uppercase tracking-wider text-fg-muted">
                   Total
                 </td>
                 <td className="py-1.5 px-2 text-right font-mono">

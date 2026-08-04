@@ -20,7 +20,7 @@ export function BalanceSheetPage() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Balance sheet</CardTitle>
         <div className="flex items-center gap-2 text-sm">
-          <label className="text-white/55">As of</label>
+          <label className="text-fg-muted">As of</label>
           <DatePicker value={asOf} onChange={setAsOf} className="h-9 w-44" />
           {sheet.data && (
             <Badge variant={sheet.data.inBalance ? "success" : "danger"}>
@@ -33,7 +33,7 @@ export function BalanceSheetPage() {
         {sheet.isLoading ? (
           <SkeletonCard />
         ) : !sheet.data ? (
-          <p className="text-sm text-white/55">No data.</p>
+          <p className="text-sm text-fg-muted">No data.</p>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Section
@@ -48,14 +48,14 @@ export function BalanceSheetPage() {
                 total={sheet.data.liabilities.total}
               />
               <div>
-                <h3 className="text-xs uppercase tracking-wider text-white/45 mb-2">
+                <h3 className="text-xs uppercase tracking-wider text-fg-subtle mb-2">
                   Equity
                 </h3>
-                <ul className="divide-y divide-white/5 text-sm">
+                <ul className="divide-y divide-default text-sm">
                   {sheet.data.equity.rows.map((r) => (
                     <li key={r.code} className="flex justify-between py-1.5">
                       <span>
-                        <span className="font-mono text-white/55 mr-2">
+                        <span className="font-mono text-fg-muted mr-2">
                           {r.code}
                         </span>
                         {r.name}
@@ -69,7 +69,7 @@ export function BalanceSheetPage() {
                       {formatMoney(sheet.data.retainedEarnings)}
                     </span>
                   </li>
-                  <li className="flex justify-between py-2 border-t border-white/10 font-semibold mt-1">
+                  <li className="flex justify-between py-2 border-t border-default font-semibold mt-1">
                     <span>Total equity</span>
                     <span className="font-mono">
                       {formatMoney(
@@ -79,7 +79,7 @@ export function BalanceSheetPage() {
                   </li>
                 </ul>
               </div>
-              <div className="border-t border-white/10 pt-3 flex items-center justify-between font-semibold">
+              <div className="border-t border-default pt-3 flex items-center justify-between font-semibold">
                 <span>Total liabilities + equity</span>
                 <span className="font-mono">
                   {formatMoney(sheet.data.totalLiabilitiesAndEquity)}
@@ -104,23 +104,23 @@ function Section({
 }) {
   return (
     <div>
-      <h3 className="text-xs uppercase tracking-wider text-white/45 mb-2">
+      <h3 className="text-xs uppercase tracking-wider text-fg-subtle mb-2">
         {title}
       </h3>
-      <ul className="divide-y divide-white/5 text-sm">
+      <ul className="divide-y divide-default text-sm">
         {rows.length === 0 && (
-          <li className="py-2 text-white/45">No activity.</li>
+          <li className="py-2 text-fg-subtle">No activity.</li>
         )}
         {rows.map((r) => (
           <li key={r.code} className="flex justify-between py-1.5">
             <span>
-              <span className="font-mono text-white/55 mr-2">{r.code}</span>
+              <span className="font-mono text-fg-muted mr-2">{r.code}</span>
               {r.name}
             </span>
             <span className="font-mono">{formatMoney(r.amount)}</span>
           </li>
         ))}
-        <li className="flex justify-between py-2 border-t border-white/10 font-semibold mt-1">
+        <li className="flex justify-between py-2 border-t border-default font-semibold mt-1">
           <span>Total {title.toLowerCase()}</span>
           <span className="font-mono">{formatMoney(total)}</span>
         </li>

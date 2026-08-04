@@ -105,7 +105,7 @@ export function PreDecisionPreview({
   // is still whatever the rules engine returned.
   if (!result) {
     return (
-      <div className="rounded-md border border-white/10 bg-white/[0.02] p-3 text-xs text-white/55 flex items-center gap-2">
+      <div className="rounded-md border border-default bg-surface-2 p-3 text-xs text-fg-muted flex items-center gap-2">
         <Loader2 className={`h-3 w-3 ${isBusy ? "animate-spin" : ""}`} />
         {isBusy
           ? "Running pre-decisioning preview…"
@@ -126,12 +126,14 @@ export function PreDecisionPreview({
         <div className="flex items-center gap-2">
           <verdictMeta.Icon className={`h-4 w-4 ${verdictMeta.iconClass}`} />
           <span className="text-sm font-semibold">{verdictMeta.label}</span>
-          <span className="text-[10px] uppercase tracking-wider text-white/45">
+          <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
             · Pre-decisioning preview
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          {isBusy && <Loader2 className="h-3 w-3 animate-spin text-white/45" />}
+          {isBusy && (
+            <Loader2 className="h-3 w-3 animate-spin text-fg-subtle" />
+          )}
           <Badge variant={verdictMeta.badgeVariant}>
             {result.verdict === "APPROVE"
               ? "Auto-approve likely"
@@ -143,13 +145,13 @@ export function PreDecisionPreview({
       </div>
 
       {/* Reason */}
-      <div className="text-xs text-white/80">
+      <div className="text-xs text-fg">
         {result.reason}
         {result.matchedRule && (
-          <span className="text-white/45">
+          <span className="text-fg-subtle">
             {" "}
             · rule:{" "}
-            <span className="font-mono text-white/65">
+            <span className="font-mono text-fg-muted">
               {result.matchedRule.name}
             </span>
           </span>
@@ -159,7 +161,7 @@ export function PreDecisionPreview({
       {/* Pre-flight gates (always render so an officer who sees a green
           verdict still understands what gates are open). */}
       {(hasBlockingGate || result.gates.amlMatch === false) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 border-t border-white/5 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 border-t border-default pt-2">
           <GateRow
             ok={!result.gates.amlMatch}
             okLabel="AML clear"
@@ -179,7 +181,7 @@ export function PreDecisionPreview({
       )}
 
       {/* Context echo — small/dim, mostly diagnostic */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-white/45 border-t border-white/5 pt-2 font-mono">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-fg-subtle border-t border-default pt-2 font-mono">
         <span>
           score: {result.context.creditScore ?? "—"}
           {result.context.tier && ` (${result.context.tier})`}
@@ -207,15 +209,15 @@ function AnomalyList({ anomalies }: { anomalies: AnomalyFlag[] }) {
     const baseline = anomalies[0];
     if (!baseline) return null;
     return (
-      <div className="border-t border-white/5 pt-2 text-[10px] text-white/45 italic">
+      <div className="border-t border-default pt-2 text-[10px] text-fg-subtle italic">
         {baseline.message}
       </div>
     );
   }
   return (
-    <div className="border-t border-white/5 pt-2 space-y-1.5">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-white/55">
-        <Sparkles className="h-3 w-3 text-amber-300" />
+    <div className="border-t border-default pt-2 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-fg-muted">
+        <Sparkles className="h-3 w-3 text-warning" />
         Anomaly flags · {realFlags.length}
       </div>
       <ul className="space-y-1">
@@ -233,15 +235,15 @@ function AnomalyRow({ flag }: { flag: AnomalyFlag }) {
     { color: string; label: string }
   > = {
     high: {
-      color: "text-rose-200 bg-rose-500/10 border-rose-400/30",
+      color: "text-danger bg-rose-500/10 border-rose-400/30",
       label: "High",
     },
     medium: {
-      color: "text-amber-200 bg-amber-500/10 border-amber-400/30",
+      color: "text-warning bg-amber-500/10 border-amber-400/30",
       label: "Medium",
     },
     low: {
-      color: "text-white/75 bg-white/[0.04] border-white/15",
+      color: "text-fg bg-surface-2 border-default",
       label: "Low",
     },
   };
@@ -262,7 +264,7 @@ const VERDICT_META = {
   APPROVE: {
     label: "Likely approve",
     Icon: ThumbsUp,
-    iconClass: "text-emerald-300",
+    iconClass: "text-success",
     borderClass: "border-emerald-400/30",
     bgClass: "bg-emerald-500/[0.06]",
     badgeVariant: "success" as const,
@@ -270,7 +272,7 @@ const VERDICT_META = {
   REVIEW: {
     label: "Manual review needed",
     Icon: AlertTriangle,
-    iconClass: "text-amber-300",
+    iconClass: "text-warning",
     borderClass: "border-amber-400/30",
     bgClass: "bg-amber-500/[0.06]",
     badgeVariant: "warning" as const,
@@ -278,7 +280,7 @@ const VERDICT_META = {
   REJECT: {
     label: "Likely reject",
     Icon: ShieldAlert,
-    iconClass: "text-rose-300",
+    iconClass: "text-danger",
     borderClass: "border-rose-400/30",
     bgClass: "bg-rose-500/[0.08]",
     badgeVariant: "danger" as const,
@@ -297,11 +299,11 @@ function GateRow({
   return (
     <div className="flex items-center gap-1.5 text-[11px]">
       {ok ? (
-        <CheckCircle2 className="h-3 w-3 text-emerald-300 shrink-0" />
+        <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
       ) : (
-        <XCircle className="h-3 w-3 text-rose-300 shrink-0" />
+        <XCircle className="h-3 w-3 text-danger shrink-0" />
       )}
-      <span className={ok ? "text-emerald-200" : "text-rose-200"}>
+      <span className={ok ? "text-success" : "text-danger"}>
         {ok ? okLabel : failLabel}
       </span>
     </div>

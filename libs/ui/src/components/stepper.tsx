@@ -87,11 +87,10 @@ export function Stepper({
                   className={cn(
                     "inline-flex items-center justify-center h-7 w-7 rounded-full border text-xs font-semibold shrink-0 transition-colors",
                     isActive &&
-                      "border-sky-400 bg-sky-500/15 text-sky-200 ring-2 ring-sky-400/30",
+                      "border-sky-400 bg-sky-500/15 text-info ring-2 ring-sky-400/30",
                     isDone &&
-                      "border-emerald-400/40 bg-emerald-500/10 text-emerald-300 group-hover:bg-emerald-500/20",
-                    isUpcoming &&
-                      "border-white/15 bg-white/[0.02] text-white/45",
+                      "border-emerald-400/40 bg-emerald-500/10 text-success group-hover:bg-emerald-500/20",
+                    isUpcoming && "border-default bg-surface-2 text-fg-subtle",
                   )}
                 >
                   {isDone ? <Check className="h-3.5 w-3.5" /> : i + 1}
@@ -100,9 +99,9 @@ export function Stepper({
                   <span
                     className={cn(
                       "text-xs font-medium truncate max-w-[12rem]",
-                      isActive && "text-white",
-                      isDone && "text-white/85 group-hover:text-white",
-                      isUpcoming && "text-white/45",
+                      isActive && "text-fg",
+                      isDone && "text-fg group-hover:text-fg",
+                      isUpcoming && "text-fg-subtle",
                     )}
                   >
                     {step.label}
@@ -111,7 +110,7 @@ export function Stepper({
                     <span
                       className={cn(
                         "text-[10px] truncate max-w-[12rem]",
-                        isActive ? "text-sky-300/80" : "text-white/40",
+                        isActive ? "text-info" : "text-fg-subtle",
                       )}
                     >
                       {step.hint}
@@ -124,7 +123,7 @@ export function Stepper({
                 <span
                   className={cn(
                     "flex-1 mx-2 h-px",
-                    isDone ? "bg-emerald-400/40" : "bg-white/10",
+                    isDone ? "bg-emerald-400/40" : "bg-surface-3",
                   )}
                 />
               )}

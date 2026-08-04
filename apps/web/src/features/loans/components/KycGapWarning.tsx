@@ -96,7 +96,7 @@ export function KycGapWarning({
 
   if (kyc.isLoading) {
     return (
-      <div className="rounded-md border border-white/10 bg-white/[0.02] p-3 text-xs text-white/55">
+      <div className="rounded-md border border-default bg-surface-2 p-3 text-xs text-fg-muted">
         Checking KYC pack…
       </div>
     );
@@ -122,9 +122,9 @@ export function KycGapWarning({
     <div className={`rounded-md border ${toneClass} p-3 space-y-2`}>
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 text-sm">
-          <FileCheck2 className="h-4 w-4 text-sky-300" />
+          <FileCheck2 className="h-4 w-4 text-info" />
           <span className="font-medium">KYC checklist</span>
-          <span className="text-white/55 text-xs">
+          <span className="text-fg-muted text-xs">
             for this product · {verifiedCount}/{rows.length} verified
           </span>
         </div>
@@ -140,7 +140,7 @@ export function KycGapWarning({
             </Badge>
           )}
           <KycInspectorLink customerId={customerId} customerName="">
-            <span className="inline-flex items-center gap-1 text-xs text-sky-300 hover:underline">
+            <span className="inline-flex items-center gap-1 text-xs text-info hover:underline">
               Open KYC inspector
               <ExternalLink className="h-3 w-3" />
             </span>
@@ -152,13 +152,13 @@ export function KycGapWarning({
         {rows.map(({ docType, status }) => (
           <li
             key={docType}
-            className="flex items-center gap-2 rounded border border-white/5 bg-white/[0.02] px-2 py-1.5 text-xs"
+            className="flex items-center gap-2 rounded border border-default bg-surface-2 px-2 py-1.5 text-xs"
           >
             <StatusIcon status={status} />
             <span className="flex-1 truncate">
               {DOC_TYPE_LABELS[docType] ?? docType}
             </span>
-            <span className="text-[10px] uppercase tracking-wider text-white/45">
+            <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
               {status === "MISSING" ? "Not submitted" : status.toLowerCase()}
             </span>
           </li>
@@ -166,10 +166,10 @@ export function KycGapWarning({
       </ul>
 
       {!ready && (
-        <p className="text-[11px] text-white/65">
+        <p className="text-[11px] text-fg-muted">
           The application can be drafted now, but{" "}
-          <strong className="text-white/85">decisioning will be blocked</strong>{" "}
-          until every required doc is VERIFIED.{" "}
+          <strong className="text-fg">decisioning will be blocked</strong> until
+          every required doc is VERIFIED.{" "}
           {rejectedCount > 0 &&
             "Rejected docs must be re-uploaded — check the rejection reason in the inspector."}
         </p>
@@ -180,10 +180,10 @@ export function KycGapWarning({
 
 function StatusIcon({ status }: { status: DocStatus }) {
   if (status === "VERIFIED")
-    return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300 shrink-0" />;
+    return <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />;
   if (status === "PENDING")
-    return <Circle className="h-3.5 w-3.5 text-amber-300 shrink-0" />;
+    return <Circle className="h-3.5 w-3.5 text-warning shrink-0" />;
   if (status === "REJECTED")
-    return <XCircle className="h-3.5 w-3.5 text-rose-300 shrink-0" />;
-  return <Circle className="h-3.5 w-3.5 text-white/30 shrink-0" />;
+    return <XCircle className="h-3.5 w-3.5 text-danger shrink-0" />;
+  return <Circle className="h-3.5 w-3.5 text-fg-subtle shrink-0" />;
 }

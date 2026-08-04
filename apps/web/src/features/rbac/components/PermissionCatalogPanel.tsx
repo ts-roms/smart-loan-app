@@ -98,7 +98,7 @@ export function PermissionCatalogPanel() {
     <Card data-tour="permission-catalog-panel">
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle className="flex items-center gap-2">
-          <ListChecks className="h-4 w-4 text-sky-300" />
+          <ListChecks className="h-4 w-4 text-info" />
           Permission catalog
         </CardTitle>
         <div className="flex items-center gap-2 text-xs">
@@ -118,7 +118,7 @@ export function PermissionCatalogPanel() {
               className="pl-7 h-8"
             />
           </div>
-          <div className="inline-flex rounded-md border border-white/10 overflow-hidden text-xs">
+          <div className="inline-flex rounded-md border border-default overflow-hidden text-xs">
             {(["all", "DRAFT", "ACTIVE", "DEPRECATED"] as const).map((f) => (
               <button
                 key={f}
@@ -126,8 +126,8 @@ export function PermissionCatalogPanel() {
                 onClick={() => setFilter(f)}
                 className={
                   filter === f
-                    ? "px-2.5 py-1 bg-white/[0.08] text-fg"
-                    : "px-2.5 py-1 hover:bg-white/[0.04] text-fg-muted"
+                    ? "px-2.5 py-1 bg-surface-3 text-fg"
+                    : "px-2.5 py-1 hover:bg-hover text-fg-muted"
                 }
               >
                 {f}
@@ -151,7 +151,7 @@ export function PermissionCatalogPanel() {
                   {perms.map((p) => (
                     <li
                       key={p.id}
-                      className="flex flex-wrap items-center gap-2 rounded-md border border-white/8 bg-white/[0.02] px-2 py-1.5"
+                      className="flex flex-wrap items-center gap-2 rounded-md border border-default bg-surface-2 px-2 py-1.5"
                     >
                       <code className="text-xs">{p.key}</code>
                       <span className="text-xs text-fg-muted">{p.label}</span>

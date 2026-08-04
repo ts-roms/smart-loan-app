@@ -60,7 +60,7 @@ export function PenaltyPanel({ loanId }: { loanId: string }) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-amber-300" />
+          <AlertTriangle className="h-4 w-4 text-warning" />
           Late-fee penalties
         </CardTitle>
         {canWaive && outstanding > 0 && (
@@ -92,24 +92,24 @@ export function PenaltyPanel({ loanId }: { loanId: string }) {
         {/* Waiver history */}
         {(waivers.data ?? []).length > 0 && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5 flex items-center gap-1">
               <ScrollText className="h-3 w-3" />
               Waiver history
             </div>
-            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+            <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
               {(waivers.data ?? []).map((w) => (
                 <div key={w.id} className="px-2.5 py-2 text-xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-semibold text-rose-300">
+                      <span className="font-mono font-semibold text-danger">
                         -{formatMoney(Number(w.waivedAmount))}
                       </span>
-                      <span className="text-white/45 text-[10px]">
+                      <span className="text-fg-subtle text-[10px]">
                         ({formatMoney(Number(w.originalPenalty))} →{" "}
                         {formatMoney(Number(w.negotiatedPenalty))})
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] text-white/45">
+                    <div className="flex items-center gap-2 text-[10px] text-fg-subtle">
                       <span>{formatDateTime(w.waivedAt)}</span>
                       {w.journalEntryId && (
                         <JournalEntryLink id={w.journalEntryId}>
@@ -118,9 +118,9 @@ export function PenaltyPanel({ loanId }: { loanId: string }) {
                       )}
                     </div>
                   </div>
-                  <div className="mt-1 text-white/65">{w.reason}</div>
+                  <div className="mt-1 text-fg-muted">{w.reason}</div>
                   {w.waivedBy && (
-                    <div className="mt-0.5 text-[10px] text-white/45">
+                    <div className="mt-0.5 text-[10px] text-fg-subtle">
                       by {w.waivedBy.name}
                     </div>
                   )}
@@ -187,12 +187,10 @@ function WaiveDialog({
           <DialogTitle>Waive penalties</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             Outstanding penalty:{" "}
-            <span className="font-mono text-white">
-              {formatMoney(maxAmount)}
-            </span>
-            . Waiving posts a reversing journal entry and snapshots the original
+            <span className="font-mono text-fg">{formatMoney(maxAmount)}</span>.
+            Waiving posts a reversing journal entry and snapshots the original
             vs negotiated amounts for future audit.
           </p>
           <div>
@@ -244,13 +242,13 @@ function Stat({
 }) {
   const color =
     accent === "amber"
-      ? "text-amber-300"
+      ? "text-warning"
       : accent === "emerald"
-        ? "text-emerald-300"
-        : "text-white";
+        ? "text-success"
+        : "text-fg";
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className={`font-mono text-sm mt-0.5 ${color}`}>{value}</div>

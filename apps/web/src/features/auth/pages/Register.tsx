@@ -78,16 +78,16 @@ export function RegisterPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
-            <Wallet className="h-6 w-6 text-sky-300" />
+            <Wallet className="h-6 w-6 text-info" />
             <span className="text-xl font-semibold">SmartLoan</span>
           </div>
           <CardTitle>Create your account</CardTitle>
-          <p className="text-xs text-white/55 mt-1">
+          <p className="text-xs text-fg-muted mt-1">
             Takes a minute. We&apos;ll ask for your details next.
           </p>
           {tenantSlug && (
-            <p className="text-xs text-white/55 mt-1">
-              Cooperative: <code className="text-sky-300">{tenantSlug}</code>
+            <p className="text-xs text-fg-muted mt-1">
+              Cooperative: <code className="text-info">{tenantSlug}</code>
             </p>
           )}
         </CardHeader>
@@ -122,7 +122,7 @@ export function RegisterPage() {
                 required
               />
               {tooShort && (
-                <p className="text-[11px] text-amber-300">
+                <p className="text-[11px] text-warning">
                   At least 8 characters.
                 </p>
               )}
@@ -137,7 +137,7 @@ export function RegisterPage() {
                 required
               />
               {mismatch && (
-                <p className="text-[11px] text-amber-300">
+                <p className="text-[11px] text-warning">
                   Passwords don&apos;t match.
                 </p>
               )}
@@ -149,11 +149,11 @@ export function RegisterPage() {
             >
               {register.isPending ? "Creating account…" : "Create account"}
             </Button>
-            <p className="text-xs text-white/45 text-center pt-2">
+            <p className="text-xs text-fg-subtle text-center pt-2">
               Already a member?{" "}
               <Link
                 to={tenantSlug ? `/login?tenant=${tenantSlug}` : "/login"}
-                className="text-sky-300 underline"
+                className="text-info underline"
               >
                 Sign in
               </Link>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, Link, useLocation } from "react-router-dom";
 
 import { useAuth } from "./AuthProvider";
@@ -46,16 +47,27 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth();
   const loc = useLocation();
   const isActive = (path: string) => loc.pathname.startsWith(path);
+
+  // Off-canvas nav state. Only has an effect below 768px — above that
+  // the media query pins the rail back in flow and ignores data-open.
+  const [navOpen, setNavOpen] = useState(false);
+  // Tapping a link should close the drawer rather than leave the scrim
+  // sitting over the page just requested.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [loc.pathname]);
+
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      <aside
-        style={{
-          width: 200,
-          borderRight: "1px solid #1e293b",
-          padding: 20,
-          background: "#0e1525",
-        }}
-      >
+    <div className="pf-shell">
+      {navOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="pf-scrim"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+      <aside className="pf-aside" data-open={navOpen ? "true" : "false"}>
         <h1 style={{ fontSize: 16, margin: "0 0 24px" }}>SmartLoan Platform</h1>
         <nav style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <NavLink to="/tenants" active={isActive("/tenants")}>
@@ -75,7 +87,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             position: "absolute",
             bottom: 20,
             fontSize: 12,
-            color: "#64748b",
+            color: "var(--text-muted)",
           }}
         >
           <div>{user?.email}</div>
@@ -85,7 +97,19 @@ function Shell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
-      <main style={{ flex: 1, padding: 32 }}>{children}</main>
+      <main className="pf-main">
+        {/* Only reachable below md, where the rail is off-canvas. */}
+        <button
+          type="button"
+          className="pf-burger"
+          aria-label="Open navigation"
+          aria-expanded={navOpen}
+          onClick={() => setNavOpen(true)}
+        >
+          ☰
+        </button>
+        {children}
+      </main>
     </div>
   );
 }
@@ -103,12 +127,12 @@ function NavLink({
     <Link
       to={to}
       style={{
-        color: active ? "#60a5fa" : "#cbd5e1",
+        color: active ? "var(--accent)" : "var(--text)",
         textDecoration: "none",
         fontSize: 14,
         padding: "6px 8px",
         borderRadius: 4,
-        background: active ? "#1e293b" : "transparent",
+        background: active ? "var(--border)" : "transparent",
       }}
     >
       {children}
@@ -133,7 +157,7 @@ function FullPage({ children }: { children: React.ReactNode }) {
 
 // ─── shared inline styles ───────────────────────────────────────────────
 export const btnPrimary: React.CSSProperties = {
-  background: "#3b82f6",
+  background: "var(--accent-strong)",
   color: "white",
   border: "none",
   borderRadius: 6,
@@ -144,8 +168,8 @@ export const btnPrimary: React.CSSProperties = {
 
 export const btnSecondary: React.CSSProperties = {
   background: "transparent",
-  color: "#cbd5e1",
-  border: "1px solid #334155",
+  color: "var(--text)",
+  border: "1px solid var(--border-strong)",
   borderRadius: 6,
   padding: "6px 12px",
   fontSize: 12,
@@ -153,9 +177,9 @@ export const btnSecondary: React.CSSProperties = {
 };
 
 export const inputStyle: React.CSSProperties = {
-  background: "#0a0f1e",
-  color: "#e2e8f0",
-  border: "1px solid #334155",
+  background: "var(--bg)",
+  color: "var(--text)",
+  border: "1px solid var(--border-strong)",
   borderRadius: 6,
   padding: "8px 12px",
   fontSize: 14,

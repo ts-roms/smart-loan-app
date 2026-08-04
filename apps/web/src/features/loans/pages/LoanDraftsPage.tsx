@@ -56,7 +56,7 @@ export function LoanDraftsPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
         <CardTitle className="flex items-center gap-2">
-          <FileEdit className="h-4 w-4 text-sky-300" />
+          <FileEdit className="h-4 w-4 text-info" />
           My loan drafts
         </CardTitle>
         <Button size="sm" onClick={() => navigate("/loans/new")}>
@@ -68,12 +68,12 @@ export function LoanDraftsPage() {
         {drafts.isLoading ? (
           <SkeletonCard />
         ) : (drafts.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No drafts saved. Start a{" "}
             <button
               type="button"
               onClick={() => navigate("/loans/new")}
-              className="text-sky-300 hover:underline"
+              className="text-info hover:underline"
             >
               new application
             </button>{" "}
@@ -81,7 +81,7 @@ export function LoanDraftsPage() {
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Started</th>
                 <th className="py-2 px-2">Customer</th>
@@ -92,7 +92,7 @@ export function LoanDraftsPage() {
                 <th className="py-2 px-2 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(drafts.data ?? []).map((d) => {
                 // formState is opaque server-side; we know the wizard
                 // stores `principal` + customer name fields, so dig in
@@ -104,8 +104,8 @@ export function LoanDraftsPage() {
                   ? d.customerId.slice(0, 8) + "…"
                   : "Not picked";
                 return (
-                  <tr key={d.id} className="hover:bg-white/[0.03]">
-                    <td className="py-2 px-2 text-xs text-white/65">
+                  <tr key={d.id} className="hover:bg-hover">
+                    <td className="py-2 px-2 text-xs text-fg-muted">
                       {formatDate(d.createdAt)}
                     </td>
                     <td className="py-2 px-2 font-mono text-xs">
@@ -119,7 +119,7 @@ export function LoanDraftsPage() {
                     <td className="py-2 px-2 font-mono">
                       {principal > 0 ? formatMoney(principal) : "—"}
                     </td>
-                    <td className="py-2 px-2 text-xs text-white/55">
+                    <td className="py-2 px-2 text-xs text-fg-muted">
                       {formatDateTime(d.updatedAt)}
                     </td>
                     <td className="py-2 px-2">
@@ -140,7 +140,7 @@ export function LoanDraftsPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() => onDiscard(d.id)}
-                          className="text-rose-300 hover:text-rose-200"
+                          className="text-danger hover:text-danger"
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>

@@ -98,19 +98,19 @@ export function AnalyticsPage() {
         </CardHeader>
         <CardContent>
           {orig.length === 0 ? (
-            <p className="text-sm text-white/55">No originations in range.</p>
+            <p className="text-sm text-fg-muted">No originations in range.</p>
           ) : (
             <div className="space-y-2">
               {orig.map((m) => (
                 <div key={m.month} className="text-xs">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-mono">{m.month}</span>
-                    <span className="text-white/55">
+                    <span className="text-fg-muted">
                       {m.count} loan{m.count === 1 ? "" : "s"} ·{" "}
                       {formatMoney(m.principal)}
                     </span>
                   </div>
-                  <div className="h-2 rounded bg-white/5 overflow-hidden">
+                  <div className="h-2 rounded bg-surface-2 overflow-hidden">
                     <div
                       className="h-full bg-sky-400/70"
                       style={{
@@ -134,10 +134,10 @@ export function AnalyticsPage() {
         </CardHeader>
         <CardContent>
           {cohorts.length === 0 ? (
-            <p className="text-sm text-white/55">No cohorts available.</p>
+            <p className="text-sm text-fg-muted">No cohorts available.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Vintage</th>
                   <th className="py-2 px-2 text-right">Originated</th>
@@ -146,9 +146,9 @@ export function AnalyticsPage() {
                   <th className="py-2 px-2">Health</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {cohorts.map((c) => (
-                  <tr key={c.vintage} className="hover:bg-white/[0.03]">
+                  <tr key={c.vintage} className="hover:bg-hover">
                     <td className="py-2 px-2 font-mono">{c.vintage}</td>
                     <td className="py-2 px-2 text-right">{c.originated}</td>
                     <td className="py-2 px-2 text-right">
@@ -173,9 +173,9 @@ export function AnalyticsPage() {
                             ? "Watch"
                             : "Healthy"}
                       </Badge>
-                      <div className="h-1 mt-1 rounded bg-white/5 overflow-hidden">
+                      <div className="h-1 mt-1 rounded bg-surface-2 overflow-hidden">
                         <div
-                          className="h-full bg-white/20"
+                          className="h-full bg-surface-3"
                           style={{
                             width: `${maxOriginated > 0 ? (c.originated / maxOriginated) * 100 : 0}%`,
                           }}
@@ -205,16 +205,16 @@ function Stat({
   accent: "sky" | "amber" | "emerald" | "rose";
 }) {
   const colors = {
-    sky: "text-sky-300 bg-sky-500/10 border-sky-400/20",
-    amber: "text-amber-300 bg-amber-500/10 border-amber-400/20",
-    emerald: "text-emerald-300 bg-emerald-500/10 border-emerald-400/20",
-    rose: "text-rose-300 bg-rose-500/10 border-rose-400/20",
+    sky: "text-info bg-sky-500/10 border-sky-400/20",
+    amber: "text-warning bg-amber-500/10 border-amber-400/20",
+    emerald: "text-success bg-emerald-500/10 border-emerald-400/20",
+    rose: "text-danger bg-rose-500/10 border-rose-400/20",
   };
   return (
     <Card>
       <CardContent className="flex items-center justify-between gap-3 py-4">
         <div className="min-w-0">
-          <div className="text-xs text-white/55 uppercase tracking-wider">
+          <div className="text-xs text-fg-muted uppercase tracking-wider">
             {label}
           </div>
           <div className="text-2xl font-semibold tracking-tight truncate">
@@ -240,7 +240,7 @@ function Info({
 }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className="text-base font-mono">{children ?? "—"}</div>

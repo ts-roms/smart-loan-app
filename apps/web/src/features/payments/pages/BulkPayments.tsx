@@ -102,7 +102,7 @@ export function BulkPaymentsPage() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="text-xs text-white/55">
+        <div className="text-xs text-fg-muted">
           Format: <code>loanNumber,amount,paidOn,reference</code>. Header row
           optional. Use <code>loanId</code> in the header instead of{" "}
           <code>loanNumber</code> if you have UUIDs.
@@ -116,18 +116,18 @@ export function BulkPaymentsPage() {
           label={
             fileName ? (
               <>
-                <span className="font-medium text-sky-300">{fileName}</span>
-                <span className="text-white/55">
+                <span className="font-medium text-info">{fileName}</span>
+                <span className="text-fg-muted">
                   {" "}
                   loaded — drop another to replace
                 </span>
               </>
             ) : (
               <>
-                <span className="font-medium text-sky-300">
+                <span className="font-medium text-info">
                   Drop your CSV here
                 </span>
-                <span className="text-white/55"> or click to browse</span>
+                <span className="text-fg-muted"> or click to browse</span>
               </>
             )
           }
@@ -136,10 +136,10 @@ export function BulkPaymentsPage() {
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] uppercase tracking-wider text-white/45">
+            <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
               CSV contents
             </span>
-            <span className="text-[10px] text-white/45">
+            <span className="text-[10px] text-fg-subtle">
               {raw.split(/\r?\n/).filter((l) => l.trim().length > 0).length}{" "}
               non-empty line(s)
             </span>
@@ -153,7 +153,7 @@ export function BulkPaymentsPage() {
               if (fileName) setFileName(null);
             }}
             rows={12}
-            className="w-full font-mono text-xs rounded-md border border-white/15 bg-white/[0.04] p-2"
+            className="w-full font-mono text-xs rounded-md border border-default bg-surface-2 p-2"
             spellCheck={false}
           />
         </div>
@@ -169,7 +169,7 @@ export function BulkPaymentsPage() {
               </Badge>
             )}
             {parsed.totalAmount > 0 && (
-              <span className="text-white/55">
+              <span className="text-fg-muted">
                 Total:{" "}
                 <span className="font-mono">
                   {formatMoney(parsed.totalAmount)}
@@ -188,7 +188,7 @@ export function BulkPaymentsPage() {
         </div>
 
         {parsed.errors.length > 0 && (
-          <ul className="text-xs space-y-1 text-rose-300">
+          <ul className="text-xs space-y-1 text-danger">
             {parsed.errors.map((e, i) => (
               <li key={i}>
                 Line {e.line}: {e.message}
@@ -199,11 +199,11 @@ export function BulkPaymentsPage() {
 
         {parsed.rows.length > 0 && (
           <details className="text-sm" open>
-            <summary className="cursor-pointer text-xs uppercase tracking-wider text-white/45">
+            <summary className="cursor-pointer text-xs uppercase tracking-wider text-fg-subtle">
               Preview ({parsed.rows.length} rows)
             </summary>
             <table className="w-full mt-2">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-1 px-2">#</th>
                   <th className="py-1 px-2">Loan</th>
@@ -212,20 +212,20 @@ export function BulkPaymentsPage() {
                   <th className="py-1 px-2">Reference</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {parsed.rows.map((r, i) => (
                   <tr key={i} className="text-xs">
-                    <td className="py-1 px-2 text-white/45">{i + 1}</td>
+                    <td className="py-1 px-2 text-fg-subtle">{i + 1}</td>
                     <td className="py-1 px-2 font-mono">
                       {r.loanNumber ?? r.loanId}
                     </td>
                     <td className="py-1 px-2 text-right font-mono">
                       {formatMoney(r.amount)}
                     </td>
-                    <td className="py-1 px-2 text-white/65">
+                    <td className="py-1 px-2 text-fg-muted">
                       {r.paidOn ?? "today"}
                     </td>
-                    <td className="py-1 px-2 text-white/65">
+                    <td className="py-1 px-2 text-fg-muted">
                       {r.reference ?? "—"}
                     </td>
                   </tr>
@@ -252,12 +252,12 @@ export function BulkPaymentsPage() {
         </div>
 
         {results && (
-          <div className="rounded-md border border-white/10 p-3">
-            <div className="text-xs uppercase tracking-wider text-white/45 mb-2">
+          <div className="rounded-md border border-default p-3">
+            <div className="text-xs uppercase tracking-wider text-fg-subtle mb-2">
               Results
             </div>
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-1 px-2">#</th>
                   <th className="py-1 px-2">Loan</th>
@@ -265,17 +265,17 @@ export function BulkPaymentsPage() {
                   <th className="py-1 px-2">Detail</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {results.map((r) => (
                   <tr key={r.index} className="text-xs">
-                    <td className="py-1 px-2 text-white/45">{r.index + 1}</td>
+                    <td className="py-1 px-2 text-fg-subtle">{r.index + 1}</td>
                     <td className="py-1 px-2 font-mono">{r.loanNumber}</td>
                     <td className="py-1 px-2">
                       <Badge variant={r.ok ? "success" : "danger"}>
                         {r.ok ? "Posted" : "Failed"}
                       </Badge>
                     </td>
-                    <td className="py-1 px-2 text-white/65">
+                    <td className="py-1 px-2 text-fg-muted">
                       {r.ok ? `payment ${r.paymentId?.slice(0, 8)}` : r.error}
                     </td>
                   </tr>

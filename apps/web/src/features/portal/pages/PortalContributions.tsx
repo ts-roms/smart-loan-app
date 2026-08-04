@@ -36,7 +36,7 @@ export function PortalContributions() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle className="flex items-center gap-2">
-            <HandCoins className="h-4 w-4 text-emerald-300" />
+            <HandCoins className="h-4 w-4 text-success" />
             My contributions
           </CardTitle>
           {(rows.data ?? []).length > 0 && (
@@ -66,13 +66,13 @@ export function PortalContributions() {
           {rows.isLoading ? (
             <SkeletonCard />
           ) : (rows.data ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">
+            <p className="text-sm text-fg-muted">
               No contributions on record yet. Visit the branch to make your
               first contribution.
             </p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Date</th>
                   <th className="py-2 px-2 text-right">CBU</th>
@@ -82,15 +82,15 @@ export function PortalContributions() {
                   <th className="py-2 px-2">Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {(rows.data ?? []).map((c) => {
                   const total =
                     Number(c.capitalBuildUp) +
                     Number(c.mortuaryFund) +
                     Number(c.emergencyFund);
                   return (
-                    <tr key={c.id} className="hover:bg-white/[0.03]">
-                      <td className="py-2 px-2 text-xs text-white/65">
+                    <tr key={c.id} className="hover:bg-hover">
+                      <td className="py-2 px-2 text-xs text-fg-muted">
                         {formatDate(c.contributedAt)}
                       </td>
                       <td className="py-2 px-2 text-right font-mono text-xs">
@@ -105,7 +105,7 @@ export function PortalContributions() {
                       <td className="py-2 px-2 text-right font-mono font-semibold">
                         {formatMoney(total)}
                       </td>
-                      <td className="py-2 px-2 text-xs text-white/55 max-w-xs truncate">
+                      <td className="py-2 px-2 text-xs text-fg-muted max-w-xs truncate">
                         {c.notes ?? "—"}
                       </td>
                     </tr>
@@ -122,11 +122,11 @@ export function PortalContributions() {
 
 function RollupCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.02] p-3">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-3">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
-      <div className="text-base font-semibold font-mono text-emerald-300">
+      <div className="text-base font-semibold font-mono text-success">
         {value}
       </div>
     </div>

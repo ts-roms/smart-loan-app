@@ -82,13 +82,13 @@ export function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
-            <Wallet className="h-6 w-6 text-sky-300" />
+            <Wallet className="h-6 w-6 text-info" />
             <span className="text-xl font-semibold">SmartLoan</span>
           </div>
           <CardTitle>Sign in</CardTitle>
           {tenantSlug && (
-            <p className="text-xs text-white/55 mt-1">
-              Tenant: <code className="text-sky-300">{tenantSlug}</code>
+            <p className="text-xs text-fg-muted mt-1">
+              Tenant: <code className="text-info">{tenantSlug}</code>
             </p>
           )}
         </CardHeader>
@@ -133,7 +133,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setUseRecovery(true)}
-                  className="text-[10px] text-white/55 underline mt-1"
+                  className="text-[10px] text-fg-muted underline mt-1"
                 >
                   Lost your device? Use a recovery code instead
                 </button>
@@ -155,7 +155,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setUseRecovery(false)}
-                  className="text-[10px] text-white/55 underline mt-1"
+                  className="text-[10px] text-fg-muted underline mt-1"
                 >
                   Back to TOTP code
                 </button>
@@ -168,16 +168,16 @@ export function LoginPage() {
                   ? "Verify and sign in"
                   : "Sign in"}
             </Button>
-            <p className="text-xs text-white/45 text-center pt-2">
+            <p className="text-xs text-fg-subtle text-center pt-2">
               New member?{" "}
               <Link
                 to={tenantSlug ? `/register?tenant=${tenantSlug}` : "/register"}
-                className="text-sky-300 underline"
+                className="text-info underline"
               >
                 Create an account
               </Link>
             </p>
-            <p className="text-xs text-white/45 text-center">
+            <p className="text-xs text-fg-subtle text-center">
               Default admin · admin@loan.local / P@ssw0rd123
             </p>
           </form>

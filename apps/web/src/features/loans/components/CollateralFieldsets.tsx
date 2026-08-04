@@ -24,8 +24,8 @@ export function VehicleFieldset({
   productCode: string;
 }) {
   return (
-    <fieldset className="rounded-md border border-white/10 p-3 space-y-3">
-      <legend className="px-1 text-xs uppercase tracking-wider text-white/45">
+    <fieldset className="rounded-md border border-default p-3 space-y-3">
+      <legend className="px-1 text-xs uppercase tracking-wider text-fg-subtle">
         {productCode === "MOTORCYCLE" ? "Motorcycle" : "Vehicle"} collateral
       </legend>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -97,8 +97,8 @@ export function PropertyFieldset({
   onChange: (next: PropertyInput) => void;
 }) {
   return (
-    <fieldset className="rounded-md border border-white/10 p-3 space-y-3">
-      <legend className="px-1 text-xs uppercase tracking-wider text-white/45">
+    <fieldset className="rounded-md border border-default p-3 space-y-3">
+      <legend className="px-1 text-xs uppercase tracking-wider text-fg-subtle">
         Property collateral
       </legend>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -203,7 +203,7 @@ export function defaultProperty(): PropertyInput {
 function CFLabel({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );

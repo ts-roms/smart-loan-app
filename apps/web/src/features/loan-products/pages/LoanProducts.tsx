@@ -271,13 +271,13 @@ export function LoanProductsPage() {
         {products.isLoading ? (
           <SkeletonCard />
         ) : (products.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No products yet. Click "Seed defaults" or "New product" to get
             started.
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Code</th>
                 <th className="py-2 px-2">Name</th>
@@ -291,19 +291,19 @@ export function LoanProductsPage() {
                 <th />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(products.data ?? []).map((p) => (
-                <tr key={p.id} className="hover:bg-white/[0.03]">
+                <tr key={p.id} className="hover:bg-hover">
                   <td className="py-2 px-2 font-mono">{p.code}</td>
                   <td className="py-2 px-2">
                     <div>{p.name}</div>
                     {p.description && (
-                      <div className="text-xs text-white/45">
+                      <div className="text-xs text-fg-subtle">
                         {p.description}
                       </div>
                     )}
                   </td>
-                  <td className="py-2 px-2 text-white/65">
+                  <td className="py-2 px-2 text-fg-muted">
                     {p.collateralKind}
                   </td>
                   <td className="py-2 px-2 text-right font-mono text-xs">
@@ -334,7 +334,7 @@ export function LoanProductsPage() {
                         <button
                           type="button"
                           onClick={() => setEditingChain(p)}
-                          className="text-white/55 hover:text-sky-300"
+                          className="text-fg-muted hover:text-info"
                           title="Approval chain"
                         >
                           <ListChecks className="h-4 w-4" />
@@ -342,7 +342,7 @@ export function LoanProductsPage() {
                         <button
                           type="button"
                           onClick={() => setEditing(p)}
-                          className="text-white/55 hover:text-sky-300"
+                          className="text-fg-muted hover:text-info"
                           title="Edit"
                         >
                           <Pencil className="h-4 w-4" />
@@ -350,7 +350,7 @@ export function LoanProductsPage() {
                         <button
                           type="button"
                           onClick={() => onDelete(p)}
-                          className="text-white/55 hover:text-rose-300"
+                          className="text-fg-muted hover:text-danger"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -830,7 +830,7 @@ function ProductForm({
             </label>
           ))}
         </div>
-        <p className="text-xs text-white/45">
+        <p className="text-xs text-fg-subtle">
           Base docs (ID_FRONT, PROOF_OF_INCOME, PROOF_OF_ADDRESS) are always
           required.
         </p>
@@ -847,8 +847,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-white/10 p-3 space-y-3">
-      <div className="text-xs uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default p-3 space-y-3">
+      <div className="text-xs uppercase tracking-wider text-fg-subtle">
         {title}
       </div>
       {children}
@@ -865,7 +865,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );

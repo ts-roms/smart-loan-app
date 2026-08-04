@@ -180,7 +180,7 @@ export function BulkCustomersPage() {
           label={
             fileName ? (
               <>
-                <span className="font-medium text-sky-300">{fileName}</span>
+                <span className="font-medium text-info">{fileName}</span>
                 <span className="text-fg-muted">
                   {" "}
                   loaded — drop another to replace
@@ -188,7 +188,7 @@ export function BulkCustomersPage() {
               </>
             ) : (
               <>
-                <span className="font-medium text-sky-300">
+                <span className="font-medium text-info">
                   Drop your CSV here
                 </span>
                 <span className="text-fg-muted"> or click to browse</span>
@@ -216,7 +216,7 @@ export function BulkCustomersPage() {
               setResults(null);
             }}
             rows={12}
-            className="w-full font-mono text-xs rounded-md border border-white/15 bg-white/[0.04] p-2"
+            className="w-full font-mono text-xs rounded-md border border-default bg-surface-2 p-2"
             spellCheck={false}
           />
         </div>
@@ -243,7 +243,7 @@ export function BulkCustomersPage() {
         </div>
 
         {parsed.errors.length > 0 && (
-          <ul className="text-xs space-y-1 text-rose-300">
+          <ul className="text-xs space-y-1 text-danger">
             {parsed.errors.map((e, i) => (
               <li key={i}>
                 Line {e.line}: {e.message}
@@ -270,7 +270,7 @@ export function BulkCustomersPage() {
                     <th className="py-1 px-2 text-right">Income</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-default">
                   {parsed.rows.slice(0, 50).map((r, i) => (
                     <tr key={i} className="text-xs">
                       <td className="py-1 px-2 text-fg-subtle">{i + 1}</td>
@@ -348,7 +348,7 @@ export function BulkCustomersPage() {
 
 function ResultsTable({ results }: { results: BulkCustomerImportResponse }) {
   return (
-    <div className="rounded-md border border-white/10 p-3 space-y-2">
+    <div className="rounded-md border border-default p-3 space-y-2">
       <div className="text-xs uppercase tracking-wider text-fg-subtle">
         Results {results.dryRun && "· dry run"}
       </div>
@@ -368,7 +368,7 @@ function ResultsTable({ results }: { results: BulkCustomerImportResponse }) {
               <th className="py-1 px-2">Detail</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-default">
             {results.results.map((r) => (
               <ResultRow key={r.index} row={r} dryRun={results.dryRun} />
             ))}
@@ -398,7 +398,7 @@ function ResultRow({
         {row.ok && row.number ? (
           <Link
             to={`/customers/${row.number}`}
-            className="text-sky-300 hover:underline"
+            className="text-info hover:underline"
           >
             {row.number}
           </Link>

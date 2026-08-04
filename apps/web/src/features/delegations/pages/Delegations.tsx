@@ -208,7 +208,7 @@ export function DelegationsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle className="flex items-center gap-2">
-            <CalendarClock className="h-4 w-4 text-sky-300" />
+            <CalendarClock className="h-4 w-4 text-info" />
             Delegations
           </CardTitle>
           <div className="flex items-center gap-2">
@@ -226,7 +226,7 @@ export function DelegationsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-white/55 mb-3">
+          <p className="text-xs text-fg-muted mb-3">
             Time-bounded proxy authority. The delegate uses their own login, but
             during the window they inherit the listed permissions from you.
             Empty permission list = blanket — they inherit everything you
@@ -275,7 +275,7 @@ export function DelegationsPage() {
             />
             {/* Search shares the toolbar — collapses to the right on wide screens */}
             <div className="ml-auto relative">
-              <Search className="h-3 w-3 text-white/45 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="h-3 w-3 text-fg-subtle absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -371,7 +371,7 @@ function DelegationPreviewDialog({
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Eye className="h-4 w-4 text-sky-300" />
+            <Eye className="h-4 w-4 text-info" />
             Resolved permissions
           </DialogTitle>
         </DialogHeader>
@@ -379,17 +379,17 @@ function DelegationPreviewDialog({
         {query.isLoading ? (
           <SkeletonCard />
         ) : query.isError ? (
-          <div className="text-sm text-rose-300 bg-rose-500/5 border border-rose-500/20 rounded px-3 py-2">
+          <div className="text-sm text-danger bg-rose-500/5 border border-rose-500/20 rounded px-3 py-2">
             {query.error.message}
           </div>
         ) : data ? (
           <div className="space-y-4">
-            <div className="text-xs text-white/55">
-              <span className="text-white/85">
+            <div className="text-xs text-fg-muted">
+              <span className="text-fg">
                 {delegate?.name ?? data.delegation.delegateId.slice(0, 8)}
               </span>{" "}
               gains permissions delegated by{" "}
-              <span className="text-white/85">
+              <span className="text-fg">
                 {delegator?.name ?? data.delegation.delegatorId.slice(0, 8)}
               </span>
               .{" "}
@@ -401,13 +401,13 @@ function DelegationPreviewDialog({
             </div>
 
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5">
                 {data.delegation.permissions.length === 0
                   ? `Resolved (all of delegator's permissions)`
                   : "Resolved permissions"}
               </div>
               {data.resolvedPermissions.length === 0 ? (
-                <p className="text-xs text-white/55">
+                <p className="text-xs text-fg-muted">
                   No permissions are currently granted by this delegation.
                 </p>
               ) : (
@@ -415,7 +415,7 @@ function DelegationPreviewDialog({
                   {data.resolvedPermissions.map((p) => (
                     <span
                       key={p}
-                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-sky-400/10 text-sky-200"
+                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-sky-400/10 text-info"
                     >
                       {p}
                     </span>
@@ -426,11 +426,11 @@ function DelegationPreviewDialog({
 
             {data.droppedPermissions.length > 0 && (
               <div className="rounded-md border border-amber-400/30 bg-amber-500/[0.04] p-3">
-                <div className="flex items-center gap-2 text-amber-200 text-xs font-medium">
+                <div className="flex items-center gap-2 text-warning text-xs font-medium">
                   <AlertTriangle className="h-3 w-3" />
                   Dropped from the original delegation
                 </div>
-                <p className="text-xs text-white/60 mt-1">
+                <p className="text-xs text-fg-muted mt-1">
                   The delegator no longer holds these keys, so they're silently
                   excluded from what the delegate actually receives right now.
                 </p>
@@ -438,7 +438,7 @@ function DelegationPreviewDialog({
                   {data.droppedPermissions.map((p) => (
                     <span
                       key={p}
-                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-200 line-through"
+                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-amber-400/10 text-warning line-through"
                     >
                       {p}
                     </span>
@@ -447,14 +447,14 @@ function DelegationPreviewDialog({
               </div>
             )}
 
-            <div className="text-[10px] uppercase tracking-wider text-white/45">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
               Window
             </div>
-            <div className="text-xs text-white/70">
+            <div className="text-xs text-fg">
               {formatDateTime(data.delegation.startsAt)} →{" "}
               {formatDateTime(data.delegation.endsAt)}
               {data.delegation.revokedAt && (
-                <span className="ml-2 text-rose-300">
+                <span className="ml-2 text-danger">
                   · revoked {formatDateTime(data.delegation.revokedAt)}
                 </span>
               )}
@@ -489,7 +489,7 @@ function StatusChip({
     success: "ring-emerald-400/30 hover:ring-emerald-400/60",
     warning: "ring-amber-400/30 hover:ring-amber-400/60",
     danger: "ring-rose-400/30 hover:ring-rose-400/60",
-    muted: "ring-white/15 hover:ring-white/30",
+    muted: "ring-border-strong hover:ring-border-strong",
   }[tone ?? "muted"];
   return (
     <button
@@ -498,8 +498,8 @@ function StatusChip({
       className={cn(
         "rounded-full px-2.5 py-1 text-xs font-medium border transition-colors",
         active
-          ? "border-sky-400/60 bg-sky-500/15 text-sky-100"
-          : `border-transparent ring-1 ${toneRing} text-white/70 hover:text-white`,
+          ? "border-sky-400/60 bg-sky-500/15 text-info"
+          : `border-transparent ring-1 ${toneRing} text-fg hover:text-fg`,
       )}
     >
       {label}
@@ -518,8 +518,8 @@ function ExpiringSoonBanner({
 }) {
   return (
     <div className="rounded-md border border-amber-400/30 bg-amber-500/10 p-3 space-y-2">
-      <div className="flex items-center gap-2 text-sm font-medium text-amber-100">
-        <AlertTriangle className="h-4 w-4 text-amber-300" />
+      <div className="flex items-center gap-2 text-sm font-medium text-warning">
+        <AlertTriangle className="h-4 w-4 text-warning" />
         {rows.length} delegation{rows.length === 1 ? "" : "s"} expiring in the
         next 48 hours
       </div>
@@ -532,10 +532,10 @@ function ExpiringSoonBanner({
               className="flex items-center justify-between gap-2 text-xs"
             >
               <span className="truncate">
-                <span className="text-white/85">
+                <span className="text-fg">
                   {other?.name ?? d.delegateId.slice(0, 8)}
                 </span>
-                <span className="text-white/55">
+                <span className="text-fg-muted">
                   {" "}
                   · ends {formatDateTime(d.endsAt)}
                 </span>
@@ -589,16 +589,16 @@ function DelegationList({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-white/55 mb-3">{subtitle}</p>
+        <p className="text-xs text-fg-muted mb-3">{subtitle}</p>
         {loading ? (
           <SkeletonCard />
         ) : rows.length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No delegations match the current filter.
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">
                   {direction === "granted" ? "Delegate" : "Delegator"}
@@ -609,7 +609,7 @@ function DelegationList({
                 <th />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {rows.map((d) => {
                 const otherId =
                   direction === "granted" ? d.delegateId : d.delegatorId;
@@ -621,10 +621,10 @@ function DelegationList({
                 const canExtend =
                   isMine && (status === "active" || status === "expiring-soon");
                 return (
-                  <tr key={d.id} className="hover:bg-white/[0.03] align-top">
+                  <tr key={d.id} className="hover:bg-hover align-top">
                     <td className="py-2 px-2">
                       <div>{other?.name ?? otherId.slice(0, 8)}</div>
-                      <div className="text-xs text-white/45">
+                      <div className="text-xs text-fg-subtle">
                         {other?.email ?? "—"}
                       </div>
                     </td>
@@ -636,27 +636,27 @@ function DelegationList({
                           {d.permissions.slice(0, 6).map((p) => (
                             <span
                               key={p}
-                              className="font-mono text-[10px] rounded bg-white/[0.06] px-1.5 py-0.5"
+                              className="font-mono text-[10px] rounded bg-surface-3 px-1.5 py-0.5"
                             >
                               {p}
                             </span>
                           ))}
                           {d.permissions.length > 6 && (
-                            <span className="text-[10px] text-white/55">
+                            <span className="text-[10px] text-fg-muted">
                               +{d.permissions.length - 6} more
                             </span>
                           )}
                         </div>
                       )}
                       {d.note && (
-                        <div className="text-xs text-white/55 mt-1">
+                        <div className="text-xs text-fg-muted mt-1">
                           {d.note}
                         </div>
                       )}
                     </td>
                     <td className="py-2 px-2 text-xs">
                       <div>{formatDate(d.startsAt)}</div>
-                      <div className="text-white/55">
+                      <div className="text-fg-muted">
                         → {formatDate(d.endsAt)}
                       </div>
                     </td>
@@ -665,7 +665,7 @@ function DelegationList({
                         {STATUS_LABEL[status]}
                       </Badge>
                       {d.revokedAt && (
-                        <div className="text-[10px] text-white/45 mt-0.5">
+                        <div className="text-[10px] text-fg-subtle mt-0.5">
                           {formatDateTime(d.revokedAt)}
                           {d.revokedReason ? ` — ${d.revokedReason}` : ""}
                         </div>
@@ -829,7 +829,7 @@ function CreateDialog({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-sky-300" />
+            <ShieldCheck className="h-4 w-4 text-info" />
             New delegation
           </DialogTitle>
         </DialogHeader>
@@ -882,7 +882,7 @@ function CreateDialog({
                   <button
                     type="button"
                     onClick={() => setPicked(new Set())}
-                    className="text-xs text-sky-300 hover:underline"
+                    className="text-xs text-info hover:underline"
                   >
                     Clear all
                   </button>
@@ -896,15 +896,15 @@ function CreateDialog({
                     onClick={() => applyTemplate(r)}
                     className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/10 hover:bg-sky-500/20 px-2.5 py-1 text-xs"
                   >
-                    <ShieldCheck className="h-3 w-3 text-sky-300" />
+                    <ShieldCheck className="h-3 w-3 text-info" />
                     Delegate as {r.name}
-                    <span className="text-white/45 text-[10px]">
+                    <span className="text-fg-subtle text-[10px]">
                       ({r.permissions.length})
                     </span>
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-white/45 mt-1">
+              <p className="text-[10px] text-fg-subtle mt-1">
                 Pre-fills the permission list below with that role's
                 permissions. Edit afterward to fine-tune.
               </p>
@@ -914,13 +914,13 @@ function CreateDialog({
           <div>
             <Label className="flex items-center justify-between">
               <span>Permissions to delegate</span>
-              <span className="text-xs text-white/55">
+              <span className="text-xs text-fg-muted">
                 {picked.size === 0
                   ? "Empty = blanket (all of my permissions)"
                   : `${picked.size} selected`}
               </span>
             </Label>
-            <div className="max-h-72 overflow-y-auto rounded-md border border-white/10 bg-white/[0.02] p-3 space-y-3">
+            <div className="max-h-72 overflow-y-auto rounded-md border border-default bg-surface-2 p-3 space-y-3">
               {grouped.map(([cat, items]) => {
                 const pickedInCat = items.filter((p) =>
                   picked.has(p.key),
@@ -929,10 +929,10 @@ function CreateDialog({
                 return (
                   <div key={cat}>
                     <div className="flex items-center justify-between mb-1">
-                      <div className="text-xs uppercase tracking-wider text-white/55">
+                      <div className="text-xs uppercase tracking-wider text-fg-muted">
                         {cat}
                         {pickedInCat > 0 && (
-                          <span className="ml-1 text-[10px] text-sky-300">
+                          <span className="ml-1 text-[10px] text-info">
                             ({pickedInCat}/{items.length})
                           </span>
                         )}
@@ -947,7 +947,7 @@ function CreateDialog({
                               allPicked ? "clear" : "all",
                             )
                           }
-                          className="text-sky-300 hover:underline"
+                          className="text-info hover:underline"
                         >
                           {allPicked ? "Clear" : "Select all"}
                         </button>
@@ -957,7 +957,7 @@ function CreateDialog({
                       {items.map((p) => (
                         <label
                           key={p.key}
-                          className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white/[0.03] rounded px-1.5 py-1"
+                          className="flex items-center gap-2 text-xs cursor-pointer hover:bg-hover rounded px-1.5 py-1"
                         >
                           <input
                             type="checkbox"
@@ -972,7 +972,7 @@ function CreateDialog({
                 );
               })}
               {grouped.length === 0 && (
-                <p className="text-sm text-white/55">
+                <p className="text-sm text-fg-muted">
                   No permissions available.
                 </p>
               )}

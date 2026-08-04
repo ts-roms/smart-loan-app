@@ -120,7 +120,7 @@ export function DecisionRulesPage() {
         )}
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-white/55 mb-3">
+        <p className="text-xs text-fg-muted mb-3">
           Rules evaluate at loan apply time in priority order (lowest first).
           The first rule whose conditions ALL match decides the loan's initial
           status. If nothing matches, the loan stays SUBMITTED for manual
@@ -129,13 +129,13 @@ export function DecisionRulesPage() {
         {rules.isLoading ? (
           <SkeletonCard />
         ) : (rules.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No rules configured. Every loan goes to manual review. Click "Seed
             defaults" for a starting policy.
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2 w-16">Priority</th>
                 <th className="py-2 px-2">Name</th>
@@ -145,14 +145,14 @@ export function DecisionRulesPage() {
                 <th />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(rules.data ?? []).map((r) => (
-                <tr key={r.id} className="hover:bg-white/[0.03] align-top">
+                <tr key={r.id} className="hover:bg-hover align-top">
                   <td className="py-2 px-2 font-mono">{r.priority}</td>
                   <td className="py-2 px-2">
                     <div className="font-medium">{r.name}</div>
                     {r.description && (
-                      <div className="text-xs text-white/45">
+                      <div className="text-xs text-fg-subtle">
                         {r.description}
                       </div>
                     )}
@@ -183,7 +183,7 @@ export function DecisionRulesPage() {
                         <button
                           type="button"
                           onClick={() => setEditing(r)}
-                          className="text-white/55 hover:text-sky-300"
+                          className="text-fg-muted hover:text-info"
                           title="Edit"
                         >
                           <Pencil className="h-3 w-3" />
@@ -191,7 +191,7 @@ export function DecisionRulesPage() {
                         <button
                           type="button"
                           onClick={() => onDelete(r)}
-                          className="text-white/55 hover:text-rose-300"
+                          className="text-fg-muted hover:text-danger"
                           title="Delete"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -349,8 +349,8 @@ function RuleDialog({
             <Input value={reason} onChange={(e) => setReason(e.target.value)} />
           </Field>
 
-          <div className="rounded-md border border-white/10 p-3 space-y-2">
-            <div className="text-xs uppercase tracking-wider text-white/45 flex items-center justify-between">
+          <div className="rounded-md border border-default p-3 space-y-2">
+            <div className="text-xs uppercase tracking-wider text-fg-subtle flex items-center justify-between">
               <span>Conditions (ALL must match)</span>
               <Button
                 type="button"
@@ -430,7 +430,7 @@ function RuleDialog({
                 />
                 <button
                   type="button"
-                  className="col-span-1 text-white/55 hover:text-rose-300"
+                  className="col-span-1 text-fg-muted hover:text-danger"
                   onClick={() =>
                     setConditions(conditions.filter((_, idx) => idx !== i))
                   }
@@ -467,7 +467,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );

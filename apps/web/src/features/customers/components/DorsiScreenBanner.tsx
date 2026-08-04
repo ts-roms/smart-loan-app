@@ -68,7 +68,7 @@ export function DorsiScreenBanner({
   // sees the DORSI category at a glance.
   if (existing.data) {
     return (
-      <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-100 flex items-center gap-2">
+      <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
         <ShieldCheck className="h-3 w-3" />
         <span>
           This customer is tagged as{" "}
@@ -77,7 +77,7 @@ export function DorsiScreenBanner({
         </span>
         <Link
           to="/compliance/dorsi"
-          className="ml-auto text-sky-300 hover:underline"
+          className="ml-auto text-info hover:underline"
         >
           View register →
         </Link>
@@ -90,7 +90,7 @@ export function DorsiScreenBanner({
   // never imply when the check never completed.
   if (failed) {
     return (
-      <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-100 flex items-center gap-2">
+      <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
         <AlertTriangle className="h-3 w-3 shrink-0" />
         <span>
           <strong>DORSI screening could not be completed.</strong> This is not a
@@ -121,8 +121,8 @@ export function DorsiScreenBanner({
       className={cn(
         "rounded-md border px-3 py-2 text-xs",
         topMatch.similarity >= 0.85
-          ? "border-rose-400/40 bg-rose-400/10 text-rose-100"
-          : "border-amber-400/40 bg-amber-400/10 text-amber-100",
+          ? "border-rose-400/40 bg-rose-400/10 text-danger"
+          : "border-amber-400/40 bg-amber-400/10 text-warning",
       )}
     >
       <div className="flex items-center gap-2 mb-1">
@@ -138,11 +138,11 @@ export function DorsiScreenBanner({
             <span>
               <Link
                 to={`/customers/${m.customerId}`}
-                className="text-sky-300 hover:underline"
+                className="text-info hover:underline"
               >
                 {m.customerName}
               </Link>{" "}
-              · {m.category} · <span className="text-white/65">{m.reason}</span>
+              · {m.category} · <span className="text-fg-muted">{m.reason}</span>
             </span>
             <Badge variant={m.similarity >= 0.85 ? "danger" : "warning"}>
               {(m.similarity * 100).toFixed(0)}%

@@ -378,7 +378,7 @@ export function NewLoanPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-sky-300" />
+            <CreditCard className="h-4 w-4 text-info" />
             New loan application
             {currentDraftId && (
               <Badge variant="muted" title={`Draft id: ${currentDraftId}`}>
@@ -417,7 +417,7 @@ export function NewLoanPage() {
             completedIds={completedIds}
             onStepClick={(i) => setStep(i)}
             trailing={
-              <span className="text-xs text-white/55">
+              <span className="text-xs text-fg-muted">
                 Step {step + 1} of {STEPS.length}
               </span>
             }
@@ -666,7 +666,7 @@ function Step2ProductTerms({
           </Select>
         </Field>
         {product && (
-          <div className="text-xs text-white/55 self-center">
+          <div className="text-xs text-fg-muted self-center">
             Range: {formatMoney(Number(product.minPrincipal))}–
             {formatMoney(Number(product.maxPrincipal))} ·{" "}
             {product.minTermMonths}–{product.maxTermMonths} months ·{" "}
@@ -737,8 +737,8 @@ function Step2ProductTerms({
       )}
 
       {quote && (
-        <div className="rounded-md border border-white/10 bg-white/[0.04] p-3 text-sm space-y-2">
-          <div className="flex items-center justify-between text-xs uppercase tracking-wider text-white/45">
+        <div className="rounded-md border border-default bg-surface-2 p-3 text-sm space-y-2">
+          <div className="flex items-center justify-between text-xs uppercase tracking-wider text-fg-subtle">
             <span>Quote</span>
             <span>
               {quote.method === "FLAT" ? "Flat interest" : "Declining balance"}{" "}
@@ -758,7 +758,7 @@ function Step2ProductTerms({
             )}
           </div>
           {quote.fees.total > 0 && (
-            <div className="border-t border-white/10 pt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="border-t border-default pt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
               <Stat
                 label="Processing fee"
                 value={formatMoney(quote.fees.processing)}
@@ -831,7 +831,7 @@ function Step3CollateralCoMakers({
       />
 
       {collateralKind === "NONE" && (
-        <p className="rounded-md border border-white/10 bg-white/[0.02] p-3 text-xs text-white/65">
+        <p className="rounded-md border border-default bg-surface-2 p-3 text-xs text-fg-muted">
           This product has no collateral requirement. Skip directly to co-makers
           below.
         </p>
@@ -850,13 +850,13 @@ function Step3CollateralCoMakers({
         />
       )}
 
-      <fieldset className="rounded-md border border-white/10 p-3 space-y-3">
-        <legend className="px-1 text-xs uppercase tracking-wider text-white/45 flex items-center gap-1">
+      <fieldset className="rounded-md border border-default p-3 space-y-3">
+        <legend className="px-1 text-xs uppercase tracking-wider text-fg-subtle flex items-center gap-1">
           <Users className="h-3 w-3" />
           Co-makers · {form.coMakers.length} added
         </legend>
         {form.coMakers.length === 0 ? (
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             No co-makers yet. Adding one improves approval odds for thin-file or
             borderline-DTI applicants.
           </p>
@@ -865,7 +865,7 @@ function Step3CollateralCoMakers({
             {form.coMakers.map((cm) => (
               <li
                 key={cm._key}
-                className="rounded border border-white/10 bg-white/[0.02] p-2 space-y-2"
+                className="rounded border border-default bg-surface-2 p-2 space-y-2"
               >
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                   <Field label="Full name">
@@ -918,7 +918,7 @@ function Step3CollateralCoMakers({
                     variant="ghost"
                     size="sm"
                     onClick={() => removeCoMaker(cm._key)}
-                    className="text-rose-300 hover:text-rose-200"
+                    className="text-danger hover:text-danger"
                   >
                     <Trash2 className="h-3 w-3" />
                     Remove
@@ -954,12 +954,12 @@ function Step4Verification({
         title="Verify the applicant"
         subtitle="Live selfie strengthens the fraud signal. Purpose helps the underwriter understand intent."
       />
-      <fieldset className="rounded-md border border-white/10 p-3 space-y-2">
-        <legend className="px-1 text-xs uppercase tracking-wider text-white/45 flex items-center gap-1">
+      <fieldset className="rounded-md border border-default p-3 space-y-2">
+        <legend className="px-1 text-xs uppercase tracking-wider text-fg-subtle flex items-center gap-1">
           <Camera className="h-3 w-3" />
           Application selfie
         </legend>
-        <p className="text-xs text-white/55">
+        <p className="text-xs text-fg-muted">
           Live capture of the borrower for face-match against the ID on file.
           Optional but strongly recommended.
         </p>
@@ -1072,9 +1072,9 @@ function Step5Review({
 
 function StepHeading({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className="border-b border-white/5 pb-3 mb-2">
+    <div className="border-b border-default pb-3 mb-2">
       <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-      <p className="text-xs text-white/55 mt-1">{subtitle}</p>
+      <p className="text-xs text-fg-muted mt-1">{subtitle}</p>
     </div>
   );
 }
@@ -1082,7 +1082,7 @@ function StepHeading({ title, subtitle }: { title: string; subtitle: string }) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );
@@ -1091,10 +1091,10 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-xs">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
-      <div className="font-mono text-white/85 truncate">{value}</div>
+      <div className="font-mono text-fg truncate">{value}</div>
     </div>
   );
 }
@@ -1107,8 +1107,8 @@ function SummaryCard({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.02] p-3 space-y-2">
-      <div className="text-xs uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-3 space-y-2">
+      <div className="text-xs uppercase tracking-wider text-fg-subtle">
         {title}
       </div>
       <div className="grid grid-cols-2 gap-2">{children}</div>

@@ -110,11 +110,11 @@ export function AssistantPanel({
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-md border border-sky-400/30 bg-sky-500/10 flex items-center justify-center shrink-0">
-            <Sparkles className="h-4 w-4 text-sky-300" />
+            <Sparkles className="h-4 w-4 text-info" />
           </div>
           <div>
             <div className="text-sm font-semibold">{title}</div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
               Local LLM · never sends data off your server
             </div>
           </div>
@@ -137,7 +137,7 @@ export function AssistantPanel({
 
       {/* Status notice when not configured / not ready */}
       {ping.data && !isAvailable && (
-        <div className="rounded-md border border-amber-400/30 bg-amber-500/10 p-2 text-[11px] text-amber-100">
+        <div className="rounded-md border border-amber-400/30 bg-amber-500/10 p-2 text-[11px] text-warning">
           {ping.data.message}
         </div>
       )}
@@ -184,13 +184,13 @@ export function AssistantPanel({
 
       {/* Error */}
       {error && !result && (
-        <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-2 text-[11px] text-rose-200 flex items-start gap-2">
+        <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-2 text-[11px] text-danger flex items-start gap-2">
           <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      <p className="text-[10px] text-white/45">
+      <p className="text-[10px] text-fg-subtle">
         Always review and edit AI-generated text before sending or saving. The
         model is a drafting assistant, not a decision-maker.
       </p>
@@ -210,11 +210,11 @@ function ResultSurface({
   onDismiss: () => void;
 }) {
   return (
-    <div className="rounded-md border border-white/10 bg-black/30 p-3 space-y-2">
-      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-black/30 p-3 space-y-2">
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-fg-subtle">
         <span>Generated</span>
         <div className="flex items-center gap-2">
-          <span className="font-mono normal-case text-white/55">
+          <span className="font-mono normal-case text-fg-muted">
             {response.model}
             {response.isMock && " · mock"}
           </span>
@@ -222,7 +222,7 @@ function ResultSurface({
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="text-white/45 hover:text-white/85"
+            className="text-fg-subtle hover:text-fg"
           >
             <X className="h-3 w-3" />
           </button>
@@ -247,7 +247,7 @@ function ResultSurface({
 
 function Pre({ children }: { children: ReactNode }) {
   return (
-    <pre className="text-xs text-white/85 whitespace-pre-wrap leading-relaxed font-sans max-h-72 overflow-auto">
+    <pre className="text-xs text-fg whitespace-pre-wrap leading-relaxed font-sans max-h-72 overflow-auto">
       {children}
     </pre>
   );

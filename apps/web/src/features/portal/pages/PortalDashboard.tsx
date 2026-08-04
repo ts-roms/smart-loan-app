@@ -49,7 +49,7 @@ export function PortalDashboard() {
         <h1 className="text-xl font-semibold">
           Hello, {me.data?.customer.firstName} 👋
         </h1>
-        <p className="text-sm text-white/55">
+        <p className="text-sm text-fg-muted">
           {kyc.data?.status.complete
             ? "Your account is verified. You can apply for new loans."
             : "Please complete your KYC documents to unlock new loans."}
@@ -83,20 +83,17 @@ export function PortalDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
             <CardTitle className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-emerald-300" />
+              <Users className="h-4 w-4 text-success" />
               My membership
             </CardTitle>
             <div className="flex items-center gap-2 text-xs">
               <Link
                 to="/portal/contributions"
-                className="text-sky-300 hover:underline"
+                className="text-info hover:underline"
               >
                 Contributions →
               </Link>
-              <Link
-                to="/portal/savings"
-                className="text-sky-300 hover:underline"
-              >
+              <Link to="/portal/savings" className="text-info hover:underline">
                 Savings →
               </Link>
             </div>
@@ -135,15 +132,15 @@ export function PortalDashboard() {
         </CardHeader>
         <CardContent>
           {(loans.data ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">
+            <p className="text-sm text-fg-muted">
               You don't have any loans yet.{" "}
-              <Link to="/portal/apply" className="text-sky-300 hover:underline">
+              <Link to="/portal/apply" className="text-info hover:underline">
                 Apply for one →
               </Link>
             </p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Number</th>
                   <th className="py-2 px-2">Type</th>
@@ -152,13 +149,13 @@ export function PortalDashboard() {
                   <th className="py-2 px-2">Submitted</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {(loans.data ?? []).map((l) => (
-                  <tr key={l.id} className="hover:bg-white/[0.03]">
+                  <tr key={l.id} className="hover:bg-hover">
                     <td className="py-2 px-2 font-mono">
                       <Link
                         to={`/portal/loans/${l.number}`}
-                        className="text-sky-300 hover:underline"
+                        className="text-info hover:underline"
                       >
                         {l.number}
                       </Link>
@@ -174,7 +171,7 @@ export function PortalDashboard() {
                     <td className="py-2 px-2">
                       <Badge variant={badgeVariant(l.status)}>{l.status}</Badge>
                     </td>
-                    <td className="py-2 px-2 text-xs text-white/55">
+                    <td className="py-2 px-2 text-xs text-fg-muted">
                       {formatDate(l.submittedAt)}
                     </td>
                   </tr>
@@ -210,12 +207,12 @@ function Stat({
     <Card>
       <CardContent className="flex items-center justify-between gap-3 py-4">
         <div>
-          <div className="text-xs text-white/55 uppercase tracking-wider">
+          <div className="text-xs text-fg-muted uppercase tracking-wider">
             {label}
           </div>
           <div className="text-2xl font-semibold tracking-tight">{value}</div>
         </div>
-        <Icon className="h-8 w-8 text-sky-300 opacity-60" />
+        <Icon className="h-8 w-8 text-info opacity-60" />
       </CardContent>
     </Card>
   );
@@ -233,15 +230,15 @@ function LedgerCell({
   tone?: "info" | "good" | "bad";
 }) {
   const toneClass = {
-    info: "text-white/85",
-    good: "text-emerald-300",
-    bad: "text-rose-300",
+    info: "text-fg",
+    good: "text-success",
+    bad: "text-danger",
   }[tone];
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.02] p-3 flex items-start gap-2">
-      <Icon className="h-4 w-4 text-emerald-300/70 mt-0.5 shrink-0" />
+    <div className="rounded-md border border-default bg-surface-2 p-3 flex items-start gap-2">
+      <Icon className="h-4 w-4 text-success mt-0.5 shrink-0" />
       <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wider text-white/45 truncate">
+        <div className="text-[10px] uppercase tracking-wider text-fg-subtle truncate">
           {label}
         </div>
         <div

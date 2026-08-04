@@ -79,7 +79,7 @@ export function CollectionsCaseLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="text-left text-sky-300 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="text-left text-info hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
           aria-label="Open collections case"
         >
           {children}
@@ -130,7 +130,7 @@ function CollectionsCaseInspector({ id }: { id: string }) {
           <DrawerTitle>Collections case</DrawerTitle>
         </DrawerHeader>
         <DrawerBody>
-          <p className="text-sm text-white/55">Loan not found.</p>
+          <p className="text-sm text-fg-muted">Loan not found.</p>
         </DrawerBody>
       </>
     );
@@ -218,12 +218,12 @@ function CollectionsCaseInspector({ id }: { id: string }) {
     <>
       <DrawerHeader>
         <div className="flex items-start gap-2">
-          <PhoneCall className="h-5 w-5 mt-0.5 text-rose-300" />
+          <PhoneCall className="h-5 w-5 mt-0.5 text-danger" />
           <div className="flex-1 min-w-0">
             <DrawerTitle className="font-mono">{l.number}</DrawerTitle>
             <DrawerDescription>
               <LoanStatusBadge status={l.status} />
-              <span className="ml-2 text-rose-300 font-mono">
+              <span className="ml-2 text-danger font-mono">
                 {daysOverdue} day{daysOverdue === 1 ? "" : "s"} overdue
               </span>
             </DrawerDescription>
@@ -246,11 +246,11 @@ function CollectionsCaseInspector({ id }: { id: string }) {
         {/* Active PTPs */}
         {activePromises.length > 0 && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5 flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               Active promises to pay
             </div>
-            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+            <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
               {activePromises.map((p) => (
                 <div key={p.id} className="px-2.5 py-2 text-xs">
                   <div className="flex items-center justify-between">
@@ -258,7 +258,7 @@ function CollectionsCaseInspector({ id }: { id: string }) {
                       <div className="font-mono font-semibold">
                         {formatMoney(Number(p.amount))}
                       </div>
-                      <div className="text-[10px] text-white/55">
+                      <div className="text-[10px] text-fg-muted">
                         by {formatDate(p.promisedDate)}
                       </div>
                     </div>
@@ -279,7 +279,7 @@ function CollectionsCaseInspector({ id }: { id: string }) {
                       </Button>
                     </div>
                   </div>
-                  {p.note && <div className="mt-1 text-white/65">{p.note}</div>}
+                  {p.note && <div className="mt-1 text-fg-muted">{p.note}</div>}
                 </div>
               ))}
             </div>
@@ -287,8 +287,8 @@ function CollectionsCaseInspector({ id }: { id: string }) {
         )}
 
         {/* New PTP */}
-        <div className="rounded-md border border-white/10 bg-white/[0.03] p-2.5">
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-2 flex items-center gap-1">
+        <div className="rounded-md border border-default bg-surface-2 p-2.5">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2 flex items-center gap-1">
             <Calendar className="h-3 w-3" />
             Record new promise
           </div>
@@ -330,25 +330,25 @@ function CollectionsCaseInspector({ id }: { id: string }) {
         {/* Recent payments */}
         {lastPayments.length > 0 && (
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5 flex items-center gap-1">
               <PiggyBank className="h-3 w-3" />
               Recent payments
             </div>
-            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+            <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
               {lastPayments.map((p) => (
                 <div
                   key={p.id}
                   className="px-2.5 py-1.5 text-xs flex items-center justify-between"
                 >
-                  <div className="text-white/65">
+                  <div className="text-fg-muted">
                     {formatDate(p.paidOn)}
                     {p.reference && (
-                      <span className="ml-1 font-mono text-[10px] text-white/45">
+                      <span className="ml-1 font-mono text-[10px] text-fg-subtle">
                         {p.reference}
                       </span>
                     )}
                   </div>
-                  <div className="font-mono font-semibold text-emerald-300">
+                  <div className="font-mono font-semibold text-success">
                     {formatMoney(Number(p.amount))}
                   </div>
                 </div>
@@ -359,27 +359,25 @@ function CollectionsCaseInspector({ id }: { id: string }) {
 
         {/* Note timeline */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5 flex items-center gap-1">
             <StickyNote className="h-3 w-3" />
             Note timeline
           </div>
           {notes.isLoading ? (
             <SkeletonLine />
           ) : (notes.data ?? []).length === 0 ? (
-            <p className="text-xs text-white/55">No notes yet.</p>
+            <p className="text-xs text-fg-muted">No notes yet.</p>
           ) : (
-            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+            <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
               {(notes.data ?? []).map((n) => (
                 <div key={n.id} className="px-2.5 py-2 text-xs">
                   <div className="flex items-center justify-between">
                     <Badge variant="muted">{n.type}</Badge>
-                    <span className="text-[10px] text-white/45">
+                    <span className="text-[10px] text-fg-subtle">
                       {formatDateTime(n.createdAt)}
                     </span>
                   </div>
-                  <p className="mt-1 text-white/85 whitespace-pre-wrap">
-                    {n.body}
-                  </p>
+                  <p className="mt-1 text-fg whitespace-pre-wrap">{n.body}</p>
                 </div>
               ))}
             </div>
@@ -387,8 +385,8 @@ function CollectionsCaseInspector({ id }: { id: string }) {
         </div>
 
         {/* New note */}
-        <div className="rounded-md border border-white/10 bg-white/[0.03] p-2.5">
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-2 flex items-center gap-1">
+        <div className="rounded-md border border-default bg-surface-2 p-2.5">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2 flex items-center gap-1">
             <StickyNote className="h-3 w-3" />
             Add note
           </div>
@@ -456,10 +454,10 @@ function Stat({
   value: string;
   accent?: "rose";
 }) {
-  const color = accent === "rose" ? "text-rose-300" : "text-white";
+  const color = accent === "rose" ? "text-danger" : "text-fg";
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-2">
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+    <div className="rounded-md border border-default bg-surface-2 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className={`font-mono text-sm mt-0.5 ${color}`}>{value}</div>

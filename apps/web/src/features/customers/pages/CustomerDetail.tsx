@@ -58,7 +58,7 @@ export function CustomerDetailPage() {
 
   if (customer.isLoading) return <SkeletonCard />;
   if (!customer.data)
-    return <p className="text-sm text-white/55">Customer not found.</p>;
+    return <p className="text-sm text-fg-muted">Customer not found.</p>;
   const c = customer.data;
 
   const fullName = [c.firstName, c.middleName, c.lastName]
@@ -80,7 +80,7 @@ export function CustomerDetailPage() {
               {c.firstName} {c.middleName ? `${c.middleName} ` : ""}
               {c.lastName}
             </CardTitle>
-            <div className="text-xs text-white/55 mt-1">
+            <div className="text-xs text-fg-muted mt-1">
               {c.phone} · {c.email ?? "—"} · DOB {formatDate(c.dateOfBirth)}
             </div>
           </div>
@@ -88,14 +88,14 @@ export function CustomerDetailPage() {
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/[0.06] px-3 py-1.5 text-sm hover:bg-white/[0.10]"
+              className="inline-flex items-center gap-1 rounded-md border border-default bg-surface-3 px-3 py-1.5 text-sm hover:bg-hover"
             >
               <Pencil className="h-4 w-4" />
               Edit profile
             </button>
             <Link
               to={`/customers/${id}/survey`}
-              className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/[0.06] px-3 py-1.5 text-sm hover:bg-white/[0.10]"
+              className="inline-flex items-center gap-1 rounded-md border border-default bg-surface-3 px-3 py-1.5 text-sm hover:bg-hover"
             >
               <Gauge className="h-4 w-4" />
               {score.data ? "Re-score" : "Take credit survey"}
@@ -136,13 +136,13 @@ export function CustomerDetailPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Gauge className="h-4 w-4 text-sky-300" />
+              <Gauge className="h-4 w-4 text-info" />
               Credit score
             </CardTitle>
           </CardHeader>
           <CardContent>
             {score.isLoading ? (
-              <p className="text-sm text-white/55">Loading…</p>
+              <p className="text-sm text-fg-muted">Loading…</p>
             ) : score.data ? (
               <div className="space-y-3">
                 <div className="flex items-end gap-3">
@@ -151,16 +151,16 @@ export function CustomerDetailPage() {
                   </div>
                   <TierBadge tier={score.data.tier} />
                 </div>
-                <div className="text-xs text-white/55">
+                <div className="text-xs text-fg-muted">
                   Last scored {formatDate(score.data.computedAt)}
                 </div>
-                <ul className="text-xs divide-y divide-white/5">
+                <ul className="text-xs divide-y divide-default">
                   {score.data.breakdown.slice(0, 6).map((b) => (
                     <li
                       key={b.factorId}
                       className="flex justify-between py-1.5"
                     >
-                      <span className="text-white/70">{b.label}</span>
+                      <span className="text-fg">{b.label}</span>
                       <span className="font-mono">
                         {b.points.toFixed(1)} / {b.maxPoints}
                       </span>
@@ -169,7 +169,7 @@ export function CustomerDetailPage() {
                 </ul>
               </div>
             ) : (
-              <p className="text-sm text-white/55">
+              <p className="text-sm text-fg-muted">
                 No score yet — run the survey.
               </p>
             )}
@@ -179,7 +179,7 @@ export function CustomerDetailPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-300" />
+              <ShieldCheck className="h-4 w-4 text-success" />
               KYC
             </CardTitle>
           </CardHeader>
@@ -201,7 +201,7 @@ export function CustomerDetailPage() {
                   {kycStatus.data.status}
                 </Badge>
                 {kycStatus.data.missing.length > 0 && (
-                  <div className="text-xs text-amber-300 mt-1">
+                  <div className="text-xs text-warning mt-1">
                     Missing:{" "}
                     {kycStatus.data.missing
                       .map((m) => DOC_TYPE_LABELS[m])
@@ -210,7 +210,7 @@ export function CustomerDetailPage() {
                 )}
               </div>
             )}
-            <ul className="text-xs divide-y divide-white/5">
+            <ul className="text-xs divide-y divide-default">
               {(kycDocs.data ?? []).map((d) => (
                 <li key={d.id} className="py-1.5 flex justify-between">
                   <span>
@@ -341,7 +341,7 @@ function SubmitKycForm({
 
   if (available.length === 0) {
     return (
-      <div className="border-t border-white/10 pt-3 text-xs text-fg-subtle">
+      <div className="border-t border-default pt-3 text-xs text-fg-subtle">
         <FileUp className="inline h-3 w-3 mr-1" />
         All document types have an active submission. Mark one as rejected above
         to allow a fresh upload.
@@ -352,7 +352,7 @@ function SubmitKycForm({
   const captureMode = CAMERA_MODE[documentType];
 
   return (
-    <div className="space-y-3 border-t border-white/10 pt-3">
+    <div className="space-y-3 border-t border-default pt-3">
       <div className="text-xs text-fg-subtle flex items-center gap-1">
         <FileUp className="h-3 w-3" />
         Submit a document
@@ -412,23 +412,23 @@ function SubmitKycForm({
 function TierBadge({ tier }: { tier: CreditTier }) {
   const map: Record<CreditTier, { cls: string; label: string }> = {
     A: {
-      cls: "bg-emerald-500/15 text-emerald-300 border-emerald-400/30",
+      cls: "bg-emerald-500/15 text-success border-emerald-400/30",
       label: "A · Prime",
     },
     B: {
-      cls: "bg-sky-500/15 text-sky-300 border-sky-400/30",
+      cls: "bg-sky-500/15 text-info border-sky-400/30",
       label: "B · Good",
     },
     C: {
-      cls: "bg-amber-500/15 text-amber-200 border-amber-400/30",
+      cls: "bg-amber-500/15 text-warning border-amber-400/30",
       label: "C · Fair",
     },
     D: {
-      cls: "bg-orange-500/15 text-orange-300 border-orange-400/30",
+      cls: "bg-orange-500/15 text-warning border-orange-400/30",
       label: "D · Subprime",
     },
     F: {
-      cls: "bg-rose-500/15 text-rose-300 border-rose-400/30",
+      cls: "bg-rose-500/15 text-danger border-rose-400/30",
       label: "F · Decline",
     },
   };
@@ -450,7 +450,7 @@ function Info({
 }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-white/45">
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
         {label}
       </div>
       <div className="text-sm">{children}</div>
@@ -499,7 +499,7 @@ function ExpandedDetails({ customer: c }: { customer: Customer }) {
   }
 
   return (
-    <div className="border-t border-white/10 pt-3 space-y-4">
+    <div className="border-t border-default pt-3 space-y-4">
       {hasPersonalExtras && (
         <div>
           <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2">

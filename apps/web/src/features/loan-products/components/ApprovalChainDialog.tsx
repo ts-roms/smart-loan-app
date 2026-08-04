@@ -202,7 +202,7 @@ export function ApprovalChainDialog({
                             requiredPermission: e.target.value,
                           });
                         }}
-                        className="w-full rounded-md border border-default bg-surface-2 px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+                        className="w-full rounded-md border border-default bg-surface-2 px-2 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {SUGGESTED_PERMISSIONS.map((p) => (
                           <option key={p.key} value={p.key}>

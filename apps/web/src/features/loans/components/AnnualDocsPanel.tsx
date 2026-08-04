@@ -71,7 +71,7 @@ export function AnnualDocsPanel({ loanId }: { loanId: string }) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-sky-300" />
+          <ShieldCheck className="h-4 w-4 text-info" />
           Renewable documents
         </CardTitle>
         {canManage && (
@@ -85,12 +85,12 @@ export function AnnualDocsPanel({ loanId }: { loanId: string }) {
         {docs.isLoading ? (
           <SkeletonLine />
         ) : list.length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No renewable docs tracked yet. Car insurance and other annual
             documents required by the product policy go here.
           </p>
         ) : (
-          <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+          <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
             {list.map((d) => (
               <DocRow
                 key={d.id}
@@ -141,11 +141,11 @@ function DocRow({
     <div className="px-3 py-2 text-xs flex items-start justify-between gap-2">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-white">{doc.name}</span>
+          <span className="font-medium text-fg">{doc.name}</span>
           <Badge variant="muted">{TYPE_LABELS[doc.type]}</Badge>
           <StatusBadge status={doc.status} />
         </div>
-        <div className="text-[10px] text-white/55 mt-0.5 flex items-center gap-2">
+        <div className="text-[10px] text-fg-muted mt-0.5 flex items-center gap-2">
           <CalendarClock className="h-3 w-3" />
           <span>
             {formatDate(doc.effectiveFrom)} → {formatDate(doc.expiresAt)}
@@ -155,14 +155,14 @@ function DocRow({
               href={doc.documentUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sky-300 hover:underline"
+              className="text-info hover:underline"
             >
               view
             </a>
           )}
         </div>
         {doc.notes && (
-          <p className="text-[10px] text-white/55 mt-0.5">{doc.notes}</p>
+          <p className="text-[10px] text-fg-muted mt-0.5">{doc.notes}</p>
         )}
       </div>
       {canManage && (
@@ -318,7 +318,7 @@ function NewDocDialog({
               placeholder="Provider, policy ref, etc."
             />
           </div>
-          <p className="text-[10px] text-white/45">
+          <p className="text-[10px] text-fg-subtle">
             The borrower receives a 30-day reminder before expiry; an escalation
             goes out if the doc lapses past the due date.
           </p>

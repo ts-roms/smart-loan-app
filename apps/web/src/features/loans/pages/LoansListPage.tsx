@@ -61,10 +61,10 @@ export function LoansListPage() {
             <SkeletonCard /> <SkeletonCard /> <SkeletonCard />
           </div>
         ) : (loans.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">No loans yet.</p>
+          <p className="text-sm text-fg-muted">No loans yet.</p>
         ) : (
           <table className="w-full text-sm" data-tour="loans-table">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Number</th>
                 <th className="py-2 px-2">Type</th>
@@ -75,9 +75,9 @@ export function LoansListPage() {
                 <th className="py-2 px-2">Submitted</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(loans.data ?? []).map((l) => (
-                <tr key={l.id} className="hover:bg-white/[0.03]">
+                <tr key={l.id} className="hover:bg-hover">
                   <td className="py-2 px-2 font-mono">
                     <QuickLoanLink id={l.id}>{l.number}</QuickLoanLink>
                   </td>
@@ -103,7 +103,7 @@ export function LoansListPage() {
                   <td className="py-2 px-2">
                     <LoanStatusBadge status={l.status} />
                   </td>
-                  <td className="py-2 px-2 text-xs text-white/55">
+                  <td className="py-2 px-2 text-xs text-fg-muted">
                     {formatDate(l.submittedAt)}
                   </td>
                 </tr>

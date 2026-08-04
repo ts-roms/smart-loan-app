@@ -56,12 +56,12 @@ export function LeaseQueuePage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Car className="h-4 w-4 text-sky-300" />
+            <Car className="h-4 w-4 text-info" />
             Lease-to-Own
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             agreements are created automatically when a lease-product loan is
             disbursed. Operators monitor active units, follow up on pull-outs,
             and close out via buyout, return, or extension. State transitions
@@ -75,7 +75,7 @@ export function LeaseQueuePage() {
           {(Object.keys(counts) as LeaseStatus[]).map((s) => (
             <Card key={s}>
               <CardContent className="py-3">
-                <div className="text-xs text-white/55">{STATUS_LABEL[s]}</div>
+                <div className="text-xs text-fg-muted">{STATUS_LABEL[s]}</div>
                 <div className="mt-1 text-2xl font-semibold tabular-nums">
                   {counts[s]}
                 </div>
@@ -109,12 +109,12 @@ export function LeaseQueuePage() {
           {leases.isLoading ? (
             <SkeletonCard />
           ) : (leases.data ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">
+            <p className="text-sm text-fg-muted">
               No lease agreements at this status.
             </p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Loan</th>
                   <th className="py-2 px-2">Status</th>
@@ -124,7 +124,7 @@ export function LeaseQueuePage() {
                   <th className="py-2 px-2">Closed</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {leases.data!.map((a) => (
                   <LeaseRow key={a.id} a={a} />
                 ))}
@@ -151,11 +151,11 @@ function LeaseRow({ a }: { a: LeaseAgreementWithLoan }) {
         : "—";
 
   return (
-    <tr className="hover:bg-white/[0.03]">
+    <tr className="hover:bg-hover">
       <td className="py-2 px-2 font-mono text-xs">
         <Link
           to={`/loans/${a.loan.number}`}
-          className="text-sky-300 hover:underline"
+          className="text-info hover:underline"
         >
           {a.loan.number}
         </Link>
@@ -168,23 +168,23 @@ function LeaseRow({ a }: { a: LeaseAgreementWithLoan }) {
       <td className="py-2 px-2 text-right tabular-nums">
         {formatMoney(Number(a.residualValue))}
       </td>
-      <td className="py-2 px-2 text-xs text-white/70">
+      <td className="py-2 px-2 text-xs text-fg">
         {TITLE_HOLDER_LABEL[a.titleHolder]}
       </td>
       <td className="py-2 px-2 text-right tabular-nums">
         {a.missedPaymentStreak > 0 ? (
           <span
             className={
-              a.missedPaymentStreak >= 3 ? "text-rose-300" : "text-amber-300"
+              a.missedPaymentStreak >= 3 ? "text-danger" : "text-warning"
             }
           >
             {a.missedPaymentStreak}
           </span>
         ) : (
-          <span className="text-white/40">0</span>
+          <span className="text-fg-subtle">0</span>
         )}
       </td>
-      <td className="py-2 px-2 text-xs text-white/70">{closedLabel}</td>
+      <td className="py-2 px-2 text-xs text-fg">{closedLabel}</td>
     </tr>
   );
 }

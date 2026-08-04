@@ -66,7 +66,7 @@ export function EclRunsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-sky-300" />
+            <ShieldCheck className="h-4 w-4 text-info" />
             ECL provisioning
           </CardTitle>
           {canRun && (
@@ -81,7 +81,7 @@ export function EclRunsPage() {
           )}
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             IFRS 9 / PFRS 9 staged provisioning. Stage 1 = performing (12-month
             PD), Stage 2 = significant increase (lifetime PD), Stage 3 =
             credit-impaired (lifetime PD, individually assessed). DPD-driven;
@@ -105,13 +105,13 @@ export function EclRunsPage() {
           {runs.isLoading ? (
             <SkeletonCard />
           ) : (runs.data ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">
+            <p className="text-sm text-fg-muted">
               No ECL runs yet. Click <strong>Run ECL now</strong> to compute the
               first period.
             </p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Period</th>
                   <th className="py-2 px-2">As of</th>
@@ -123,13 +123,13 @@ export function EclRunsPage() {
                   <th className="py-2 px-2">Journal</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {(runs.data ?? []).map((r) => (
-                  <tr key={r.id} className="hover:bg-white/[0.03]">
+                  <tr key={r.id} className="hover:bg-hover">
                     <td className="py-2 px-2 text-xs">
                       {formatDate(r.periodStart)} → {formatDate(r.periodEnd)}
                     </td>
-                    <td className="py-2 px-2 text-xs text-white/65">
+                    <td className="py-2 px-2 text-xs text-fg-muted">
                       {formatDateTime(r.asOf)}
                     </td>
                     <td className="py-2 px-2 text-right font-mono">
@@ -139,7 +139,7 @@ export function EclRunsPage() {
                       <div className="font-mono text-xs">
                         {formatMoney(Number(r.stage1Ecl))}
                       </div>
-                      <div className="text-[10px] text-white/45">
+                      <div className="text-[10px] text-fg-subtle">
                         {r.stage1Count} loans
                       </div>
                     </td>
@@ -147,7 +147,7 @@ export function EclRunsPage() {
                       <div className="font-mono text-xs">
                         {formatMoney(Number(r.stage2Ecl))}
                       </div>
-                      <div className="text-[10px] text-white/45">
+                      <div className="text-[10px] text-fg-subtle">
                         {r.stage2Count} loans
                       </div>
                     </td>
@@ -155,7 +155,7 @@ export function EclRunsPage() {
                       <div className="font-mono text-xs">
                         {formatMoney(Number(r.stage3Ecl))}
                       </div>
-                      <div className="text-[10px] text-white/45">
+                      <div className="text-[10px] text-fg-subtle">
                         {r.stage3Count} loans
                       </div>
                     </td>
@@ -217,15 +217,15 @@ function LastRunSummary({ result }: { result: EclRunResult }) {
             return (
               <div
                 key={s}
-                className="rounded-md border border-white/10 bg-white/[0.03] p-3"
+                className="rounded-md border border-default bg-surface-2 p-3"
               >
-                <div className="text-[10px] uppercase tracking-wider text-white/55">
+                <div className="text-[10px] uppercase tracking-wider text-fg-muted">
                   {s.replace("_", " ")}
                 </div>
                 <div className="font-mono text-sm mt-1">
                   {formatMoney(bucket.ecl)}
                 </div>
-                <div className="text-[10px] text-white/45">
+                <div className="text-[10px] text-fg-subtle">
                   {bucket.count} loans
                 </div>
               </div>
@@ -234,7 +234,7 @@ function LastRunSummary({ result }: { result: EclRunResult }) {
         </div>
 
         {result.perLoan.some((l) => l.stage === "STAGE_3") && (
-          <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-100 flex items-center gap-2">
+          <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
             <AlertTriangle className="h-3 w-3" />
             {result.perLoan.filter((l) => l.stage === "STAGE_3").length} loan(s)
             now Stage 3 (credit-impaired) — review for write-off candidacy.
@@ -256,15 +256,15 @@ function Stat({
 }) {
   const color =
     accent === "sky"
-      ? "text-sky-300"
+      ? "text-info"
       : accent === "rose"
-        ? "text-rose-300"
+        ? "text-danger"
         : accent === "emerald"
-          ? "text-emerald-300"
-          : "text-white";
+          ? "text-success"
+          : "text-fg";
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-[10px] uppercase tracking-wider text-white/55">
+    <div className="rounded-md border border-default bg-surface-2 p-3">
+      <div className="text-[10px] uppercase tracking-wider text-fg-muted">
         {label}
       </div>
       <div className={`font-mono text-sm mt-1 ${color}`}>{value}</div>

@@ -159,10 +159,10 @@ export function JournalEntriesPage() {
         {entries.isLoading ? (
           <SkeletonCard />
         ) : data.length === 0 ? (
-          <p className="text-sm text-white/55">No entries yet.</p>
+          <p className="text-sm text-fg-muted">No entries yet.</p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 {canPost && (
                   <th className="py-2 px-2 w-8">
@@ -184,7 +184,7 @@ export function JournalEntriesPage() {
                 <th className="py-2 px-2 w-8" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {data.map((e) => {
                 const debits = (e.lines ?? []).reduce(
                   (s, l) => s + Number(l.debit),
@@ -196,7 +196,7 @@ export function JournalEntriesPage() {
                 return (
                   <tr
                     key={e.id}
-                    className={`hover:bg-white/[0.03] align-top ${isReversed ? "opacity-50" : ""}`}
+                    className={`hover:bg-hover align-top ${isReversed ? "opacity-50" : ""}`}
                   >
                     {canPost && (
                       <td className="py-2 px-2">
@@ -211,12 +211,12 @@ export function JournalEntriesPage() {
                     )}
                     <td className="py-2 px-2 font-mono">
                       <JournalEntryLink id={e.id}>
-                        <span className="text-sky-300 hover:underline">
+                        <span className="text-info hover:underline">
                           {e.number}
                         </span>
                       </JournalEntryLink>
                     </td>
-                    <td className="py-2 px-2 text-white/65">
+                    <td className="py-2 px-2 text-fg-muted">
                       {formatDate(e.entryDate)}
                     </td>
                     <td className="py-2 px-2">
@@ -226,18 +226,18 @@ export function JournalEntriesPage() {
                       <div className="truncate" title={e.memo ?? ""}>
                         {e.memo ?? "—"}
                         {isReversed && (
-                          <span className="ml-2 text-rose-300 text-xs">
+                          <span className="ml-2 text-danger text-xs">
                             reversed
                           </span>
                         )}
                         {isReversal && (
-                          <span className="ml-2 text-amber-300 text-xs">
+                          <span className="ml-2 text-warning text-xs">
                             reversal entry
                           </span>
                         )}
                       </div>
                       {e.lines && (
-                        <details className="mt-1 text-xs text-white/55">
+                        <details className="mt-1 text-xs text-fg-muted">
                           <summary className="cursor-pointer">
                             {e.lines.length} lines
                           </summary>
@@ -264,7 +264,7 @@ export function JournalEntriesPage() {
                           type="button"
                           title="Reverse this entry"
                           onClick={() => onReverseOne(e.id)}
-                          className="text-white/55 hover:text-rose-300"
+                          className="text-fg-muted hover:text-danger"
                           disabled={reverseOne.isPending}
                         >
                           <RotateCcw className="h-3 w-3" />
@@ -363,9 +363,9 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
             </Field>
           </div>
 
-          <div className="rounded-md border border-white/10">
+          <div className="rounded-md border border-default">
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Account</th>
                   <th className="py-2 px-2 w-32">Debit</th>
@@ -376,7 +376,7 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
               </thead>
               <tbody>
                 {lines.map((l, idx) => (
-                  <tr key={idx} className="border-t border-white/5">
+                  <tr key={idx} className="border-t border-default">
                     <td className="p-1">
                       <Select
                         value={l.accountCode}
@@ -436,7 +436,7 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
                       {lines.length > 2 && (
                         <button
                           type="button"
-                          className="text-white/45 hover:text-rose-300"
+                          className="text-fg-subtle hover:text-danger"
                           onClick={() =>
                             setLines(lines.filter((_, i) => i !== idx))
                           }
@@ -449,8 +449,8 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-white/10 bg-white/[0.02]">
-                  <td className="px-2 py-2 text-xs uppercase tracking-wider text-white/45">
+                <tr className="border-t border-default bg-surface-2">
+                  <td className="px-2 py-2 text-xs uppercase tracking-wider text-fg-subtle">
                     Total
                   </td>
                   <td className="px-2 py-2 font-mono">
@@ -461,9 +461,9 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
                   </td>
                   <td className="px-2 py-2 text-xs">
                     {balanced ? (
-                      <span className="text-emerald-300">Balanced</span>
+                      <span className="text-success">Balanced</span>
                     ) : (
-                      <span className="text-rose-300">Out of balance</span>
+                      <span className="text-danger">Out of balance</span>
                     )}
                   </td>
                   <td />
@@ -520,7 +520,7 @@ function Field({
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-white/55">{label}</label>
+      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );

@@ -39,7 +39,7 @@ export function LoanPortfolioPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Loan portfolio aging</CardTitle>
           <div className="flex items-center gap-2 text-sm">
-            <label className="text-white/55">As of</label>
+            <label className="text-fg-muted">As of</label>
             <DatePicker value={asOf} onChange={setAsOf} className="h-9 w-44" />
           </div>
         </CardHeader>
@@ -51,9 +51,9 @@ export function LoanPortfolioPage() {
               {BUCKETS.map((b) => (
                 <div
                   key={b}
-                  className="rounded-md border border-white/10 bg-white/[0.03] p-3"
+                  className="rounded-md border border-default bg-surface-2 p-3"
                 >
-                  <div className="text-xs uppercase tracking-wider text-white/45">
+                  <div className="text-xs uppercase tracking-wider text-fg-subtle">
                     {BUCKET_LABELS[b]}
                   </div>
                   <div className="text-lg font-semibold font-mono mt-1">
@@ -74,10 +74,10 @@ export function LoanPortfolioPage() {
           {report.isLoading ? (
             <SkeletonCard />
           ) : (report.data?.rows ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">No active loans.</p>
+            <p className="text-sm text-fg-muted">No active loans.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Loan</th>
                   <th className="py-2 px-2">Customer</th>
@@ -87,13 +87,13 @@ export function LoanPortfolioPage() {
                   <th className="py-2 px-2">Bucket</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {(report.data?.rows ?? []).map((r) => (
-                  <tr key={r.loanId} className="hover:bg-white/[0.03]">
+                  <tr key={r.loanId} className="hover:bg-hover">
                     <td className="py-2 px-2 font-mono">
                       <Link
                         to={`/loans/${r.loanNumber}`}
-                        className="text-sky-300 hover:underline"
+                        className="text-info hover:underline"
                       >
                         {r.loanNumber}
                       </Link>
@@ -115,7 +115,7 @@ export function LoanPortfolioPage() {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-white/10 bg-white/[0.02] font-semibold">
+                <tr className="border-t border-default bg-surface-2 font-semibold">
                   <td className="py-2 px-2" colSpan={2}>
                     Total
                   </td>

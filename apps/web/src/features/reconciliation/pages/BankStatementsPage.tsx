@@ -32,7 +32,7 @@ export function BankStatementsPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <Banknote className="h-4 w-4 text-sky-300" />
+          <Banknote className="h-4 w-4 text-info" />
           Bank reconciliation
         </CardTitle>
         <div className="flex items-center gap-2">
@@ -51,7 +51,7 @@ export function BankStatementsPage() {
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-white/55 mb-3">
+        <p className="text-xs text-fg-muted mb-3">
           Imported bank statements. Each statement holds raw transaction lines;
           auto-match pairs incoming credits with recorded payments and outgoing
           debits with loan disbursements. Anything that doesn't match
@@ -60,13 +60,13 @@ export function BankStatementsPage() {
         {list.isLoading ? (
           <SkeletonCard />
         ) : (list.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No statements imported yet. Click <strong>Import statement</strong>{" "}
             to start the first reconciliation.
           </p>
         ) : (
           <table className="w-full text-sm" data-tour="recon-list">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Label</th>
                 <th className="py-2 px-2">Account</th>
@@ -77,13 +77,13 @@ export function BankStatementsPage() {
                 <th className="py-2 px-2">Imported</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(list.data ?? []).map((s) => (
-                <tr key={s.id} className="hover:bg-white/[0.03]">
+                <tr key={s.id} className="hover:bg-hover">
                   <td className="py-2 px-2">
                     <Link
                       to={`/reconciliation/${s.id}`}
-                      className="text-sky-300 hover:underline font-medium"
+                      className="text-info hover:underline font-medium"
                     >
                       {s.label}
                     </Link>
@@ -113,7 +113,7 @@ export function BankStatementsPage() {
                       {s.status}
                     </Badge>
                   </td>
-                  <td className="py-2 px-2 text-xs text-white/55">
+                  <td className="py-2 px-2 text-xs text-fg-muted">
                     <FileSpreadsheet className="h-3 w-3 inline mr-1" />
                     {formatDateTime(s.importedAt)}
                   </td>

@@ -140,7 +140,7 @@ export function ImportStatementDialog({ onClose }: { onClose: () => void }) {
           <div>
             <Label className="flex items-center justify-between">
               <span>CSV lines</span>
-              <span className="text-xs text-white/55">
+              <span className="text-xs text-fg-muted">
                 {parsed.rows.length} rows parsed
                 {parsed.errors.length > 0 &&
                   ` · ${parsed.errors.length} error${parsed.errors.length === 1 ? "" : "s"}`}
@@ -150,17 +150,17 @@ export function ImportStatementDialog({ onClose }: { onClose: () => void }) {
               value={csv}
               onChange={(e) => setCsv(e.target.value)}
               rows={8}
-              className="w-full font-mono text-xs rounded-md border border-white/10 bg-white/[0.04] p-2"
+              className="w-full font-mono text-xs rounded-md border border-default bg-surface-2 p-2"
               spellCheck={false}
             />
-            <p className="text-[10px] text-white/45 mt-1">
+            <p className="text-[10px] text-fg-subtle mt-1">
               Header row required:{" "}
               <code>txnDate,description,amount,reference,runningBalance</code>.
               Amount positive = credit, negative = debit. Last two columns
               optional.
             </p>
             {parsed.errors.length > 0 && (
-              <div className="text-[10px] text-rose-300 mt-1">
+              <div className="text-[10px] text-danger mt-1">
                 {parsed.errors[0]}
               </div>
             )}

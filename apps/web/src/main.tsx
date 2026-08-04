@@ -7,6 +7,7 @@ import { App } from "./App";
 import { ApiClientProvider } from "./providers/api";
 import { AuthProvider } from "./providers/auth";
 import { PwaProvider } from "./providers/pwa";
+import { ThemeProvider } from "./providers/theme";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -18,19 +19,23 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <ApiClientProvider>
-            <Toaster>
-              <ConfirmDialogProvider>
-                <PwaProvider>
-                  <App />
-                </PwaProvider>
-              </ConfirmDialogProvider>
-            </Toaster>
-          </ApiClientProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      {/* Outermost of the app providers: everything below can read the
+          theme, and nothing it renders depends on auth or data. */}
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <ApiClientProvider>
+              <Toaster>
+                <ConfirmDialogProvider>
+                  <PwaProvider>
+                    <App />
+                  </PwaProvider>
+                </ConfirmDialogProvider>
+              </Toaster>
+            </ApiClientProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,
 );

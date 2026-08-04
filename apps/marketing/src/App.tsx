@@ -308,7 +308,7 @@ function FooterColumn({
 export const container: React.CSSProperties = {
   maxWidth: 1100,
   margin: "0 auto",
-  padding: "0 24px",
+  padding: "24px 24px",
 };
 
 export const btnPrimary: React.CSSProperties = {

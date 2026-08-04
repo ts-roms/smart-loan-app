@@ -32,6 +32,7 @@ import {
   Layers,
   LogOut,
   Mail,
+  Menu,
   Package,
   PhoneCall,
   Settings,
@@ -43,13 +44,14 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/auth";
 import { ActiveDelegationBanner } from "../features/delegations";
 import { LicenseBanner } from "../features/settings";
 import { AuditLogTrigger } from "../features/audit";
 import { HelpTrigger } from "../features/help";
 import { NotificationBell } from "../features/notifications";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface NavItem {
   to: string;
@@ -247,27 +249,72 @@ function visibleItems(items: NavItem[], role: UserRole | undefined): NavItem[] {
   return items.filter((n) => !n.roles || (role && n.roles.includes(role)));
 }
 
-function NavItemLink({ item }: { item: NavItem }) {
-  return (
-    <NavLink
-      to={item.to}
-      end={item.to === "/"}
-      className={({ isActive }) =>
-        cn(
-          // Subtle active state: a vertical accent rule on the left edge
-          // plus a tinted surface. Looks more intentional than just a
-          // darker background.
-          "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
-          "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity",
-          isActive
-            ? "bg-surface-2 text-fg before:opacity-100"
-            : "text-fg-muted hover:bg-surface-2/60 hover:text-fg",
-        )
+/** Does `path` fall under `to` — the item itself or any route below it? */
+function coversRoute(to: string, path: string): boolean {
+  if (to === "/") return path === "/";
+  return path === to || path.startsWith(`${to}/`);
+}
+
+/**
+ * Which single nav item owns `path` — the longest `to` that covers it.
+ *
+ * NavLink's own `isActive` can't decide this: it lights up on any
+ * ancestor match, so `/collections/demand-letters` highlighted both
+ * "Collections" and "Demand letters" at once. Four pairs in this sidebar
+ * nest that way (collections, customers, users, accounting).
+ *
+ * `end` on every item would fix the double-highlight and break the
+ * common case instead — `/customers/:id`, `/loans/new` and the eight
+ * `/accounting/*` pages have no nav entry of their own and rely on the
+ * parent staying lit. Longest-match satisfies both: a child claims the
+ * route when one exists, otherwise the nearest ancestor keeps it.
+ *
+ * Scoped to items the role can actually see, so an item hidden by
+ * `roles` never steals the highlight from the visible parent.
+ */
+function activeNavPath(
+  path: string,
+  role: UserRole | undefined,
+): string | null {
+  let best: string | null = null;
+  for (const section of NAV_SECTIONS) {
+    for (const item of visibleItems(section.items, role)) {
+      if (
+        coversRoute(item.to, path) &&
+        (!best || item.to.length > best.length)
+      ) {
+        best = item.to;
       }
+    }
+  }
+  return best;
+}
+
+function NavItemLink({ item, active }: { item: NavItem; active: boolean }) {
+  return (
+    <Link
+      to={item.to}
+      // Plain Link, not NavLink: active state comes from activeNavPath,
+      // and NavLink would only ever set aria-current from its own match.
+      // With `end` that drops the marker on `/customers/:id` (parent lit,
+      // nothing announced); without it, it marks two items at once — the
+      // same bug, moved to the accessibility tree where it's harder to
+      // see. Setting it here keeps the visual and announced state equal.
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        // Subtle active state: a vertical accent rule on the left edge
+        // plus a tinted surface. Looks more intentional than just a
+        // darker background.
+        "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
+        "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity",
+        active
+          ? "bg-surface-2 text-fg before:opacity-100"
+          : "text-fg-muted hover:bg-surface-2/60 hover:text-fg",
+      )}
     >
       <item.icon className="h-4 w-4 shrink-0" />
       <span className="truncate">{item.label}</span>
-    </NavLink>
+    </Link>
   );
 }
 
@@ -290,20 +337,26 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     }
   }, [branding.data?.companyName]);
 
-  // Find the section the current route lives in so the matching accordion
-  // panel opens by default — the user lands with their context already
-  // expanded instead of having to click around for it.
+  // Exactly one nav item is lit at a time; everything else keys off it.
   const currentPath = location.pathname;
+  const activePath = activeNavPath(currentPath, role);
+
+  // Find the section that item lives in so the matching accordion panel
+  // opens by default — the user lands with their context already
+  // expanded instead of having to click around for it.
   const sectionWithRoute =
     NAV_SECTIONS.find(
-      (s) =>
-        s.label &&
-        s.items.some((i) =>
-          i.to === "/"
-            ? currentPath === "/"
-            : currentPath === i.to || currentPath.startsWith(`${i.to}/`),
-        ),
+      (s) => s.label && s.items.some((i) => i.to === activePath),
     )?.label ?? null;
+
+  // Off-canvas nav state — only meaningful below the md breakpoint.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Navigating from the drawer should close it; otherwise the overlay
+  // stays over the page you just asked for.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [currentPath]);
 
   const [openSection, setOpenSection] = useState<string | null>(
     sectionWithRoute,
@@ -336,9 +389,30 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     // sidebar and header don't scroll with the page. Each interior region
     // (sidebar nav, main content) owns its own scroll instead.
     <div className="h-screen flex overflow-hidden bg-background">
+      {/*
+        Below md the sidebar slides over the content instead of sitting
+        beside it. At 375px a fixed 240px rail left `main` with 135px,
+        and after the page's own padding the inner panels were down to
+        ~16px — narrow enough that the permission list on /roles rendered
+        each key one character per line, stacked on its own label. No
+        amount of truncation helps a 16px column; the rail has to go.
+      */}
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavOpen(false)}
+          className="fixed inset-0 z-40 bg-foreground/40 md:hidden"
+        />
+      )}
       <aside
         data-tour="nav-sidebar"
-        className="w-60 shrink-0 border-r border-default bg-surface-1/80 backdrop-blur-md flex flex-col h-full"
+        className={cn(
+          "w-60 shrink-0 border-r border-default bg-surface-1/80 backdrop-blur-md flex flex-col h-full",
+          // Off-canvas on small screens, in-flow from md up.
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full",
+        )}
       >
         <div className="px-4 py-5 border-b border-default">
           <div className="flex items-center gap-2.5">
@@ -377,18 +451,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               return (
                 <div key={`section-${idx}`} className="space-y-0.5">
                   {items.map((n) => (
-                    <NavItemLink key={n.to} item={n} />
+                    <NavItemLink
+                      key={n.to}
+                      item={n}
+                      active={n.to === activePath}
+                    />
                   ))}
                 </div>
               );
             }
 
             const isOpen = openSection === section.label;
-            const hasActiveItem = items.some((i) =>
-              i.to === "/"
-                ? currentPath === "/"
-                : currentPath === i.to || currentPath.startsWith(`${i.to}/`),
-            );
+            const hasActiveItem = items.some((i) => i.to === activePath);
 
             return (
               <div key={section.label} className="space-y-0.5">
@@ -426,7 +500,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   <div className="min-h-0 overflow-hidden">
                     <div className="space-y-0.5 pb-1">
                       {items.map((n) => (
-                        <NavItemLink key={n.to} item={n} />
+                        <NavItemLink
+                          key={n.to}
+                          item={n}
+                          active={n.to === activePath}
+                        />
                       ))}
                     </div>
                   </div>
@@ -443,7 +521,19 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         only this column scrolls.
       */}
       <main className="flex-1 min-w-0 h-full overflow-y-auto">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b border-default bg-background/85 backdrop-blur-xl px-6">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-default bg-background/85 backdrop-blur-xl px-4 md:px-6">
+          {/* Only route to the nav once the rail is off-canvas. */}
+          <button
+            type="button"
+            aria-label="Open navigation"
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen(true)}
+            className="md:hidden grid h-9 w-9 place-items-center rounded-md text-fg-muted hover:bg-hover hover:text-fg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="flex-1" />
+          <ThemeToggle />
           <span data-tour="navbar-help">
             <HelpTrigger />
           </span>
@@ -459,7 +549,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 type="button"
                 aria-label="Open profile menu"
                 data-tour="navbar-profile"
-                className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 transition"
+                className="flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring transition"
               >
                 <Avatar name={user?.name ?? "—"} size="md" />
               </button>
@@ -472,10 +562,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   <div className="text-sm font-medium truncate">
                     {user?.name ?? "—"}
                   </div>
-                  <div className="text-xs text-white/55 truncate">
+                  <div className="text-xs text-fg-muted truncate">
                     {user?.email}
                   </div>
-                  <div className="text-[10px] uppercase tracking-wider text-sky-300/80 mt-0.5">
+                  <div className="text-[10px] uppercase tracking-wider text-info mt-0.5">
                     {user?.role}
                   </div>
                 </div>
@@ -504,7 +594,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   signOut();
                   void navigate("/login");
                 }}
-                className="text-rose-300 focus:text-rose-200"
+                className="text-danger focus:text-danger"
               >
                 <LogOut className="h-4 w-4" />
                 Log out

@@ -157,9 +157,9 @@ export function FileDropzone({
       data-drag-over={isDragOver || undefined}
       className={cn(
         "group relative flex flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed px-4 py-6 text-center transition-colors",
-        "border-white/15 bg-white/[0.02] cursor-pointer",
-        "hover:border-sky-400/50 hover:bg-white/[0.04]",
-        "focus-within:border-sky-400/70 focus-within:bg-white/[0.04]",
+        "border-default bg-surface-2 cursor-pointer",
+        "hover:border-sky-400/50 hover:bg-hover",
+        "focus-within:border-sky-400/70 focus-within:bg-surface-2",
         isDragOver && "border-sky-400 bg-sky-500/10",
         disabled && "pointer-events-none opacity-50",
         className,
@@ -182,21 +182,19 @@ export function FileDropzone({
       <Upload
         className={cn(
           "h-5 w-5 transition-colors",
-          isDragOver
-            ? "text-sky-300"
-            : "text-white/55 group-hover:text-sky-300",
+          isDragOver ? "text-info" : "text-fg-muted group-hover:text-info",
         )}
         aria-hidden
       />
-      <div className="text-sm text-white/80">
+      <div className="text-sm text-fg">
         {label ?? (
           <>
-            <span className="font-medium text-sky-300">Click to browse</span>
-            <span className="text-white/55"> or drop a file here</span>
+            <span className="font-medium text-info">Click to browse</span>
+            <span className="text-fg-muted"> or drop a file here</span>
           </>
         )}
       </div>
-      {hint && <div className="text-[11px] text-white/45">{hint}</div>}
+      {hint && <div className="text-[11px] text-fg-subtle">{hint}</div>}
     </label>
   );
 }

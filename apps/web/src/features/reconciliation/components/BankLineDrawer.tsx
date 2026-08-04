@@ -49,7 +49,7 @@ export function BankLineLink({
       <DrawerTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-amber-200/80 hover:text-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 rounded"
+          className="inline-flex items-center gap-1 text-warning hover:text-warning focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
           aria-label="Inspect bank line"
         >
           {children}
@@ -131,12 +131,12 @@ function BankLineInspector({
     <>
       <DrawerHeader>
         <div className="flex items-start gap-2">
-          <Banknote className="h-5 w-5 mt-0.5 text-sky-300" />
+          <Banknote className="h-5 w-5 mt-0.5 text-info" />
           <div className="flex-1 min-w-0">
             <DrawerTitle>Match bank line</DrawerTitle>
             <DrawerDescription>
               {formatDate(line.txnDate)} ·{" "}
-              <span className={isCredit ? "text-emerald-300" : "text-rose-300"}>
+              <span className={isCredit ? "text-success" : "text-danger"}>
                 {formatMoney(amount)}
               </span>
               {line.reference && (
@@ -152,16 +152,16 @@ function BankLineInspector({
 
       <DrawerBody>
         {/* The line itself */}
-        <div className="rounded-md border border-white/10 bg-white/[0.03] p-2.5 text-xs">
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1">
+        <div className="rounded-md border border-default bg-surface-2 p-2.5 text-xs">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">
             Description
           </div>
-          <p className="text-white/85">{line.description}</p>
+          <p className="text-fg">{line.description}</p>
         </div>
 
         {/* Suggested matches */}
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-1.5 flex items-center gap-1">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1.5 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" />
             Suggested matches
           </div>
@@ -171,13 +171,13 @@ function BankLineInspector({
               <SkeletonLine />
             </div>
           ) : (candidates.data ?? []).length === 0 ? (
-            <p className="text-xs text-white/55 inline-flex items-center gap-1">
+            <p className="text-xs text-fg-muted inline-flex items-center gap-1">
               <CircleHelp className="h-3 w-3" />
               No candidates within ±2 days at exact amount. Use the manual form
               below.
             </p>
           ) : (
-            <div className="rounded-md border border-white/10 bg-white/[0.03] divide-y divide-white/5">
+            <div className="rounded-md border border-default bg-surface-2 divide-y divide-default">
               {(candidates.data ?? []).map((c) => (
                 <div
                   key={`${c.type}-${c.refId}`}
@@ -185,7 +185,7 @@ function BankLineInspector({
                 >
                   <div className="min-w-0">
                     <div className="font-medium">{c.label}</div>
-                    <div className="text-[10px] text-white/55 truncate">
+                    <div className="text-[10px] text-fg-muted truncate">
                       {c.detail}
                     </div>
                   </div>
@@ -217,8 +217,8 @@ function BankLineInspector({
         </div>
 
         {/* Manual fallback */}
-        <div className="rounded-md border border-white/10 bg-white/[0.03] p-2.5">
-          <div className="text-[10px] uppercase tracking-wider text-white/45 mb-2">
+        <div className="rounded-md border border-default bg-surface-2 p-2.5">
+          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2">
             Manual match
           </div>
           <div className="grid grid-cols-2 gap-2">

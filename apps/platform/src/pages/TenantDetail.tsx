@@ -102,16 +102,16 @@ export function TenantDetail() {
     },
   });
 
-  if (isLoading) return <p style={{ color: "#94a3b8" }}>Loading…</p>;
-  if (!data) return <p style={{ color: "#fca5a5" }}>Tenant not found.</p>;
+  if (isLoading) return <p style={{ color: "var(--text-dim)" }}>Loading…</p>;
+  if (!data) return <p style={{ color: "var(--danger)" }}>Tenant not found.</p>;
 
   return (
     <div>
-      <Link to="/tenants" style={{ color: "#60a5fa", fontSize: 13 }}>
+      <Link to="/tenants" style={{ color: "var(--accent)", fontSize: 13 }}>
         ← Tenants
       </Link>
       <h1 style={{ fontSize: 22, margin: "12px 0 4px" }}>{data.name}</h1>
-      <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 24 }}>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 24 }}>
         <code>{data.slug}</code> · {data.status}
       </div>
 
@@ -156,7 +156,7 @@ export function TenantDetail() {
             />
           </dl>
         ) : (
-          <p style={{ fontSize: 13, color: "#94a3b8" }}>
+          <p style={{ fontSize: 13, color: "var(--text-dim)" }}>
             No license issued yet for this tenant.
           </p>
         )}
@@ -165,7 +165,7 @@ export function TenantDetail() {
           style={{
             display: "inline-block",
             marginTop: 12,
-            color: "#60a5fa",
+            color: "var(--accent)",
             fontSize: 13,
           }}
         >
@@ -175,57 +175,67 @@ export function TenantDetail() {
 
       <section style={card}>
         <h2 style={h2}>License history</h2>
-        <p style={{ fontSize: 12, color: "#64748b", marginTop: 0 }}>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 0 }}>
           Every license issued for this tenant. Revoke is platform-side only —
           the signed token still validates on tenant instances until its expiry.
           In practice: revoke, then issue a fresh token with new terms.
         </p>
         {licenses.isLoading && (
-          <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading…</p>
+          <p style={{ fontSize: 13, color: "var(--text-dim)" }}>Loading…</p>
         )}
         {licenses.data && licenses.data.length === 0 && (
-          <p style={{ fontSize: 13, color: "#94a3b8" }}>
+          <p style={{ fontSize: 13, color: "var(--text-dim)" }}>
             No licenses have been issued yet.
           </p>
         )}
         {licenses.data && licenses.data.length > 0 && (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: 13,
-            }}
-          >
-            <thead>
-              <tr style={{ textAlign: "left", color: "#94a3b8", fontSize: 11 }}>
-                <th style={th}>Issued</th>
-                <th style={th}>Tier</th>
-                <th style={th}>Expires</th>
-                <th style={th}>Status</th>
-                <th style={th}>By</th>
-                <th style={th}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {licenses.data.map((lic) => (
-                <LicenseRow
-                  key={lic.id}
-                  lic={lic}
-                  isCurrent={data.licenseSnapshot?.jti === lic.jti}
-                  canRevoke={isAdmin}
-                  pending={revoke.isPending}
-                  onRevoke={(reason) => revoke.mutate({ jti: lic.jti, reason })}
-                />
-              ))}
-            </tbody>
-          </table>
+          <div className="pf-tablewrap">
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 13,
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    textAlign: "left",
+                    color: "var(--text-dim)",
+                    fontSize: 11,
+                  }}
+                >
+                  <th style={th}>Issued</th>
+                  <th style={th}>Tier</th>
+                  <th style={th}>Expires</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>By</th>
+                  <th style={th}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {licenses.data.map((lic) => (
+                  <LicenseRow
+                    key={lic.id}
+                    lic={lic}
+                    isCurrent={data.licenseSnapshot?.jti === lic.jti}
+                    canRevoke={isAdmin}
+                    pending={revoke.isPending}
+                    onRevoke={(reason) =>
+                      revoke.mutate({ jti: lic.jti, reason })
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
       {isAdmin && (
         <section style={card}>
           <h2 style={h2}>Lifecycle</h2>
-          <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 0 }}>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 0 }}>
             Suspended tenants keep their data but the tenant API returns 503.
             Archived tenants are soft-deleted (data retained, never served).
           </p>
@@ -261,8 +271,8 @@ export function TenantDetail() {
                 }}
                 style={{
                   ...btnSecondary,
-                  borderColor: "#7f1d1d",
-                  color: "#fca5a5",
+                  borderColor: "var(--danger-ring)",
+                  color: "var(--danger)",
                 }}
                 disabled={action.isPending}
               >
@@ -291,7 +301,7 @@ export function TenantDetail() {
           <div style={{ marginTop: 12 }}>
             <Link
               to={`/audit?tenantSlug=${data.slug}`}
-              style={{ color: "#60a5fa", fontSize: 13 }}
+              style={{ color: "var(--accent)", fontSize: 13 }}
             >
               View audit log for this tenant →
             </Link>
@@ -318,10 +328,10 @@ function ProvisioningSection({
   canRetry: boolean;
 }) {
   const failed = Boolean(tenant.provisioningError);
-  const bg = failed ? "rgba(239,68,68,0.08)" : "rgba(245,158,11,0.08)";
+  const bg = failed ? "var(--danger-soft)" : "var(--warning-soft)";
   const border = failed
-    ? "1px solid rgba(239,68,68,0.3)"
-    : "1px solid rgba(245,158,11,0.3)";
+    ? "1px solid var(--danger-ring)"
+    : "1px solid var(--warning-ring)";
 
   return (
     <section
@@ -335,7 +345,9 @@ function ProvisioningSection({
         {failed ? "Provisioning failed" : "Provisioning in progress"}
       </h2>
       {!failed && (
-        <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 12px" }}>
+        <p
+          style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 12px" }}
+        >
           The tenant schema is being created and seeded. If you just clicked
           "Provision", this page refreshes automatically every few seconds.
           Expected duration: ~10 seconds.
@@ -343,17 +355,23 @@ function ProvisioningSection({
       )}
       {failed && (
         <>
-          <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 8px" }}>
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--text-dim)",
+              margin: "0 0 8px",
+            }}
+          >
             The last provisioning attempt couldn't finish. The recorded error:
           </p>
           <pre
             style={{
               padding: 12,
-              background: "#0a0f1e",
-              border: "1px solid #1e293b",
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
               borderRadius: 4,
               fontSize: 12,
-              color: "#fca5a5",
+              color: "var(--danger)",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
               margin: "0 0 12px",
@@ -361,7 +379,13 @@ function ProvisioningSection({
           >
             {tenant.provisioningError}
           </pre>
-          <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 12px" }}>
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--text-muted)",
+              margin: "0 0 12px",
+            }}
+          >
             Retry is safe — every step (schema create, migrations, seed) is
             idempotent. If you keep hitting the same error, fix the underlying
             cause first (DATABASE_URL reachable, migrations folder intact, disk
@@ -376,11 +400,11 @@ function ProvisioningSection({
         <div
           style={{
             padding: 10,
-            background: "rgba(239,68,68,0.1)",
-            border: "1px solid rgba(239,68,68,0.3)",
+            background: "var(--danger-soft)",
+            border: "1px solid var(--danger-ring)",
             borderRadius: 4,
             fontSize: 13,
-            color: "#fca5a5",
+            color: "var(--danger)",
             marginBottom: 12,
           }}
         >
@@ -394,7 +418,7 @@ function ProvisioningSection({
           disabled={retrying}
           style={{
             ...btnPrimary,
-            background: "#dc2626",
+            background: "var(--danger-strong)",
           }}
         >
           {retrying ? "Retrying…" : "Retry provisioning"}
@@ -420,19 +444,25 @@ function RetrySuccessBanner({ result }: { result: RetryProvisioningResponse }) {
     <div
       style={{
         padding: 16,
-        background: "rgba(16,185,129,0.1)",
-        border: "1px solid rgba(16,185,129,0.3)",
+        background: "var(--success-soft)",
+        border: "1px solid var(--success-ring)",
         borderRadius: 8,
         marginBottom: 12,
       }}
     >
-      <strong style={{ color: "#34d399" }}>Provisioning complete.</strong>
-      <p style={{ fontSize: 13, color: "#94a3b8", margin: "4px 0 12px" }}>
+      <strong style={{ color: "var(--success)" }}>
+        Provisioning complete.
+      </strong>
+      <p
+        style={{ fontSize: 13, color: "var(--text-dim)", margin: "4px 0 12px" }}
+      >
         Status is now ACTIVE. Refresh to see the rest of the tenant page.
       </p>
       {result.bootstrapPassword && (
         <div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
+          <div
+            style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}
+          >
             Admin email
           </div>
           <div
@@ -444,7 +474,9 @@ function RetrySuccessBanner({ result }: { result: RetryProvisioningResponse }) {
           >
             {result.bootstrapAdminEmail}
           </div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>
+          <div
+            style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}
+          >
             Initial password (shown once)
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -452,12 +484,12 @@ function RetrySuccessBanner({ result }: { result: RetryProvisioningResponse }) {
               style={{
                 flex: 1,
                 padding: "8px 12px",
-                background: "#0a0f1e",
-                border: "1px solid #1e293b",
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
                 borderRadius: 4,
                 fontSize: 13,
                 fontFamily: "monospace",
-                color: "#fbbf24",
+                color: "var(--warning)",
                 userSelect: "all",
               }}
             >
@@ -489,12 +521,12 @@ function LicenseRow({
   const now = Date.now();
   const expired = Date.parse(lic.expiresAt) < now;
   const status: { label: string; color: string } = lic.revokedAt
-    ? { label: "REVOKED", color: "#ef4444" }
+    ? { label: "REVOKED", color: "var(--danger)" }
     : expired
-      ? { label: "EXPIRED", color: "#64748b" }
+      ? { label: "EXPIRED", color: "var(--text-muted)" }
       : isCurrent
-        ? { label: "ACTIVE", color: "#10b981" }
-        : { label: "SUPERSEDED", color: "#94a3b8" };
+        ? { label: "ACTIVE", color: "var(--success)" }
+        : { label: "SUPERSEDED", color: "var(--text-dim)" };
 
   // Prefill the IssueLicense form for renewal with the same tenant +
   // tier + seats + notes. Expiry stays at the default (1 year forward)
@@ -510,13 +542,13 @@ function LicenseRow({
   return (
     <tr
       style={{
-        borderTop: "1px solid #1e293b",
+        borderTop: "1px solid var(--border)",
         opacity: lic.revokedAt || expired ? 0.7 : 1,
       }}
     >
       <td style={td}>
         {new Date(lic.issuedAt).toLocaleDateString()}{" "}
-        <span style={{ color: "#475569", fontSize: 11 }}>
+        <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
           {new Date(lic.issuedAt).toLocaleTimeString()}
         </span>
       </td>
@@ -539,13 +571,13 @@ function LicenseRow({
           {status.label}
         </span>
       </td>
-      <td style={{ ...td, color: "#94a3b8", fontSize: 11 }}>
+      <td style={{ ...td, color: "var(--text-dim)", fontSize: 11 }}>
         {lic.issuedByEmail}
       </td>
       <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
         <Link
           to={`/licenses/issue?${renewHref}`}
-          style={{ color: "#60a5fa", fontSize: 11, marginRight: 12 }}
+          style={{ color: "var(--accent)", fontSize: 11, marginRight: 12 }}
         >
           Renew
         </Link>
@@ -561,8 +593,8 @@ function LicenseRow({
             disabled={pending}
             style={{
               background: "transparent",
-              color: "#fca5a5",
-              border: "1px solid #7f1d1d",
+              color: "var(--danger)",
+              border: "1px solid var(--danger-ring)",
               borderRadius: 4,
               padding: "2px 8px",
               fontSize: 11,
@@ -580,15 +612,15 @@ function LicenseRow({
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: "flex", margin: "6px 0", fontSize: 14 }}>
-      <div style={{ width: 120, color: "#94a3b8" }}>{label}</div>
+      <div style={{ width: 120, color: "var(--text-dim)" }}>{label}</div>
       <div>{value}</div>
     </div>
   );
 }
 
 const card: React.CSSProperties = {
-  background: "#0e1525",
-  border: "1px solid #1e293b",
+  background: "var(--bg-elev)",
+  border: "1px solid var(--border)",
   borderRadius: 8,
   padding: 20,
   marginBottom: 16,

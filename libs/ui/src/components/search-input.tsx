@@ -235,7 +235,7 @@ export function SearchInput<T>({
           className={cn(
             "w-full rounded-md border bg-surface-2 pl-8 pr-8 py-2 text-sm",
             "border-default placeholder:text-fg-subtle",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             "disabled:cursor-not-allowed disabled:opacity-60",
             value && "border-primary/40 bg-primary-soft text-fg",
             inputClassName,

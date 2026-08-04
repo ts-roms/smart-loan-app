@@ -48,7 +48,7 @@ export function StatementDetailPage() {
 
   if (statement.isLoading) return <SkeletonCard />;
   if (!statement.data)
-    return <p className="text-sm text-white/55">Statement not found.</p>;
+    return <p className="text-sm text-fg-muted">Statement not found.</p>;
   const s = statement.data;
 
   const onAutoMatch = async () => {
@@ -129,7 +129,7 @@ export function StatementDetailPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>{s.label}</CardTitle>
-            <p className="text-xs text-white/55 mt-0.5">
+            <p className="text-xs text-fg-muted mt-0.5">
               {s.bankAccount} · {formatDate(s.periodStart)} →{" "}
               {formatDate(s.periodEnd)}
             </p>
@@ -192,7 +192,7 @@ export function StatementDetailPage() {
         </CardHeader>
         <CardContent>
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Date</th>
                 <th className="py-2 px-2">Description</th>
@@ -202,32 +202,32 @@ export function StatementDetailPage() {
                 <th />
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {s.lines.map((l) => {
                 const amount = Number(l.amount);
                 const matched = l.matchedAt !== null;
                 return (
-                  <tr key={l.id} className="hover:bg-white/[0.03]">
+                  <tr key={l.id} className="hover:bg-hover">
                     <td className="py-2 px-2 text-xs">
                       {formatDate(l.txnDate)}
                     </td>
                     <td className="py-2 px-2">{l.description}</td>
-                    <td className="py-2 px-2 font-mono text-[10px] text-white/65">
+                    <td className="py-2 px-2 font-mono text-[10px] text-fg-muted">
                       {l.reference ?? "—"}
                     </td>
                     <td
-                      className={`py-2 px-2 text-right font-mono ${amount < 0 ? "text-rose-300" : "text-emerald-300"}`}
+                      className={`py-2 px-2 text-right font-mono ${amount < 0 ? "text-danger" : "text-success"}`}
                     >
                       {formatMoney(amount)}
                     </td>
                     <td className="py-2 px-2 text-xs">
                       {matched ? (
                         <span className="inline-flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+                          <CheckCircle2 className="h-3 w-3 text-success" />
                           <Badge variant="success">{l.matchedType}</Badge>
                           {l.matchNote && (
                             <span
-                              className="text-white/55 ml-1 truncate max-w-[12rem]"
+                              className="text-fg-muted ml-1 truncate max-w-[12rem]"
                               title={l.matchNote}
                             >
                               {l.matchNote}
@@ -286,17 +286,17 @@ function Stat({
 }) {
   const color =
     accent === "emerald"
-      ? "text-emerald-300"
+      ? "text-success"
       : accent === "amber"
-        ? "text-amber-300"
-        : "text-white";
+        ? "text-warning"
+        : "text-fg";
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-[10px] uppercase tracking-wider text-white/55">
+    <div className="rounded-md border border-default bg-surface-2 p-3">
+      <div className="text-[10px] uppercase tracking-wider text-fg-muted">
         {label}
       </div>
       <div className={`font-mono text-sm mt-1 ${color}`}>{value}</div>
-      {sub && <div className="text-[10px] text-white/45">{sub}</div>}
+      {sub && <div className="text-[10px] text-fg-subtle">{sub}</div>}
     </div>
   );
 }

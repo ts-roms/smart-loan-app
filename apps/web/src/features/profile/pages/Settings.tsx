@@ -82,17 +82,17 @@ export function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <SettingsIcon className="h-4 w-4 text-sky-300" />
+            <SettingsIcon className="h-4 w-4 text-info" />
             My settings
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <div className="text-xs uppercase tracking-wider text-white/55 mb-2 flex items-center gap-1">
+            <div className="text-xs uppercase tracking-wider text-fg-muted mb-2 flex items-center gap-1">
               <Pen className="h-3 w-3" />
               My signature
             </div>
-            <p className="text-xs text-white/55 mb-3">
+            <p className="text-xs text-fg-muted mb-3">
               Capture your signature once and reuse it. When you download a loan
               agreement, statement of account, or payment receipt, you'll get an
               extra "Download with my signature" button that embeds this
@@ -103,18 +103,18 @@ export function SettingsPage() {
             {sig.isLoading ? (
               <SkeletonCard />
             ) : sig.data?.signatureUrl ? (
-              <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+              <div className="rounded-md border border-default bg-surface-2 p-3">
                 <div className="flex items-start gap-3">
                   <img
                     src={sig.data.signatureUrl}
                     alt={`${user?.name} signature`}
-                    className="h-24 w-auto max-w-xs rounded border border-white/15 bg-white p-2"
+                    className="h-24 w-auto max-w-xs rounded border border-default bg-white p-2"
                   />
-                  <div className="flex-1 text-xs text-white/65">
-                    <div className="font-medium text-white">{user?.name}</div>
-                    <div className="text-white/45 mt-0.5">{user?.role}</div>
+                  <div className="flex-1 text-xs text-fg-muted">
+                    <div className="font-medium text-fg">{user?.name}</div>
+                    <div className="text-fg-subtle mt-0.5">{user?.role}</div>
                     {sig.data.savedAt && (
-                      <div className="text-white/45 mt-0.5">
+                      <div className="text-fg-subtle mt-0.5">
                         Saved {formatDateTime(sig.data.savedAt)}
                       </div>
                     )}
@@ -141,8 +141,8 @@ export function SettingsPage() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-md border border-dashed border-white/15 bg-white/[0.02] p-4 text-center">
-                <p className="text-sm text-white/55 mb-3">
+              <div className="rounded-md border border-dashed border-default bg-surface-2 p-4 text-center">
+                <p className="text-sm text-fg-muted mb-3">
                   No signature saved yet.
                 </p>
                 <Button onClick={() => setCapturing(true)}>

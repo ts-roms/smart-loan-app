@@ -67,7 +67,7 @@ export function AccountingDashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="text-lg font-semibold tracking-tight">Accounting</div>
-          <div className="text-xs text-white/55">General ledger snapshot</div>
+          <div className="text-xs text-fg-muted">General ledger snapshot</div>
         </div>
         <TourButton
           tourId="accounting"
@@ -144,7 +144,7 @@ export function AccountingDashboardPage() {
             <CardTitle>Aging buckets</CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="divide-y divide-white/5 text-sm">
+            <ul className="divide-y divide-default text-sm">
               {(
                 [
                   "CURRENT",
@@ -155,7 +155,7 @@ export function AccountingDashboardPage() {
                 ] as const
               ).map((b) => (
                 <li key={b} className="flex items-center justify-between py-2">
-                  <span className="text-white/70">{labelFor(b)}</span>
+                  <span className="text-fg">{labelFor(b)}</span>
                   <span className="font-mono">
                     {formatMoney(aging.data?.totals[b] ?? 0)}
                   </span>
@@ -179,7 +179,7 @@ export function AccountingDashboardPage() {
             <ul className="space-y-2 text-sm">
               <li>
                 <Link
-                  className="text-sky-300 hover:underline"
+                  className="text-info hover:underline"
                   to="/accounting/accounts"
                 >
                   Chart of accounts →
@@ -187,7 +187,7 @@ export function AccountingDashboardPage() {
               </li>
               <li>
                 <Link
-                  className="text-sky-300 hover:underline"
+                  className="text-info hover:underline"
                   to="/accounting/journal"
                 >
                   Journal entries →
@@ -195,7 +195,7 @@ export function AccountingDashboardPage() {
               </li>
               <li>
                 <Link
-                  className="text-sky-300 hover:underline"
+                  className="text-info hover:underline"
                   to="/accounting/portfolio"
                 >
                   Loan portfolio aging →
@@ -203,7 +203,7 @@ export function AccountingDashboardPage() {
               </li>
               <li>
                 <Link
-                  className="text-sky-300 hover:underline"
+                  className="text-info hover:underline"
                   to="/accounting/periods"
                 >
                   Periods & accrual →
@@ -246,16 +246,16 @@ function StatCard({
   accent: "sky" | "amber" | "emerald" | "rose";
 }) {
   const colors = {
-    sky: "text-sky-300 bg-sky-500/10 border-sky-400/20",
-    amber: "text-amber-300 bg-amber-500/10 border-amber-400/20",
-    emerald: "text-emerald-300 bg-emerald-500/10 border-emerald-400/20",
-    rose: "text-rose-300 bg-rose-500/10 border-rose-400/20",
+    sky: "text-info bg-sky-500/10 border-sky-400/20",
+    amber: "text-warning bg-amber-500/10 border-amber-400/20",
+    emerald: "text-success bg-emerald-500/10 border-emerald-400/20",
+    rose: "text-danger bg-rose-500/10 border-rose-400/20",
   };
   return (
     <Card>
       <CardContent className="flex items-center justify-between gap-3 py-4">
         <div className="min-w-0">
-          <div className="text-xs text-white/55 uppercase tracking-wider">
+          <div className="text-xs text-fg-muted uppercase tracking-wider">
             {label}
           </div>
           <div className="text-2xl font-semibold tracking-tight truncate">
@@ -284,10 +284,10 @@ function ReportLink({
   return (
     <Link
       to={to}
-      className="rounded-md border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-colors p-3 block"
+      className="rounded-md border border-default bg-surface-2 hover:bg-hover transition-colors p-3 block"
     >
       <div className="text-sm font-medium">{title}</div>
-      <div className="text-xs text-white/55 mt-1">{subtitle}</div>
+      <div className="text-xs text-fg-muted mt-1">{subtitle}</div>
     </Link>
   );
 }

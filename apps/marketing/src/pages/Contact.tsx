@@ -84,8 +84,8 @@ export function Contact() {
         <div
           style={{
             padding: 40,
-            background: "rgba(16,185,129,0.08)",
-            border: "1px solid rgba(16,185,129,0.3)",
+            background: "var(--success-soft)",
+            border: "1px solid var(--success-ring)",
             borderRadius: 12,
           }}
         >
@@ -238,11 +238,11 @@ export function Contact() {
           <div
             style={{
               padding: 12,
-              background: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.3)",
+              background: "var(--danger-soft)",
+              border: "1px solid var(--danger-ring)",
               borderRadius: 6,
               fontSize: 13,
-              color: "#fca5a5",
+              color: "var(--danger)",
             }}
           >
             {state.message}
@@ -330,7 +330,7 @@ function DeploymentChoice({
       onClick={onClick}
       style={{
         padding: 12,
-        background: active ? "rgba(96,165,250,0.1)" : "var(--bg)",
+        background: active ? "var(--accent-soft)" : "var(--bg)",
         border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
         borderRadius: 6,
         cursor: "pointer",

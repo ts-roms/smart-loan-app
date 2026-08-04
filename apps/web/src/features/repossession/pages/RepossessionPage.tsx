@@ -95,7 +95,7 @@ export function RepossessionPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <ShieldAlert className="h-4 w-4 text-rose-300" />
+            <ShieldAlert className="h-4 w-4 text-danger" />
             Repossession
           </CardTitle>
           <div className="flex items-center gap-2">
@@ -114,7 +114,7 @@ export function RepossessionPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             formal vehicle recovery process. Each case advances through BM →
             Credit Head → Legal approval before an agent is dispatched. After
             recovery, the vehicle is auctioned and any deficiency is booked to
@@ -149,10 +149,10 @@ export function RepossessionPage() {
           {cases.isLoading ? (
             <SkeletonCard />
           ) : (cases.data ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">No cases at this status.</p>
+            <p className="text-sm text-fg-muted">No cases at this status.</p>
           ) : (
             <table className="w-full text-sm" data-tour="repo-cases">
-              <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+              <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
                 <tr>
                   <th className="py-2 px-2">Loan</th>
                   <th className="py-2 px-2">Status</th>
@@ -162,7 +162,7 @@ export function RepossessionPage() {
                   <th className="py-2 px-2 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-default">
                 {cases.data!.map((c) => (
                   <CaseRow key={c.id} c={c} perms={perms} />
                 ))}
@@ -187,11 +187,11 @@ function CaseRow({
   perms: Set<string>;
 }) {
   return (
-    <tr className="hover:bg-white/[0.03]">
+    <tr className="hover:bg-hover">
       <td className="py-2 px-2 font-mono text-xs">
         <Link
           to={`/loans/${c.loan.number}`}
-          className="text-sky-300 hover:underline"
+          className="text-info hover:underline"
         >
           {c.loan.number}
         </Link>
@@ -202,7 +202,7 @@ function CaseRow({
         </Badge>
       </td>
       <td className="py-2 px-2 text-xs max-w-xs truncate">{c.reason}</td>
-      <td className="py-2 px-2 text-[10px] text-white/55">
+      <td className="py-2 px-2 text-[10px] text-fg-muted">
         {formatDateTime(c.identifiedAt)}
       </td>
       <td className="py-2 px-2 text-right font-mono text-xs">
@@ -436,7 +436,7 @@ function IdentifyDialog({ onClose }: { onClose: () => void }) {
           <DialogTitle>Identify repossession case</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             Opens a new case at status IDENTIFIED. The BM → Credit Head → Legal
             approval chain must complete before an agent can be dispatched. Only
             one active case per loan is allowed.
@@ -529,7 +529,7 @@ function RecoverDialog({
           <DialogTitle>Record vehicle recovery</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             Snapshot the vehicle condition + outstanding balance so the auction
             settlement can compute deficiency cleanly.
           </p>
@@ -648,7 +648,7 @@ function AuctionDialog({
           <DialogTitle>Auction settlement</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-xs text-white/55">
+          <p className="text-xs text-fg-muted">
             Posts the auction proceeds against the loan + writes off any
             deficiency to bad debt. Closes the case and the loan.
           </p>
@@ -681,25 +681,25 @@ function AuctionDialog({
               />
             </div>
           </div>
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-2.5 text-xs space-y-1">
+          <div className="rounded-md border border-default bg-surface-2 p-2.5 text-xs space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-white/55">Outstanding at recovery</span>
+              <span className="text-fg-muted">Outstanding at recovery</span>
               <span className="font-mono">
                 {formatMoney(outstandingAtRecovery)}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-white/55">Proceeds</span>
+              <span className="text-fg-muted">Proceeds</span>
               <span className="font-mono">{formatMoney(proceeds)}</span>
             </div>
             {deficiency > 0 && (
-              <div className="flex items-center justify-between text-rose-300">
+              <div className="flex items-center justify-between text-danger">
                 <span>Deficiency (→ bad debt)</span>
                 <span className="font-mono">{formatMoney(deficiency)}</span>
               </div>
             )}
             {surplus > 0 && (
-              <div className="flex items-center justify-between text-emerald-300">
+              <div className="flex items-center justify-between text-success">
                 <span>Surplus (→ other income)</span>
                 <span className="font-mono">{formatMoney(surplus)}</span>
               </div>

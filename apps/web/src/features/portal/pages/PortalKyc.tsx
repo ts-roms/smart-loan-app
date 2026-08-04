@@ -82,7 +82,7 @@ export function PortalKyc() {
                 {status.status}
               </Badge>
               {status.missing.length > 0 && (
-                <div className="mt-2 text-xs text-amber-300">
+                <div className="mt-2 text-xs text-warning">
                   Still missing:{" "}
                   {status.missing
                     .map((m) => DOC_TYPE_LABELS[m] ?? m)
@@ -92,9 +92,9 @@ export function PortalKyc() {
             </div>
           )}
           {(kyc.data?.docs ?? []).length === 0 ? (
-            <p className="text-sm text-white/55">No documents submitted yet.</p>
+            <p className="text-sm text-fg-muted">No documents submitted yet.</p>
           ) : (
-            <ul className="divide-y divide-white/5 text-sm">
+            <ul className="divide-y divide-default text-sm">
               {(kyc.data?.docs ?? []).map((d) => (
                 <li
                   key={d.id}
@@ -104,7 +104,7 @@ export function PortalKyc() {
                     <div>
                       {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
                     </div>
-                    <div className="text-xs text-white/45">
+                    <div className="text-xs text-fg-subtle">
                       {formatDate(d.submittedAt)}
                     </div>
                   </div>
@@ -136,7 +136,7 @@ export function PortalKyc() {
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-3">
             <div className="space-y-1">
-              <label className="text-xs text-white/55">Document type</label>
+              <label className="text-xs text-fg-muted">Document type</label>
               <Select
                 value={documentType}
                 onValueChange={(v) => setDocumentType(v as KycDocumentType)}
@@ -154,7 +154,7 @@ export function PortalKyc() {
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-white/55">Document URL</label>
+              <label className="text-xs text-fg-muted">Document URL</label>
               <Input
                 placeholder="https://… (upload your scan first)"
                 value={documentUrl}
@@ -163,7 +163,7 @@ export function PortalKyc() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-white/55">Notes (optional)</label>
+              <label className="text-xs text-fg-muted">Notes (optional)</label>
               <Input
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

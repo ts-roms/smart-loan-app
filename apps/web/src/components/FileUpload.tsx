@@ -73,7 +73,7 @@ export function FileUpload({
             <img
               src={value}
               alt="upload preview"
-              className="h-16 w-16 rounded-md border border-white/15 object-cover"
+              className="h-16 w-16 rounded-md border border-default object-cover"
             />
           </a>
         ) : (
@@ -81,7 +81,7 @@ export function FileUpload({
             href={value}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-sky-300 hover:underline"
+            className="text-sm text-info hover:underline"
           >
             View file
           </a>
@@ -90,7 +90,7 @@ export function FileUpload({
           <button
             type="button"
             onClick={onClear}
-            className="text-white/45 hover:text-rose-300"
+            className="text-fg-subtle hover:text-danger"
           >
             <X className="h-4 w-4" />
           </button>
@@ -126,7 +126,7 @@ export function FileUpload({
           type="button"
           onClick={() => ref.current?.click()}
           disabled={upload.isPending}
-          className="text-xs text-white/55 hover:text-sky-300 underline-offset-2 hover:underline disabled:opacity-50"
+          className="text-xs text-fg-muted hover:text-info underline-offset-2 hover:underline disabled:opacity-50"
         >
           or upload a file
         </button>

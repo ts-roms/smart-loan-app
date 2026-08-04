@@ -27,15 +27,15 @@ export function PortalLoans() {
         {loans.isLoading ? (
           <SkeletonCard />
         ) : (loans.data ?? []).length === 0 ? (
-          <p className="text-sm text-white/55">
+          <p className="text-sm text-fg-muted">
             No loans yet.{" "}
-            <Link to="/portal/apply" className="text-sky-300 hover:underline">
+            <Link to="/portal/apply" className="text-info hover:underline">
               Apply now →
             </Link>
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wider text-white/45">
+            <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
               <tr>
                 <th className="py-2 px-2">Number</th>
                 <th className="py-2 px-2">Type</th>
@@ -46,13 +46,13 @@ export function PortalLoans() {
                 <th className="py-2 px-2">Submitted</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-default">
               {(loans.data ?? []).map((l) => (
-                <tr key={l.id} className="hover:bg-white/[0.03]">
+                <tr key={l.id} className="hover:bg-hover">
                   <td className="py-2 px-2 font-mono">
                     <Link
                       to={`/portal/loans/${l.number}`}
-                      className="text-sky-300 hover:underline"
+                      className="text-info hover:underline"
                     >
                       {l.number}
                     </Link>
@@ -72,7 +72,7 @@ export function PortalLoans() {
                   <td className="py-2 px-2">
                     <Badge variant={badgeVariant(l.status)}>{l.status}</Badge>
                   </td>
-                  <td className="py-2 px-2 text-xs text-white/55">
+                  <td className="py-2 px-2 text-xs text-fg-muted">
                     {formatDate(l.submittedAt)}
                   </td>
                 </tr>
