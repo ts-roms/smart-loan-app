@@ -61,8 +61,8 @@ export function TenantsList() {
               style={{
                 ...btnPrimary,
                 background: "transparent",
-                border: "1px solid #334155",
-                color: "#cbd5e1",
+                border: "1px solid var(--border-strong)",
+                color: "var(--text)",
               }}
             >
               + Provision tenant
@@ -74,17 +74,19 @@ export function TenantsList() {
         </div>
       </header>
 
-      {isLoading && <p style={{ color: "#94a3b8" }}>Loading…</p>}
-      {error && <p style={{ color: "#fca5a5" }}>Failed: {error.message}</p>}
+      {isLoading && <p style={{ color: "var(--text-dim)" }}>Loading…</p>}
+      {error && (
+        <p style={{ color: "var(--danger)" }}>Failed: {error.message}</p>
+      )}
 
       {data && data.length === 0 && (
         <div
           style={{
             padding: 32,
-            border: "1px dashed #334155",
+            border: "1px dashed var(--border-strong)",
             borderRadius: 8,
             textAlign: "center",
-            color: "#94a3b8",
+            color: "var(--text-dim)",
           }}
         >
           No tenants yet.{" "}
@@ -99,7 +101,13 @@ export function TenantsList() {
       {data && data.length > 0 && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ textAlign: "left", fontSize: 12, color: "#94a3b8" }}>
+            <tr
+              style={{
+                textAlign: "left",
+                fontSize: 12,
+                color: "var(--text-dim)",
+              }}
+            >
               <th style={th}>Tenant</th>
               <th style={th}>Slug</th>
               <th style={th}>Status</th>
@@ -110,11 +118,11 @@ export function TenantsList() {
           </thead>
           <tbody>
             {data.map((t) => (
-              <tr key={t.id} style={{ borderTop: "1px solid #1e293b" }}>
+              <tr key={t.id} style={{ borderTop: "1px solid var(--border)" }}>
                 <td style={td}>
                   <Link
                     to={`/tenants/${t.slug}`}
-                    style={{ color: "#60a5fa", textDecoration: "none" }}
+                    style={{ color: "var(--accent)", textDecoration: "none" }}
                   >
                     {t.name}
                   </Link>
@@ -128,7 +136,7 @@ export function TenantsList() {
                       style={{
                         marginLeft: 8,
                         fontSize: 11,
-                        color: "#fca5a5",
+                        color: "var(--danger)",
                       }}
                     >
                       (error)
@@ -141,7 +149,7 @@ export function TenantsList() {
                     ? new Date(t.licenseSnapshot.exp).toLocaleDateString()
                     : "—"}
                 </td>
-                <td style={{ ...td, color: "#64748b" }}>
+                <td style={{ ...td, color: "var(--text-muted)" }}>
                   {t.lastSeenAt
                     ? new Date(t.lastSeenAt).toLocaleString()
                     : "never"}
@@ -204,7 +212,7 @@ function ProvisionDialog({ onClose }: { onClose: () => void }) {
           <p
             style={{
               fontSize: 12,
-              color: "#94a3b8",
+              color: "var(--text-dim)",
               margin: 0,
               lineHeight: 1.6,
             }}
@@ -265,11 +273,11 @@ function ProvisionDialog({ onClose }: { onClose: () => void }) {
             <div
               style={{
                 padding: 10,
-                background: "rgba(239,68,68,0.1)",
-                border: "1px solid rgba(239,68,68,0.3)",
+                background: "var(--danger-soft)",
+                border: "1px solid var(--danger-ring)",
                 borderRadius: 4,
                 fontSize: 13,
-                color: "#fca5a5",
+                color: "var(--danger)",
               }}
             >
               {provision.error.message}
@@ -328,17 +336,21 @@ function ProvisionResultView({
         style={{
           padding: 16,
           background: provisioned
-            ? "rgba(16,185,129,0.1)"
-            : "rgba(245,158,11,0.1)",
-          border: `1px solid ${provisioned ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)"}`,
+            ? "var(--success-soft)"
+            : "var(--warning-soft)",
+          border: `1px solid ${provisioned ? "var(--success-ring)" : "var(--warning-ring)"}`,
           borderRadius: 8,
           marginBottom: 16,
         }}
       >
-        <strong style={{ color: provisioned ? "#34d399" : "#fbbf24" }}>
+        <strong
+          style={{ color: provisioned ? "var(--success)" : "var(--warning)" }}
+        >
           {provisioned ? "Provisioning complete." : "Catalog row created."}
         </strong>
-        <p style={{ fontSize: 13, color: "#94a3b8", margin: "4px 0 0" }}>
+        <p
+          style={{ fontSize: 13, color: "var(--text-dim)", margin: "4px 0 0" }}
+        >
           {provisioned
             ? "The tenant's schema is ready and seeded. Hand the credentials below to the cooperative's admin."
             : "Multi-tenant mode is off, or provisioning failed. Open the tenant detail page to see the error and retry."}
@@ -349,14 +361,14 @@ function ProvisionResultView({
         <div
           style={{
             padding: 16,
-            background: "#0a0f1e",
-            border: "1px solid #1e293b",
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
             borderRadius: 8,
             marginBottom: 16,
           }}
         >
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 11, color: "#94a3b8" }}>
+            <label style={{ fontSize: 11, color: "var(--text-dim)" }}>
               Admin email
             </label>
             <div
@@ -366,7 +378,7 @@ function ProvisionResultView({
             </div>
           </div>
           <div>
-            <label style={{ fontSize: 11, color: "#94a3b8" }}>
+            <label style={{ fontSize: 11, color: "var(--text-dim)" }}>
               Initial password (shown once)
             </label>
             <div
@@ -382,11 +394,11 @@ function ProvisionResultView({
                   flex: 1,
                   fontSize: 14,
                   fontFamily: "monospace",
-                  color: "#fbbf24",
-                  background: "rgba(245,158,11,0.05)",
+                  color: "var(--warning)",
+                  background: "var(--warning-soft)",
                   padding: "8px 12px",
                   borderRadius: 4,
-                  border: "1px solid rgba(245,158,11,0.2)",
+                  border: "1px solid var(--warning-ring)",
                   userSelect: "all",
                 }}
               >
@@ -399,7 +411,7 @@ function ProvisionResultView({
             <p
               style={{
                 fontSize: 11,
-                color: "#fbbf24",
+                color: "var(--warning)",
                 margin: "8px 0 0",
               }}
             >
@@ -441,7 +453,7 @@ function ModalShell({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.6)",
+        background: "var(--overlay)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -453,8 +465,8 @@ function ModalShell({
         style={{
           width: 480,
           maxWidth: "90vw",
-          background: "#0e1525",
-          border: "1px solid #1e293b",
+          background: "var(--bg-elev)",
+          border: "1px solid var(--border)",
           borderRadius: 8,
           padding: 24,
         }}
@@ -484,8 +496,14 @@ function Field({
           marginBottom: 4,
         }}
       >
-        <label style={{ fontSize: 12, color: "#94a3b8" }}>{label}</label>
-        {hint && <span style={{ fontSize: 11, color: "#64748b" }}>{hint}</span>}
+        <label style={{ fontSize: 12, color: "var(--text-dim)" }}>
+          {label}
+        </label>
+        {hint && (
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            {hint}
+          </span>
+        )}
       </div>
       {children}
     </div>
@@ -494,10 +512,10 @@ function Field({
 
 function StatusBadge({ status }: { status: Tenant["status"] }) {
   const colors: Record<Tenant["status"], string> = {
-    ACTIVE: "#10b981",
-    PROVISIONING: "#f59e0b",
-    SUSPENDED: "#ef4444",
-    ARCHIVED: "#64748b",
+    ACTIVE: "var(--success)",
+    PROVISIONING: "var(--warning)",
+    SUSPENDED: "var(--danger)",
+    ARCHIVED: "var(--text-muted)",
   };
   return (
     <span

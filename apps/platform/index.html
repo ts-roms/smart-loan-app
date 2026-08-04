@@ -4,15 +4,81 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SmartLoan Platform</title>
+    <meta name="theme-color" content="#f6f7f9" />
     <style>
+      /*
+       * Same token names and structure as the marketing site and
+       * libs/ui — light on :root, the original dark values kept under
+       * [data-theme="dark"]. Nothing sets that attribute here yet, so
+       * dark is dormant rather than lost.
+       *
+       * The pages had been writing hex literals inline (#94a3b8 for
+       * secondary text, rgba(239,68,68,0.1) for danger tints). Those
+       * were picked against a near-black page; naming them here is what
+       * lets the palette flip at all.
+       */
       :root {
-        color-scheme: dark;
+        color-scheme: light;
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+        --bg: #f6f7f9;
+        --bg-elev: #ffffff;
+        --border: #dfe3e8;
+        --border-strong: #c3cad3;
+        --text: #171c26;
+        --text-dim: #545c6b;
+        --text-muted: #59606d;
+        /* Tertiary — em-dashes and placeholder marks. The faintest thing
+         * that still passes AA on the page plate; #6f7784 measured
+         * 4.22:1, so it goes darker. */
+        --text-faint: #656c79;
+        --accent: #0a5f9e;
+        --accent-strong: #0a5f9e;
+        --success: #0f7a4f;
+        --warning: #9a6100;
+        --danger: #c02626;
+        --danger-strong: #a81f1f;
+
+        --success-soft: rgba(15, 122, 79, 0.08);
+        --success-ring: rgba(15, 122, 79, 0.3);
+        --warning-soft: rgba(154, 97, 0, 0.08);
+        --warning-ring: rgba(154, 97, 0, 0.3);
+        --danger-soft: rgba(192, 38, 38, 0.07);
+        --danger-ring: rgba(192, 38, 38, 0.3);
+        --overlay: rgba(23, 28, 38, 0.45);
       }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+
+        --bg: #0a0f1e;
+        --bg-elev: #0e1525;
+        --border: #1e293b;
+        --border-strong: #334155;
+        --text: #e2e8f0;
+        --text-dim: #94a3b8;
+        --text-muted: #64748b;
+        --text-faint: #475569;
+        --accent: #60a5fa;
+        --accent-strong: #3b82f6;
+        --success: #34d399;
+        --warning: #fbbf24;
+        --danger: #fca5a5;
+        --danger-strong: #dc2626;
+
+        --success-soft: rgba(16, 185, 129, 0.1);
+        --success-ring: rgba(16, 185, 129, 0.3);
+        --warning-soft: rgba(245, 158, 11, 0.1);
+        --warning-ring: rgba(245, 158, 11, 0.3);
+        --danger-soft: rgba(239, 68, 68, 0.1);
+        --danger-ring: rgba(239, 68, 68, 0.3);
+        --overlay: rgba(0, 0, 0, 0.6);
+      }
+
       body {
         margin: 0;
-        background: #0a0f1e;
-        color: #e2e8f0;
+        background: var(--bg);
+        color: var(--text);
       }
     </style>
   </head>

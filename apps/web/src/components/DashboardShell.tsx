@@ -477,7 +477,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   <div className="text-xs text-fg-muted truncate">
                     {user?.email}
                   </div>
-                  <div className="text-[10px] uppercase tracking-wider text-info/80 mt-0.5">
+                  <div className="text-[10px] uppercase tracking-wider text-info mt-0.5">
                     {user?.role}
                   </div>
                 </div>

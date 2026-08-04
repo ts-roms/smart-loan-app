@@ -61,7 +61,7 @@ export const SelectContent = forwardRef<
       position={position}
       sideOffset={position === "popper" ? 4 : undefined}
       className={cn(
-        "relative z-50 min-w-[8rem] max-h-[20rem] overflow-hidden rounded-md border border-default bg-slate-950/95 backdrop-blur-xl text-fg shadow-2xl",
+        "relative z-50 min-w-[8rem] max-h-[20rem] overflow-hidden rounded-md border border-default bg-surface-3 backdrop-blur-xl text-fg shadow-2xl",
         // Popper-anchored animation: opacity + scale only, no translate
         // (Radix owns the position transform — overriding it causes a
         // first-frame flicker). The transform-origin variable Radix

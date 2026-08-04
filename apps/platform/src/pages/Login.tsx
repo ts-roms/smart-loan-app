@@ -52,13 +52,15 @@ export function Login() {
         style={{
           width: 360,
           padding: 32,
-          background: "#0e1525",
-          border: "1px solid #1e293b",
+          background: "var(--bg-elev)",
+          border: "1px solid var(--border)",
           borderRadius: 8,
         }}
       >
         <h1 style={{ fontSize: 20, margin: "0 0 8px" }}>SmartLoan Platform</h1>
-        <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 24px" }}>
+        <p
+          style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 24px" }}
+        >
           Vendor console — tenants, licenses, audit.
         </p>
         <div style={{ marginBottom: 12 }}>
@@ -88,11 +90,11 @@ export function Login() {
             style={{
               padding: "8px 12px",
               marginBottom: 12,
-              background: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.3)",
+              background: "var(--danger-soft)",
+              border: "1px solid var(--danger-ring)",
               borderRadius: 4,
               fontSize: 13,
-              color: "#fca5a5",
+              color: "var(--danger)",
             }}
           >
             {error}
@@ -114,5 +116,5 @@ const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 12,
   marginBottom: 4,
-  color: "#94a3b8",
+  color: "var(--text-dim)",
 };

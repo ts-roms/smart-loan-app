@@ -51,7 +51,7 @@ export const DrawerContent = forwardRef<
         void e;
       }}
       className={cn(
-        "fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-default bg-slate-950/95 backdrop-blur-xl shadow-2xl flex flex-col",
+        "fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-default bg-surface-3 backdrop-blur-xl shadow-2xl flex flex-col",
         "data-[state=open]:animate-drawer-in-right data-[state=closed]:animate-drawer-out-right",
         className,
       )}

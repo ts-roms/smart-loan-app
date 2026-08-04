@@ -69,7 +69,7 @@ export function Audit() {
   return (
     <div>
       <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>Audit log</h1>
-      <p style={{ fontSize: 13, color: "#94a3b8", margin: "0 0 20px" }}>
+      <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 20px" }}>
         Every platform-side action — tenant lifecycle, license issuance, license
         revocation. Append-only.
       </p>
@@ -105,19 +105,19 @@ export function Audit() {
         </div>
       </div>
 
-      {query.isLoading && <p style={{ color: "#94a3b8" }}>Loading…</p>}
+      {query.isLoading && <p style={{ color: "var(--text-dim)" }}>Loading…</p>}
       {query.error && (
-        <p style={{ color: "#fca5a5" }}>Failed: {query.error.message}</p>
+        <p style={{ color: "var(--danger)" }}>Failed: {query.error.message}</p>
       )}
 
       {query.data && query.data.length === 0 && (
         <div
           style={{
             padding: 32,
-            border: "1px dashed #334155",
+            border: "1px dashed var(--border-strong)",
             borderRadius: 8,
             textAlign: "center",
-            color: "#94a3b8",
+            color: "var(--text-dim)",
           }}
         >
           No audit entries match these filters.
@@ -127,7 +127,13 @@ export function Audit() {
       {query.data && query.data.length > 0 && (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ textAlign: "left", fontSize: 12, color: "#94a3b8" }}>
+            <tr
+              style={{
+                textAlign: "left",
+                fontSize: 12,
+                color: "var(--text-dim)",
+              }}
+            >
               <th style={th}>When</th>
               <th style={th}>Action</th>
               <th style={th}>Actor</th>
@@ -152,8 +158,8 @@ function AuditEntry({ row }: { row: AuditRow }) {
     [row.payload],
   );
   return (
-    <tr style={{ borderTop: "1px solid #1e293b", verticalAlign: "top" }}>
-      <td style={{ ...td, color: "#64748b", whiteSpace: "nowrap" }}>
+    <tr style={{ borderTop: "1px solid var(--border)", verticalAlign: "top" }}>
+      <td style={{ ...td, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
         {new Date(row.createdAt).toLocaleString()}
       </td>
       <td style={td}>
@@ -164,25 +170,25 @@ function AuditEntry({ row }: { row: AuditRow }) {
         {row.tenantSlug ? (
           <Link
             to={`/tenants/${row.tenantSlug}`}
-            style={{ color: "#60a5fa", textDecoration: "none" }}
+            style={{ color: "var(--accent)", textDecoration: "none" }}
           >
             {row.tenantSlug}
           </Link>
         ) : (
-          <span style={{ color: "#475569" }}>—</span>
+          <span style={{ color: "var(--text-faint)" }}>—</span>
         )}
       </td>
       <td style={{ ...td, fontFamily: "monospace", fontSize: 11 }}>
         <details>
-          <summary style={{ cursor: "pointer", color: "#94a3b8" }}>
+          <summary style={{ cursor: "pointer", color: "var(--text-dim)" }}>
             view
           </summary>
           <pre
             style={{
               margin: "4px 0 0",
               padding: 8,
-              background: "#0a0f1e",
-              border: "1px solid #1e293b",
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
               borderRadius: 4,
               maxWidth: 400,
               overflowX: "auto",
@@ -199,18 +205,18 @@ function AuditEntry({ row }: { row: AuditRow }) {
 function ActionBadge({ action }: { action: string }) {
   // Color by intent: blue=create, amber=lifecycle, green=issue, red=destroy.
   const intent = action.includes("REVOKE")
-    ? "#ef4444"
+    ? "var(--danger)"
     : action.includes("ARCHIVED")
-      ? "#ef4444"
+      ? "var(--danger)"
       : action.includes("SUSPENDED")
-        ? "#f59e0b"
+        ? "var(--warning)"
         : action.includes("PROVISION")
-          ? "#3b82f6"
+          ? "var(--accent-strong)"
           : action.includes("ISSUE")
-            ? "#10b981"
+            ? "var(--success)"
             : action.includes("ACTIVE")
-              ? "#10b981"
-              : "#64748b";
+              ? "var(--success)"
+              : "var(--text-muted)";
   return (
     <span
       style={{
@@ -231,7 +237,7 @@ function ActionBadge({ action }: { action: string }) {
 const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 12,
-  color: "#94a3b8",
+  color: "var(--text-dim)",
   marginBottom: 4,
 };
 const th: React.CSSProperties = {

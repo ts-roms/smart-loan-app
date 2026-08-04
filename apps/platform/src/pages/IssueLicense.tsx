@@ -134,11 +134,11 @@ export function IssueLicense() {
             <div
               style={{
                 padding: 12,
-                background: "rgba(239,68,68,0.1)",
-                border: "1px solid rgba(239,68,68,0.3)",
+                background: "var(--danger-soft)",
+                border: "1px solid var(--danger-ring)",
                 borderRadius: 4,
                 fontSize: 13,
-                color: "#fca5a5",
+                color: "var(--danger)",
               }}
             >
               {issue.error.message}
@@ -180,20 +180,24 @@ function IssuedResult({
       <div
         style={{
           padding: 16,
-          background: "rgba(16,185,129,0.1)",
-          border: "1px solid rgba(16,185,129,0.3)",
+          background: "var(--success-soft)",
+          border: "1px solid var(--success-ring)",
           borderRadius: 8,
           marginBottom: 16,
         }}
       >
-        <strong style={{ color: "#34d399" }}>License signed.</strong>
-        <p style={{ fontSize: 13, color: "#94a3b8", margin: "4px 0 0" }}>
+        <strong style={{ color: "var(--success)" }}>License signed.</strong>
+        <p
+          style={{ fontSize: 13, color: "var(--text-dim)", margin: "4px 0 0" }}
+        >
           Send the token below to the tenant admin. They paste it into Settings
           → License on their instance to activate.
         </p>
       </div>
 
-      <label style={{ fontSize: 12, color: "#94a3b8" }}>License token</label>
+      <label style={{ fontSize: 12, color: "var(--text-dim)" }}>
+        License token
+      </label>
       <textarea
         readOnly
         value={result.token}
@@ -217,19 +221,21 @@ function IssuedResult({
           style={{
             ...btnPrimary,
             background: "transparent",
-            border: "1px solid #334155",
+            border: "1px solid var(--border-strong)",
           }}
         >
           Issue another
         </button>
       </div>
 
-      <details style={{ marginTop: 24, fontSize: 12, color: "#94a3b8" }}>
+      <details
+        style={{ marginTop: 24, fontSize: 12, color: "var(--text-dim)" }}
+      >
         <summary style={{ cursor: "pointer" }}>Payload</summary>
         <pre
           style={{
-            background: "#0a0f1e",
-            border: "1px solid #1e293b",
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
             borderRadius: 4,
             padding: 12,
             fontSize: 11,
@@ -264,7 +270,7 @@ function Field({
         style={{
           display: "block",
           fontSize: 12,
-          color: "#94a3b8",
+          color: "var(--text-dim)",
           marginBottom: 4,
         }}
       >
