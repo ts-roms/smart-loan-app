@@ -1,0 +1,68 @@
+# SmartLoan tenant web app — Railway image
+#
+# Same two stages as deploy/docker/Dockerfile.web. It exists separately
+# rather than as a flag on that one because the runtime differs in three
+# ways that all trace back to Railway deciding things at deploy time:
+#
+#   1. nginx binds $PORT, assigned per deploy, so the config has to be a
+#      template rather than a file.
+#   2. The API upstream is private DNS (<service>.railway.internal), not
+#      a compose service name.
+#   3. No EXPOSE and no HEALTHCHECK — Railway reads the port from the
+#      service config and runs its own probe from outside the container.
+#
+# Build context is the REPO ROOT, not this directory. Set that in the
+# service's build settings; see README.md.
+
+ARG NODE_VERSION=20.18.0
+FROM node:${NODE_VERSION}-bookworm-slim AS builder
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+WORKDIR /app
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc* package.json tsconfig.base.json ./
+COPY apps ./apps
+COPY libs ./libs
+
+RUN pnpm install --frozen-lockfile
+
+# The web app imports types from @loan/db, so the generated Prisma
+# client has to exist before tsc runs. Without it every prisma.*
+# expression resolves to `any` and the build fails on noImplicitAny with
+# errors that point at callsites rather than at the missing client.
+RUN pnpm --filter @loan/db prisma:generate
+
+RUN pnpm --filter @loan/web build
+
+# ─── runtime ────────────────────────────────────────────────────────────
+FROM nginx:1.27-alpine AS runtime
+
+RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/*.conf
+
+# Templates in this directory are envsubst'd into /etc/nginx/conf.d at
+# container start by the base image's entrypoint.
+COPY deploy/railway/nginx.web.conf.template \
+     /etc/nginx/templates/default.conf.template
+
+# Substitute ONLY these two. Left unset, envsubst replaces every $name
+# it finds — including nginx's own $uri, $host and
+# $proxy_add_x_forwarded_for — with empty strings, which produces a
+# config that starts cleanly and then misroutes.
+ENV NGINX_ENVSUBST_FILTER='^(PORT|API_UPSTREAM|NGINX_LOCAL_RESOLVERS)$'
+
+# Opt in to the base image populating NGINX_LOCAL_RESOLVERS from
+# /etc/resolv.conf. 15-local-resolvers.envsh returns early unless this is
+# set, so without it the template's `resolver ${NGINX_LOCAL_RESOLVERS}`
+# survives substitution as a literal and nginx dies at startup with
+#   [emerg] host not found in resolver "${NGINX_LOCAL_RESOLVERS}"
+# — the very crash-loop the resolver was added to prevent.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+
+# Sensible default for the common single-environment setup. Override in
+# the service variables when the API service is named something else.
+ENV API_UPSTREAM=http://api.railway.internal:3001
+
+COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
