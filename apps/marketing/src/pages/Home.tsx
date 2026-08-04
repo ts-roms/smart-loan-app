@@ -40,8 +40,8 @@ function Hero() {
           style={{
             display: "inline-block",
             padding: "4px 12px",
-            background: "rgba(96,165,250,0.1)",
-            border: "1px solid rgba(96,165,250,0.3)",
+            background: "var(--accent-soft)",
+            border: "1px solid var(--accent-ring)",
             borderRadius: 999,
             fontSize: 12,
             color: "var(--accent)",

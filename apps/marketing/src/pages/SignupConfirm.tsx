@@ -76,9 +76,9 @@ export function SignupConfirm() {
       {error && (
         <div
           style={{
-            background: "rgba(248,113,113,0.08)",
-            border: "1px solid rgba(248,113,113,0.35)",
-            color: "#fca5a5",
+            background: "var(--danger-soft)",
+            border: "1px solid var(--danger-ring)",
+            color: "var(--danger)",
             borderRadius: 8,
             padding: "12px 14px",
             fontSize: 14,

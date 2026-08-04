@@ -111,7 +111,7 @@ function PathCard({
       style={{
         textAlign: "left",
         padding: 20,
-        background: active ? "rgba(96,165,250,0.08)" : "var(--bg-elev)",
+        background: active ? "var(--accent-soft)" : "var(--bg-elev)",
         border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
         borderRadius: 10,
         cursor: "pointer",
@@ -446,8 +446,8 @@ function SharedFooter() {
     <div
       style={{
         padding: 28,
-        background: "rgba(16,185,129,0.08)",
-        border: "1px solid rgba(16,185,129,0.3)",
+        background: "var(--success-soft)",
+        border: "1px solid var(--success-ring)",
         borderRadius: 12,
         marginTop: 40,
       }}

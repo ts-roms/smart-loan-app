@@ -186,9 +186,9 @@ export function Signup() {
         {error && (
           <div
             style={{
-              background: "rgba(248,113,113,0.08)",
-              border: "1px solid rgba(248,113,113,0.35)",
-              color: "#fca5a5",
+              background: "var(--danger-soft)",
+              border: "1px solid var(--danger-ring)",
+              color: "var(--danger)",
               borderRadius: 8,
               padding: "12px 14px",
               fontSize: 14,
@@ -288,8 +288,8 @@ export function Credentials({ result }: { result: SignupSuccess }) {
 
       <div
         style={{
-          background: "rgba(251,191,36,0.07)",
-          border: "1px solid rgba(251,191,36,0.4)",
+          background: "var(--warning-soft)",
+          border: "1px solid var(--warning-ring)",
           borderRadius: 10,
           padding: 20,
           marginBottom: 24,
@@ -300,7 +300,7 @@ export function Credentials({ result }: { result: SignupSuccess }) {
             fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: 0.5,
-            color: "#fbbf24",
+            color: "var(--warning)",
             marginBottom: 14,
           }}
         >

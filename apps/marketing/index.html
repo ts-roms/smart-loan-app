@@ -8,7 +8,7 @@
       name="description"
       content="Lending and savings software built for Philippine cooperatives. Install on your own server with a perpetual license, or use the hosted option. Your data, your hardware, your control."
     />
-    <meta name="theme-color" content="#0a0f1e" />
+    <meta name="theme-color" content="#f6f7f9" />
 
     <!-- Open Graph / social previews -->
     <meta property="og:type" content="website" />
@@ -23,7 +23,52 @@
          the rest of the styling lives inline so the bundle has no
          CSS file to fetch before first paint. -->
     <style>
+      /*
+       * Light is the default, matching the console. Dark is kept intact
+       * under [data-theme="dark"] — nothing sets that attribute here
+       * yet, so it's dormant, but the values are preserved and a toggle
+       * is a small change away rather than a re-derivation.
+       *
+       * The `-soft` / `-ring` pairs exist because the pages had been
+       * hardcoding `rgba(248,113,113,0.08)` and friends inline. Those
+       * alphas were picked against a near-black page and turn muddy on
+       * white, so the tints are named here and tuned per theme.
+       */
       :root {
+        color-scheme: light;
+
+        --bg: #f6f7f9;
+        --bg-elev: #ffffff;
+        --border: #dfe3e8;
+        --text: #171c26;
+        --text-dim: #545c6b;
+        /* Tuned against the tinted callout panels, not the page white —
+         * #6b7280 cleared AA on the body but measured 4.07:1 on the
+         * light-blue step boxes in /install, where it's mostly used. */
+        --text-muted: #59606d;
+        /* `--accent` is link text on white; `--accent-strong` is a fill
+         * that carries white text. Both are darker than the obvious
+         * sky-blue: at #0b93cb the primary buttons measured 3.47:1
+         * against their own white labels. */
+        --accent: #0a5f9e;
+        --accent-strong: #0a5f9e;
+        --success: #0f7a4f;
+        --warning: #9a6100;
+        --danger: #c02626;
+
+        --accent-soft: rgba(10, 95, 158, 0.07);
+        --accent-ring: rgba(10, 95, 158, 0.28);
+        --success-soft: rgba(15, 122, 79, 0.07);
+        --success-ring: rgba(15, 122, 79, 0.3);
+        --warning-soft: rgba(154, 97, 0, 0.07);
+        --warning-ring: rgba(154, 97, 0, 0.32);
+        --danger-soft: rgba(192, 38, 38, 0.06);
+        --danger-ring: rgba(192, 38, 38, 0.3);
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+
         --bg: #0a0f1e;
         --bg-elev: #0e1525;
         --border: #1e293b;
@@ -33,8 +78,17 @@
         --accent: #60a5fa;
         --accent-strong: #3b82f6;
         --success: #10b981;
-        --warning: #f59e0b;
-        --danger: #ef4444;
+        --warning: #fbbf24;
+        --danger: #fca5a5;
+
+        --accent-soft: rgba(96, 165, 250, 0.1);
+        --accent-ring: rgba(96, 165, 250, 0.3);
+        --success-soft: rgba(16, 185, 129, 0.08);
+        --success-ring: rgba(16, 185, 129, 0.3);
+        --warning-soft: rgba(251, 191, 36, 0.07);
+        --warning-ring: rgba(251, 191, 36, 0.4);
+        --danger-soft: rgba(248, 113, 113, 0.08);
+        --danger-ring: rgba(248, 113, 113, 0.35);
       }
       *,
       *::before,
