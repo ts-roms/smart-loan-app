@@ -51,6 +51,7 @@ import { LicenseBanner } from "../features/settings";
 import { AuditLogTrigger } from "../features/audit";
 import { HelpTrigger } from "../features/help";
 import { NotificationBell } from "../features/notifications";
+import { Breadcrumbs } from "./Breadcrumbs";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface NavItem {
@@ -612,6 +613,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <LicenseBanner />
         <div className="p-6 space-y-4">
           <ActiveDelegationBanner />
+          <Breadcrumbs variant="staff" />
           {children}
         </div>
       </main>

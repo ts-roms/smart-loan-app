@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
+import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { SignaturePad } from "../../../components/SignaturePad";
 import { downloadPdf } from "../../../lib/download-pdf";
@@ -105,6 +106,10 @@ export function LoanDetailPage() {
   const askPrompt = usePrompt();
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentRef, setPaymentRef] = useState("");
+
+  // Breadcrumb label. Must run before the early returns below — it's a
+  // hook, and bailing first would change the hook order between renders.
+  useCrumbTitle(loan.data?.number ?? null);
 
   if (loan.isLoading) return <SkeletonCard />;
   if (!loan.data)

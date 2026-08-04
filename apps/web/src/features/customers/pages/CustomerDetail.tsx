@@ -31,6 +31,7 @@ import { formatDate, formatMoney } from "@loan/shared-utils";
 import { FileUp, Gauge, Pencil, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { CustomerLedgerPanel } from "../components/CustomerLedgerPanel";
 import { DorsiScreenBanner } from "../components/DorsiScreenBanner";
@@ -55,6 +56,18 @@ export function CustomerDetailPage() {
   const kycStatus = useKycStatus(id);
   const score = useCustomerScore(id);
   const [editing, setEditing] = useState(false);
+
+  // Name the breadcrumb crumb for this route. Called before the early
+  // returns below — it's a hook, and the loading branch would otherwise
+  // change the hook order. Null while loading; the trail shows the id
+  // until the record arrives.
+  useCrumbTitle(
+    customer.data
+      ? [customer.data.firstName, customer.data.lastName]
+          .filter(Boolean)
+          .join(" ")
+      : null,
+  );
 
   if (customer.isLoading) return <SkeletonCard />;
   if (!customer.data)

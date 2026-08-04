@@ -6,6 +6,7 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { ApiClientProvider } from "./providers/api";
 import { AuthProvider } from "./providers/auth";
+import { BreadcrumbTitleProvider } from "./providers/breadcrumb-titles";
 import { PwaProvider } from "./providers/pwa";
 import { ThemeProvider } from "./providers/theme";
 import "./index.css";
@@ -28,7 +29,12 @@ createRoot(document.getElementById("root")!).render(
               <Toaster>
                 <ConfirmDialogProvider>
                   <PwaProvider>
-                    <App />
+                    {/* Holds record names for the breadcrumb trail.
+                        Above <App /> so a title published by a detail
+                        page survives navigating deeper into it. */}
+                    <BreadcrumbTitleProvider>
+                      <App />
+                    </BreadcrumbTitleProvider>
                   </PwaProvider>
                 </ConfirmDialogProvider>
               </Toaster>

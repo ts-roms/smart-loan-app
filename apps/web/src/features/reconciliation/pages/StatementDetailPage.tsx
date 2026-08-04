@@ -27,6 +27,7 @@ import {
   Unlink,
 } from "lucide-react";
 import { useParams, Link as RouterLink } from "react-router-dom";
+import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { BankLineLink } from "../components/BankLineDrawer";
 
@@ -45,6 +46,10 @@ export function StatementDetailPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const askPrompt = usePrompt();
+
+  // Breadcrumb label — before the early returns, so the hook order
+  // stays the same on the loading and loaded renders.
+  useCrumbTitle(statement.data?.label ?? null);
 
   if (statement.isLoading) return <SkeletonCard />;
   if (!statement.data)
