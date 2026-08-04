@@ -189,42 +189,46 @@ export function TenantDetail() {
           </p>
         )}
         {licenses.data && licenses.data.length > 0 && (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: 13,
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  textAlign: "left",
-                  color: "var(--text-dim)",
-                  fontSize: 11,
-                }}
-              >
-                <th style={th}>Issued</th>
-                <th style={th}>Tier</th>
-                <th style={th}>Expires</th>
-                <th style={th}>Status</th>
-                <th style={th}>By</th>
-                <th style={th}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {licenses.data.map((lic) => (
-                <LicenseRow
-                  key={lic.id}
-                  lic={lic}
-                  isCurrent={data.licenseSnapshot?.jti === lic.jti}
-                  canRevoke={isAdmin}
-                  pending={revoke.isPending}
-                  onRevoke={(reason) => revoke.mutate({ jti: lic.jti, reason })}
-                />
-              ))}
-            </tbody>
-          </table>
+          <div className="pf-tablewrap">
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 13,
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    textAlign: "left",
+                    color: "var(--text-dim)",
+                    fontSize: 11,
+                  }}
+                >
+                  <th style={th}>Issued</th>
+                  <th style={th}>Tier</th>
+                  <th style={th}>Expires</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>By</th>
+                  <th style={th}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {licenses.data.map((lic) => (
+                  <LicenseRow
+                    key={lic.id}
+                    lic={lic}
+                    isCurrent={data.licenseSnapshot?.jti === lic.jti}
+                    canRevoke={isAdmin}
+                    pending={revoke.isPending}
+                    onRevoke={(reason) =>
+                      revoke.mutate({ jti: lic.jti, reason })
+                    }
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 

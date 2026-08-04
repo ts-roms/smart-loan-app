@@ -80,6 +80,89 @@
         background: var(--bg);
         color: var(--text);
       }
+
+      /*
+       * Shell layout lives here rather than in inline styles because it
+       * needs a media query, and `style={{}}` can't express one.
+       *
+       * Below 768px the rail goes off-canvas. Left in flow it was being
+       * flex-shrunk from 200px to 122px AND still pushing the page to
+       * 439px wide on a 375px screen — the console scrolled sideways.
+       */
+      .pf-shell {
+        display: flex;
+        min-height: 100vh;
+      }
+      .pf-aside {
+        width: 200px;
+        flex-shrink: 0;
+        /* Anchors the signed-in-as block, which is absolutely
+         * positioned — without this it resolved against <body> and sat
+         * at the bottom of the document instead of the sidebar. */
+        position: relative;
+        border-right: 1px solid var(--border);
+        padding: 20px;
+        background: var(--bg-elev);
+      }
+      .pf-main {
+        flex: 1;
+        min-width: 0;
+        padding: 32px;
+      }
+      .pf-burger,
+      .pf-scrim {
+        display: none;
+      }
+
+      /*
+       * Wide tables scroll inside their own box rather than dragging the
+       * whole page sideways. The audit log is 670px of columns; on a
+       * 375px screen that made the entire console pan, sidebar and all.
+       */
+      .pf-tablewrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      @media (max-width: 767px) {
+        .pf-aside {
+          position: fixed;
+          inset: 0 auto 0 0;
+          z-index: 50;
+          transform: translateX(-100%);
+          transition: transform 0.2s ease;
+        }
+        .pf-aside[data-open="true"] {
+          transform: translateX(0);
+        }
+        .pf-scrim {
+          display: block;
+          position: fixed;
+          inset: 0;
+          z-index: 40;
+          border: 0;
+          padding: 0;
+          background: var(--overlay);
+        }
+        .pf-burger {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          height: 36px;
+          width: 36px;
+          margin-bottom: 12px;
+          border-radius: 6px;
+          border: 1px solid var(--border);
+          background: var(--bg-elev);
+          color: var(--text-dim);
+          cursor: pointer;
+          font-size: 18px;
+          line-height: 1;
+        }
+        .pf-main {
+          padding: 16px;
+        }
+      }
     </style>
   </head>
   <body>

@@ -99,65 +99,67 @@ export function TenantsList() {
       )}
 
       {data && data.length > 0 && (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr
-              style={{
-                textAlign: "left",
-                fontSize: 12,
-                color: "var(--text-dim)",
-              }}
-            >
-              <th style={th}>Tenant</th>
-              <th style={th}>Slug</th>
-              <th style={th}>Status</th>
-              <th style={th}>Tier</th>
-              <th style={th}>License expires</th>
-              <th style={th}>Last seen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((t) => (
-              <tr key={t.id} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={td}>
-                  <Link
-                    to={`/tenants/${t.slug}`}
-                    style={{ color: "var(--accent)", textDecoration: "none" }}
-                  >
-                    {t.name}
-                  </Link>
-                </td>
-                <td style={{ ...td, fontFamily: "monospace" }}>{t.slug}</td>
-                <td style={td}>
-                  <StatusBadge status={t.status} />
-                  {t.status === "PROVISIONING" && t.provisioningError && (
-                    <span
-                      title={t.provisioningError}
-                      style={{
-                        marginLeft: 8,
-                        fontSize: 11,
-                        color: "var(--danger)",
-                      }}
-                    >
-                      (error)
-                    </span>
-                  )}
-                </td>
-                <td style={td}>{t.licenseSnapshot?.tier ?? "—"}</td>
-                <td style={td}>
-                  {t.licenseSnapshot?.exp
-                    ? new Date(t.licenseSnapshot.exp).toLocaleDateString()
-                    : "—"}
-                </td>
-                <td style={{ ...td, color: "var(--text-muted)" }}>
-                  {t.lastSeenAt
-                    ? new Date(t.lastSeenAt).toLocaleString()
-                    : "never"}
-                </td>
+        <div className="pf-tablewrap">
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr
+                style={{
+                  textAlign: "left",
+                  fontSize: 12,
+                  color: "var(--text-dim)",
+                }}
+              >
+                <th style={th}>Tenant</th>
+                <th style={th}>Slug</th>
+                <th style={th}>Status</th>
+                <th style={th}>Tier</th>
+                <th style={th}>License expires</th>
+                <th style={th}>Last seen</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.map((t) => (
+                <tr key={t.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={td}>
+                    <Link
+                      to={`/tenants/${t.slug}`}
+                      style={{ color: "var(--accent)", textDecoration: "none" }}
+                    >
+                      {t.name}
+                    </Link>
+                  </td>
+                  <td style={{ ...td, fontFamily: "monospace" }}>{t.slug}</td>
+                  <td style={td}>
+                    <StatusBadge status={t.status} />
+                    {t.status === "PROVISIONING" && t.provisioningError && (
+                      <span
+                        title={t.provisioningError}
+                        style={{
+                          marginLeft: 8,
+                          fontSize: 11,
+                          color: "var(--danger)",
+                        }}
+                      >
+                        (error)
+                      </span>
+                    )}
+                  </td>
+                  <td style={td}>{t.licenseSnapshot?.tier ?? "—"}</td>
+                  <td style={td}>
+                    {t.licenseSnapshot?.exp
+                      ? new Date(t.licenseSnapshot.exp).toLocaleDateString()
+                      : "—"}
+                  </td>
+                  <td style={{ ...td, color: "var(--text-muted)" }}>
+                    {t.lastSeenAt
+                      ? new Date(t.lastSeenAt).toLocaleString()
+                      : "never"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {provisionOpen && (

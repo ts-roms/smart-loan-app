@@ -125,28 +125,30 @@ export function Audit() {
       )}
 
       {query.data && query.data.length > 0 && (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr
-              style={{
-                textAlign: "left",
-                fontSize: 12,
-                color: "var(--text-dim)",
-              }}
-            >
-              <th style={th}>When</th>
-              <th style={th}>Action</th>
-              <th style={th}>Actor</th>
-              <th style={th}>Tenant</th>
-              <th style={th}>Payload</th>
-            </tr>
-          </thead>
-          <tbody>
-            {query.data.map((row) => (
-              <AuditEntry key={row.id} row={row} />
-            ))}
-          </tbody>
-        </table>
+        <div className="pf-tablewrap">
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr
+                style={{
+                  textAlign: "left",
+                  fontSize: 12,
+                  color: "var(--text-dim)",
+                }}
+              >
+                <th style={th}>When</th>
+                <th style={th}>Action</th>
+                <th style={th}>Actor</th>
+                <th style={th}>Tenant</th>
+                <th style={th}>Payload</th>
+              </tr>
+            </thead>
+            <tbody>
+              {query.data.map((row) => (
+                <AuditEntry key={row.id} row={row} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
