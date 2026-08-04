@@ -16,12 +16,15 @@
  *   1. Edit the constants below.
  *   2. Edit the matching HSL in `libs/ui/src/globals.css` — that's
  *      what the running app actually paints with. Keep both in sync.
- *   3. Hand-sync the static assets that this module can't reach:
- *        - `apps/web/public/offline.html` (inline-styled fallback)
- *        - `apps/web/public/favicon.svg`
- *        - `apps/web/public/icons/icon.svg`
- *        - `apps/web/public/icons/icon-maskable.svg`
+ *   3. Hand-sync `apps/web/public/offline.html`, which is inline-styled
+ *      because the service worker serves it before any bundle attaches.
  *      A grep for the old hex covers it.
+ *
+ * NOT synced, deliberately: `favicon.svg`, `icons/icon.svg` and
+ * `icons/icon-maskable.svg` keep their dark plate regardless of the UI
+ * theme. They're brand marks on someone's home screen and in a browser
+ * tab, not UI surfaces — a light icon on the light splash screen this
+ * manifest declares would have no visible edge at all.
  *
  * Consumers (auto-synced via vite.config.ts):
  *
@@ -42,8 +45,8 @@ export const themeColors = {
   background: "#f6f7f9",
   /** Body / primary text. HSL: 222 24% 12%. */
   foreground: "#171c26",
-  /** Brand accent — links, focus rings, primary buttons. HSL: 199 89% 42%. */
-  primary: "#0b93cb",
+  /** Brand accent — links, focus rings, primary buttons. HSL: 199 92% 32%. */
+  primary: "#0a5f9e",
 } as const;
 
 export type ThemeColorName = keyof typeof themeColors;

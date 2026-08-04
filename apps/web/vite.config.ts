@@ -99,10 +99,23 @@ export default defineConfig({
         // 5 MB cap per asset — face-api ships a 1.3 MB chunk that
         // would exceed Workbox's default 2 MB ceiling otherwise.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        // Navigation fallback: if the SP request fails (offline),
-        // serve the app shell so React Router takes over and renders
-        // the offline page client-side.
-        navigateFallback: "/offline.html",
+        /*
+         * SPA navigation fallback — MUST be the app shell.
+         *
+         * Workbox serves this for EVERY navigation request the service
+         * worker handles, not only ones the network refuses. Pointing it
+         * at offline.html meant that once the SW installed, every reload
+         * and every deep link rendered "You're offline" — online,
+         * offline, didn't matter. Installing the PWA bricked the app.
+         *
+         * index.html is precached, so it also loads with no network at
+         * all; React then boots and can show its own offline state.
+         * offline.html stays precached as the pre-install cold-start
+         * fallback, but it is deliberately NOT the navigation target.
+         */
+        navigateFallback: "/index.html",
+        // Never hand API or upload requests the HTML shell — they must
+        // fail as requests so the client's error handling sees them.
         navigateFallbackDenylist: [/^\/api\//, /^\/uploads\//],
         runtimeCaching: [
           {
