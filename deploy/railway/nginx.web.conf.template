@@ -1,0 +1,111 @@
+# SmartLoan web — nginx config for Railway.
+#
+# A template, not a plain conf: nginx:alpine runs envsubst over
+# /etc/nginx/templates/*.template at startup and writes the result to
+# /etc/nginx/conf.d/. That is what lets the two values Railway decides
+# at deploy time reach nginx.
+#
+# Only ${PORT} and ${API_UPSTREAM} are substituted — the substitution
+# list is pinned by NGINX_ENVSUBST_FILTER in the Dockerfile. Without
+# that pin envsubst would also eat nginx's own $uri, $host and
+# $proxy_add_x_forwarded_for, replacing them with empty strings and
+# breaking routing in ways that only show up under traffic.
+#
+# Differences from deploy/docker/nginx.web.conf, and why:
+#
+#   listen ${PORT}   Railway assigns a port per deploy and expects the
+#                    container to bind it. A hardcoded 80 means the
+#                    router gets connection-refused and the deploy is
+#                    marked unhealthy.
+#   ${API_UPSTREAM}  compose resolves the API as `api:3001` over its
+#                    bridge network. Railway uses private DNS —
+#                    <service>.railway.internal — so the upstream has to
+#                    be configurable.
+
+server {
+    listen ${PORT};
+    server_name _;
+
+    # Resolve the API upstream per request, not once at startup.
+    #
+    # nginx normally resolves proxy_pass hostnames while parsing the
+    # config and REFUSES TO START if one doesn't resolve — so the web
+    # service crash-loops whenever it boots before the api service
+    # exists, which is exactly what a first deploy does. Verified:
+    # an unresolvable upstream produces
+    #   [emerg] host not found in upstream
+    # and the container exits 1.
+    #
+    # Putting the address in a variable defers the lookup to request
+    # time. nginx then needs a resolver of its own; the base image's
+    # 15-local-resolvers.envsh reads /etc/resolv.conf into
+    # NGINX_LOCAL_RESOLVERS before templates are substituted, so this
+    # picks up whatever the platform provides. ipv6 is left ON —
+    # Railway's private network is IPv6.
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+    set $api_upstream ${API_UPSTREAM};
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Railway terminates TLS at its edge and forwards over HTTP, so the
+    # scheme the app should believe is in X-Forwarded-Proto, not $scheme.
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+
+    # Static probe target. Railway's healthcheck hits the web service
+    # directly, and answering from nginx rather than proxying to the API
+    # keeps "is the SPA being served" separate from "is the API up" —
+    # otherwise an API outage marks the web deploy failed and rolls back
+    # a perfectly good frontend.
+    location = /health.txt {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 'ok';
+    }
+
+    # Hashed build assets. Immutable because Vite fingerprints them.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # No URI part on any of these proxy_pass values, deliberately.
+    #
+    # With a literal upstream, `proxy_pass http://host/api/v1/` replaces
+    # the matched location prefix. With a VARIABLE upstream that
+    # rewriting doesn't apply, and mixing the two forms is a classic way
+    # to end up serving /api/v1/api/v1/... Here the path is identical on
+    # both sides, so passing the original URI through untouched is both
+    # simpler and correct.
+    location /api/v1/ {
+        proxy_pass $api_upstream;
+        proxy_http_version 1.1;
+        # Long enough for a bulk import or a PDF render.
+        proxy_read_timeout 120s;
+    }
+
+    location /uploads/ {
+        proxy_pass $api_upstream;
+        proxy_http_version 1.1;
+    }
+
+    location /docs {
+        proxy_pass $api_upstream;
+        proxy_http_version 1.1;
+    }
+
+    # SPA fallback. Must stay last — it catches everything the more
+    # specific blocks above didn't.
+    #
+    # index.html is deliberately never cached: it names the hashed asset
+    # bundles, so a cached copy pins users to a previous deploy's
+    # JavaScript and they see stale code until the cache expires.
+    location / {
+        add_header Cache-Control "no-store, must-revalidate";
+        try_files $uri $uri/ /index.html;
+    }
+}

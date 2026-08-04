@@ -7,10 +7,16 @@ SmartLoan on their own server.
 | --------------------------------------- | --------------------------------------------------------------------------------- | --------------- |
 | [`docker/`](./docker/README.md)         | IT shops comfortable with containers. `docker compose up -d` and you're 90% done. | ~15 min         |
 | [`bare-metal/`](./bare-metal/README.md) | Traditional Linux admins. Native systemd service, nginx in front.                 | ~30 min         |
+| [`railway/`](./railway/README.md)       | Vendor-hosted. Managed Postgres, deploy on push, no server to run.                | ~10 min         |
 
-Both deliver the same software. Same database schema, same features,
-same license activation flow. The choice is purely operational — what
-your team already knows how to run.
+All three deliver the same software. Same database schema, same
+features, same license activation flow. The choice is operational —
+what your team already knows how to run.
+
+The first two are the on-prem story: the cooperative owns the hardware
+and the data sits on it. `railway/` is the hosted alternative, and it
+is a different trade — the data lives on Railway's infrastructure, not
+the cooperative's. Say so when someone asks for "the cloud one".
 
 ## What gets deployed
 
