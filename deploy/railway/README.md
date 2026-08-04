@@ -108,6 +108,20 @@ directory `/`, and `API_UPSTREAM` pointing at the API.
 These are vendor-side apps, not part of a cooperative's install. Deploy
 them only if you are hosting the vendor surfaces too.
 
+The marketing service needs two more variables, and they are build-time:
+
+| Variable            | Value                               |
+| ------------------- | ----------------------------------- |
+| `VITE_APP_URL`      | the tenant web service's public URL |
+| `VITE_PLATFORM_URL` | the platform console's public URL   |
+
+Vite inlines `import.meta.env` when the bundle is compiled, so these
+must reach the BUILD, not the running container. `Dockerfile.marketing`
+declares them as `ARG`s for exactly that reason — Railway forwards
+service variables to declared args. Set them as ordinary service
+variables and they arrive. Miss them and the public site ships
+`http://localhost:5173` as its "Sign in" link.
+
 They proxy DIFFERENT prefixes, because they talk to different mount
 points on the same API (see apps/api/src/app.ts):
 

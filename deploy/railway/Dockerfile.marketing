@@ -33,6 +33,20 @@ RUN pnpm install --frozen-lockfile
 # these apps import resolve through @loan/db.
 RUN pnpm --filter @loan/db prisma:generate
 
+# Vite inlines import.meta.env at BUILD time, so these have to be
+# present as build args — a Railway service variable alone reaches the
+# running container, which is far too late for a static bundle. Without
+# them the site ships with the dev fallbacks compiled in and its
+# "Sign in" and "Platform console" links point at localhost for every
+# visitor. Verified by grepping the emitted bundle.
+#
+# Railway forwards service variables to declared ARGs automatically;
+# the defaults keep a plain `docker build` working locally.
+ARG VITE_APP_URL=http://localhost:5173
+ARG VITE_PLATFORM_URL=http://localhost:5174
+ENV VITE_APP_URL=$VITE_APP_URL
+ENV VITE_PLATFORM_URL=$VITE_PLATFORM_URL
+
 RUN pnpm --filter @loan/marketing build
 
 # ─── runtime ────────────────────────────────────────────────────────────
