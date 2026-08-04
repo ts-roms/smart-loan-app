@@ -40,6 +40,7 @@ const STAFF_ROUTES: readonly CrumbRoute[] = [
   ["/loan-products", "Loan products"],
 
   ["/collections", "Collections"],
+  ["/collections/my-accounts", "My accounts"],
   ["/collections/demand-letters", "Demand letters"],
   ["/repossession", "Repossession"],
   ["/lease", "Lease-to-Own"],

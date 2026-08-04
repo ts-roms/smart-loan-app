@@ -28,6 +28,7 @@ import {
   FileSpreadsheet,
   Gauge,
   HandCoins,
+  Inbox,
   KeyRound,
   Layers,
   LogOut,
@@ -127,6 +128,12 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Servicing",
     items: [
+      {
+        to: "/collections/my-accounts",
+        label: "My accounts",
+        icon: Inbox,
+        permission: "collections.read",
+      },
       {
         to: "/collections",
         label: "Collections",

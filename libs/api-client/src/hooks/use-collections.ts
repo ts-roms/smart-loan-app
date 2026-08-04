@@ -1,25 +1,97 @@
 import type {
   AccrualJobResult,
+  AssignableCollector,
   CollectionNote,
   CollectionNoteType,
+  CollectorWorkload,
   OverdueRow,
   PromiseStatus,
   PromiseToPay,
+  QueueScope,
 } from "@loan/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "../client";
 
 export const collectionsKeys = {
-  queue: ["collections", "queue"] as const,
+  // Scoped: a collector's own queue and the full worklist are different
+  // responses and must not share a cache entry.
+  queue: (scope: QueueScope = "all") =>
+    ["collections", "queue", scope] as const,
+  collectors: ["collections", "collectors"] as const,
+  workload: ["collections", "workload"] as const,
   notes: (loanId: string) => ["collections", "notes", loanId] as const,
   promises: (loanId: string) => ["collections", "promises", loanId] as const,
 };
 
-export function useOverdueQueue() {
+export function useOverdueQueue(scope: QueueScope = "all") {
   return useQuery({
-    queryKey: collectionsKeys.queue,
-    queryFn: () => getApiClient().get<OverdueRow[]>("/collections/queue"),
+    queryKey: collectionsKeys.queue(scope),
+    queryFn: () =>
+      getApiClient().get<OverdueRow[]>(`/collections/queue?scope=${scope}`),
+  });
+}
+
+/** Users who may hold accounts — for the assign picker. */
+export function useAssignableCollectors() {
+  return useQuery({
+    queryKey: collectionsKeys.collectors,
+    queryFn: () =>
+      getApiClient().get<AssignableCollector[]>("/collections/collectors"),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** How many accounts each collector is carrying. */
+export function useCollectorWorkload() {
+  return useQuery({
+    queryKey: collectionsKeys.workload,
+    queryFn: () =>
+      getApiClient().get<CollectorWorkload[]>("/collections/workload"),
+  });
+}
+
+/**
+ * Assign or reassign an account.
+ *
+ * Invalidates every queue scope, not just the one on screen: moving an
+ * account changes the unassigned pool, the new owner's queue, and the
+ * old owner's, and the supervisor is usually looking at one while
+ * changing another.
+ */
+export function useAssignAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      loanId: string;
+      collectorId: string;
+      note?: string;
+    }) =>
+      getApiClient().request(`/collections/loans/${input.loanId}/assignee`, {
+        method: "PUT",
+        body: JSON.stringify({
+          collectorId: input.collectorId,
+          note: input.note,
+        }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["collections", "queue"] });
+      void qc.invalidateQueries({ queryKey: collectionsKeys.workload });
+    },
+  });
+}
+
+export function useUnassignAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (loanId: string) =>
+      getApiClient().request(`/collections/loans/${loanId}/assignee`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["collections", "queue"] });
+      void qc.invalidateQueries({ queryKey: collectionsKeys.workload });
+    },
   });
 }
 
