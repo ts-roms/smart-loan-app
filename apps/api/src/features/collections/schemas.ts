@@ -24,3 +24,27 @@ export const resolveSchema = z.object({
   status: z.enum(["HONORED", "BROKEN", "CANCELLED"]),
 });
 export type ResolveInput = z.infer<typeof resolveSchema>;
+
+/** Hand an account to a collector, or move it to a different one. */
+export const assignSchema = z.object({
+  collectorId: z.string().uuid(),
+  note: z.string().max(500).optional(),
+});
+export type AssignInput = z.infer<typeof assignSchema>;
+
+/**
+ * Queue scope.
+ *
+ *   all         every delinquent account (the existing shared worklist)
+ *   mine        only the caller's own — the collector dashboard
+ *   unassigned  the pool a supervisor hands out from
+ *
+ * `mine` resolves to the caller's own id server-side and never accepts
+ * a collectorId from the client: letting the caller name whose queue to
+ * read would turn a collector's own-accounts view into a way to read
+ * everyone else's book.
+ */
+export const queueScopeSchema = z.object({
+  scope: z.enum(["all", "mine", "unassigned"]).default("all"),
+});
+export type QueueScope = z.infer<typeof queueScopeSchema>;

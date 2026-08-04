@@ -96,14 +96,16 @@ export const USER_ROLES = [
   "ADMIN",
   "LOAN_OFFICER",
   "ACCOUNTANT",
+  "COLLECTOR",
   "CUSTOMER",
 ] as const;
 export type UserRole = (typeof USER_ROLES)[number];
-/** Staff (non-customer) — the four primary console personas combined. */
+/** Staff (non-customer) — the console personas combined. */
 export const STAFF_ROLES = [
   "ADMIN",
   "LOAN_OFFICER",
   "ACCOUNTANT",
+  "COLLECTOR",
 ] as const satisfies ReadonlyArray<UserRole>;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 

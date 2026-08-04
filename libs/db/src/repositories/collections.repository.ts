@@ -5,6 +5,7 @@
  *   - Notes log (calls, SMS, visits) attached to a loan
  *   - Promise-to-pay tracking
  *   - Overdue queue listing (active loans with an unpaid installment past due)
+ *   - Account ownership: which collector is working which account
  *   - Daily late-fee accrual (idempotent; posts via AccountingRepository)
  */
 
@@ -37,6 +38,21 @@ export interface PtpCreateInput {
   promisedDate: Date;
   note?: string;
   createdById: string;
+}
+
+/** The collector working an account, flattened onto a queue row. */
+export interface QueueAssignee {
+  collectorId: string;
+  collectorName: string;
+  assignedAt: Date;
+  note: string | null;
+}
+
+export interface AssignInput {
+  loanId: string;
+  collectorId: string;
+  assignedById: string;
+  note?: string;
 }
 
 export class CollectionsRepository {
@@ -95,14 +111,24 @@ export class CollectionsRepository {
   /**
    * Loans with at least one unpaid installment past its due date.
    * Returns the loan + a denormalized summary for the queue table.
+   *
+   * `collectorId` narrows to one collector's accounts — the collector
+   * dashboard's only read. Filtering here rather than in the caller
+   * keeps a collector's queue from ever being assembled client-side out
+   * of the full list, which would ship every borrower's delinquency to
+   * someone who may only see their own.
    */
-  async overdueQueue(asOf: Date = new Date()): Promise<
+  async overdueQueue(
+    asOf: Date = new Date(),
+    filter: { collectorId?: string; unassignedOnly?: boolean } = {},
+  ): Promise<
     Array<
       LoanApplication & {
         customerName: string;
         daysOverdue: number;
         outstanding: number;
         overdueCount: number;
+        assignee: QueueAssignee | null;
       }
     >
   > {
@@ -110,12 +136,19 @@ export class CollectionsRepository {
       where: {
         status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] },
         schedule: { some: { paidInFullAt: null, dueDate: { lt: asOf } } },
+        ...(filter.collectorId
+          ? { collectionAssignment: { collectorId: filter.collectorId } }
+          : {}),
+        ...(filter.unassignedOnly ? { collectionAssignment: null } : {}),
       },
       include: {
         customer: { select: { firstName: true, lastName: true } },
         schedule: {
           where: { paidInFullAt: null },
           orderBy: { dueDate: "asc" },
+        },
+        collectionAssignment: {
+          include: { collector: { select: { name: true } } },
         },
       },
     });
@@ -139,18 +172,103 @@ export class CollectionsRepository {
         0,
       );
       const overdueCount = l.schedule.filter((s) => s.dueDate < asOf).length;
-      const { schedule: _schedule, customer, ...rest } = l;
+      const {
+        schedule: _schedule,
+        customer,
+        collectionAssignment,
+        ...rest
+      } = l;
       return {
         ...rest,
         customerName: `${customer.firstName} ${customer.lastName}`,
         daysOverdue,
         outstanding: Math.round(outstanding * 100) / 100,
         overdueCount,
+        assignee: collectionAssignment
+          ? {
+              collectorId: collectionAssignment.collectorId,
+              collectorName: collectionAssignment.collector.name,
+              assignedAt: collectionAssignment.assignedAt,
+              note: collectionAssignment.note,
+            }
+          : null,
       };
     });
 
     out.sort((a, b) => b.daysOverdue - a.daysOverdue);
     return out;
+  }
+
+  // ─── Account ownership ─────────────────────────────────────────────
+
+  /**
+   * Give an account to a collector, or move it to a different one.
+   *
+   * Upsert rather than create: `loanId` is unique, so reassignment is
+   * the same operation as first assignment. `assignedAt` is refreshed on
+   * the move — "held since" means since this collector got it, not since
+   * the account was first handed to anyone.
+   */
+  async assign(input: AssignInput) {
+    return this.prisma.collectionAssignment.upsert({
+      where: { loanId: input.loanId },
+      create: {
+        loanId: input.loanId,
+        collectorId: input.collectorId,
+        assignedById: input.assignedById,
+        note: input.note ?? null,
+      },
+      update: {
+        collectorId: input.collectorId,
+        assignedById: input.assignedById,
+        assignedAt: new Date(),
+        note: input.note ?? null,
+      },
+      include: { collector: { select: { id: true, name: true } } },
+    });
+  }
+
+  /**
+   * Return an account to the unassigned pool. Idempotent — unassigning
+   * something already unassigned is a no-op rather than an error, so a
+   * double-click can't 500.
+   */
+  async unassign(loanId: string): Promise<boolean> {
+    const { count } = await this.prisma.collectionAssignment.deleteMany({
+      where: { loanId },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Per-collector counts for the supervisor's view: how loaded is
+   * everyone, right now.
+   *
+   * Counts assignments, NOT currently-delinquent assignments — an
+   * account that cured keeps its owner (see the model comment), so this
+   * answers "how many accounts is this person carrying", which is the
+   * question a supervisor about to hand out more work is asking.
+   */
+  async workloadByCollector(): Promise<
+    Array<{ collectorId: string; collectorName: string; accounts: number }>
+  > {
+    const grouped = await this.prisma.collectionAssignment.groupBy({
+      by: ["collectorId"],
+      _count: { _all: true },
+    });
+    if (grouped.length === 0) return [];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: grouped.map((g) => g.collectorId) } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(users.map((u) => [u.id, u.name]));
+    return grouped
+      .map((g) => ({
+        collectorId: g.collectorId,
+        collectorName: nameById.get(g.collectorId) ?? "(deleted user)",
+        accounts: g._count._all,
+      }))
+      .sort((a, b) => b.accounts - a.accounts);
   }
 
   // ─── Late-fee accrual job ──────────────────────────────────────────

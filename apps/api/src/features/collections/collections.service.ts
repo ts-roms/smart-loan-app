@@ -1,6 +1,12 @@
-import { type CollectionsRepository } from "@loan/db";
+import { type CollectionsRepository, type PrismaClient } from "@loan/db";
 
-import type { NoteInput, PtpInput, ResolveInput } from "./schemas";
+import type {
+  AssignInput,
+  NoteInput,
+  PtpInput,
+  QueueScope,
+  ResolveInput,
+} from "./schemas";
 
 /**
  * Collections orchestration. Notes + PTPs + queue + the late-fee
@@ -18,10 +24,89 @@ export type AccrueResult =
   | { ok: false; kind: "AccrualFailed"; message: string };
 
 export class CollectionsService {
-  constructor(private readonly repo: CollectionsRepository) {}
+  constructor(
+    private readonly repo: CollectionsRepository,
+    /**
+     * Tenant-scoped user table. Assignment has to answer "is this a real,
+     * active user who may hold accounts", which is a User question the
+     * collections repo has no business owning.
+     */
+    private readonly users: PrismaClient["user"],
+  ) {}
 
-  overdueQueue() {
+  /**
+   * The overdue queue, scoped.
+   *
+   * `actorId` is the authenticated caller, not a parameter the client
+   * chooses — "mine" means the person asking. See queueScopeSchema.
+   */
+  overdueQueue(args: { scope: QueueScope["scope"]; actorId: string }) {
+    if (args.scope === "mine") {
+      return this.repo.overdueQueue(new Date(), {
+        collectorId: args.actorId,
+      });
+    }
+    if (args.scope === "unassigned") {
+      return this.repo.overdueQueue(new Date(), { unassignedOnly: true });
+    }
     return this.repo.overdueQueue();
+  }
+
+  // ─── account ownership ────────────────────────────────────────────
+
+  /**
+   * Assign or reassign an account.
+   *
+   * Rejects an unknown or deactivated collector up front. Without the
+   * check the FK would still hold, but a deactivated user can be
+   * assigned work they can never sign in to do — the account then looks
+   * covered and is silently orphaned.
+   */
+  async assign(args: {
+    loanId: string;
+    input: AssignInput;
+    actorId: string;
+  }): Promise<
+    | { ok: true; value: Awaited<ReturnType<CollectionsRepository["assign"]>> }
+    | { ok: false; kind: "UnknownCollector" | "InactiveCollector" }
+  > {
+    const collector = await this.users.findUnique({
+      where: { id: args.input.collectorId },
+      select: { id: true, active: true },
+    });
+    if (!collector) return { ok: false, kind: "UnknownCollector" };
+    if (!collector.active) return { ok: false, kind: "InactiveCollector" };
+
+    return {
+      ok: true,
+      value: await this.repo.assign({
+        loanId: args.loanId,
+        collectorId: args.input.collectorId,
+        assignedById: args.actorId,
+        note: args.input.note,
+      }),
+    };
+  }
+
+  unassign(loanId: string) {
+    return this.repo.unassign(loanId);
+  }
+
+  workload() {
+    return this.repo.workloadByCollector();
+  }
+
+  /**
+   * Users who can hold accounts — for the assign picker. COLLECTOR and
+   * LOAN_OFFICER, since officers work their own delinquencies too, and
+   * only active ones.
+   */
+  assignableCollectors() {
+    return this.users.findMany({
+      where: { active: true, role: { in: ["COLLECTOR", "LOAN_OFFICER"] } },
+      select: { id: true, name: true, email: true, role: true },
+      orderBy: { name: "asc" },
+    });
   }
 
   // ─── notes ────────────────────────────────────────────────────────
