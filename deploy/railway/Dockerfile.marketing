@@ -99,7 +99,18 @@ ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 
 # Sensible default for the common single-environment setup. Override in
 # the service variables when the API service is named something else.
-ENV API_UPSTREAM=http://api.railway.internal:3001
+# Railway injects PORT into the API container, and the API binds it
+# rather than the 3001 in its config — so the private port is 8080, NOT
+# the 3001 you see in .env.example and compose. Confirm with
+#   railway logs --service <api> | grep "Server listening"
+# which prints the address it actually bound.
+#
+# The hostname is derived from the SERVICE NAME and is not a passthrough:
+# a service called `@loan/api` is reachable at loanapi.railway.internal.
+# This default is a placeholder for a service literally named `api` —
+# set the variable explicitly. A wrong value here is a request-time 502,
+# never a build error.
+ENV API_UPSTREAM=http://api.railway.internal:8080
 # The web service, for the /app mount. Same defaulting rationale as
 # API_UPSTREAM — override in the service variables if it isn't named
 # `web`. The port is the one nginx binds inside that container
