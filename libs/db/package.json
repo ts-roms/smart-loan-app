@@ -20,7 +20,8 @@
     "prisma:studio": "dotenv -e ../../.env -- prisma studio",
     "migrate-tenants": "dotenv -e ../../.env -- tsx scripts/migrate-tenants.mjs",
     "repair-payments": "dotenv -e ../../.env -- tsx scripts/repair-payments.mjs",
-    "adopt-existing-as-tenant": "dotenv -e ../../.env -- tsx scripts/adopt-existing-as-tenant.mjs"
+    "adopt-existing-as-tenant": "dotenv -e ../../.env -- tsx scripts/adopt-existing-as-tenant.mjs",
+    "bootstrap-admin": "dotenv -e ../../.env -- tsx scripts/bootstrap-admin.ts"
   },
   "dependencies": {
     "@loan/accounting": "workspace:*",

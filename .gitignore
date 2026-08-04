@@ -33,3 +33,7 @@ data/
 .claude/settings.local.json
 # TypeScript incremental build artifacts
 *.tsbuildinfo
+
+# Written by `pnpm --filter @loan/db bootstrap-admin`. Contains a
+# plaintext bootstrap password; delete it after first sign-in.
+admin-credentials.txt

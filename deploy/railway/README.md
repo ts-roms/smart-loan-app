@@ -159,6 +159,41 @@ Generate a public domain on the MARKETING service, not this one — see
 talks to it through nginx, which is also why there is no CORS hop to
 configure between them.
 
+## Creating the first admin
+
+`pnpm db:seed` is the DEVELOPMENT seed. It creates four accounts, all
+with the password `P@ssw0rd123`, which is committed to this repository
+and therefore public knowledge. Never run it against a deployment — it
+is an ADMIN account whose credentials anyone reading the repo has.
+
+Use the bootstrap script instead. It creates exactly one ADMIN with a
+generated high-entropy password, and seeds the same reference data
+(permissions, roles, chart of accounts, loan products, decision rules):
+
+```bash
+railway ssh --service '<api-service>'
+```
+
+then, inside the container:
+
+```bash
+cd /home/node/app && pnpm --filter @loan/db exec tsx scripts/bootstrap-admin.ts --email admin@yourcoop.org
+```
+
+It writes the password to `admin-credentials.txt` rather than printing
+it — `cat` it, sign in, change the password, and delete the file.
+
+Run it from inside the container, not from your machine. Railway's
+Postgres has no public TCP proxy by default, so `DATABASE_PUBLIC_URL`
+exists but is EMPTY and the database simply is not reachable from
+outside the project network. The API image ships the full workspace
+including devDependencies, so `tsx` and this script are both present.
+
+Re-running is safe. Reference data is upserted, and an existing user at
+that email is left alone — which also means the password is issued once
+and never rotated. If it is lost, change it from the app, or delete the
+user and re-run.
+
 ## Uploads do not survive a redeploy
 
 The API writes KYC documents and signatures to `UPLOADS_DIR` on the
