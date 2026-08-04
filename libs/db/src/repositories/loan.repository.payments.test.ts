@@ -141,6 +141,22 @@ function makeClient(db: FakeDb): PrismaClient {
     loanApplication: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         db.loans.find((l) => l.id === where.id) ?? null,
+      /*
+       * recordPayment resolves its argument through idOrNumberWhere, so
+       * the where clause is `{ id }` OR `{ number }` — never both. The
+       * stub honours whichever arrives rather than assuming `id`, which
+       * is the whole point of the lookup being able to take a reference.
+       */
+      findFirst: async ({
+        where,
+      }: {
+        where: { id?: string; number?: string };
+      }) =>
+        db.loans.find((l) =>
+          where.id !== undefined
+            ? l.id === where.id
+            : l.number === where.number,
+        ) ?? null,
       update: async ({
         where,
         data,
@@ -258,7 +274,15 @@ function makeClient(db: FakeDb): PrismaClient {
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────
 
-const LOAN_ID = "loan-1";
+/*
+ * A real UUID, not "loan-1". recordPayment now resolves its argument
+ * through idOrNumberWhere, which treats anything that doesn't look like
+ * a UUID as a loan number — so a synthetic id was being looked up in the
+ * `number` column and never found. Production ids are @default(uuid()),
+ * so this is what the fixture should have been all along.
+ */
+const LOAN_ID = "6f2d1a4e-9c3b-4f18-8a71-2e5d0c7b9a44";
+const LOAN_NUMBER = "LN-2026-000001";
 const OFFICER = "user-1";
 const DUE = new Date("2026-04-01");
 
@@ -270,7 +294,7 @@ function seed(installments: Array<{ interest: number; principal: number }>): {
   const db = new FakeDb();
   db.loans.push({
     id: LOAN_ID,
-    number: "LN-2026-000001",
+    number: LOAN_NUMBER,
     status: "ACTIVE",
     closedAt: null,
   });
@@ -500,5 +524,76 @@ describe("recordPayment — overpayment on top of partial progress", () => {
     expect(db.creditedTo(ACCOUNT_CODES.CUSTOMER_ADVANCES)).toBe(600);
     expect(db.installment(1).paidInFullAt).not.toBeNull();
     expectAllEntriesBalance(db);
+  });
+});
+
+describe("recordPayment — identifier resolution", () => {
+  /*
+   * recordPayment takes a loan number as well as a UUID. The risk in
+   * that change wasn't the lookup — it was everything after it: the
+   * schedule updates, the loan close and the journal posting all key on
+   * the id, so a number reaching them would have matched nothing and
+   * silently written to no rows.
+   *
+   * So these assert the SIDE EFFECTS, not just that the call resolved.
+   */
+  it("allocates identically whether paid by number or by id", async () => {
+    const byId = seed([{ interest: 200, principal: 800 }]);
+    await byId.repo.recordPayment(LOAN_ID, {
+      amount: 600,
+      paidOn: new Date(2026, 3, 1),
+      recordedById: OFFICER,
+    });
+
+    const byNumber = seed([{ interest: 200, principal: 800 }]);
+    await byNumber.repo.recordPayment(LOAN_NUMBER, {
+      amount: 600,
+      paidOn: new Date(2026, 3, 1),
+      recordedById: OFFICER,
+    });
+
+    // Same installment progress — proving the schedule update found its
+    // row when the caller passed a reference.
+    expect(byNumber.db.installment(1).interestPaid).toBe(
+      byId.db.installment(1).interestPaid,
+    );
+    expect(byNumber.db.installment(1).principalPaid).toBe(
+      byId.db.installment(1).principalPaid,
+    );
+    expect(byNumber.db.installment(1).interestPaid).toBe(200);
+    expect(byNumber.db.installment(1).principalPaid).toBe(400);
+
+    // And the same postings, so the GL didn't silently miss the entry.
+    expect(byNumber.db.creditedTo(ACCOUNT_CODES.INTEREST_INCOME)).toBe(
+      byId.db.creditedTo(ACCOUNT_CODES.INTEREST_INCOME),
+    );
+    expect(byNumber.db.creditedTo(ACCOUNT_CODES.LOANS_RECEIVABLE)).toBe(
+      byId.db.creditedTo(ACCOUNT_CODES.LOANS_RECEIVABLE),
+    );
+    expectAllEntriesBalance(byNumber.db);
+  });
+
+  it("closes the loan when settled via its number", async () => {
+    const { db, repo } = seed([{ interest: 100, principal: 900 }]);
+    await repo.recordPayment(LOAN_NUMBER, {
+      amount: 1_000,
+      paidOn: new Date(2026, 3, 1),
+      recordedById: OFFICER,
+    });
+    // The close keys on the resolved id, not the caller's string.
+    expect(db.installment(1).paidInFullAt).not.toBeNull();
+    expect(db.loans[0]!.status).toBe("CLOSED");
+    expect(db.loans[0]!.closedAt).not.toBeNull();
+  });
+
+  it("rejects an identifier that matches neither column", async () => {
+    const { repo } = seed([{ interest: 100, principal: 900 }]);
+    await expect(
+      repo.recordPayment("LN-2026-999999", {
+        amount: 100,
+        paidOn: new Date(2026, 3, 1),
+        recordedById: OFFICER,
+      }),
+    ).rejects.toThrow("Loan not found");
   });
 });

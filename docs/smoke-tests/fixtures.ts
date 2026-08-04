@@ -46,7 +46,30 @@ async function main() {
   });
   const product = await prisma.loanProduct.findFirstOrThrow();
 
-  // Clean out a previous run. Loans first — Customer has onDelete: Restrict.
+  /*
+   * Clean out a previous run. Loans first — Customer has onDelete:
+   * Restrict.
+   *
+   * Deleted by OWNING CUSTOMER, not by loan number. Matching
+   * "PICKER-*" on the loan looks equivalent and isn't: anything the API
+   * derives from a fixture loan gets a real LN-YYYY-NNNNNN number, so a
+   * restructure (which closes the original and creates a replacement)
+   * leaves a loan on a fixture customer that this sweep would skip. The
+   * customer delete then fails the FK and the whole reseed aborts —
+   * leaving no fixtures at all and every picker assertion failing with
+   * flags that look like a product bug.
+   */
+  const fixtureCustomers = await prisma.customer.findMany({
+    where: { number: { startsWith: "PICKER-" } },
+    select: { id: true },
+  });
+  const fixtureCustomerIds = fixtureCustomers.map((c) => c.id);
+  if (fixtureCustomerIds.length > 0) {
+    await prisma.loanApplication.deleteMany({
+      where: { customerId: { in: fixtureCustomerIds } },
+    });
+  }
+  // Belt and braces: a PICKER-* loan whose customer was already removed.
   await prisma.loanApplication.deleteMany({
     where: { number: { startsWith: "PICKER-" } },
   });

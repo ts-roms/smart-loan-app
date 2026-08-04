@@ -368,9 +368,19 @@ export class LoanRepository {
     });
   }
 
-  async decide(id: string, input: LoanDecideInput): Promise<LoanApplication> {
+  async decide(
+    idOrNumber: string,
+    input: LoanDecideInput,
+  ): Promise<LoanApplication> {
+    // Unlike the other writers this had no lookup — it updated straight
+    // off the caller's id. A number needs resolving to one first.
+    const found = await this.prisma.loanApplication.findFirst({
+      where: idOrNumberWhere(idOrNumber),
+      select: { id: true },
+    });
+    if (!found) throw new Error("Loan not found");
     return this.prisma.loanApplication.update({
-      where: { id },
+      where: { id: found.id },
       data: {
         status: input.status,
         decisionReason: input.reason,
@@ -387,7 +397,7 @@ export class LoanRepository {
    * the API can validate inputs in one place.
    */
   async setSelfieMatch(
-    id: string,
+    idOrNumber: string,
     input: {
       score: number;
       distance: number;
@@ -395,8 +405,13 @@ export class LoanRepository {
       model: string;
     },
   ): Promise<LoanApplication> {
+    const found = await this.prisma.loanApplication.findFirst({
+      where: idOrNumberWhere(idOrNumber),
+      select: { id: true },
+    });
+    if (!found) throw new Error("Loan not found");
     return this.prisma.loanApplication.update({
-      where: { id },
+      where: { id: found.id },
       data: {
         selfieMatchScore: input.score,
         selfieMatchDistance: input.distance,
@@ -413,15 +428,22 @@ export class LoanRepository {
    * entry — including processing + documentary stamp fees as fee income.
    */
   async disburse(
-    id: string,
+    idOrNumber: string,
     input: { disbursedById: string },
   ): Promise<LoanApplication> {
     return this.prisma.$transaction(async (tx) => {
-      const loan = await tx.loanApplication.findUnique({
-        where: { id },
+      const loan = await tx.loanApplication.findFirst({
+        where: idOrNumberWhere(idOrNumber),
         include: { product: true },
       });
       if (!loan) throw new Error("Loan not found");
+      /*
+       * Accepts a loan number as well as a UUID. Everything below this
+       * lookup uses `id`, rebound to the row's real id — the later
+       * update/delete clauses all key on it, so resolving only the lookup
+       * would leave them matching a number against a uuid column.
+       */
+      const id = loan.id;
       if (loan.status !== "APPROVED") {
         throw new Error(`Cannot disburse from status ${loan.status}`);
       }
@@ -534,14 +556,21 @@ export class LoanRepository {
    * crediting Loans Receivable past zero would misstate the asset.
    */
   async recordPayment(
-    loanId: string,
+    loanIdOrNumber: string,
     input: RecordPaymentInput,
   ): Promise<LoanPayment> {
     return this.prisma.$transaction(async (tx) => {
-      const loan = await tx.loanApplication.findUnique({
-        where: { id: loanId },
+      const loan = await tx.loanApplication.findFirst({
+        where: idOrNumberWhere(loanIdOrNumber),
       });
       if (!loan) throw new Error("Loan not found");
+      /*
+       * Accepts a loan number as well as a UUID. Everything below this
+       * lookup uses `loanId`, rebound to the row's real id — the later
+       * update/delete clauses all key on it, so resolving only the lookup
+       * would leave them matching a number against a uuid column.
+       */
+      const loanId = loan.id;
 
       const payment = await tx.loanPayment.create({
         data: {
@@ -687,10 +716,10 @@ export class LoanRepository {
    * product's pre-termination fee, records both as a single LoanPayment,
    * posts the disbursement-side fee income entry, and closes the loan.
    */
-  async closeEarly(loanId: string, input: CloseEarlyInput) {
+  async closeEarly(loanIdOrNumber: string, input: CloseEarlyInput) {
     return this.prisma.$transaction(async (tx) => {
-      const loan = await tx.loanApplication.findUnique({
-        where: { id: loanId },
+      const loan = await tx.loanApplication.findFirst({
+        where: idOrNumberWhere(loanIdOrNumber),
         include: {
           product: true,
           schedule: { where: { paidInFullAt: null } },
@@ -700,6 +729,12 @@ export class LoanRepository {
       if (loan.status !== "ACTIVE" && loan.status !== "DISBURSED") {
         throw new Error(`Cannot close early from status ${loan.status}`);
       }
+      /*
+       * Rebound to the row's real id. Everything below keys on `loanId`
+       * for its updates, so resolving only the lookup would leave them
+       * matching a loan number against a uuid column.
+       */
+      const loanId = loan.id;
 
       const remainingPrincipal = loan.schedule.reduce(
         (sum, s) => sum + (Number(s.principalDue) - Number(s.principalPaid)),
@@ -796,12 +831,12 @@ export class LoanRepository {
    * Returns both rows so the API can show "this loan is now LN-2026-000045".
    */
   async restructure(
-    originalId: string,
+    originalIdOrNumber: string,
     input: RestructureInput,
   ): Promise<{ original: LoanApplication; replacement: LoanApplication }> {
     return this.prisma.$transaction(async (tx) => {
-      const original = await tx.loanApplication.findUnique({
-        where: { id: originalId },
+      const original = await tx.loanApplication.findFirst({
+        where: idOrNumberWhere(originalIdOrNumber),
         include: {
           schedule: { where: { paidInFullAt: null } },
           customer: true,
@@ -834,7 +869,9 @@ export class LoanRepository {
         });
       }
       const updatedOriginal = await tx.loanApplication.update({
-        where: { id: originalId },
+        // The row we resolved, not the caller's identifier, which may
+        // have been a loan number.
+        where: { id: original.id },
         data: {
           status: "RESTRUCTURED",
           closedAt: new Date(),
@@ -923,15 +960,20 @@ export class LoanRepository {
    *     Cr Loans Receivable    remainingPrincipal
    */
   async writeOff(
-    id: string,
+    idOrNumber: string,
     input: WriteOffInput,
   ): Promise<{ loan: LoanApplication; amount: number }> {
     return this.prisma.$transaction(async (tx) => {
-      const loan = await tx.loanApplication.findUnique({
-        where: { id },
+      const loan = await tx.loanApplication.findFirst({
+        where: idOrNumberWhere(idOrNumber),
         include: { schedule: { where: { paidInFullAt: null } } },
       });
       if (!loan) throw new Error("Loan not found");
+      /*
+       * Rebound to the row's real id — the writes below key on it, and
+       * a loan number would not match the uuid column.
+       */
+      const id = loan.id;
       if (loan.status === "WRITTEN_OFF" || loan.status === "CLOSED") {
         throw new Error(`Cannot write off from status ${loan.status}`);
       }
@@ -1009,13 +1051,13 @@ export class LoanRepository {
    * minus prior waivers. Cheap enough to compute on demand from JE rows;
    * we keep no running counter to avoid drift.
    */
-  async accruedPenaltiesFor(loanId: string): Promise<{
+  async accruedPenaltiesFor(loanIdOrNumber: string): Promise<{
     originalPenalty: number;
     waivedToDate: number;
     outstanding: number;
   }> {
-    const loan = await this.prisma.loanApplication.findUnique({
-      where: { id: loanId },
+    const loan = await this.prisma.loanApplication.findFirst({
+      where: idOrNumberWhere(loanIdOrNumber),
       include: { schedule: { select: { id: true } } },
     });
     if (!loan) throw new Error("Loan not found");
@@ -1041,7 +1083,7 @@ export class LoanRepository {
     }, 0);
 
     const waivers = await this.prisma.penaltyWaiver.findMany({
-      where: { loanId },
+      where: { loanId: loan.id },
       select: { waivedAmount: true },
     });
     const waivedToDate = waivers.reduce(
@@ -1062,7 +1104,7 @@ export class LoanRepository {
    * `loans.waive_penalty` permission at the route layer.
    */
   async waivePenalty(
-    loanId: string,
+    loanIdOrNumber: string,
     input: {
       waivedAmount: number;
       reason: string;
@@ -1073,10 +1115,15 @@ export class LoanRepository {
     journalEntryId: string;
   }> {
     return this.prisma.$transaction(async (tx) => {
-      const loan = await tx.loanApplication.findUnique({
-        where: { id: loanId },
+      const loan = await tx.loanApplication.findFirst({
+        where: idOrNumberWhere(loanIdOrNumber),
       });
       if (!loan) throw new Error("Loan not found");
+      /*
+       * Rebound to the row's real id — the writes below key on it, and
+       * a loan number would not match the uuid column.
+       */
+      const loanId = loan.id;
 
       // Reuse the public method's logic but read inside the txn so the
       // snapshot stays consistent if accruals are running concurrently.
@@ -1168,9 +1215,14 @@ export class LoanRepository {
   }
 
   /** List historical waivers on a loan (drawer / audit-trail surface). */
-  async listPenaltyWaivers(loanId: string) {
+  async listPenaltyWaivers(loanIdOrNumber: string) {
+    const loan = await this.prisma.loanApplication.findFirst({
+      where: idOrNumberWhere(loanIdOrNumber),
+      select: { id: true },
+    });
+    if (!loan) return [];
     return this.prisma.penaltyWaiver.findMany({
-      where: { loanId },
+      where: { loanId: loan.id },
       orderBy: { waivedAt: "desc" },
       include: {
         waivedBy: { select: { id: true, name: true, email: true } },
