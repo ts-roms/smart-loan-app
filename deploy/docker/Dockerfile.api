@@ -80,6 +80,13 @@ FROM deps AS prisma
 
 # Generate the Prisma client. This is the only "build step" the API
 # really needs — the rest runs as TS via tsx.
+#
+# ANY step that typechecks the API must come AFTER this line, and in
+# this stage or one derived from it. `pnpm --filter @loan/api build` is
+# `tsc --noEmit`, and without the generated client every `prisma.*`
+# expression resolves to `any`; the build then fails with a wall of
+# TS7006 "implicitly has an 'any' type" on callbacks over query results,
+# which points at the callsites rather than the missing client.
 RUN pnpm --filter @loan/db prisma:generate
 
 # ─── runtime stage ──────────────────────────────────────────────────────
