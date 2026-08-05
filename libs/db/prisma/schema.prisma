@@ -1402,6 +1402,8 @@ enum NotificationEvent {
   LEASE_MAINTENANCE_REMINDER
   /// Lease-to-own pull-out warning (3rd consecutive missed payment).
   LEASE_PULL_OUT_WARNING
+  /// A co-maker has been asked to accept or decline being one.
+  CO_MAKER_INVITED
   /// A loan needs the recipient's approval (per-product approval chain).
   /// Fired on loan submit (step 1 approvers) and on each step advance
   /// (the next step's approvers). One row dispatched per recipient per
@@ -1513,6 +1515,18 @@ enum CoMakerRole {
   CO_MAKER // generic "second signer"
 }
 
+/// Where a co-maker stands on being one.
+///
+/// A co-maker is jointly liable, so their agreement is a decision they
+/// make rather than a box the officer ticks. PENDING until they answer
+/// the invite; disbursement is blocked while any of them is not
+/// APPROVED (see LoanService.disburse).
+enum CoMakerConsentStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
 model CoMaker {
   id                 String            @id @default(uuid())
   loanId             String
@@ -1532,12 +1546,46 @@ model CoMaker {
   signatureUrl       String?
   signedAt           DateTime?
   notes              String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
 
-  loan LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  // ── Consent ────────────────────────────────────────────────────────
+  status          CoMakerConsentStatus @default(PENDING)
+  respondedAt     DateTime?
+  /// Their words, kept verbatim — a declined co-maker is a fact the
+  /// officer has to act on, and "why" is the whole of it.
+  declineReason   String?
+  /// Opaque invite token. Stored rather than HMAC-derived so it can be
+  /// revoked and rotated: a resend must invalidate the old link, which
+  /// a stateless signature can't do.
+  inviteToken     String?              @unique
+  inviteSentAt    DateTime?
+  inviteExpiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  loan      LoanApplication   @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  documents CoMakerDocument[]
 
   @@index([loanId])
+}
+
+/// A file a co-maker attached when accepting.
+///
+/// Separate from KycSubmission, which is customer-scoped and carries a
+/// verify/reject review cycle. These are attachments on a consent, not
+/// submissions awaiting adjudication, and giving them a review status
+/// would imply a workflow nobody runs.
+model CoMakerDocument {
+  id           String          @id @default(uuid())
+  coMakerId    String
+  documentType KycDocumentType
+  documentUrl  String
+  notes        String?
+  uploadedAt   DateTime        @default(now())
+
+  coMaker CoMaker @relation(fields: [coMakerId], references: [id], onDelete: Cascade)
+
+  @@index([coMakerId])
 }
 
 // ─── Automated decisioning rules ─────────────────────────────────────────────

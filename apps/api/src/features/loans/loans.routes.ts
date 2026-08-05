@@ -21,6 +21,9 @@ import {
 import { validateKyc } from "@loan/kyc";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import { config } from "../../config";
+import { INVITE_TTL_DAYS, mintInviteToken } from "../co-maker/consent.service";
+import { sendCoMakerInvite } from "../co-maker/notify-invite";
 import { LoanWorkflowController } from "./loans.controller";
 import { LoanWorkflowService } from "./loans.service";
 import { notifyApproversForStep } from "./notify-approvers";
@@ -790,7 +793,8 @@ export async function loanRoutes(app: FastifyInstance) {
   // ─── Co-makers ─────────────────────────────────────────────────────
 
   app.get<{ Params: { id: string } }>("/:id/co-makers", canRead, async (req) =>
-    req.loanCtx!.coMakers.listForLoan(req.params.id),
+    // With consent state + attachments — the officer view needs both.
+    req.loanCtx!.coMakers.listForLoanWithDocuments(req.params.id),
   );
 
   // Adding a co-maker is part of assembling the application file, so it
@@ -810,6 +814,52 @@ export async function loanRoutes(app: FastifyInstance) {
       return reply
         .code(201)
         .send(await req.loanCtx!.coMakers.create(req.params.id, parsed.data));
+    },
+  );
+
+  /**
+   * Mint (or replace) a co-maker's invite link.
+   *
+   * Returns the URL rather than sending it: who delivers it — SMS,
+   * email, or the officer reading it out — isn't settled, and a link
+   * the officer can copy works today under all three. Resending
+   * invalidates the previous link and clears any previous answer, so
+   * a co-maker who declined can be asked again without that decline
+   * lingering on the record.
+   */
+  app.post<{ Params: { coMakerId: string } }>(
+    "/co-makers/:coMakerId/invite",
+    { preHandler: app.requirePermission("loans.apply") },
+    async (req, reply) => {
+      const token = mintInviteToken(req.tenantCtx.slug);
+      const expiresAt = new Date(
+        Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000,
+      );
+      let coMaker;
+      try {
+        coMaker = await req.loanCtx!.coMakers.issueInvite(
+          req.params.coMakerId,
+          token,
+          expiresAt,
+        );
+      } catch {
+        return reply.code(404).send({ error: "NotFound" });
+      }
+
+      const url = `${config.webOrigin}/co-maker/${token}`;
+      const delivery = await sendCoMakerInvite({
+        prisma: req.tenantCtx.prisma,
+        notifications: app.notifications(req.tenantCtx.prisma),
+        coMaker,
+        url,
+        log: app.log,
+      });
+
+      // The URL comes back either way. Delivery is best-effort — an
+      // SMS provider being down shouldn't cost the officer the link,
+      // and `delivery` tells the UI whether to say "sent" or "copy
+      // this to them".
+      return { url, expiresAt: expiresAt.toISOString(), delivery };
     },
   );
 
@@ -943,6 +993,8 @@ function buildLoanCtx(app: FastifyInstance) {
       (loanId, stepOrder) =>
         notifyApproversForStep(app, prisma, notifications, loanId, stepOrder),
       new PreAssessmentRepository(prisma),
+      // Consent gate on disburse — see LoanWorkflowService.disburse.
+      coMakers,
     );
     req.loanCtx = {
       loans,

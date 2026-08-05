@@ -846,6 +846,41 @@ export interface VintageCohort {
 // Co-makers
 export type CoMakerRole = "CO_BORROWER" | "GUARANTOR" | "CO_MAKER";
 
+/**
+ * Where a co-maker stands on being one. A co-maker is jointly liable,
+ * so agreeing is their decision rather than a box the officer ticks.
+ */
+export type CoMakerConsentStatus = "PENDING" | "APPROVED" | "DECLINED";
+
+export interface CoMakerDocument {
+  id: string;
+  coMakerId: string;
+  documentType: KycDocumentType;
+  documentUrl: string;
+  notes: string | null;
+  uploadedAt: string;
+}
+
+/** What a co-maker sees when they open their invite link. */
+export interface CoMakerInviteView {
+  coMakerId: string;
+  fullName: string;
+  role: CoMakerRole;
+  status: CoMakerConsentStatus;
+  respondedAt: string | null;
+  /** Which documents they're being asked for, from the loan product. */
+  requiredDocuments: KycDocumentType[];
+  documents: CoMakerDocument[];
+  loan: {
+    number: string;
+    principal: number;
+    termMonths: number;
+    productName: string;
+    borrowerName: string;
+  };
+  lender: { companyName: string };
+}
+
 export interface CoMaker {
   id: string;
   loanId: string;
@@ -860,6 +895,12 @@ export interface CoMaker {
   monthlyIncome: string | number | null;
   signedAgreementUrl: string | null;
   notes: string | null;
+  status: CoMakerConsentStatus;
+  respondedAt: string | null;
+  declineReason: string | null;
+  inviteSentAt: string | null;
+  inviteExpiresAt: string | null;
+  documents?: CoMakerDocument[];
   createdAt: string;
   updatedAt: string;
 }

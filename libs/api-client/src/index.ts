@@ -11,6 +11,7 @@ export * from "./hooks/use-collections";
 export * from "./hooks/use-payments";
 export * from "./hooks/use-portal";
 export * from "./hooks/use-pre-assessment";
+export * from "./hooks/use-co-maker-consent";
 export * from "./hooks/use-upload";
 export * from "./hooks/use-ops";
 export * from "./hooks/use-servicing";

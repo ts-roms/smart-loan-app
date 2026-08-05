@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { SkeletonCard } from "@loan/ui";
 
 import { DashboardShell } from "./components/DashboardShell";
@@ -141,6 +141,10 @@ const TrialBalancePage = lazyNamed(
   "TrialBalancePage",
 );
 
+const CoMakerConsentPage = lazyNamed(
+  () => import("./features/co-maker"),
+  "CoMakerConsentPage",
+);
 const QuestionnairesPage = lazyNamed(
   () => import("./features/questionnaires"),
   "QuestionnairesPage",
@@ -238,6 +242,22 @@ function RouteFallback() {
 
 export function App() {
   const { token, user } = useAuth();
+  const { pathname } = useLocation();
+
+  // Co-maker consent is reached from an invite link by someone with no
+  // account, so it sits ahead of the auth check and outside both
+  // shells. Ahead of it rather than inside the signed-out branch
+  // because an officer with a session open must be able to follow the
+  // link too — to check what their co-maker sees, if nothing else.
+  if (pathname.startsWith("/co-maker/")) {
+    return (
+      <Suspense fallback={<SkeletonCard />}>
+        <Routes>
+          <Route path="/co-maker/:token" element={<CoMakerConsentPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
 
   if (!token) {
     return (

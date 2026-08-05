@@ -28,6 +28,7 @@ export type NotificationEvent =
   | "LEASE_END_OF_TERM"
   | "LEASE_MAINTENANCE_REMINDER"
   | "LEASE_PULL_OUT_WARNING"
+  | "CO_MAKER_INVITED"
   | "LOAN_APPROVAL_PENDING"
   | "STATEMENT_READY"
   | "DELEGATION_REVOKED"
@@ -143,6 +144,14 @@ const TEMPLATES: Record<NotificationEvent, { subject?: string; body: string }> =
     PROMISE_TO_PAY: {
       subject: "Promise to pay recorded",
       body: "Hi %{customerName}%, we have recorded your promise to pay %{amount}% on %{dueDate}% for loan %{loanNumber}%.",
+    },
+    CO_MAKER_INVITED: {
+      subject: "%{borrowerName}% named you as a %{roleLabel}%",
+      // Deliberately short: this goes out by SMS first, and the link
+      // has to survive being read on a feature phone. Says who, how
+      // much, and that agreeing carries liability — everything else is
+      // on the page behind the link.
+      body: "Hi %{coMakerName}%, %{borrowerName}% named you as %{roleLabel}% on a %{amountLabel}% loan with %{companyName}%. Agreeing makes you jointly liable. Review and respond: %{url}%",
     },
     WELCOME: {
       subject: "Welcome to SmartLoan",
