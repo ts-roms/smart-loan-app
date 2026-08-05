@@ -675,7 +675,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           don't need an inner column cap.
         */}
         <LicenseBanner />
-        <div className="p-6 space-y-4">
+        {/*
+          `key` on the pathname, not just the class. Without it React
+          reuses this subtree across navigations, the CSS animation
+          never restarts, and only the very first page ever animates.
+          Re-keying remounts the children, which replays it.
+        */}
+        <div key={currentPath} className="page-enter p-6 space-y-4">
           <ActiveDelegationBanner />
           <Breadcrumbs variant="staff" />
           {children}

@@ -72,13 +72,13 @@
      * 42% was 3.66:1 as link text on white, 36% was 4.12:1 as pill text
      * on its own soft tint. 32% clears both. */
     --primary: 199 92% 32%;
-    --primary-soft: 199 92% 32% / 0.10;
+    --primary-soft: 199 92% 32% / 0.1;
     --primary-foreground: 0 0% 100%;
 
     /* Semantic statuses — darkened so they stay legible as TEXT on
      * white, not just as fills. The -soft tints stay light. */
     --success: 152 62% 30%;
-    --success-soft: 152 62% 30% / 0.10;
+    --success-soft: 152 62% 30% / 0.1;
     /* 36% cleared AA on white but measured 3.99:1 as badge text on its
      * own tint — the account-type chips use a heavier wash than the
      * banners do. Amber is the worst case here: it's the lightest hue
@@ -86,9 +86,9 @@
     --warning: 32 92% 31%;
     --warning-soft: 32 92% 31% / 0.12;
     --danger: 0 68% 45%;
-    --danger-soft: 0 68% 45% / 0.10;
+    --danger-soft: 0 68% 45% / 0.1;
     --info: 217 75% 45%;
-    --info-soft: 217 75% 45% / 0.10;
+    --info-soft: 217 75% 45% / 0.1;
 
     --hover: 222 24% 12% / 0.045;
     --divider: 220 15% 91%;
@@ -100,7 +100,7 @@
     --glow-b: 0.03;
     --elev-highlight: 0 0% 100% / 0;
     --elev-hairline: 220 15% 88% / 1;
-    --elev-shadow: 220 20% 40% / 0.10;
+    --elev-shadow: 220 20% 40% / 0.1;
     --glass-bg: 222 24% 12% / 0.025;
     --glass-border: 220 15% 88% / 1;
 
@@ -117,10 +117,10 @@
   :root[data-theme="dark"] {
     color-scheme: dark;
 
-    --background: 222 16% 7%;          /* deeper plate so cards stand out */
-    --surface-1: 220 14% 10%;          /* page surface */
-    --surface-2: 220 13% 13%;          /* default card */
-    --surface-3: 220 12% 16%;          /* elevated card */
+    --background: 222 16% 7%; /* deeper plate so cards stand out */
+    --surface-1: 220 14% 10%; /* page surface */
+    --surface-2: 220 13% 13%; /* default card */
+    --surface-3: 220 12% 16%; /* elevated card */
 
     --foreground: 213 18% 92%;
     --foreground-muted: 215 14% 65%;
@@ -163,13 +163,15 @@
     --elev-hairline: 0 0% 0% / 0.4;
     --elev-shadow: 0 0% 0% / 0.5;
     --glass-bg: 0 0% 100% / 0.04;
-    --glass-border: 0 0% 100% / 0.10;
+    --glass-border: 0 0% 100% / 0.1;
 
     --destructive: 0 70% 60%;
     --destructive-foreground: 213 18% 92%;
   }
 
-  html, body, #root {
+  html,
+  body,
+  #root {
     height: 100%;
   }
 
@@ -185,14 +187,22 @@
      * near-white. Light halves them.
      */
     background:
-      radial-gradient(900px 480px at 8% -10%, hsl(var(--primary) / var(--glow-a)), transparent 60%),
-      radial-gradient(700px 420px at 100% 110%, hsl(265 80% 60% / var(--glow-b)), transparent 55%),
+      radial-gradient(
+        900px 480px at 8% -10%,
+        hsl(var(--primary) / var(--glow-a)),
+        transparent 60%
+      ),
+      radial-gradient(
+        700px 420px at 100% 110%,
+        hsl(265 80% 60% / var(--glow-b)),
+        transparent 55%
+      ),
       hsl(var(--background));
     color: hsl(var(--foreground));
     /* Stylistic alternates Inter exposes — tighter alt for `cv02`, single-
      * storey `g` for `cv03`, sharper `i/j` for `cv04`, modernised `1` for
      * `cv11`. Keeps the type feeling tuned, not default. */
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
   }
 
@@ -200,7 +210,9 @@
    * line up. We tag every number container with `font-variant-numeric` via
    * the .tabular utility below; this rule covers <code>/<kbd>/<samp> by
    * default which also tend to be numeric in this app. */
-  code, kbd, samp {
+  code,
+  kbd,
+  samp {
     font-variant-numeric: tabular-nums;
   }
 }
@@ -208,43 +220,85 @@
 @layer utilities {
   /* Surface helpers — paired with the CSS vars above. Cards use surface-2
    * by default; elevated cards (hero KPIs, popovers) use surface-3. */
-  .bg-surface-1 { background-color: hsl(var(--surface-1)); }
-  .bg-surface-2 { background-color: hsl(var(--surface-2)); }
-  .bg-surface-3 { background-color: hsl(var(--surface-3)); }
-  .border-default { border-color: hsl(var(--border)); }
-  .border-strong  { border-color: hsl(var(--border-strong)); }
+  .bg-surface-1 {
+    background-color: hsl(var(--surface-1));
+  }
+  .bg-surface-2 {
+    background-color: hsl(var(--surface-2));
+  }
+  .bg-surface-3 {
+    background-color: hsl(var(--surface-3));
+  }
+  .border-default {
+    border-color: hsl(var(--border));
+  }
+  .border-strong {
+    border-color: hsl(var(--border-strong));
+  }
 
   /* Semantic text + background utilities. Keep these short — the goal is
    * to write `text-success` instead of `text-emerald-300`. */
-  .text-success  { color: hsl(var(--success)); }
-  .text-warning  { color: hsl(var(--warning)); }
-  .text-danger   { color: hsl(var(--danger)); }
-  .text-info     { color: hsl(var(--info)); }
-  .bg-success-soft { background-color: hsl(var(--success-soft)); }
-  .bg-warning-soft { background-color: hsl(var(--warning-soft)); }
-  .bg-danger-soft  { background-color: hsl(var(--danger-soft)); }
-  .bg-info-soft    { background-color: hsl(var(--info-soft)); }
-  .bg-primary-soft { background-color: hsl(var(--primary-soft)); }
+  .text-success {
+    color: hsl(var(--success));
+  }
+  .text-warning {
+    color: hsl(var(--warning));
+  }
+  .text-danger {
+    color: hsl(var(--danger));
+  }
+  .text-info {
+    color: hsl(var(--info));
+  }
+  .bg-success-soft {
+    background-color: hsl(var(--success-soft));
+  }
+  .bg-warning-soft {
+    background-color: hsl(var(--warning-soft));
+  }
+  .bg-danger-soft {
+    background-color: hsl(var(--danger-soft));
+  }
+  .bg-info-soft {
+    background-color: hsl(var(--info-soft));
+  }
+  .bg-primary-soft {
+    background-color: hsl(var(--primary-soft));
+  }
 
   /* Foreground tiers — replaces the `text-white/45` / `/55` mosaic. */
-  .text-fg          { color: hsl(var(--foreground)); }
-  .text-fg-muted    { color: hsl(var(--foreground-muted)); }
-  .text-fg-subtle   { color: hsl(var(--foreground-subtle)); }
+  .text-fg {
+    color: hsl(var(--foreground));
+  }
+  .text-fg-muted {
+    color: hsl(var(--foreground-muted));
+  }
+  .text-fg-subtle {
+    color: hsl(var(--foreground-subtle));
+  }
 
   /* Tabular figures — flip on for any container holding numbers. */
-  .tabular { font-variant-numeric: tabular-nums; }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
 
   /* Hover wash for rows and ghost buttons — replaces `hover:bg-white/5`,
    * which tints the wrong way on a light background. */
-  .bg-hover { background-color: hsl(var(--hover)); }
-  .hover\:bg-hover:hover { background-color: hsl(var(--hover)); }
+  .bg-hover {
+    background-color: hsl(var(--hover));
+  }
+  .hover\:bg-hover:hover {
+    background-color: hsl(var(--hover));
+  }
 
   /* Table row separators — lighter than --border so dense tables don't
    * turn into a grid of lines. Replaces `divide-white/10`. */
   .divide-default > :not([hidden]) ~ :not([hidden]) {
     border-color: hsl(var(--divider));
   }
-  .border-divider { border-color: hsl(var(--divider)); }
+  .border-divider {
+    border-color: hsl(var(--divider));
+  }
 
   /* Glass surfaces — kept for compat with existing call sites. Tinted
    * via variables so the wash darkens on light and lightens on dark
@@ -286,8 +340,13 @@
   }
 
   /* Themed scrollbar */
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
   ::-webkit-scrollbar-thumb {
     background: hsl(var(--border-strong) / 0.6);
     border-radius: 8px;
@@ -297,6 +356,86 @@
   ::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--border-strong));
     background-clip: padding-box;
+  }
+}
+
+/* ── Page entrance ──────────────────────────────────────────────────
+ *
+ * A short fade + rise applied to the shell's content area on every
+ * navigation, so pages arrive rather than snap in.
+ *
+ * `transform: none` in the to-frame, and `backwards` rather than
+ * `both`, both matter — this is not stylistic.
+ *
+ *   A transform on an element makes it the containing block for any
+ *   descendant with `position: sticky`, which silently stops the
+ *   sticky working. This app has two: the shell's own top bar, and the
+ *   save/cancel bar in CustomerProfileForm. `both` would leave the
+ *   to-frame's transform applied forever, breaking the second one
+ *   permanently. `backwards` applies only the from-frame, and only
+ *   before the animation starts, so once it finishes the element is
+ *   back to its ordinary untransformed style.
+ *
+ *   The shell's top bar is outside .page-enter, so it is unaffected
+ *   either way — but the form's bar is inside, and would have been.
+ *
+ * Children are staggered rather than the container animating as one
+ * block, which reads as the page assembling instead of sliding. The
+ * delay is capped so a long page doesn't take a second to appear —
+ * past the fifth child everything shares the last step.
+ */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.page-enter > * {
+  animation: page-enter 240ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.page-enter > *:nth-child(2) {
+  animation-delay: 50ms;
+}
+.page-enter > *:nth-child(3) {
+  animation-delay: 100ms;
+}
+.page-enter > *:nth-child(4) {
+  animation-delay: 150ms;
+}
+.page-enter > *:nth-child(n + 5) {
+  animation-delay: 200ms;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────
+ *
+ * Honour the OS setting. Nothing in this app did before — not the
+ * dialogs, toasts, drawers or popovers, all of which animate — so this
+ * covers those too rather than just the entrance above.
+ *
+ * Animations are reduced to a single 1ms tick rather than `none`:
+ * `animation: none` never fires `animationend`, and any component
+ * waiting on that event to unmount would hang. Radix's exit animations
+ * work exactly that way. Same reasoning for transitions.
+ *
+ * `scroll-behavior: auto` because a smooth-scrolled jump is motion
+ * too, and it is the one people with vestibular sensitivity report
+ * most.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

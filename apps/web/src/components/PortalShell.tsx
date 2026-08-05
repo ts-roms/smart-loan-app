@@ -212,7 +212,12 @@ export function PortalShell({ children }: { children: ReactNode }) {
           </button>
           <span className="text-sm font-medium truncate">{brandName}</span>
         </div>
-        <div className="p-6 max-w-5xl mx-auto space-y-4">
+        {/* Keyed on the route so the entrance replays per navigation —
+            see the note in DashboardShell. */}
+        <div
+          key={pathname}
+          className="page-enter p-6 max-w-5xl mx-auto space-y-4"
+        >
           <Breadcrumbs variant="portal" />
           {children}
         </div>
