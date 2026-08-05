@@ -1,10 +1,13 @@
 import {
   computeCreditScore,
-  SURVEY_QUESTIONS,
   toBureauBucket,
   toTier,
 } from "@loan/credit-scoring";
-import { type CreditScoreRepository, type SurveyRepository } from "@loan/db";
+import {
+  type CreditScoreRepository,
+  type ScoringCatalogRepository,
+  type SurveyRepository,
+} from "@loan/db";
 
 import type { SubmitSurveyInput } from "./schemas";
 
@@ -24,11 +27,20 @@ export class ScoringService {
   constructor(
     private readonly survey: SurveyRepository,
     private readonly scores: CreditScoreRepository,
+    /**
+     * The tenant's editable catalog. Falls back to the shipped one when
+     * the tables are empty, so a tenant provisioned before the catalog
+     * existed keeps scoring on the built-in questions.
+     */
+    private readonly catalog: ScoringCatalogRepository,
   ) {}
 
-  /** Static questionnaire structure — owned by @loan/credit-scoring. */
-  getQuestions() {
-    return SURVEY_QUESTIONS;
+  /**
+   * Questionnaire structure, from the tenant's catalog. Was a static
+   * export; it's rows now so admins can tune the survey.
+   */
+  async getQuestions() {
+    return (await this.catalog.activeCatalog()).questions;
   }
 
   /**
@@ -39,7 +51,11 @@ export class ScoringService {
     const { customerId, answers } = args.input;
 
     const behavior = await this.scores.behaviorSignal(customerId);
-    const result = computeCreditScore({ answers, behavior });
+    // Score against the tenant's catalog. Factor points are derived
+    // from weights against a fixed total, so an edited catalog changes
+    // the emphasis without moving the 300–850 scale.
+    const catalog = await this.catalog.activeCatalog();
+    const result = computeCreditScore({ answers, behavior, catalog });
 
     const saved = await this.survey.saveResponse({
       customerId,
