@@ -14,22 +14,21 @@ import { z } from "zod";
  * `transform` runs after the check, so what reaches the repository is
  * always digits — search and duplicate detection depend on that.
  */
-const phone = () =>
+/**
+ * Normalises but does NOT reject.
+ *
+ * The length rule lives where the previous value is known: the create
+ * refinement below, and the update service. A PATCH body carries every
+ * field the form rendered, so rejecting here would let one bad legacy
+ * number block every future edit of that record.
+ */
+const phoneField = () =>
   z
     .string()
-    .refine((v) => isValidPhone(v), {
-      message: `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`,
-    })
+    .max(40)
     .transform((v) => normalizePhone(v));
 
-/** Same rule, but an empty string passes through as "not given". */
-const optionalPhone = () =>
-  z
-    .string()
-    .refine((v) => v.trim() === "" || isValidPhone(v), {
-      message: `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`,
-    })
-    .transform((v) => (v.trim() === "" ? "" : normalizePhone(v)));
+export const PHONE_MESSAGE = `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`;
 
 /**
  * Customer registration schema — expanded for PH-standard borrower
@@ -67,8 +66,8 @@ export const customerBaseSchema = z.object({
   // notification dispatch, and portal account provisioning. Operators
   // can still leave it blank temporarily by holding the form in draft;
   // the API enforces it on commit.
-  phone: phone(),
-  secondaryPhone: optionalPhone().optional(),
+  phone: phoneField(),
+  secondaryPhone: phoneField().optional(),
   email: z.string().email(),
 
   // Address (PSGC-style)
@@ -83,7 +82,7 @@ export const customerBaseSchema = z.object({
   // Spouse (validated below)
   spouseName: z.string().max(160).optional(),
   spouseDateOfBirth: z.string().optional(),
-  spouseContact: optionalPhone().optional(),
+  spouseContact: phoneField().optional(),
   spouseOccupation: z.string().max(120).optional(),
 
   // Government ID
@@ -122,6 +121,22 @@ export const customerBaseSchema = z.object({
  * to resend unchanged spouse fields on every status edit.
  */
 export const customerSchema = customerBaseSchema.superRefine((data, ctx) => {
+  // A new record has no number on file to preserve, so the rule
+  // applies outright here. Updates go through the service, which
+  // compares against what's stored — see phoneChangeError.
+  for (const field of ["phone", "secondaryPhone", "spouseContact"] as const) {
+    const value = data[field];
+    if (value === undefined) continue;
+    if (field !== "phone" && value.trim() === "") continue;
+    if (!isValidPhone(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [field],
+        message: PHONE_MESSAGE,
+      });
+    }
+  }
+
   if (data.civilStatus === "MARRIED" && !data.spouseName?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

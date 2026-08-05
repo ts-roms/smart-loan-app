@@ -82,11 +82,20 @@ export class CustomerController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const updated = await req.customerServices!.customer.update(
+    const result = await req.customerServices!.customer.update(
       req.params.id,
       parsed.data,
     );
-    if (!updated) return reply.code(404).send({ error: "NotFound" });
-    return updated;
+    if (!result.ok) {
+      // Phone rules need the stored record to know what changed, so
+      // they run in the service rather than the schema — the failure
+      // shape still matches every other validated endpoint.
+      return result.reason === "NotFound"
+        ? reply.code(404).send({ error: "NotFound" })
+        : reply
+            .code(400)
+            .send({ error: "ValidationError", issues: result.issues });
+    }
+    return result.customer;
   };
 }

@@ -1,25 +1,14 @@
-import {
-  PHONE_MAX_DIGITS,
-  PHONE_MIN_DIGITS,
-  isValidPhone,
-  normalizePhone,
-} from "@loan/shared-utils";
+import { normalizePhone } from "@loan/shared-utils";
 import { z } from "zod";
 
 /**
- * A PH phone number: 10 or 11 digits once punctuation and a country
- * code are stripped, stored normalised so "+63 917 123 4567" and
- * "09171234567" are one value rather than two.
- *
- * `transform` runs after the check, so what reaches the repository is
- * always digits — search and duplicate detection depend on that.
+ * Normalised, not rejected — the length rule needs the number already
+ * on file to know whether this is a change. See portal.service.
  */
-const phone = () =>
+const phoneField = () =>
   z
     .string()
-    .refine((v) => isValidPhone(v), {
-      message: `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`,
-    })
+    .max(40)
     .transform((v) => normalizePhone(v));
 
 /**
@@ -127,7 +116,7 @@ export type SignInput = z.infer<typeof signSchema>;
  * borrower silently rewrite their KYC record.
  */
 export const profileUpdateSchema = z.object({
-  phone: phone().optional(),
+  phone: phoneField().optional(),
   email: z.string().email().max(120).optional().nullable(),
   address: z.string().min(1).max(500).optional(),
   city: z.string().min(1).max(80).optional(),
