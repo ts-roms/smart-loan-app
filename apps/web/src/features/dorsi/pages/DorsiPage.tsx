@@ -483,6 +483,13 @@ function ConfigCard() {
   );
 }
 
+/**
+ * A basis has to say something. It's what a BSP examiner reads to see
+ * why this customer was classified DORSI, so a single character is a
+ * blank field with extra steps.
+ */
+const MIN_BASIS = 3;
+
 function TagDialog({ onClose }: { onClose: () => void }) {
   const tag = useTagDorsi();
   const toast = useToast();
@@ -491,8 +498,17 @@ function TagDialog({ onClose }: { onClose: () => void }) {
   const [basis, setBasis] = useState("");
 
   const onSubmit = async () => {
-    if (!customerId || basis.trim().length < 3) {
-      toast.error("Customer id + basis required");
+    // Named separately: one message for both conditions sent people
+    // hunting for a customer-picker fault when the basis was simply
+    // too short.
+    if (!customerId) {
+      toast.error("Pick a customer to tag");
+      return;
+    }
+    if (basis.trim().length < MIN_BASIS) {
+      toast.error(
+        `Give a basis of at least ${MIN_BASIS} characters — it's the audit trail for why this customer is DORSI`,
+      );
       return;
     }
     try {
@@ -557,7 +573,15 @@ function TagDialog({ onClose }: { onClose: () => void }) {
               value={basis}
               onChange={(e) => setBasis(e.target.value)}
               placeholder="Director since 2022 / CFO / Spouse of stockholder"
+              aria-describedby="dorsi-basis-help"
             />
+            <div
+              id="dorsi-basis-help"
+              className="text-[10px] text-fg-subtle mt-1"
+            >
+              Why this customer is DORSI — the relationship, not just a name. At
+              least {MIN_BASIS} characters.
+            </div>
           </div>
         </div>
         <DialogFooter>
