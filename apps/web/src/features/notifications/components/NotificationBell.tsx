@@ -11,8 +11,10 @@ import {
   DropdownMenuTrigger,
   cn,
 } from "@loan/ui";
-import { Bell } from "lucide-react";
+import { Bell, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
+
+import { notificationLink } from "../links";
 
 /**
  * Top-bar notification bell. Click to open a dropdown with the last 10
@@ -22,6 +24,11 @@ import { Link } from "react-router-dom";
  *
  * Driven by `/notifications` (all system-wide notifications) — staff are
  * authorized to see them all. The `/notifications` page is the full list.
+ *
+ * Rows link to whatever they were raised about — the loan, the
+ * customer — via the `refType`/`refId` the notification already
+ * carries. Reading "Loan disbursed · LN-2026-000006" and then having
+ * to go find that loan by hand was the whole complaint.
  */
 
 const EVENT_LABELS: Record<string, string> = {
@@ -117,20 +124,17 @@ export function NotificationBell() {
               // as unseen so the user sees the tinted rows on first load.
               const created = new Date(n.createdAt);
               const fresh = lastSeenAt ? created > lastSeenAt : true;
-              return (
-                <div
-                  key={n.id}
-                  className={cn(
-                    "px-3 py-2 text-xs border-b border-default last:border-b-0",
-                    fresh && "bg-sky-500/[0.04]",
-                  )}
-                >
+              const to = notificationLink(n);
+
+              const body = (
+                <>
                   <div className="flex items-start justify-between gap-2">
                     <div className="font-medium text-fg">
                       {EVENT_LABELS[n.event] ?? n.event}
                     </div>
-                    <div className="text-[10px] text-fg-subtle whitespace-nowrap">
+                    <div className="flex items-center gap-1 text-[10px] text-fg-subtle whitespace-nowrap">
                       {relativeTime(n.createdAt)}
+                      {to && <ChevronRight className="h-3 w-3" />}
                     </div>
                   </div>
                   <div className="text-fg-muted truncate mt-0.5">
@@ -145,7 +149,32 @@ export function NotificationBell() {
                       {n.subject}
                     </div>
                   )}
-                </div>
+                </>
+              );
+
+              const rowClass = cn(
+                "block px-3 py-2 text-xs border-b border-default last:border-b-0",
+                fresh && "bg-sky-500/[0.04]",
+              );
+
+              // A notification with nowhere to point stays a plain row —
+              // see notificationLink. Wrapping it in a DropdownMenuItem
+              // anyway would give it hover and focus styling that
+              // promises a navigation it can't perform.
+              if (!to) {
+                return (
+                  <div key={n.id} className={rowClass}>
+                    {body}
+                  </div>
+                );
+              }
+
+              return (
+                <DropdownMenuItem key={n.id} asChild className="p-0">
+                  <Link to={to} className={cn(rowClass, "cursor-pointer")}>
+                    {body}
+                  </Link>
+                </DropdownMenuItem>
               );
             })
           )}

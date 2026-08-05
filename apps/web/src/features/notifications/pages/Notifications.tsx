@@ -22,8 +22,11 @@ import {
   useToast,
 } from "@loan/ui";
 import { formatDateTime } from "@loan/shared-utils";
-import { Mail, Send } from "lucide-react";
+import { ChevronRight, Mail, Send } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+
+import { notificationLink } from "../links";
 
 import { useAuth } from "../../../providers/auth";
 
@@ -61,6 +64,7 @@ export function NotificationsPage() {
                 <th className="py-2 px-2">Recipient</th>
                 <th className="py-2 px-2">Subject / preview</th>
                 <th className="py-2 px-2">Status</th>
+                <th className="py-2 px-2 sr-only">Open</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-default">
@@ -96,6 +100,21 @@ export function NotificationsPage() {
                     </Badge>
                     {n.error && (
                       <div className="text-xs text-danger mt-1">{n.error}</div>
+                    )}
+                  </td>
+                  {/* Its own column rather than a clickable row: the
+                      row already holds a recipient address people
+                      select and copy, and a row-wide link makes that
+                      a navigation instead. */}
+                  <td className="py-2 px-2">
+                    {notificationLink(n) && (
+                      <Link
+                        to={notificationLink(n)!}
+                        className="inline-flex items-center gap-0.5 text-xs text-info hover:underline"
+                      >
+                        Open
+                        <ChevronRight className="h-3 w-3" />
+                      </Link>
                     )}
                   </td>
                 </tr>
