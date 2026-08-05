@@ -11,7 +11,6 @@ import type {
   InterestMethod,
   KycDocumentType,
   KycQuestion,
-  KycQuestionType,
   LoanProduct,
   PaymentFrequency,
 } from "@loan/shared-types";
@@ -38,18 +37,11 @@ import {
   useToast,
 } from "@loan/ui";
 import { formatMoney } from "@loan/shared-utils";
-import {
-  ArrowDown,
-  ArrowUp,
-  ListChecks,
-  Pencil,
-  Plus,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { ListChecks, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { ApprovalChainDialog } from "../components/ApprovalChainDialog";
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 
 import { useAuth } from "../../../providers/auth";
 
@@ -850,197 +842,25 @@ function ProductForm({
         </p>
       </Section>
 
-      {/* Per-product declaration questionnaire. Each product asks its own
-          questions — housing about the property, salary about employment.
-          Answers are snapshotted per application, so editing here never
-          rewrites what an applicant already attested to. */}
+      {/* The questionnaire itself lives in Questionnaires, next to the
+          credit survey — one place for everything the app asks an
+          applicant. `kycQuestions` still rides along in the draft so
+          saving a product here can't wipe what was configured there. */}
       <Section title="KYC declaration questionnaire">
-        <QuestionnaireBuilder
-          questions={draft.kycQuestions}
-          onChange={(qs) => set("kycQuestions", qs)}
-        />
+        <p className="text-sm text-fg-muted">
+          {draft.kycQuestions.length === 0
+            ? "No declaration questions yet."
+            : `${draft.kycQuestions.length} question(s) configured.`}{" "}
+          <Link
+            to="/questionnaires"
+            className="text-brand hover:underline underline-offset-4"
+          >
+            Edit them in Questionnaires
+          </Link>
+          .
+        </p>
       </Section>
     </form>
-  );
-}
-
-/**
- * Build / edit the product's declaration questions. Ids are slugified
- * from the label on add and then FROZEN — application snapshots key
- * answers by id, so renaming a question keeps its identity while
- * deleting-and-re-adding deliberately makes a new one.
- */
-function QuestionnaireBuilder({
-  questions,
-  onChange,
-}: {
-  questions: KycQuestion[];
-  onChange: (next: KycQuestion[]) => void;
-}) {
-  const [label, setLabel] = useState("");
-  const [type, setType] = useState<KycQuestionType>("YES_NO");
-  const [options, setOptions] = useState("");
-  const [category, setCategory] = useState("");
-  const [required, setRequired] = useState(true);
-
-  const addQuestion = () => {
-    const trimmed = label.trim();
-    if (!trimmed) return;
-    const slugBase =
-      trimmed
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "_")
-        .replace(/^_+|_+$/g, "")
-        .slice(0, 50) || "question";
-    // Uniqueness by suffixing — two "Source of funds?" questions get
-    // distinct ids rather than colliding.
-    let id = slugBase;
-    let n = 2;
-    while (questions.some((q) => q.id === id)) id = `${slugBase}_${n++}`;
-
-    const next: KycQuestion = {
-      id,
-      label: trimmed,
-      type,
-      required,
-      ...(category.trim() ? { category: category.trim() } : {}),
-      ...(type === "SELECT"
-        ? {
-            options: options
-              .split(",")
-              .map((o) => o.trim())
-              .filter(Boolean),
-          }
-        : {}),
-    };
-    if (type === "SELECT" && (next.options?.length ?? 0) < 2) return;
-    onChange([...questions, next]);
-    setLabel("");
-    setOptions("");
-    //  deliberately persists: questions are usually added in
-    // runs within one group, and retyping "Property" seven times is the
-    // kind of friction that stops people using categories at all.
-  };
-
-  const move = (index: number, dir: -1 | 1) => {
-    const next = [...questions];
-    const target = index + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target]!, next[index]!];
-    onChange(next);
-  };
-
-  return (
-    <div className="space-y-3">
-      {questions.length === 0 ? (
-        <p className="text-xs text-fg-muted">
-          No questions yet. Applications for this product will skip the
-          declarations step entirely.
-        </p>
-      ) : (
-        <ul className="space-y-1.5">
-          {questions.map((q, i) => (
-            <li
-              key={q.id}
-              className="flex items-center gap-2 rounded border border-default bg-surface-2 px-2 py-1.5 text-sm"
-            >
-              <span className="flex-1 min-w-0 truncate">
-                {q.label}
-                {q.type === "SELECT" && (
-                  <span className="text-fg-subtle text-xs">
-                    {" "}
-                    ({(q.options ?? []).join(" / ")})
-                  </span>
-                )}
-              </span>
-              {q.category && <Badge variant="muted">{q.category}</Badge>}
-              <Badge variant="muted">{q.type}</Badge>
-              {q.required && <Badge variant="warning">Required</Badge>}
-              <button
-                type="button"
-                aria-label={`Move "${q.label}" up`}
-                onClick={() => move(i, -1)}
-                disabled={i === 0}
-                className="text-fg-subtle hover:text-fg disabled:opacity-30"
-              >
-                <ArrowUp className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                aria-label={`Move "${q.label}" down`}
-                onClick={() => move(i, 1)}
-                disabled={i === questions.length - 1}
-                className="text-fg-subtle hover:text-fg disabled:opacity-30"
-              >
-                <ArrowDown className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                aria-label={`Remove "${q.label}"`}
-                onClick={() => onChange(questions.filter((x) => x.id !== q.id))}
-                className="text-fg-subtle hover:text-danger"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-2 items-end">
-        <div className="md:col-span-3">
-          <Field label="Question">
-            <Input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. What is the source of funds?"
-            />
-          </Field>
-        </div>
-        <Field label="Type">
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as KycQuestionType)}
-            className="w-full rounded-md border border-default bg-surface-2 px-2 py-2 text-sm"
-          >
-            <option value="YES_NO">Yes / No</option>
-            <option value="TEXT">Text</option>
-            <option value="NUMBER">Number</option>
-            <option value="SELECT">Select</option>
-          </select>
-        </Field>
-        <Field label="Category">
-          <Input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="General"
-          />
-        </Field>
-        <Field label="Required">
-          <label className="flex h-9 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={required}
-              onChange={(e) => setRequired(e.target.checked)}
-            />
-            Blocks approval
-          </label>
-        </Field>
-        <Button type="button" variant="outline" onClick={addQuestion}>
-          <Plus className="h-3.5 w-3.5" />
-          Add
-        </Button>
-      </div>
-      {type === "SELECT" && (
-        <Field label="Options (comma-separated, at least two)">
-          <Input
-            value={options}
-            onChange={(e) => setOptions(e.target.value)}
-            placeholder="Salary, Business income, Remittance"
-          />
-        </Field>
-      )}
-    </div>
   );
 }
 

@@ -383,6 +383,86 @@ model SurveyResponse {
   @@index([customerId, computedAt(sort: Desc)])
 }
 
+// ─── Scoring catalog (admin-editable credit survey) ─────────────────────────
+//
+// The factor list and survey questions used to be constants in
+// @loan/credit-scoring. They're rows now so an admin can tune the survey
+// per deployment — but the SCALE is not editable. Factors carry a
+// relative `weight`; the lib normalizes those onto a fixed 150-point
+// total, so adding a factor redistributes points rather than moving the
+// 300–850 scale. A 720 means the same thing before and after an edit,
+// and decision rules that threshold on score keep their meaning.
+//
+// Seeded from the shipped catalog, so a fresh deployment scores exactly
+// as it did before the catalog became editable.
+
+enum SurveyQuestionKind {
+  /// Pick one option; each option carries its own weight.
+  CHOICE
+  /// Numeric input mapped linearly from min..max onto 0..1.
+  NUMBER
+  /// Yes/no; `true` contributes weightWhenTrue, `false` contributes 0.
+  BOOLEAN
+}
+
+model SurveyFactor {
+  id       String  @id @default(uuid())
+  /// Stable identifier referenced by questions AND by stored score
+  /// breakdowns ("income", "on_time"). Renaming the label is safe;
+  /// changing this orphans historical breakdowns, so the API refuses.
+  key      String  @unique
+  label    String
+  /// Relative share of the fixed total. Any positive number — only the
+  /// ratio between factors matters, so 25/20 and 5/4 are identical.
+  weight   Float
+  /// Derived from loan history rather than a survey answer (on-time
+  /// rate, defaults). Still consumes points, so it normalizes like any
+  /// other factor, but the builder doesn't offer questions for it.
+  computed Boolean @default(false)
+  order    Int     @default(0)
+  active   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions SurveyQuestionDef[]
+
+  @@index([order])
+}
+
+model SurveyQuestionDef {
+  id       String             @id @default(uuid())
+  /// Stable identifier answers key on. SurveyResponse.answers is
+  /// `{ [key]: answer }`, so this is as immutable as the factor key.
+  key      String             @unique
+  kind     SurveyQuestionKind
+  label    String
+  help     String?
+  /// Free-text grouping heading, same convention as KYC declarations.
+  category String?
+  order    Int                @default(0)
+  active   Boolean            @default(true)
+
+  /// Kind-specific configuration:
+  ///   CHOICE  → { options: [{ label, value, weight }] }
+  ///   NUMBER  → { min, max, step?, inverted? }
+  ///   BOOLEAN → { weightWhenTrue }
+  /// JSON because the three shapes share nothing; the API validates
+  /// per-kind with a discriminated zod union.
+  config Json
+
+  factorId String
+  /// Cascade: a factor's questions are meaningless without it, and the
+  /// API blocks deleting a factor that still has any.
+  factor   SurveyFactor @relation(fields: [factorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([factorId])
+  @@index([order])
+}
+
 // ─── Loans (application → approved → disbursed → active → closed) ───────────
 
 enum LoanStatus {

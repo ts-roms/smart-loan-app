@@ -1,10 +1,23 @@
+import { DORSI_BASIS_MIN_LENGTH } from "@loan/shared-types";
 import { z } from "zod";
 
 /** Tag a customer as Director/Officer/Stockholder/Related-Interest. */
 export const tagSchema = z.object({
   customerId: z.string().uuid(),
   category: z.enum(["DIRECTOR", "OFFICER", "STOCKHOLDER", "RELATED_INTEREST"]),
-  basis: z.string().min(3).max(500),
+  /**
+   * Trimmed before length-checking, so whitespace can't pad a basis to
+   * the minimum. The shared constant is the single source — see its
+   * comment for why 10 and why existing records aren't affected.
+   */
+  basis: z
+    .string()
+    .trim()
+    .min(
+      DORSI_BASIS_MIN_LENGTH,
+      `Basis must explain the relationship (at least ${DORSI_BASIS_MIN_LENGTH} characters)`,
+    )
+    .max(500),
 });
 
 /** Reason captured on deactivation, kept in the audit trail. */

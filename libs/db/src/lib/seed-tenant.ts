@@ -6,6 +6,7 @@ import type { PrismaClient } from "@prisma/client";
 import { AccountingRepository } from "../repositories/accounting.repository";
 import { DecisionRuleRepository } from "../repositories/decision-rule.repository";
 import { LoanProductRepository } from "../repositories/loan-product.repository";
+import { seedScoringCatalog } from "../repositories/scoring-catalog.repository";
 import {
   PermissionRepository,
   RoleRepository,
@@ -27,6 +28,10 @@ import {
  *   - Default chart of accounts (`AccountingRepository.seedDefaultChart()`)
  *   - Default LoanProduct templates (`LoanProductRepository.seedDefaults()`)
  *   - Default DecisionRule catalogue (`DecisionRuleRepository.seedDefaults()`)
+ *   - Credit survey scoring catalog (`seedScoringCatalog()`) — the
+ *     factors and questions that used to be constants in code. Seeded
+ *     so a fresh tenant scores identically to a pre-catalog deployment;
+ *     idempotent by key, so it never overwrites an admin's tuning.
  *   - Bootstrap admin User with a generated random password
  *
  * The password is returned ONCE — the platform service surfaces it to
@@ -88,6 +93,7 @@ export async function seedTenant(
   const chart = await new AccountingRepository(prisma).seedDefaultChart();
   const products = await new LoanProductRepository(prisma).seedDefaults();
   const rules = await new DecisionRuleRepository(prisma).seedDefaults();
+  await seedScoringCatalog(prisma);
 
   // Bootstrap admin — skip if one already exists at this email
   // (re-provisioning retry, manual seed, etc.). We don't pick a

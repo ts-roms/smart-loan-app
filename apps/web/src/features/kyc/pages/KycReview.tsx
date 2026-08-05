@@ -22,6 +22,7 @@ import { useMemo } from "react";
 // Direct import — pulling DOC_TYPE_LABELS via the customers barrel
 // would drag the CustomerDetail page chunk into the kyc chunk and
 // trip Rollup's circular-chunk warning.
+import { DocumentThumbnail } from "../../../components/DocumentPreview";
 import { DOC_TYPE_LABELS } from "../../customers/constants";
 import { KycInspectorLink } from "../components/KycInspectorDrawer";
 import { findArticle, TourButton } from "../../help";
@@ -134,7 +135,11 @@ function CustomerKycBlock({ customer }: { customer: Customer }) {
               key={d.id}
               className="py-2 flex items-center justify-between gap-2 text-sm"
             >
-              <div className="min-w-0">
+              <DocumentThumbnail
+                url={d.documentUrl}
+                label={DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
+              />
+              <div className="min-w-0 flex-1">
                 <div className="font-medium">
                   {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
                 </div>

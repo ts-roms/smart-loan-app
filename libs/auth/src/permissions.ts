@@ -293,6 +293,14 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
     label: "Edit decision rules",
     category: "Admin",
   },
+  {
+    // The credit survey itself — factors, questions, weights. Distinct
+    // from customers.write (scoring ONE borrower) because editing this
+    // changes how every future borrower is scored.
+    key: "admin.scoring_catalog",
+    label: "Edit the credit survey catalog",
+    category: "Admin",
+  },
   { key: "admin.audit_log", label: "View audit log", category: "Admin" },
   {
     key: "admin.system_config",

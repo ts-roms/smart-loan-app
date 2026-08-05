@@ -8,7 +8,11 @@ import {
   useTagDorsi,
   useUpdateSystemConfig,
 } from "@loan/api-client";
-import type { DorsiCategory } from "@loan/shared-types";
+import {
+  DORSI_BASIS_EXAMPLE,
+  DORSI_BASIS_MIN_LENGTH,
+  type DorsiCategory,
+} from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -491,8 +495,17 @@ function TagDialog({ onClose }: { onClose: () => void }) {
   const [basis, setBasis] = useState("");
 
   const onSubmit = async () => {
-    if (!customerId || basis.trim().length < 3) {
-      toast.error("Customer id + basis required");
+    // Named separately: one message for both conditions sent people
+    // hunting for a customer-picker fault when the basis was simply
+    // too short.
+    if (!customerId) {
+      toast.error("Pick a customer to tag");
+      return;
+    }
+    if (basis.trim().length < DORSI_BASIS_MIN_LENGTH) {
+      toast.error(
+        `Basis needs at least ${DORSI_BASIS_MIN_LENGTH} characters — name the relationship, e.g. "${DORSI_BASIS_EXAMPLE[category]}"`,
+      );
       return;
     }
     try {
@@ -556,8 +569,19 @@ function TagDialog({ onClose }: { onClose: () => void }) {
             <Input
               value={basis}
               onChange={(e) => setBasis(e.target.value)}
-              placeholder="Director since 2022 / CFO / Spouse of stockholder"
+              /* Tracks the category, so the example is always one the
+                 examiner would expect for the class being tagged. */
+              placeholder={DORSI_BASIS_EXAMPLE[category]}
+              aria-describedby="dorsi-basis-help"
             />
+            <div
+              id="dorsi-basis-help"
+              className="text-[10px] text-fg-subtle mt-1"
+            >
+              What a BSP examiner reads to see why this customer is DORSI. Name
+              the relationship — a title alone (&ldquo;CFO&rdquo;) doesn&apos;t
+              say since when or to whom.
+            </div>
           </div>
         </div>
         <DialogFooter>

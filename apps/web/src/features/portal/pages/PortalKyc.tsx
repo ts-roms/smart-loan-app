@@ -21,6 +21,7 @@ import { FileUp } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 // Direct import — see customers/constants.ts for why.
+import { DocumentThumbnail } from "../../../components/DocumentPreview";
 import { DOC_TYPE_LABELS } from "../../customers/constants";
 
 const DOC_OPTIONS: KycDocumentType[] = [
@@ -98,15 +99,26 @@ export function PortalKyc() {
               {(kyc.data?.docs ?? []).map((d) => (
                 <li
                   key={d.id}
-                  className="py-2 flex items-center justify-between"
+                  className="py-2 flex items-center justify-between gap-2"
                 >
-                  <div>
-                    <div>
+                  {/* Borrowers resubmit blurry photos — they need to
+                      see what they actually sent. */}
+                  <DocumentThumbnail
+                    url={d.documentUrl}
+                    label={DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">
                       {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
                     </div>
                     <div className="text-xs text-fg-subtle">
                       {formatDate(d.submittedAt)}
                     </div>
+                    {d.status === "REJECTED" && d.reason && (
+                      <div className="text-xs text-danger mt-0.5">
+                        {d.reason}
+                      </div>
+                    )}
                   </div>
                   <Badge
                     variant={

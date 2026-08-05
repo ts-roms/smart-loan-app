@@ -370,6 +370,9 @@ importers:
       "@loan/accounting":
         specifier: workspace:*
         version: link:../accounting
+      "@loan/credit-scoring":
+        specifier: workspace:*
+        version: link:../credit-scoring
       "@loan/decisioning":
         specifier: workspace:*
         version: link:../decisioning

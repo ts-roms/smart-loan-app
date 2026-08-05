@@ -63,6 +63,7 @@ const STAFF_ROUTES: readonly CrumbRoute[] = [
 
   ["/cooperative", "Contributions & funds"],
 
+  ["/questionnaires", "Questionnaires"],
   ["/decision-rules", "Decision rules"],
   ["/screening", "AML watchlist"],
   ["/compliance/annual-docs", "Renewable docs"],
