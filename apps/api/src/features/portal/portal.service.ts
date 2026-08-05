@@ -145,11 +145,25 @@ export class PortalService {
 
   // ─── loans ────────────────────────────────────────────────────────
 
-  listLoans(customerId: string) {
-    return this.prisma.loanApplication.findMany({
+  /**
+   * The borrower's loans, each carrying its current balance.
+   *
+   * The balance is attached here rather than left to the client because
+   * the dashboard used to derive "Outstanding" by summing the original
+   * principal of active loans — telling someone who had repaid 90% of a
+   * loan that they still owed all of it. The page had nothing better to
+   * work with; now it does.
+   */
+  async listLoans(customerId: string) {
+    const loans = await this.prisma.loanApplication.findMany({
       where: { customerId },
       orderBy: { submittedAt: "desc" },
     });
+    const balances = await this.loans.balancesFor(loans.map((l) => l.id));
+    return loans.map((loan) => ({
+      ...loan,
+      balance: balances.get(loan.id) ?? null,
+    }));
   }
 
   async getLoan(customerId: string, idOrNumber: string) {

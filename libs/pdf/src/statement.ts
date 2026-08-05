@@ -56,6 +56,17 @@ export interface StatementInput {
     /** Interest collected on this installment so far. Optional for callers
      * that predate per-installment progress tracking. */
     interestPaid?: number;
+    /**
+     * Principal still outstanding after this installment, given what has
+     * actually been paid.
+     *
+     * Supplied by the caller rather than derived here: this lib is
+     * deliberately dependency-free (data in, Buffer out), and the
+     * arithmetic belongs to @loan/loans so the document and the screen
+     * can't quote different balances. Optional — when every row omits
+     * it, the column is dropped rather than printed empty.
+     */
+    balance?: number;
   }>;
 
   payments: Array<{
@@ -120,28 +131,73 @@ export function renderStatementOfAccount(
       kv(doc, "Remaining principal", moneyPHP(remainingPrincipal));
 
       section(doc, "Amortization schedule");
+      // The balance column only renders when the caller supplied the
+      // figures. Older callers get exactly the six-column table they got
+      // before, rather than a seventh column of blanks.
+      const withBalance = input.schedule.some((s) => s.balance !== undefined);
       table(
         doc,
-        input.schedule.map((s) => [
-          String(s.installmentNo),
-          fmtDate(s.dueDate),
-          moneyPHP(s.principalDue),
-          moneyPHP(s.interestDue),
-          moneyPHP(s.totalDue),
-          scheduleStatus(s),
-        ]),
-        {
-          header: ["#", "Due date", "Principal", "Interest", "Total", "Status"],
-          columnWidths: [
-            CONTENT_WIDTH * 0.06,
-            CONTENT_WIDTH * 0.16,
-            CONTENT_WIDTH * 0.18,
-            CONTENT_WIDTH * 0.16,
-            CONTENT_WIDTH * 0.18,
-            CONTENT_WIDTH * 0.26,
-          ],
-          alignments: ["left", "left", "right", "right", "right", "left"],
-        },
+        input.schedule.map((s) => {
+          const cells = [
+            String(s.installmentNo),
+            fmtDate(s.dueDate),
+            moneyPHP(s.principalDue),
+            moneyPHP(s.interestDue),
+            moneyPHP(s.totalDue),
+          ];
+          if (withBalance) cells.push(moneyPHP(s.balance ?? 0));
+          cells.push(scheduleStatus(s));
+          return cells;
+        }),
+        withBalance
+          ? {
+              header: [
+                "#",
+                "Due date",
+                "Principal",
+                "Interest",
+                "Total",
+                "Balance",
+                "Status",
+              ],
+              columnWidths: [
+                CONTENT_WIDTH * 0.05,
+                CONTENT_WIDTH * 0.14,
+                CONTENT_WIDTH * 0.15,
+                CONTENT_WIDTH * 0.13,
+                CONTENT_WIDTH * 0.15,
+                CONTENT_WIDTH * 0.16,
+                CONTENT_WIDTH * 0.22,
+              ],
+              alignments: [
+                "left",
+                "left",
+                "right",
+                "right",
+                "right",
+                "right",
+                "left",
+              ],
+            }
+          : {
+              header: [
+                "#",
+                "Due date",
+                "Principal",
+                "Interest",
+                "Total",
+                "Status",
+              ],
+              columnWidths: [
+                CONTENT_WIDTH * 0.06,
+                CONTENT_WIDTH * 0.16,
+                CONTENT_WIDTH * 0.18,
+                CONTENT_WIDTH * 0.16,
+                CONTENT_WIDTH * 0.18,
+                CONTENT_WIDTH * 0.26,
+              ],
+              alignments: ["left", "left", "right", "right", "right", "left"],
+            },
       );
 
       section(doc, "Payment history");

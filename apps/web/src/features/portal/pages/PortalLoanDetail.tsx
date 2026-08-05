@@ -36,7 +36,7 @@ import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { downloadPdf } from "../../../lib/download-pdf";
 import { SignaturePad } from "../../../components/SignaturePad";
-import { LoanLedgerPanel } from "../../loans";
+import { LoanLedgerPanel, ProjectedSchedulePanel } from "../../loans";
 import { LoanMessagePanel } from "../../messaging";
 
 export function PortalLoanDetail() {
@@ -124,6 +124,23 @@ export function PortalLoanDetail() {
               two can't disagree about what's due or what's been
               credited. Self-hides until disbursement generates it. */}
           <LoanLedgerPanel rows={l.schedule ?? []} principal={l.principal} />
+
+          {/* …and until then, what the payments are going to look like.
+              Gated on the pre-release statuses rather than "schedule
+              missing" — a rejected loan gets no offer, and a released
+              loan with no schedule rows is a data problem that an
+              "estimate until release" banner would misstate. */}
+          {(l.schedule ?? []).length === 0 &&
+            ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED"].includes(
+              l.status,
+            ) && (
+              <ProjectedSchedulePanel
+                principal={l.principal}
+                termMonths={l.termMonths}
+                annualInterestRate={l.annualInterestRate}
+                productCode={l.productCode}
+              />
+            )}
         </CardContent>
       </Card>
 

@@ -180,6 +180,9 @@ export function LoansListPage() {
                 <th className="py-2 px-2">Borrower</th>
                 <th className="py-2 px-2">Type</th>
                 <th className="py-2 px-2">Principal</th>
+                {/* Outstanding, not disbursed — the number an officer
+                    triaging a queue is actually reading for. */}
+                <th className="py-2 px-2">Balance</th>
                 <th className="py-2 px-2">Term</th>
                 <th className="py-2 px-2">Rate</th>
                 <th className="py-2 px-2">Status</th>
@@ -213,6 +216,11 @@ export function LoansListPage() {
                   </td>
                   <td className="py-2 px-2">
                     {formatMoney(Number(l.principal))}
+                  </td>
+                  {/* An em dash, not ₱0.00, before disbursement — no
+                      schedule yet is not the same as nothing owed. */}
+                  <td className="py-2 px-2">
+                    {l.balance ? formatMoney(l.balance.outstanding) : "—"}
                   </td>
                   <td className="py-2 px-2">{l.termMonths}m</td>
                   <td className="py-2 px-2">

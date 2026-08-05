@@ -1,6 +1,6 @@
 import { ACCOUNT_CODES, allocatePayment } from "@loan/accounting";
 import { type LoanRepository, type PrismaClient } from "@loan/db";
-import { computeFees } from "@loan/loans";
+import { computeFees, runningBalances } from "@loan/loans";
 import {
   renderLoanAgreement,
   renderPaymentReceipt,
@@ -131,7 +131,10 @@ export class DocumentsService {
       asOf: new Date(),
       loan: this.statementLoanShape(loan),
       customer: this.customerStatementShape(loan.customer),
-      schedule: this.scheduleStatementShape(loan.schedule),
+      schedule: this.scheduleStatementShape(
+        loan.schedule,
+        Number(loan.principal),
+      ),
       payments: this.paymentsShape(loan.payments),
       personnelSignature: personnel,
     });
@@ -211,7 +214,10 @@ export class DocumentsService {
       asOf: new Date(),
       loan: this.statementLoanShape(loan),
       customer: this.customerStatementShape(loan.customer),
-      schedule: this.scheduleStatementShape(loan.schedule),
+      schedule: this.scheduleStatementShape(
+        loan.schedule,
+        Number(loan.principal),
+      ),
       payments: this.paymentsShape(loan.payments),
     });
     return {
@@ -469,12 +475,34 @@ export class DocumentsService {
     }));
   }
 
+  /**
+   * Map the persisted schedule into the PDF renderer's shape, attaching
+   * the running balance per instalment.
+   *
+   * The balance is computed here rather than inside @loan/pdf because
+   * that lib is deliberately dependency-free — data in, Buffer out. It
+   * still comes from @loan/loans, the same function the on-screen
+   * amortization panel uses, so the statement a borrower downloads can't
+   * quote a different balance from the page they downloaded it on.
+   */
   private scheduleStatementShape(
     schedule: NonNullable<
       Awaited<ReturnType<LoanRepository["findByIdOrNumber"]>>
     >["schedule"],
+    principal: number,
   ) {
-    return schedule.map((s) => ({
+    const balances = runningBalances(
+      schedule.map((s) => ({
+        principalDue: Number(s.principalDue),
+        interestDue: Number(s.interestDue),
+        totalDue: Number(s.totalDue),
+        principalPaid: Number(s.principalPaid),
+        interestPaid: Number(s.interestPaid),
+        paidInFullAt: s.paidInFullAt,
+      })),
+      principal,
+    );
+    return schedule.map((s, i) => ({
       installmentNo: s.installmentNo,
       dueDate: s.dueDate,
       principalDue: Number(s.principalDue),
@@ -483,6 +511,10 @@ export class DocumentsService {
       paidInFullAt: s.paidInFullAt,
       principalPaid: Number(s.principalPaid),
       interestPaid: Number(s.interestPaid),
+      // The actual balance, not the contractual one: this is a statement
+      // of account, so it answers "where do I stand", not "where was I
+      // meant to be".
+      balance: balances[i]?.actualBalance,
     }));
   }
 

@@ -41,7 +41,24 @@ export function PortalDashboard() {
   const active = (loans.data ?? []).filter((l) =>
     ["DISBURSED", "ACTIVE"].includes(l.status),
   );
-  const outstanding = active.reduce((sum, l) => sum + Number(l.principal), 0);
+  /*
+   * What's actually still owed, from the server-computed balance.
+   *
+   * This used to sum `l.principal` — the amount originally borrowed —
+   * and label it Outstanding, so a borrower who had repaid 90% of a
+   * ₱500,000 loan was told they still owed ₱500,000. It also
+   * contradicted the correct figure on the loan detail page one click
+   * away. The list endpoint now carries the real balance; see
+   * PortalService.listLoans.
+   *
+   * Falls back to the principal only when the balance is missing, which
+   * for an active loan means the schedule hasn't been generated — rare,
+   * and over-stating is the safer direction of the two.
+   */
+  const outstanding = active.reduce(
+    (sum, l) => sum + (l.balance?.outstanding ?? Number(l.principal)),
+    0,
+  );
 
   return (
     <div className="space-y-4">

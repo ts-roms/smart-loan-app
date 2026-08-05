@@ -5,7 +5,9 @@ import {
   preTerminationFeeEntry,
 } from "@loan/accounting";
 import {
+  type LoanBalance,
   type LoanProductConfig,
+  balanceFromTotals,
   computeAmortizationFor,
   computeFees,
   daysBetweenInstallments,
@@ -64,6 +66,12 @@ export interface LoanListCustomer {
 
 export type LoanListRow = LoanApplication & {
   customer: LoanListCustomer;
+  /**
+   * Where the loan actually stands. Null before disbursement — there are
+   * no instalments yet, and reporting a zero balance on an approved loan
+   * would read as "nothing to pay" rather than "nothing scheduled yet".
+   */
+  balance: LoanBalance | null;
 };
 
 /**
@@ -281,7 +289,61 @@ export class LoanRepository {
       }),
       this.prisma.loanApplication.count({ where }),
     ]);
-    return toPage(rows, total, paging);
+
+    const balances = await this.balancesFor(rows.map((r) => r.id));
+    return toPage(
+      rows.map((row) => ({ ...row, balance: balances.get(row.id) ?? null })),
+      total,
+      paging,
+    );
+  }
+
+  /**
+   * Current balance for each of the given loans, keyed by loan id.
+   *
+   * One `groupBy` rather than a schedule `include`: a 360-month loan is
+   * 360 rows, and a page of 200 such loans would ship and fold 72,000
+   * rows to render one number each. Postgres sums them instead and we
+   * get one row per loan back.
+   *
+   * `_count: { paidInFullAt: true }` counts non-null values, which is
+   * exactly the settled-instalment count — the repository sets that
+   * column only once principal AND interest are both covered.
+   *
+   * Loans with no schedule are absent from the result rather than
+   * present with zeros, so callers can tell "not disbursed" from
+   * "nothing left to pay".
+   */
+  async balancesFor(loanIds: string[]): Promise<Map<string, LoanBalance>> {
+    if (loanIds.length === 0) return new Map();
+    const groups = await this.prisma.loanSchedule.groupBy({
+      by: ["loanId"],
+      where: { loanId: { in: loanIds } },
+      _sum: {
+        totalDue: true,
+        principalDue: true,
+        principalPaid: true,
+        interestPaid: true,
+      },
+      _count: { _all: true, paidInFullAt: true },
+    });
+
+    return new Map(
+      groups.map((g) => {
+        const principalPaid = Number(g._sum.principalPaid ?? 0);
+        return [
+          g.loanId,
+          balanceFromTotals({
+            scheduled: Number(g._sum.totalDue ?? 0),
+            paid: principalPaid + Number(g._sum.interestPaid ?? 0),
+            principalScheduled: Number(g._sum.principalDue ?? 0),
+            principalPaid,
+            paidInstallments: g._count.paidInFullAt,
+            totalInstallments: g._count._all,
+          }),
+        ];
+      }),
+    );
   }
 
   findById(id: string) {

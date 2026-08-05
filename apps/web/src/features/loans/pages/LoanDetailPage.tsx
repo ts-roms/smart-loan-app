@@ -57,6 +57,7 @@ import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
 import { FaceMatchPanel } from "../components/FaceMatchPanel";
 import { LeasePanel } from "../components/LeasePanel";
 import { LoanLedgerPanel } from "../components/LoanLedgerPanel";
+import { ProjectedSchedulePanel } from "../components/ProjectedSchedulePanel";
 import { DOC_LABELS, TYPE_LABELS } from "../constants";
 import { LoanMessagePanel } from "../../messaging";
 import { AssistantPanel, useExplainDecision } from "../../assistant";
@@ -294,6 +295,22 @@ export function LoanDetailPage() {
             came in reads against it. The panel self-hides when there is
             no schedule, i.e. before disbursement. */}
         <LoanLedgerPanel rows={l.schedule ?? []} principal={l.principal} />
+        {/* Before disbursement there is no schedule to show, so show what
+            it will be. Gated on the pre-release statuses, not on "schedule
+            missing": a released loan with no schedule rows is a data
+            problem, and dressing it in an "estimate until release" banner
+            would misstate where the loan is. */}
+        {(l.schedule ?? []).length === 0 &&
+          ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED"].includes(
+            l.status,
+          ) && (
+            <ProjectedSchedulePanel
+              principal={l.principal}
+              termMonths={l.termMonths}
+              annualInterestRate={l.annualInterestRate}
+              productCode={l.productCode}
+            />
+          )}
         {l.payments && l.payments.length > 0 && (
           <PaymentsPanel loanId={l.id} payments={l.payments} />
         )}

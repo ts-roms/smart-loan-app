@@ -40,6 +40,10 @@ export function PortalLoans() {
                 <th className="py-2 px-2">Number</th>
                 <th className="py-2 px-2">Type</th>
                 <th className="py-2 px-2">Principal</th>
+                {/* What was borrowed and what's left are different
+                    questions, and the second is the one a borrower opens
+                    this page to answer. */}
+                <th className="py-2 px-2">Balance</th>
                 <th className="py-2 px-2">Term</th>
                 <th className="py-2 px-2">Rate</th>
                 <th className="py-2 px-2">Status</th>
@@ -64,6 +68,12 @@ export function PortalLoans() {
                   </td>
                   <td className="py-2 px-2">
                     {formatMoney(Number(l.principal))}
+                  </td>
+                  {/* An em dash, not ₱0.00, when there's no schedule yet:
+                      a pending loan has nothing to pay *yet*, which is
+                      not the same as nothing left to pay. */}
+                  <td className="py-2 px-2 font-medium">
+                    {l.balance ? formatMoney(l.balance.outstanding) : "—"}
                   </td>
                   <td className="py-2 px-2">{l.termMonths}m</td>
                   <td className="py-2 px-2">

@@ -504,6 +504,28 @@ export interface LoanListCustomer {
 }
 
 /**
+ * Where a loan actually stands, folded from its persisted schedule.
+ *
+ * Computed server-side by @loan/loans so the borrower's dashboard, the
+ * amortization panel and the statement PDF can't quote three different
+ * balances for the same loan.
+ */
+export interface LoanBalanceSummary {
+  /** Contractual total across every instalment: principal + interest. */
+  scheduled: number;
+  /** Everything credited so far, principal and interest together. */
+  paid: number;
+  /** `scheduled - paid`, floored at zero. What's left to hand over. */
+  outstanding: number;
+  /** Principal only — what a payoff quote is built from. */
+  principalScheduled: number;
+  principalPaid: number;
+  principalOutstanding: number;
+  paidInstallments: number;
+  totalInstallments: number;
+}
+
+/**
  * Envelope returned by the paginated list endpoints.
  *
  * `total` is the count matching the filter across all pages — not
@@ -593,6 +615,14 @@ export interface LoanApplication {
    * record. Absent on payloads that don't join it at all.
    */
   customer?: LoanListCustomer | null;
+  /**
+   * Where the loan actually stands, attached by the list endpoints.
+   *
+   * Null before disbursement: there are no instalments yet, and a zero
+   * balance on an approved loan reads as "nothing to pay" rather than
+   * "nothing scheduled yet".
+   */
+  balance?: LoanBalanceSummary | null;
   /** true when submitted by a customer with prior CLOSED loans. */
   isRepeat?: boolean;
   // Face-match (selfie ↔ ID) outputs. All four are null until an

@@ -1,3 +1,4 @@
+import { loanBalance, runningBalances, type LoanBalance } from "@loan/loans";
 import { Badge } from "@loan/ui";
 import { formatDate, formatMoney } from "@loan/shared-utils";
 import { CalendarClock } from "lucide-react";
@@ -60,37 +61,17 @@ const STATE_VARIANT: Record<
   DUE: "muted",
 };
 
-export interface LoanLedgerTotals {
-  scheduled: number;
-  paid: number;
-  outstanding: number;
-  paidInstallments: number;
-}
-
 /**
- * Sum the ledger. Exported alongside the panel because the portal
- * summary and the staff panel must agree to the centavo — computing it
- * twice is how they drift.
+ * Sum the ledger.
+ *
+ * A thin re-export of `loanBalance` from @loan/loans, kept under the old
+ * name because the feature's public API exports it. The arithmetic moved
+ * to the shared lib when the API started computing the same figure for
+ * the loans lists and the borrower's dashboard — three surfaces quoting
+ * a balance from three implementations is how they drift.
  */
-export function ledgerTotals(rows: LedgerRow[]): LoanLedgerTotals {
-  let scheduled = 0;
-  let paid = 0;
-  let paidInstallments = 0;
-  for (const r of rows) {
-    scheduled += Number(r.totalDue);
-    paid += Number(r.principalPaid) + Number(r.interestPaid);
-    if (r.paidInFullAt) paidInstallments += 1;
-  }
-  return {
-    scheduled,
-    paid,
-    // Guard the float dust: summing 12 two-decimal strings can land a
-    // few millionths below zero on a fully paid loan, which would
-    // render as "-0.00".
-    outstanding: Math.max(0, scheduled - paid),
-    paidInstallments,
-  };
-}
+export const ledgerTotals = loanBalance;
+export type LoanLedgerTotals = LoanBalance;
 
 /**
  * Amortization ledger for one loan.
@@ -101,12 +82,21 @@ export function ledgerTotals(rows: LedgerRow[]): LoanLedgerTotals {
  * against. This is the other half: what was owed, when, and how much
  * of each installment has actually been settled.
  *
- * The "Balance" column is the SCHEDULED principal still outstanding
- * after each installment, which is what an amortization table
- * conventionally means and what a borrower asking "how much do I still
- * owe after March?" is asking. It deliberately doesn't react to early
- * or partial payments — the per-row Paid/Remaining columns and the
- * summary above carry the actual position.
+ * Two balance columns, because "what do I owe" has two honest answers:
+ *
+ *   • **Scheduled** — the contractual principal still outstanding after
+ *     each installment, assuming every one before it was paid on time.
+ *     What an amortization table conventionally means, and what "how
+ *     much will I still owe after March?" is asking.
+ *   • **Actual** — the same figure given what has really been paid.
+ *     Below the scheduled line when the borrower is ahead, and flat
+ *     from the point payments stopped when they're behind.
+ *
+ * Showing only the scheduled column, as this did originally, meant a
+ * borrower four installments in arrears watched a balance march
+ * confidently down as though nothing were wrong. Showing only the
+ * actual one would lose the contractual reference they agreed to. Both
+ * columns, side by side, is the comparison.
  */
 export function LoanLedgerPanel({
   rows,
@@ -123,9 +113,9 @@ export function LoanLedgerPanel({
 
   const today = Date.now();
   const totals = ledgerTotals(rows);
-
-  // Running scheduled principal, opening at the disbursed amount.
-  let balance = Number(principal);
+  // Both running columns, computed by the same lib the API and the PDF
+  // use. Parallel to `rows` — index i belongs to rows[i].
+  const balances = runningBalances(rows, principal);
 
   return (
     <div className="border-t border-default pt-3">
@@ -146,13 +136,13 @@ export function LoanLedgerPanel({
       </dl>
 
       {/*
-        Eight columns don't fit a phone. Scroll the table inside its own
+        Nine columns don't fit a phone. Scroll the table inside its own
         box rather than letting it widen the page — the loan detail page
         is already dense and a sideways-panning card is worse than a
         sideways-scrolling table.
       */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[44rem] text-sm">
+        <table className="w-full min-w-[50rem] text-sm">
           <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
             <tr>
               <th className="py-1 px-2">#</th>
@@ -161,15 +151,28 @@ export function LoanLedgerPanel({
               <th className="py-1 px-2 text-right">Interest</th>
               <th className="py-1 px-2 text-right">Total</th>
               <th className="py-1 px-2 text-right">Paid</th>
-              <th className="py-1 px-2 text-right">Balance</th>
+              <th className="py-1 px-2 text-right">Scheduled bal.</th>
+              <th className="py-1 px-2 text-right">Actual bal.</th>
               <th className="py-1 px-2">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-default">
-            {rows.map((r) => {
+            {rows.map((r, i) => {
               const state = stateOf(r, today);
               const paid = Number(r.principalPaid) + Number(r.interestPaid);
-              balance -= Number(r.principalDue);
+              const running = balances[i]!;
+              // Colour only where the comparison means something.
+              // `actual < scheduled` is genuine prepayment at any row.
+              // `actual > scheduled` is only evidence of arrears on rows
+              // whose due date has passed — on FUTURE rows it just means
+              // "not prepaid yet", which is every healthy loan, and a
+              // red column down the whole future schedule right after an
+              // on-time payment would read as delinquency where there is
+              // none.
+              const pastDue = new Date(r.dueDate).getTime() < today;
+              const ahead = running.actualBalance < running.scheduledBalance;
+              const behind =
+                pastDue && running.actualBalance > running.scheduledBalance;
               return (
                 <tr key={r.id} className="hover:bg-hover">
                   <td className="py-1.5 px-2 font-mono text-xs">
@@ -191,9 +194,25 @@ export function LoanLedgerPanel({
                     {paid > 0 ? formatMoney(paid) : "—"}
                   </td>
                   <td className="py-1.5 px-2 text-right font-mono text-xs text-fg-muted">
-                    {/* Rounding dust again: the final row's scheduled
-                        balance lands a hair off zero. */}
-                    {formatMoney(Math.max(0, balance))}
+                    {formatMoney(running.scheduledBalance)}
+                  </td>
+                  <td
+                    className={`py-1.5 px-2 text-right font-mono text-xs ${
+                      behind
+                        ? "text-danger"
+                        : ahead
+                          ? "text-success"
+                          : "text-fg"
+                    }`}
+                    title={
+                      behind
+                        ? "Above the contractual balance — payments are behind schedule"
+                        : ahead
+                          ? "Below the contractual balance — paid ahead of schedule"
+                          : undefined
+                    }
+                  >
+                    {formatMoney(running.actualBalance)}
                   </td>
                   <td className="py-1.5 px-2">
                     <Badge variant={STATE_VARIANT[state]}>
