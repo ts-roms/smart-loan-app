@@ -8,20 +8,42 @@
  *   tier 1  live loan         PICKER-006..008  (active / disbursed / approved)
  *   tier 2  prior default     PICKER-009..011  (defaulted / written off / both)
  *
- * Re-runnable: every PICKER-* row is deleted and recreated, so the smoke
- * test starts from a known state on each run. That matters because the
- * payments section of the smoke test settles a payment, and these fixture
- * loans deliberately have no LoanSchedule rows — `recordPayment` closes a
- * loan once no open installment remains, so a settled payment flips
- * whichever loan it touched from ACTIVE to CLOSED. Without the reset the
- * picker assertions pass once and fail on every run after.
+ * Loans in a post-release status also get the state release would have
+ * produced: an installment schedule (same amortization math as
+ * `LoanRepository.disburse`), a disbursement date placed so the status
+ * makes sense (an ACTIVE loan is three months in and current; a DEFAULTED
+ * one is eight months in with nothing paid), and matching LoanPayment
+ * rows for whatever the schedule shows as settled. Without this the
+ * fixtures sat in a state production can't produce — released loans with
+ * no schedule — so the amortization ledger self-hid and list balances
+ * were null on exactly the loans meant to exercise them. Journal entries
+ * are deliberately NOT posted: fixtures are rows, not workflow runs, and
+ * accumulating disbursement entries on every reseed would pollute the
+ * accounting reports.
+ *
+ * Re-runnable: every PICKER-* row is deleted and recreated (schedules and
+ * payments cascade with the loan), so the smoke test starts from a known
+ * state on each run. That matters because the payments section settles a
+ * real payment against a fixture loan on every run.
  *
  * DEV ONLY. Points at whatever DATABASE_URL resolves to, and deletes rows.
  * Never run against anything you care about.
  *
  *   pnpm --filter @loan/db exec dotenv -e ../../.env -- tsx ../../docs/smoke-tests/fixtures.ts
  */
-import { PrismaClient, type LoanStatus } from "@prisma/client";
+import {
+  PrismaClient,
+  type LoanProduct,
+  type LoanStatus,
+} from "@prisma/client";
+
+// Relative import on purpose: docs/ is not a workspace package, so the
+// "@loan/loans" alias doesn't resolve from here. tsx follows the source
+// import fine, and it's the exact function the real disburse path uses.
+import {
+  computeAmortizationFor,
+  daysBetweenInstallments,
+} from "../../libs/loans/src/index";
 
 const prisma = new PrismaClient();
 
@@ -102,7 +124,7 @@ async function main() {
     let k = 0;
     for (const status of statuses) {
       k += 1;
-      await prisma.loanApplication.create({
+      const loan = await prisma.loanApplication.create({
         data: {
           number: `PICKER-${seq}-${k}`,
           customerId: customer.id,
@@ -114,9 +136,130 @@ async function main() {
           submittedById: officer.id,
         },
       });
+      await seedPostReleaseState(loan.id, status, product, officer.id);
     }
     console.log(`${customer.number} ${fullName} → [${statuses.join(", ")}]`);
   }
+}
+
+// ─── Post-release realism ────────────────────────────────────────────
+//
+// A loan whose status says "released" needs the state release produces,
+// or every surface that reads the schedule sees a contradiction. Each
+// status gets a disbursement date that makes its story true:
+//
+//   DISBURSED     released today — schedule exists, nothing due yet.
+//   ACTIVE        three months in, every due installment paid: a
+//                 healthy, current borrower.
+//   CLOSED        a full term plus a little in the past, all twelve
+//                 installments settled on their due dates.
+//   DEFAULTED     eight months in, not one payment: rows 1–8 overdue,
+//                 which is what the status claims happened.
+//   WRITTEN_OFF   like DEFAULTED but older, with the write-off fields
+//                 stamped — the lender gave up collecting.
+
+/** How far back the release happened, per status. */
+const MONTHS_SINCE_RELEASE: Partial<Record<LoanStatus, number>> = {
+  DISBURSED: 0,
+  ACTIVE: 3,
+  CLOSED: 14,
+  DEFAULTED: 8,
+  WRITTEN_OFF: 10,
+};
+
+function addMonths(base: Date, months: number): Date {
+  const d = new Date(base);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+async function seedPostReleaseState(
+  loanId: string,
+  status: LoanStatus,
+  product: LoanProduct,
+  officerId: string,
+) {
+  const monthsAgo = MONTHS_SINCE_RELEASE[status];
+  if (monthsAgo === undefined) return; // pre-release status — no schedule
+
+  const now = new Date();
+  const disbursedAt = addMonths(now, -monthsAgo);
+
+  // Same math and the same due-date walk as LoanRepository.disburse,
+  // just anchored at the backdated release instead of today.
+  const rows = computeAmortizationFor(50000, 0.24, 12, {
+    method: product.interestMethod,
+    frequency: product.paymentFrequency,
+  });
+  const periodInc = daysBetweenInstallments(product.paymentFrequency);
+  const dueDateOf = (installmentNo: number): Date => {
+    const due = new Date(disbursedAt);
+    if (periodInc === "MONTH") due.setMonth(due.getMonth() + installmentNo);
+    else due.setDate(due.getDate() + periodInc * installmentNo);
+    return due;
+  };
+
+  // Which installments the status says were paid.
+  const isPaid = (dueDate: Date): boolean => {
+    if (status === "CLOSED") return true;
+    if (status === "ACTIVE") return dueDate.getTime() <= now.getTime();
+    return false; // DISBURSED (nothing due), DEFAULTED / WRITTEN_OFF (nothing paid)
+  };
+
+  const schedule = rows.map((row, idx) => {
+    const dueDate = dueDateOf(idx + 1);
+    const paid = isPaid(dueDate);
+    return {
+      loanId,
+      installmentNo: idx + 1,
+      dueDate,
+      principalDue: row.principal,
+      interestDue: row.interest,
+      totalDue: row.payment,
+      principalPaid: paid ? row.principal : 0,
+      interestPaid: paid ? row.interest : 0,
+      paidInFullAt: paid ? dueDate : null,
+    };
+  });
+  await prisma.loanSchedule.createMany({ data: schedule });
+
+  // One payment per settled installment, on its due date, so the
+  // statement PDF's payment history agrees with the schedule instead of
+  // reading "No payments recorded" against paid rows.
+  const paidRows = schedule.filter((s) => s.paidInFullAt);
+  if (paidRows.length > 0) {
+    await prisma.loanPayment.createMany({
+      data: paidRows.map((s) => ({
+        loanId,
+        amount: s.totalDue,
+        paidOn: s.dueDate,
+        reference: `FIXTURE-${s.installmentNo}`,
+        recordedById: officerId,
+      })),
+    });
+  }
+
+  const lastDue = dueDateOf(rows.length);
+  await prisma.loanApplication.update({
+    where: { id: loanId },
+    data: {
+      disbursedAt,
+      disbursedById: officerId,
+      decidedAt: disbursedAt,
+      decidedById: officerId,
+      ...(status === "CLOSED" ? { closedAt: lastDue } : {}),
+      ...(status === "WRITTEN_OFF"
+        ? {
+            // Nothing was ever paid on this one, so the whole principal
+            // went to Bad Debt.
+            writeOffAmount: 50000,
+            writeOffReason: "Fixture: uncollectible after default",
+            writtenOffAt: addMonths(now, -1),
+            writtenOffById: officerId,
+          }
+        : {}),
+    },
+  });
 }
 
 main()
