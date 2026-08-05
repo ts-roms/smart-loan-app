@@ -23,9 +23,10 @@ import { DOC_TYPE_LABELS } from "../../customers/constants";
  * blocked until every one of them has approved. This panel is where
  * the officer sees who is holding that up and sends them a link.
  *
- * The link is copied rather than sent: who delivers it — SMS, email,
- * or the officer reading it out over the phone — isn't settled, and a
- * copyable link works today under all three.
+ * Inviting sends the link by SMS (or email when there's no number)
+ * and copies it too — a sent link is still worth having on the
+ * clipboard when the co-maker rings back saying it never arrived.
+ * Delivery is best-effort, so the toast says which actually happened.
  */
 export function CoMakersPanel({ loanId }: { loanId: string }) {
   const coMakers = useLoanCoMakers(loanId);
@@ -40,9 +41,21 @@ export function CoMakersPanel({ loanId }: { loanId: string }) {
 
   const sendInvite = async (id: string, name: string) => {
     try {
-      const { url } = await invite.mutateAsync(id);
+      const { url, delivery } = await invite.mutateAsync(id);
+      // Copy regardless: even a sent link is worth having on the
+      // clipboard when the co-maker rings back saying it never came.
       await navigator.clipboard.writeText(url).catch(() => {});
-      toast.success(`Link for ${name} copied — send it to them.`);
+      if (delivery.sent) {
+        toast.success(
+          `Sent to ${name} by ${delivery.channel === "SMS" ? "SMS" : "email"} (${delivery.recipient}). Link also copied.`,
+        );
+      } else {
+        toast.info(
+          delivery.reason === "NoContact"
+            ? `${name} has no phone or email on file — link copied, send it yourself.`
+            : `Couldn't send automatically — link copied, send it to ${name}.`,
+        );
+      }
     } catch (err) {
       toast.error((err as Error).message ?? "Could not create a link");
     }
@@ -123,8 +136,9 @@ export function CoMakersPanel({ loanId }: { loanId: string }) {
           ))}
         </ul>
         <p className="text-[10px] text-fg-subtle">
-          Sending a new link cancels the previous one and clears any answer
-          already given.
+          Invites go out by SMS, or email when there&apos;s no number. The link
+          is copied to your clipboard either way. Sending a new one cancels the
+          previous link and clears any answer already given.
         </p>
       </CardContent>
     </Card>

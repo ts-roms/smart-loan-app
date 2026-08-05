@@ -1402,6 +1402,8 @@ enum NotificationEvent {
   LEASE_MAINTENANCE_REMINDER
   /// Lease-to-own pull-out warning (3rd consecutive missed payment).
   LEASE_PULL_OUT_WARNING
+  /// A co-maker has been asked to accept or decline being one.
+  CO_MAKER_INVITED
   /// A loan needs the recipient's approval (per-product approval chain).
   /// Fired on loan submit (step 1 approvers) and on each step advance
   /// (the next step's approvers). One row dispatched per recipient per

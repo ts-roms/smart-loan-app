@@ -35,6 +35,11 @@ async function publicJson<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** Whether the link actually went out, and by which channel. */
+export type InviteDelivery =
+  | { sent: true; channel: "SMS" | "EMAIL"; recipient: string }
+  | { sent: false; reason: "NoContact" | "Failed" };
+
 export function useCoMakerInvite(token: string) {
   return useQuery({
     queryKey: ["co-maker", "invite", token],
@@ -101,10 +106,11 @@ export function useInviteCoMaker() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (coMakerId: string) =>
-      getApiClient().post<{ url: string; expiresAt: string }>(
-        `/loans/co-makers/${coMakerId}/invite`,
-        {},
-      ),
+      getApiClient().post<{
+        url: string;
+        expiresAt: string;
+        delivery: InviteDelivery;
+      }>(`/loans/co-makers/${coMakerId}/invite`, {}),
     onSuccess: () => {
       // Matches useLoanCoMakers in use-servicing — a fresh invite
       // resets the row's status, so the panel has to re-read it.

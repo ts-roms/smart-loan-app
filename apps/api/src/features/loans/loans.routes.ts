@@ -23,6 +23,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { config } from "../../config";
 import { INVITE_TTL_DAYS, mintInviteToken } from "../co-maker/consent.service";
+import { sendCoMakerInvite } from "../co-maker/notify-invite";
 import { LoanWorkflowController } from "./loans.controller";
 import { LoanWorkflowService } from "./loans.service";
 import { notifyApproversForStep } from "./notify-approvers";
@@ -834,8 +835,9 @@ export async function loanRoutes(app: FastifyInstance) {
       const expiresAt = new Date(
         Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000,
       );
+      let coMaker;
       try {
-        await req.loanCtx!.coMakers.issueInvite(
+        coMaker = await req.loanCtx!.coMakers.issueInvite(
           req.params.coMakerId,
           token,
           expiresAt,
@@ -843,10 +845,21 @@ export async function loanRoutes(app: FastifyInstance) {
       } catch {
         return reply.code(404).send({ error: "NotFound" });
       }
-      return {
-        url: `${config.webOrigin}/co-maker/${token}`,
-        expiresAt: expiresAt.toISOString(),
-      };
+
+      const url = `${config.webOrigin}/co-maker/${token}`;
+      const delivery = await sendCoMakerInvite({
+        prisma: req.tenantCtx.prisma,
+        notifications: app.notifications(req.tenantCtx.prisma),
+        coMaker,
+        url,
+        log: app.log,
+      });
+
+      // The URL comes back either way. Delivery is best-effort — an
+      // SMS provider being down shouldn't cost the officer the link,
+      // and `delivery` tells the UI whether to say "sent" or "copy
+      // this to them".
+      return { url, expiresAt: expiresAt.toISOString(), delivery };
     },
   );
 
