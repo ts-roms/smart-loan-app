@@ -1,3 +1,4 @@
+import { CityPicker, ProvincePicker } from "../../../components/PsgcFields";
 import {
   useCompleteProfile,
   type CompleteProfileInput,
@@ -219,17 +220,18 @@ export function CompleteProfilePage() {
                   onChange={(e) => set("barangay", e.target.value)}
                 />
               </Field>
-              <Field label="City or municipality" required>
-                <Input
-                  value={form.city}
-                  onChange={(e) => set("city", e.target.value)}
-                  required
+              <Field label="Province">
+                <ProvincePicker
+                  value={form.province ?? ""}
+                  onChange={(v) => set("province", v)}
                 />
               </Field>
-              <Field label="Province">
-                <Input
-                  value={form.province ?? ""}
-                  onChange={(e) => set("province", e.target.value)}
+              <Field label="City or municipality" required>
+                <CityPicker
+                  province={form.province}
+                  value={form.city}
+                  onChange={(v) => set("city", v)}
+                  required
                 />
               </Field>
               <Field label="Postal code">
