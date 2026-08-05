@@ -125,6 +125,9 @@ export class CollectionsRepository {
     Array<
       LoanApplication & {
         customerName: string;
+        /** Borrower's area — drives the queue's area filter. */
+        customerCity: string;
+        customerProvince: string | null;
         daysOverdue: number;
         outstanding: number;
         overdueCount: number;
@@ -142,7 +145,14 @@ export class CollectionsRepository {
         ...(filter.unassignedOnly ? { collectionAssignment: null } : {}),
       },
       include: {
-        customer: { select: { firstName: true, lastName: true } },
+        customer: {
+          select: {
+            firstName: true,
+            lastName: true,
+            city: true,
+            province: true,
+          },
+        },
         schedule: {
           where: { paidInFullAt: null },
           orderBy: { dueDate: "asc" },
@@ -181,6 +191,8 @@ export class CollectionsRepository {
       return {
         ...rest,
         customerName: `${customer.firstName} ${customer.lastName}`,
+        customerCity: customer.city,
+        customerProvince: customer.province,
         daysOverdue,
         outstanding: Math.round(outstanding * 100) / 100,
         overdueCount,
@@ -226,6 +238,51 @@ export class CollectionsRepository {
       },
       include: { collector: { select: { id: true, name: true } } },
     });
+  }
+
+  /**
+   * Hand a batch of accounts to one collector — the "everything overdue
+   * in Bulacan goes to Ana" operation behind the queue's area filter.
+   *
+   * Ids that match no loan are reported back rather than silently
+   * dropped OR failing the batch: the supervisor selected rows from a
+   * live queue, and a loan deleted in between shouldn't void the other
+   * forty-nine assignments. All writes commit in one transaction, so a
+   * mid-batch failure can't leave half an area assigned.
+   */
+  async assignBulk(input: {
+    loanIds: string[];
+    collectorId: string;
+    assignedById: string;
+    note?: string;
+  }): Promise<{ assigned: number; missing: string[] }> {
+    const found = await this.prisma.loanApplication.findMany({
+      where: { id: { in: input.loanIds } },
+      select: { id: true },
+    });
+    const foundIds = new Set(found.map((l) => l.id));
+    const missing = input.loanIds.filter((id) => !foundIds.has(id));
+
+    await this.prisma.$transaction(
+      [...foundIds].map((loanId) =>
+        this.prisma.collectionAssignment.upsert({
+          where: { loanId },
+          create: {
+            loanId,
+            collectorId: input.collectorId,
+            assignedById: input.assignedById,
+            note: input.note ?? null,
+          },
+          update: {
+            collectorId: input.collectorId,
+            assignedById: input.assignedById,
+            assignedAt: new Date(),
+            note: input.note ?? null,
+          },
+        }),
+      ),
+    );
+    return { assigned: foundIds.size, missing };
   }
 
   /**

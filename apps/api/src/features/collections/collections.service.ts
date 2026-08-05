@@ -6,6 +6,7 @@ import {
 
 import type {
   AssignInput,
+  BulkAssignInput,
   NoteInput,
   PtpInput,
   QueueScope,
@@ -115,6 +116,40 @@ export class CollectionsService {
       value: await this.repo.assign({
         loanId: loan.id,
         // The resolved id, never the caller's string — it may be an email.
+        collectorId: collector.id,
+        assignedById: args.actorId,
+        note: args.input.note,
+      }),
+    };
+  }
+
+  /**
+   * Bulk assignment — same collector resolution and validation as
+   * `assign`, run once for the whole batch instead of per account. Loan
+   * ids come straight off the queue UI as UUIDs, so there's no
+   * id-or-number resolution here; ids that no longer exist are reported
+   * back in `missing` rather than failing the batch.
+   */
+  async assignBulk(args: {
+    input: BulkAssignInput;
+    actorId: string;
+  }): Promise<
+    | { ok: true; value: { assigned: number; missing: string[] } }
+    | { ok: false; kind: "UnknownCollector" | "InactiveCollector" }
+  > {
+    const collector = await this.users.findFirst({
+      where: args.input.collector.includes("@")
+        ? { email: { equals: args.input.collector, mode: "insensitive" } }
+        : { id: args.input.collector },
+      select: { id: true, active: true },
+    });
+    if (!collector) return { ok: false, kind: "UnknownCollector" };
+    if (!collector.active) return { ok: false, kind: "InactiveCollector" };
+
+    return {
+      ok: true,
+      value: await this.repo.assignBulk({
+        loanIds: args.input.loanIds,
         collectorId: collector.id,
         assignedById: args.actorId,
         note: args.input.note,

@@ -1914,12 +1914,26 @@ export interface OverdueRow {
   status: LoanStatus;
   customerId: string;
   customerName: string;
+  /**
+   * Borrower's area, for routing accounts to the collector who covers
+   * it. City is required on Customer; province isn't.
+   */
+  customerCity: string;
+  customerProvince: string | null;
   principal: string | number;
   daysOverdue: number;
   outstanding: number;
   overdueCount: number;
   /** Null when the account is still in the unassigned pool. */
   assignee: QueueAssignee | null;
+}
+
+/** Result of POST /collections/assignees/bulk. */
+export interface BulkAssignResult {
+  /** Accounts now owned by the collector (upserts — includes moves). */
+  assigned: number;
+  /** Requested ids that matched no loan; nothing was written for them. */
+  missing: string[];
 }
 
 /**

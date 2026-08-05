@@ -1,6 +1,7 @@
 import type {
   AccrualJobResult,
   AssignableCollector,
+  BulkAssignResult,
   CollectionNote,
   CollectionNoteType,
   CollectorWorkload,
@@ -75,6 +76,31 @@ export function useAssignAccount() {
           note: input.note,
         }),
       }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["collections", "queue"] });
+      void qc.invalidateQueries({ queryKey: collectionsKeys.workload });
+    },
+  });
+}
+
+/**
+ * Assign a batch of accounts to one collector in a single request —
+ * the queue's area-filtered "assign all of these to Ana" action. Same
+ * invalidation reasoning as the single assign.
+ */
+export function useBulkAssignAccounts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      loanIds: string[];
+      /** A user id or an email — the endpoint accepts either. */
+      collector: string;
+      note?: string;
+    }) =>
+      getApiClient().post<BulkAssignResult>(
+        "/collections/assignees/bulk",
+        input,
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["collections", "queue"] });
       void qc.invalidateQueries({ queryKey: collectionsKeys.workload });
