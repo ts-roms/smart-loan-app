@@ -336,7 +336,6 @@ function SubmitKycForm({
       available[0].value !== documentType
     ) {
       setDocumentType(available[0].value);
-      setDocumentUrl("");
     }
   }, [taken, documentType, available]);
 
@@ -378,12 +377,13 @@ function SubmitKycForm({
       </div>
       <Select
         value={documentType}
-        onValueChange={(v) => {
-          setDocumentType(v as KycDocumentType);
-          // Reset the staged upload when the type changes — the asset
-          // was tied to the previous type's capture mode.
-          setDocumentUrl("");
-        }}
+        // The staged upload deliberately SURVIVES a type change. It
+        // used to be cleared, on the theory that the file belonged to
+        // the previous type's capture mode — but a file is just a
+        // file, and picking the wrong type first is the common case.
+        // Losing the upload to fix the label is the wrong trade; the
+        // thumbnail shows what's attached, and X clears it.
+        onValueChange={(v) => setDocumentType(v as KycDocumentType)}
       >
         <SelectTrigger className="h-9">
           <SelectValue />

@@ -20,12 +20,7 @@ import {
   useToast,
 } from "@loan/ui";
 import { formatDateTime } from "@loan/shared-utils";
-import {
-  ExternalLink,
-  FileCheck2,
-  ShieldAlert,
-  ShieldCheck,
-} from "lucide-react";
+import { FileCheck2, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -232,15 +227,7 @@ function KycInspector({
                       {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
                     </div>
                     <div className="text-[10px] text-fg-subtle flex items-center gap-1 mt-0.5">
-                      {formatDateTime(d.submittedAt)} ·{" "}
-                      <a
-                        href={d.documentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-info hover:underline inline-flex items-center gap-0.5"
-                      >
-                        view <ExternalLink className="h-3 w-3" />
-                      </a>
+                      {formatDateTime(d.submittedAt)}
                     </div>
                   </div>
                   <Badge

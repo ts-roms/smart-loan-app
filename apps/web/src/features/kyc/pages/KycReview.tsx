@@ -16,7 +16,7 @@ import {
   useToast,
 } from "@loan/ui";
 import { formatDateTime } from "@loan/shared-utils";
-import { ExternalLink, FileCheck2 } from "lucide-react";
+import { FileCheck2 } from "lucide-react";
 import { useMemo } from "react";
 
 // Direct import — pulling DOC_TYPE_LABELS via the customers barrel
@@ -144,15 +144,7 @@ function CustomerKycBlock({ customer }: { customer: Customer }) {
                   {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
                 </div>
                 <div className="text-xs text-fg-subtle">
-                  {formatDateTime(d.submittedAt)} ·{" "}
-                  <a
-                    href={d.documentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-info hover:underline inline-flex items-center gap-0.5"
-                  >
-                    view <ExternalLink className="h-3 w-3" />
-                  </a>
+                  {formatDateTime(d.submittedAt)}
                 </div>
               </div>
               {d.status === "PENDING" ? (

@@ -185,10 +185,6 @@ export function PortalKyc() {
                   : "Upload a file"}
               </label>
               <FileUpload
-                /* Keyed on the type so switching from, say, Selfie to
-                   Proof of income resets the widget — otherwise a
-                   staged photo would silently attach to the new type. */
-                key={documentType}
                 subdir="kyc"
                 value={documentUrl || null}
                 onUploaded={setDocumentUrl}
