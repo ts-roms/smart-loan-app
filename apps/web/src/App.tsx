@@ -141,6 +141,10 @@ const TrialBalancePage = lazyNamed(
   "TrialBalancePage",
 );
 
+const QuestionnairesPage = lazyNamed(
+  () => import("./features/questionnaires"),
+  "QuestionnairesPage",
+);
 const DecisionRulesPage = lazyNamed(
   () => import("./features/decisioning"),
   "DecisionRulesPage",
@@ -316,6 +320,7 @@ export function App() {
           <Route path="/payments" element={<PaymentsConsolePage />} />
           <Route path="/payments/bulk" element={<BulkPaymentsPage />} />
           <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/questionnaires" element={<QuestionnairesPage />} />
           <Route path="/decision-rules" element={<DecisionRulesPage />} />
           <Route path="/roles" element={<RolesPage />} />
           <Route path="/users" element={<UsersPage />} />

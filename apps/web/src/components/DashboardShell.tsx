@@ -24,6 +24,7 @@ import {
   Car,
   ChevronDown,
   ClipboardCheck,
+  ClipboardList,
   Clock,
   CreditCard,
   FileCheck2,
@@ -224,6 +225,12 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "Risk & compliance",
     items: [
+      {
+        to: "/questionnaires",
+        label: "Questionnaires",
+        icon: ClipboardList,
+        permission: "products.read",
+      },
       {
         to: "/decision-rules",
         label: "Decision rules",
