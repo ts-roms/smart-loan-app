@@ -69,7 +69,12 @@ export {
   type PromptOptions,
   type ConfirmTone,
 } from "./components/confirm";
-export { useTour, type TourStep, type UseTourResult } from "./components/tour";
+export {
+  sweepDriverResidue,
+  useTour,
+  type TourStep,
+  type UseTourResult,
+} from "./components/tour";
 export {
   FileDropzone,
   type FileDropzoneProps,

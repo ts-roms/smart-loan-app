@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
   IdleWarningDialog,
   cn,
+  sweepDriverResidue,
   useIdleLogout,
 } from "@loan/ui";
 import {
@@ -428,6 +429,32 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   // stays over the page you just asked for.
   useEffect(() => {
     setMobileNavOpen(false);
+  }, [currentPath]);
+
+  /*
+   * The shell is the viewport (h-screen + overflow-hidden); <main> is
+   * the only intended scroller. That assumption was never ENFORCED:
+   * anything with real height that lands directly in <body> — a leaked
+   * third-party overlay, an extension-injected element — makes the
+   * document taller than the viewport, and the page grows a second,
+   * body-level scrollbar with a dead region below the shell. Locking
+   * body overflow while the shell is mounted makes the assumption a
+   * rule. Scoped here rather than in global CSS because the login and
+   * registration pages genuinely rely on body scroll.
+   */
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  // Belt and braces against stranded tour overlays: sweep on every
+  // route change, not only on pages that mount a TourButton — detail
+  // pages have no tour, so a sweep scoped to useTour never ran there.
+  useEffect(() => {
+    sweepDriverResidue();
   }, [currentPath]);
 
   const [openSection, setOpenSection] = useState<string | null>(

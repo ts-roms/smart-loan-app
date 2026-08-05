@@ -3,7 +3,13 @@ import {
   useBranding,
   useEffectiveIdlePolicy,
 } from "@loan/api-client";
-import { Button, IdleWarningDialog, cn, useIdleLogout } from "@loan/ui";
+import {
+  Button,
+  IdleWarningDialog,
+  cn,
+  sweepDriverResidue,
+  useIdleLogout,
+} from "@loan/ui";
 import {
   BookOpen,
   ClipboardCheck,
@@ -39,6 +45,20 @@ export function PortalShell({ children }: { children: ReactNode }) {
   // over the page you just asked for.
   useEffect(() => {
     setNavOpen(false);
+  }, [pathname]);
+
+  // Enforce the shell's no-body-scroll assumption + sweep stranded tour
+  // overlays on every navigation. Same reasoning as DashboardShell —
+  // see the comments there.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+  useEffect(() => {
+    sweepDriverResidue();
   }, [pathname]);
   const handleSignOut = () => {
     if (refreshToken) void logoutSession(refreshToken).catch(() => {});
