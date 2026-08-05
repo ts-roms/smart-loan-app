@@ -172,9 +172,17 @@ export function CustomersPage() {
               {rows.map((c) => (
                 <tr key={c.id} className="hover:bg-hover">
                   {/* Human reference — shown as the leftmost column so it's
-                      the primary handle for an operator scanning the list. */}
-                  <td className="py-2 px-2 font-mono text-xs text-fg-muted">
-                    {c.number}
+                      the primary handle for an operator scanning the list.
+                      Links straight to the profile; the name next to it
+                      opens the quick-summary drawer instead, so both the
+                      fast path and the full page are one click away. */}
+                  <td className="py-2 px-2 font-mono text-xs">
+                    <Link
+                      to={`/customers/${c.number}`}
+                      className="text-fg-muted hover:text-info hover:underline"
+                    >
+                      {c.number}
+                    </Link>
                   </td>
                   <td className="py-2 px-2">
                     <CustomerSummaryLink customerId={c.number}>

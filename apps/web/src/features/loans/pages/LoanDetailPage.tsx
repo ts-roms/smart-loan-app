@@ -44,7 +44,7 @@ import {
   Send,
 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { SignaturePad } from "../../../components/SignaturePad";
@@ -213,6 +213,21 @@ export function LoanDetailPage() {
           <Info label="Term">{l.termMonths} months</Info>
           <Info label="APR">
             {(Number(l.annualInterestRate) * 100).toFixed(2)}%
+          </Info>
+          {/* The one fact this page somehow never showed: whose loan it
+              is. Linked — an officer working the loan is one click from
+              the borrower's profile, KYC pack and history. */}
+          <Info label="Borrower">
+            {l.customer ? (
+              <Link
+                to={`/customers/${l.customer.number}`}
+                className="text-info hover:underline"
+              >
+                {l.customer.firstName} {l.customer.lastName}
+              </Link>
+            ) : (
+              "—"
+            )}
           </Info>
           <Info label="Submitted">{formatDate(l.submittedAt)}</Info>
           <Info label="Tier @ apply">{l.tierAtApply ?? "—"}</Info>

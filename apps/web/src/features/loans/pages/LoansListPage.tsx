@@ -18,7 +18,7 @@ import {
 import { formatDate, formatMoney } from "@loan/shared-utils";
 import { CreditCard, FileEdit, Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useDebouncedValue } from "../../../lib/use-debounced-value";
 import { LoanStatusBadge } from "../components/StatusBadge";
@@ -196,11 +196,20 @@ export function LoansListPage() {
                     <QuickLoanLink id={l.id}>{l.number}</QuickLoanLink>
                   </td>
                   {/* Optional on the type because only the list endpoint
-                      joins it — an em dash beats a crash if it's absent. */}
+                      joins it — an em dash beats a crash if it's absent.
+                      The name links to the borrower's profile: an officer
+                      scanning the book is one click from the person. */}
                   <td className="py-2 px-2">
-                    {l.customer
-                      ? `${l.customer.firstName} ${l.customer.lastName}`
-                      : "—"}
+                    {l.customer ? (
+                      <Link
+                        to={`/customers/${l.customer.number}`}
+                        className="text-info hover:underline"
+                      >
+                        {l.customer.firstName} {l.customer.lastName}
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="py-2 px-2">
                     <div className="flex items-center gap-1">

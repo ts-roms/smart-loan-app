@@ -7,6 +7,10 @@ import {
 } from "@loan/api-client";
 import { Badge } from "@loan/ui";
 import { formatMoney } from "@loan/shared-utils";
+// Direct module import, matching how collections consumes the drawer —
+// the customers feature's README-sanctioned exception for cross-feature
+// surfaces (pulling the routed-pages index here would circular-chunk).
+import { CustomerSummaryLink } from "../../customers/components/CustomerSummaryDrawer";
 import {
   AlertTriangle,
   Briefcase,
@@ -101,9 +105,15 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
             <User className="h-4 w-4 text-info" />
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-medium truncate">
-              {c.firstName} {c.lastName}
-            </div>
+            {/* Drawer, not navigation: this bar lives inside the new-loan
+                wizard, and a full redirect would throw away the officer's
+                half-built application. The drawer links onward to the
+                full profile for anyone who wants it. */}
+            <CustomerSummaryLink customerId={c.id}>
+              <span className="text-sm font-medium truncate text-info hover:underline">
+                {c.firstName} {c.lastName}
+              </span>
+            </CustomerSummaryLink>
             <div className="text-[10px] text-fg-muted truncate">
               {c.phone} · {c.employmentStatus.replace("_", " ").toLowerCase()}
             </div>

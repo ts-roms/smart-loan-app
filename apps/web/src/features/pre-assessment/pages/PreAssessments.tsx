@@ -24,7 +24,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { PreAssessmentVerdict } from "../components/PreAssessmentVerdict";
 import {
@@ -430,7 +430,20 @@ export function PreAssessmentsPage() {
                       <td className="py-2 px-2 font-mono text-xs">
                         {a.number}
                       </td>
-                      <td className="py-2 px-2">{subjectLabel(a)}</td>
+                      {/* Customer-backed rows link to the profile; a
+                          walk-in prospect has no page to link to. */}
+                      <td className="py-2 px-2">
+                        {a.customer ? (
+                          <Link
+                            to={`/customers/${a.customer.number}`}
+                            className="text-info hover:underline"
+                          >
+                            {a.customer.firstName} {a.customer.lastName}
+                          </Link>
+                        ) : (
+                          subjectLabel(a)
+                        )}
+                      </td>
                       <td className="py-2 px-2 text-fg-muted text-xs">
                         {a.productCode}
                       </td>
