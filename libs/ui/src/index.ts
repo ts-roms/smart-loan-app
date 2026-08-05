@@ -15,6 +15,7 @@ export {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogBody,
   DialogFooter,
   DialogClose,
 } from "./components/dialog";

@@ -303,9 +303,13 @@ function NewCustomerDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       {/* max-w-5xl so the 2-column sectioned form has breathing room. The
           previous 3xl crammed Identity / Contact / Address fields into a
-          narrow strip and forced extra scrolling on a desktop browser. */}
-      <DialogContent className="max-w-5xl max-h-[88vh] overflow-y-auto">
-        <DialogHeader>
+          narrow strip and forced extra scrolling on a desktop browser.
+
+          Flex column with p-0: the header and the form's action row stay
+          put while only the middle scrolls. `overflow-hidden` keeps the
+          scroll inside the body rather than on the dialog itself. */}
+      <DialogContent className="flex max-h-[88vh] w-full max-w-5xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b border-default px-6 py-4 pr-12">
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-4 w-4" />
             New customer

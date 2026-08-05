@@ -59,6 +59,29 @@ export const DialogHeader = ({
   />
 );
 
+/**
+ * Scrolling middle section for a tall dialog.
+ *
+ * Pair with `DialogContent className="flex flex-col p-0"` and padded
+ * header/footer siblings: the header stays put, this scrolls, the
+ * footer stays put. Scrolling the whole DialogContent instead takes
+ * the title away with the content and leaves the action row floating
+ * over fields it doesn't cover.
+ *
+ * `min-h-0` is what makes it work — a flex child won't shrink below
+ * its content without it, so the box would grow past the dialog and
+ * scroll the page instead.
+ */
+export const DialogBody = ({
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) => (
+  <div
+    className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-4", className)}
+    {...props}
+  />
+);
+
 export const DialogFooter = ({
   className,
   ...props
