@@ -1,4 +1,8 @@
-import { type DorsiRepository, type PrismaClient } from "@loan/db";
+import {
+  type CollectionsRepository,
+  type DorsiRepository,
+  type PrismaClient,
+} from "@loan/db";
 
 import type { ReportType } from "./schemas";
 
@@ -20,6 +24,9 @@ export interface BuildOptions {
   from?: Date;
   /** Inclusive upper bound; defaults to now. */
   to?: Date;
+  /** Area narrowing — only the collections-aging report reads these. */
+  province?: string;
+  city?: string;
 }
 
 /** What the controller needs to ship a download response. */
@@ -32,6 +39,7 @@ export class ReportsService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly dorsi: DorsiRepository,
+    private readonly collections: CollectionsRepository,
   ) {}
 
   async generate(type: ReportType, opts: BuildOptions): Promise<ReportBundle> {
@@ -40,6 +48,19 @@ export class ReportsService {
     const today = (label: string) => `${label}-${stamp()}`;
 
     switch (type) {
+      case "collections-aging":
+        return {
+          filename: today(
+            // The area rides in the filename so a folder of month-end
+            // downloads stays tellable-apart without opening them.
+            ["collections-aging", opts.province?.trim(), opts.city?.trim()]
+              .filter(Boolean)
+              .join("-")
+              .toLowerCase()
+              .replace(/\s+/g, "_"),
+          ),
+          rows: await this.collectionsAging(opts),
+        };
       case "dorsi-utilization":
         return {
           filename: today("dorsi-utilization"),
@@ -113,6 +134,44 @@ export class ReportsService {
       waivedByEmail: w.waivedBy.email,
       journalEntryId: w.journalEntryId,
     }));
+  }
+
+  /**
+   * Delinquency snapshot as of run time — the exportable counterpart of
+   * the collections queue, sharing its derivation (overdueQueue) so the
+   * report can never disagree with the screen about who is overdue.
+   *
+   * Area matching is case-insensitive equality, not substring: the
+   * values arrive typed rather than picked from a dropdown, and
+   * "Rizal" as a substring would also pull every city with Rizal in
+   * its name.
+   */
+  private async collectionsAging(opts: BuildOptions) {
+    const rows = await this.collections.overdueQueue(new Date());
+    const wantProvince = opts.province?.trim().toLowerCase();
+    const wantCity = opts.city?.trim().toLowerCase();
+
+    return rows
+      .filter(
+        (r) =>
+          (!wantProvince ||
+            (r.customerProvince ?? "").toLowerCase() === wantProvince) &&
+          (!wantCity || r.customerCity.toLowerCase() === wantCity),
+      )
+      .map((r) => ({
+        loanNumber: r.number,
+        customer: r.customerName,
+        city: r.customerCity,
+        province: r.customerProvince ?? "",
+        product: r.productCode,
+        status: r.status,
+        outstanding: r.outstanding,
+        overdueInstallments: r.overdueCount,
+        daysOverdue: r.daysOverdue,
+        agingBucket: agingBucket(r.daysOverdue),
+        assignee: r.assignee?.collectorName ?? "UNASSIGNED",
+        assignedAt: r.assignee?.assignedAt.toISOString() ?? "",
+      }));
   }
 
   private async demandLetters(from: Date, to: Date) {
@@ -236,6 +295,17 @@ export class ReportsService {
 }
 
 // ─── helpers ────────────────────────────────────────────────────────
+
+/**
+ * Standard 30-day aging bands — same bands the My-accounts dashboard
+ * shows, so the report's buckets line up with the screen's.
+ */
+function agingBucket(days: number): string {
+  if (days <= 30) return "1-30";
+  if (days <= 60) return "31-60";
+  if (days <= 90) return "61-90";
+  return "90+";
+}
 
 function resolveRange(opts: BuildOptions) {
   const from = opts.from ?? oneMonthAgo();

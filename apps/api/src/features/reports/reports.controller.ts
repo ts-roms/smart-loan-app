@@ -38,7 +38,12 @@ export class ReportsController {
     const to = parsedQuery.data.to ? new Date(parsedQuery.data.to) : undefined;
     const bundle = await req.reportsServices!.reports.generate(
       parsedType.data,
-      { from, to },
+      {
+        from,
+        to,
+        province: parsedQuery.data.province,
+        city: parsedQuery.data.city,
+      },
     );
 
     if (parsedQuery.data.format === "csv") {

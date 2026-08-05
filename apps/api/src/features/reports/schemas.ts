@@ -9,6 +9,14 @@ import { z } from "zod";
 export const querySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
+  /**
+   * Area narrowing for the collections-aging report — matched
+   * case-insensitively against the borrower's recorded city/province,
+   * since the values arrive typed rather than picked from a list.
+   * Ignored by the report types that have no geographic dimension.
+   */
+  province: z.string().max(80).optional(),
+  city: z.string().max(80).optional(),
   format: z.enum(["json", "csv"]).default("json"),
 });
 export type ReportQuery = z.infer<typeof querySchema>;
@@ -20,6 +28,7 @@ export type ReportQuery = z.infer<typeof querySchema>;
  * what's supported; the user asked for something that's *not* it).
  */
 export const reportTypes = [
+  "collections-aging",
   "dorsi-utilization",
   "penalty-waivers",
   "demand-letters",

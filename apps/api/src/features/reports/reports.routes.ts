@@ -6,7 +6,7 @@
  * Phase 2: per-request service wiring via `req.reportsServices`.
  */
 
-import { DorsiRepository } from "@loan/db";
+import { CollectionsRepository, DorsiRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { ReportsController } from "./reports.controller";
@@ -24,7 +24,11 @@ export async function reportRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     req.reportsServices = {
-      reports: new ReportsService(prisma, new DorsiRepository(prisma)),
+      reports: new ReportsService(
+        prisma,
+        new DorsiRepository(prisma),
+        new CollectionsRepository(prisma),
+      ),
     };
   });
 
