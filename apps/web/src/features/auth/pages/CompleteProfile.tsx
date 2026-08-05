@@ -1,3 +1,4 @@
+import { PhoneInput } from "../../../components/PhoneInput";
 import {
   BarangayPicker,
   CityPicker,
@@ -181,18 +182,18 @@ export function CompleteProfilePage() {
 
             <Section icon={MapPin} title="Contact and address">
               <Field label="Mobile number" required>
-                <Input
-                  inputMode="tel"
+                <PhoneInput
                   value={form.phone}
-                  onChange={(e) => set("phone", e.target.value)}
+                  onChange={(v) => set("phone", v)}
                   required
                 />
               </Field>
               <Field label="Alternate number">
-                <Input
-                  inputMode="tel"
+                <PhoneInput
                   value={form.secondaryPhone ?? ""}
-                  onChange={(e) => set("secondaryPhone", e.target.value)}
+                  onChange={(v) => set("secondaryPhone", v)}
+                  placeholder="Optional"
+                  optional
                 />
               </Field>
               <Field

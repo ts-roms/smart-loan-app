@@ -52,6 +52,15 @@ export function isEmail(v: string): boolean {
 }
 
 export {
+  PHONE_MAX_DIGITS,
+  PHONE_MIN_DIGITS,
+  formatPhone,
+  isValidPhone,
+  normalizePhone,
+  phoneError,
+} from "./lib/phone";
+
+export {
   PSGC_REGIONS,
   PSGC_PROVINCES,
   PSGC_CITIES,

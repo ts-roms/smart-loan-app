@@ -118,6 +118,9 @@ importers:
       "@loan/shared-types":
         specifier: workspace:*
         version: link:../../libs/shared-types
+      "@loan/shared-utils":
+        specifier: workspace:*
+        version: link:../../libs/shared-utils
       "@sentry/node":
         specifier: ^10.69.0
         version: 10.69.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))

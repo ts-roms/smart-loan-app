@@ -25,6 +25,7 @@ import {
 } from "@loan/ui";
 import { useMemo, type FormEvent } from "react";
 
+import { PhoneInput } from "../../../components/PhoneInput";
 import { BarangayPicker, SuggestInput } from "../../../components/PsgcFields";
 
 /**
@@ -200,9 +201,10 @@ export function CustomerProfileForm({
               />
             </Field>
             <Field label="Spouse contact">
-              <Input
+              <PhoneInput
                 value={form.spouseContact ?? ""}
-                onChange={(e) => set("spouseContact", e.target.value)}
+                onChange={(v) => set("spouseContact", v)}
+                optional
               />
             </Field>
             <Field label="Spouse occupation" className="sm:col-span-2">
@@ -219,18 +221,18 @@ export function CustomerProfileForm({
       <Section title="Contact">
         <Grid>
           <Field label="Primary phone" required>
-            <Input
+            <PhoneInput
               value={form.phone}
-              onChange={(e) => set("phone", e.target.value)}
-              placeholder="+63 9XX XXX XXXX"
+              onChange={(v) => set("phone", v)}
               required
             />
           </Field>
           <Field label="Secondary phone">
-            <Input
+            <PhoneInput
               value={form.secondaryPhone ?? ""}
-              onChange={(e) => set("secondaryPhone", e.target.value)}
+              onChange={(v) => set("secondaryPhone", v)}
               placeholder="Optional"
+              optional
             />
           </Field>
           <Field label="Email" required className="sm:col-span-2">

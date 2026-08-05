@@ -1,3 +1,4 @@
+import { PhoneInput } from "../../../components/PhoneInput";
 import { CityPicker, ProvincePicker } from "../../../components/PsgcFields";
 import {
   usePortalMe,
@@ -127,11 +128,9 @@ export function PortalProfile() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Phone</Label>
-                <Input
+                <PhoneInput
                   value={form.phone ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, phone: e.target.value }))
-                  }
+                  onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
                   required
                 />
               </div>
