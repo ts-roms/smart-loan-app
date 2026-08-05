@@ -37,7 +37,7 @@ import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 import { CustomerLedgerPanel } from "../components/CustomerLedgerPanel";
 import { DorsiScreenBanner } from "../components/DorsiScreenBanner";
 import { EditCustomerDialog } from "../components/EditCustomerDialog";
-import { DOC_TYPES, DOC_TYPE_LABELS } from "../constants";
+import { CAMERA_MODE, DOC_TYPES, DOC_TYPE_LABELS } from "../constants";
 
 // Re-exported here for back-compat with anything that still imports
 // from this file path. New code should import from
@@ -276,22 +276,6 @@ export function CustomerDetailPage() {
     </div>
   );
 }
-
-/**
- * Document types that ship with a camera-first flow. SELFIE uses the
- * front-facing lens; physical ID / OR / CR / title shots default to the
- * rear camera (better for sharp photos of a document on a desk).
- * Anything else falls through to the plain file picker (typed PDFs,
- * income docs, tax declarations).
- */
-const CAMERA_MODE: Partial<Record<KycDocumentType, "user" | "environment">> = {
-  SELFIE: "user",
-  ID_FRONT: "environment",
-  ID_BACK: "environment",
-  VEHICLE_OR: "environment",
-  VEHICLE_CR: "environment",
-  PROPERTY_TITLE: "environment",
-};
 
 /**
  * Inline KYC submission form. Replaces the old paste-a-URL flow with a

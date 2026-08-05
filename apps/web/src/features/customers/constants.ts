@@ -38,3 +38,26 @@ export const DOC_TYPE_LABELS: Record<KycDocumentType, string> =
     KycDocumentType,
     string
   >;
+
+/**
+ * Document types that ship with a camera-first flow. SELFIE uses the
+ * front-facing lens; physical ID / OR / CR / title shots default to the
+ * rear camera (better for sharp photos of a document on a desk).
+ * Anything else falls through to the plain file picker (typed PDFs,
+ * income docs, tax declarations).
+ *
+ * Shared by the officer form and the borrower portal so the two can't
+ * disagree about which documents are photographed — a borrower being
+ * offered a file picker for a selfie is how you get a screenshot of a
+ * screenshot.
+ */
+export const CAMERA_MODE: Partial<
+  Record<KycDocumentType, "user" | "environment">
+> = {
+  SELFIE: "user",
+  ID_FRONT: "environment",
+  ID_BACK: "environment",
+  VEHICLE_OR: "environment",
+  VEHICLE_CR: "environment",
+  PROPERTY_TITLE: "environment",
+};
