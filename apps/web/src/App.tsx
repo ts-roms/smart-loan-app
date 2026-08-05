@@ -99,6 +99,10 @@ const BulkPaymentsPage = lazyNamed(
   () => import("./features/payments"),
   "BulkPaymentsPage",
 );
+const PaymentsConsolePage = lazyNamed(
+  () => import("./features/payments"),
+  "PaymentsConsolePage",
+);
 
 const AccountingDashboardPage = lazyNamed(
   () => import("./features/accounting"),
@@ -309,6 +313,7 @@ export function App() {
           <Route path="/compliance/dorsi" element={<DorsiPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/help" element={<HelpPage />} />
+          <Route path="/payments" element={<PaymentsConsolePage />} />
           <Route path="/payments/bulk" element={<BulkPaymentsPage />} />
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/decision-rules" element={<DecisionRulesPage />} />

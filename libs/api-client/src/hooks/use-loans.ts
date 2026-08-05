@@ -344,6 +344,11 @@ export function useRecordPayment() {
       }),
     onSuccess: (_data, vars) => {
       void qc.invalidateQueries({ queryKey: loanKeys.detail(vars.loanId) });
+      // The list rows carry outstanding balances now, and the payments
+      // console records against them directly — a payment that doesn't
+      // refresh the list leaves a stale balance on the very row the
+      // cashier just settled.
+      void qc.invalidateQueries({ queryKey: loanKeys.all });
     },
   });
 }

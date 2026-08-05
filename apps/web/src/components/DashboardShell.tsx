@@ -167,6 +167,13 @@ const NAV_SECTIONS: NavSection[] = [
         permission: "lease.read",
       },
       {
+        // The cashier's counter — search a loan, record a payment.
+        to: "/payments",
+        label: "Payments",
+        icon: Wallet,
+        permission: "payments.record",
+      },
+      {
         to: "/payments/bulk",
         label: "Bulk payments",
         icon: FileSpreadsheet,
