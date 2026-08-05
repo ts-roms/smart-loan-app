@@ -8,7 +8,11 @@ import {
   useTagDorsi,
   useUpdateSystemConfig,
 } from "@loan/api-client";
-import type { DorsiCategory } from "@loan/shared-types";
+import {
+  DORSI_BASIS_EXAMPLE,
+  DORSI_BASIS_MIN_LENGTH,
+  type DorsiCategory,
+} from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -483,13 +487,6 @@ function ConfigCard() {
   );
 }
 
-/**
- * A basis has to say something. It's what a BSP examiner reads to see
- * why this customer was classified DORSI, so a single character is a
- * blank field with extra steps.
- */
-const MIN_BASIS = 3;
-
 function TagDialog({ onClose }: { onClose: () => void }) {
   const tag = useTagDorsi();
   const toast = useToast();
@@ -505,9 +502,9 @@ function TagDialog({ onClose }: { onClose: () => void }) {
       toast.error("Pick a customer to tag");
       return;
     }
-    if (basis.trim().length < MIN_BASIS) {
+    if (basis.trim().length < DORSI_BASIS_MIN_LENGTH) {
       toast.error(
-        `Give a basis of at least ${MIN_BASIS} characters — it's the audit trail for why this customer is DORSI`,
+        `Basis needs at least ${DORSI_BASIS_MIN_LENGTH} characters — name the relationship, e.g. "${DORSI_BASIS_EXAMPLE[category]}"`,
       );
       return;
     }
@@ -572,15 +569,18 @@ function TagDialog({ onClose }: { onClose: () => void }) {
             <Input
               value={basis}
               onChange={(e) => setBasis(e.target.value)}
-              placeholder="Director since 2022 / CFO / Spouse of stockholder"
+              /* Tracks the category, so the example is always one the
+                 examiner would expect for the class being tagged. */
+              placeholder={DORSI_BASIS_EXAMPLE[category]}
               aria-describedby="dorsi-basis-help"
             />
             <div
               id="dorsi-basis-help"
               className="text-[10px] text-fg-subtle mt-1"
             >
-              Why this customer is DORSI — the relationship, not just a name. At
-              least {MIN_BASIS} characters.
+              What a BSP examiner reads to see why this customer is DORSI. Name
+              the relationship — a title alone (&ldquo;CFO&rdquo;) doesn&apos;t
+              say since when or to whom.
             </div>
           </div>
         </div>

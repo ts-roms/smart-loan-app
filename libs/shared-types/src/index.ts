@@ -1421,6 +1421,32 @@ export interface LeaseAgreementWithLoan extends LeaseAgreement {
 export type DorsiCategory =
   "DIRECTOR" | "OFFICER" | "STOCKHOLDER" | "RELATED_INTEREST";
 
+/**
+ * Minimum length of a DORSI basis.
+ *
+ * The basis is what a BSP examiner reads to see why this customer was
+ * classified DORSI, so it has to carry a relationship rather than an
+ * abbreviation — "Treasurer since 2021", not "CFO". Ten characters is
+ * the shortest that reliably rules out a placeholder while still
+ * accepting every legitimate phrasing we found in the register.
+ *
+ * Lives here so the dialog and the API can't drift: a client-side
+ * minimum the server doesn't share is a suggestion, not a rule.
+ *
+ * Existing records are untouched — this validates writes only, so a
+ * record tagged under the old 3-character rule stays valid until
+ * someone re-tags it.
+ */
+export const DORSI_BASIS_MIN_LENGTH = 10;
+
+/** Per-category examples of a basis that actually explains itself. */
+export const DORSI_BASIS_EXAMPLE: Record<DorsiCategory, string> = {
+  DIRECTOR: "Board director since March 2022",
+  OFFICER: "Chief Finance Officer since 2021",
+  STOCKHOLDER: "Holds 12% of outstanding shares",
+  RELATED_INTEREST: "Spouse of director Ana Cruz",
+};
+
 export interface DorsiRecord {
   id: string;
   customerId: string;
