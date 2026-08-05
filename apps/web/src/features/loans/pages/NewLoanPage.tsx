@@ -39,6 +39,8 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+import { PhoneInput } from "../../../components/PhoneInput";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { DeclarationsForm } from "../../../components/DeclarationsForm";
@@ -896,11 +898,9 @@ function Step3CollateralCoMakers({
                     />
                   </Field>
                   <Field label="Phone">
-                    <Input
+                    <PhoneInput
                       value={cm.phone}
-                      onChange={(e) =>
-                        patchCoMaker(cm._key, { phone: e.target.value })
-                      }
+                      onChange={(v) => patchCoMaker(cm._key, { phone: v })}
                       required
                     />
                   </Field>

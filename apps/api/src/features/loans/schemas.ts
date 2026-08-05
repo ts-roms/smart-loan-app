@@ -1,3 +1,9 @@
+import {
+  PHONE_MAX_DIGITS,
+  PHONE_MIN_DIGITS,
+  isValidPhone,
+  normalizePhone,
+} from "@loan/shared-utils";
 import { z } from "zod";
 
 /**
@@ -194,7 +200,18 @@ export const coMakerSchema = z.object({
   fullName: z.string().min(1).max(200),
   role: z.enum(["CO_BORROWER", "GUARANTOR", "CO_MAKER"]).optional(),
   relationship: z.string().max(80).optional(),
-  phone: z.string().min(1).max(40),
+  /**
+   * Co-makers are created and deleted, never patched, so the rule
+   * applies outright — there's no stored number to grandfather the
+   * way the customer update path does.
+   */
+  phone: z
+    .string()
+    .max(40)
+    .refine((v) => isValidPhone(v), {
+      message: `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`,
+    })
+    .transform((v) => normalizePhone(v)),
   email: z.string().email().optional(),
   address: z.string().max(500).optional(),
   governmentIdType: z
