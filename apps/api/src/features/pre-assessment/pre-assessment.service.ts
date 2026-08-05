@@ -129,8 +129,10 @@ export class PreAssessmentService {
   }
 
   async get(idOrNumber: string): Promise<PreAssessment | null> {
+    // No cast: `RowWithCustomer.customer` is optional, so the repo's
+    // declared return type already satisfies toWire's parameter.
     const row = await this.repo.findByIdOrNumber(idOrNumber);
-    return row ? toWire(row as RowWithCustomer) : null;
+    return row ? toWire(row) : null;
   }
 }
 

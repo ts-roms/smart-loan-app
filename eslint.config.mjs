@@ -51,6 +51,11 @@ export default tseslint.config(
       // no tsconfig, so the type-aware parser can't resolve them; linting
       // them would need a tsconfig that exists only to satisfy the linter.
       "**/scripts/**/*.mjs",
+      // bootstrap-admin.ts — the first operator script written in TS
+      // rather than .mjs. Scoped to libs/db so the ROOT scripts/ dir
+      // (which IS covered by the typed-lint files pattern below) keeps
+      // getting linted if a .ts lands there.
+      "libs/db/scripts/**/*.ts",
       "**/prisma/seed.ts",
       // Smoke-test fixtures. Same story: not part of any tsconfig, so the
       // type-aware parser can't resolve them, and pulling docs/ into a
