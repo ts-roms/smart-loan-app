@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  groupByCategory,
   declarationsComplete,
   snapshotDeclarations,
   validateDeclarations,
@@ -152,5 +153,29 @@ describe("declarationsComplete", () => {
     // until an admin builds one — must not gate approval.
     expect(declarationsComplete(null).complete).toBe(true);
     expect(declarationsComplete(undefined).complete).toBe(true);
+  });
+});
+
+describe("groupByCategory", () => {
+  it("keeps author order for both categories and their questions", () => {
+    const grouped = groupByCategory([
+      { id: "a", category: "Property" },
+      { id: "b", category: "Compliance" },
+      { id: "c", category: "Property" },
+    ]);
+    expect(grouped.map((g) => g.category)).toEqual(["Property", "Compliance"]);
+    expect(grouped[0]!.items.map((i) => i.id)).toEqual(["a", "c"]);
+  });
+
+  it("collects uncategorised questions under General", () => {
+    // Never leaves questions floating outside a group — every surface
+    // renders a list of groups, so there's one code path, not two.
+    const grouped = groupByCategory([{ id: "a" }, { id: "b", category: "  " }]);
+    expect(grouped).toEqual([
+      {
+        category: "General",
+        items: [{ id: "a" }, { id: "b", category: "  " }],
+      },
+    ]);
   });
 });

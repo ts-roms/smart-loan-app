@@ -25,6 +25,13 @@ export interface KycQuestion {
   required: boolean;
   /** Helper copy under the field. */
   hint?: string;
+  /**
+   * Free-text grouping shown as a heading ("Property", "Compliance").
+   * Free text rather than an enum: what a lender groups by is their
+   * policy, and every product would need different enum members.
+   * Blank groups under "General".
+   */
+  category?: string;
 }
 
 /** One snapshotted question + its answer as attested. */
@@ -39,6 +46,8 @@ export interface KycDeclarationItem {
    */
   options?: string[];
   required: boolean;
+  /** Snapshotted so the review panel groups as it did at apply time. */
+  category?: string;
   /** Null = not answered (yet). YES_NO stores booleans. */
   answer: string | number | boolean | null;
 }
@@ -138,6 +147,7 @@ export function snapshotDeclarations(
       label: q.label,
       type: q.type,
       ...(q.options ? { options: q.options } : {}),
+      ...(q.category ? { category: q.category } : {}),
       required: q.required,
       answer: answers[q.id] ?? null,
     })),
@@ -167,6 +177,7 @@ export function answerDeclarations(
     label: i.label,
     type: i.type,
     options: i.options,
+    category: i.category,
     required: i.required,
   }));
   const { invalid } = validateDeclarations(questions, answers);
@@ -199,4 +210,37 @@ export function declarationsComplete(
     (i) => i.required && (i.answer === null || i.answer === ""),
   );
   return { complete: missing.length === 0, missing };
+}
+
+/**
+ * Group questions (or snapshot items) under their category heading,
+ * preserving the author's ordering: categories appear in the order
+ * their first question does, and questions keep their order within.
+ *
+ * Shared so the builder, the capture forms and the review panel all
+ * group identically — three hand-rolled groupings would drift, and a
+ * borrower seeing a different arrangement from the officer reviewing
+ * them is exactly the confusion categories exist to remove.
+ *
+ * Uncategorised questions collect under "General" rather than floating
+ * loose, so the rendering is a list of groups in every case.
+ */
+export const DEFAULT_CATEGORY = "General";
+
+export function groupByCategory<T extends { category?: string }>(
+  items: T[],
+): Array<{ category: string; items: T[] }> {
+  const order: string[] = [];
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = item.category?.trim() || DEFAULT_CATEGORY;
+    const bucket = groups.get(key);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      groups.set(key, [item]);
+      order.push(key);
+    }
+  }
+  return order.map((category) => ({ category, items: groups.get(category)! }));
 }

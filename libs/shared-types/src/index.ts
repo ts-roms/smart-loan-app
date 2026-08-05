@@ -386,6 +386,8 @@ export interface KycQuestion {
   options?: string[];
   required: boolean;
   hint?: string;
+  /** Free-text grouping heading; blank groups under "General". */
+  category?: string;
 }
 
 export interface KycDeclarationItem {
@@ -394,6 +396,7 @@ export interface KycDeclarationItem {
   type: KycQuestionType;
   options?: string[];
   required: boolean;
+  category?: string;
   answer: string | number | boolean | null;
 }
 

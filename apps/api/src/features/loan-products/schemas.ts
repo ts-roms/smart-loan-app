@@ -36,6 +36,7 @@ const kycQuestionSchema = z
     options: z.array(z.string().min(1).max(120)).max(20).optional(),
     required: z.boolean(),
     hint: z.string().max(300).optional(),
+    category: z.string().max(60).optional(),
   })
   .refine((q) => q.type !== "SELECT" || (q.options?.length ?? 0) >= 2, {
     message: "SELECT questions need at least two options",

@@ -3,6 +3,7 @@ import type {
   KycDeclarations,
   KycQuestion,
 } from "@loan/shared-types";
+import { groupByCategory } from "@loan/kyc";
 import { Badge, Button, useToast } from "@loan/ui";
 import { ClipboardList, Pencil } from "lucide-react";
 import { useState } from "react";
@@ -63,16 +64,21 @@ export function DeclarationsPanel({
     }
   };
 
-  // Snapshot items → live question shapes for the form. Options ride in
-  // the snapshot precisely so this reconstruction stays faithful to
-  // what was asked at apply time.
+  // Snapshot items → live question shapes for the form. Options AND
+  // category ride in the snapshot precisely so this reconstruction stays
+  // faithful to what was asked at apply time — including how it was
+  // grouped, so read mode and edit mode don't rearrange under the user.
   const questions: KycQuestion[] = items.map((i) => ({
     id: i.id,
     label: i.label,
     type: i.type,
     options: i.options,
+    category: i.category,
     required: i.required,
   }));
+
+  const groups = groupByCategory(items);
+  const showHeadings = groups.length > 1;
 
   return (
     <div className="border-t border-default pt-3 space-y-2">
@@ -120,26 +126,38 @@ export function DeclarationsPanel({
           </div>
         </div>
       ) : (
-        <dl className="space-y-1.5">
-          {items.map((i) => (
-            <div key={i.id} className="flex items-start justify-between gap-3">
-              <dt className="text-sm text-fg-muted">
-                {i.label}
-                {i.required && <span className="text-danger"> *</span>}
-              </dt>
-              <dd className="text-sm text-right">
-                {i.answer === null || i.answer === "" ? (
-                  <span className="text-fg-subtle italic">Unanswered</span>
-                ) : typeof i.answer === "boolean" ? (
-                  i.answer ? (
-                    "Yes"
-                  ) : (
-                    "No"
-                  )
-                ) : (
-                  String(i.answer)
-                )}
-              </dd>
+        <dl className="space-y-3">
+          {groups.map((group) => (
+            <div key={group.category} className="space-y-1.5">
+              {showHeadings && (
+                <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
+                  {group.category}
+                </div>
+              )}
+              {group.items.map((i) => (
+                <div
+                  key={i.id}
+                  className="flex items-start justify-between gap-3"
+                >
+                  <dt className="text-sm text-fg-muted">
+                    {i.label}
+                    {i.required && <span className="text-danger"> *</span>}
+                  </dt>
+                  <dd className="text-sm text-right">
+                    {i.answer === null || i.answer === "" ? (
+                      <span className="text-fg-subtle italic">Unanswered</span>
+                    ) : typeof i.answer === "boolean" ? (
+                      i.answer ? (
+                        "Yes"
+                      ) : (
+                        "No"
+                      )
+                    ) : (
+                      String(i.answer)
+                    )}
+                  </dd>
+                </div>
+              ))}
             </div>
           ))}
         </dl>

@@ -880,6 +880,7 @@ function QuestionnaireBuilder({
   const [label, setLabel] = useState("");
   const [type, setType] = useState<KycQuestionType>("YES_NO");
   const [options, setOptions] = useState("");
+  const [category, setCategory] = useState("");
   const [required, setRequired] = useState(true);
 
   const addQuestion = () => {
@@ -902,6 +903,7 @@ function QuestionnaireBuilder({
       label: trimmed,
       type,
       required,
+      ...(category.trim() ? { category: category.trim() } : {}),
       ...(type === "SELECT"
         ? {
             options: options
@@ -915,6 +917,9 @@ function QuestionnaireBuilder({
     onChange([...questions, next]);
     setLabel("");
     setOptions("");
+    //  deliberately persists: questions are usually added in
+    // runs within one group, and retyping "Property" seven times is the
+    // kind of friction that stops people using categories at all.
   };
 
   const move = (index: number, dir: -1 | 1) => {
@@ -948,6 +953,7 @@ function QuestionnaireBuilder({
                   </span>
                 )}
               </span>
+              {q.category && <Badge variant="muted">{q.category}</Badge>}
               <Badge variant="muted">{q.type}</Badge>
               {q.required && <Badge variant="warning">Required</Badge>}
               <button
@@ -981,7 +987,7 @@ function QuestionnaireBuilder({
         </ul>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-2 items-end">
         <div className="md:col-span-3">
           <Field label="Question">
             <Input
@@ -1002,6 +1008,13 @@ function QuestionnaireBuilder({
             <option value="NUMBER">Number</option>
             <option value="SELECT">Select</option>
           </select>
+        </Field>
+        <Field label="Category">
+          <Input
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="General"
+          />
         </Field>
         <Field label="Required">
           <label className="flex h-9 items-center gap-2 text-sm">

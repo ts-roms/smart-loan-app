@@ -14,6 +14,7 @@
     "@loan/api-client": "workspace:*",
     "@loan/credit-scoring": "workspace:*",
     "@loan/features": "workspace:*",
+    "@loan/kyc": "workspace:*",
     "@loan/loans": "workspace:*",
     "@loan/shared-types": "workspace:*",
     "@loan/shared-utils": "workspace:*",
