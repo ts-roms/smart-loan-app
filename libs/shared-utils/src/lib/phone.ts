@@ -80,3 +80,27 @@ export function formatPhone(raw: string): string {
   if (d.length === 10) return `${d.slice(0, 2)} ${d.slice(2, 6)} ${d.slice(6)}`;
   return raw;
 }
+
+/**
+ * Should this write be rejected?
+ *
+ * Validation applies to a number that is being CHANGED, not to one
+ * that merely rides along in the request body. Forms resubmit every
+ * field they rendered, so a strict check on the value alone would let
+ * one bad legacy number block every future edit of that record —
+ * including the edit that fixes it, if the operator started with the
+ * address.
+ *
+ * `previous` is what's on file. Passing it unchanged is always
+ * allowed; changing it means meeting the rule.
+ */
+export function phoneChangeError(
+  next: string,
+  previous: string | null | undefined,
+  { optional = false }: { optional?: boolean } = {},
+): string | null {
+  const incoming = normalizePhone(next);
+  if (incoming === normalizePhone(previous ?? "")) return null;
+  if (optional && incoming === "") return null;
+  return phoneError(next);
+}

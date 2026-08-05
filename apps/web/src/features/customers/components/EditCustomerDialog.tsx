@@ -53,8 +53,10 @@ export function EditCustomerDialog({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       {/* Match the New customer dialog width — same form, same breathing room. */}
-      <DialogContent className="max-w-5xl max-h-[88vh] overflow-y-auto">
-        <DialogHeader>
+      {/* Same header-fixed / body-scrolls / footer-fixed shape as the
+          new-customer dialog — both host CustomerProfileForm. */}
+      <DialogContent className="flex max-h-[88vh] w-full max-w-5xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b border-default px-6 py-4 pr-12">
           <DialogTitle className="flex items-center gap-2">
             <Pencil className="h-4 w-4" />
             Edit customer profile

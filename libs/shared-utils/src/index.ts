@@ -56,6 +56,7 @@ export {
   PHONE_MIN_DIGITS,
   formatPhone,
   isValidPhone,
+  phoneChangeError,
   normalizePhone,
   phoneError,
 } from "./lib/phone";

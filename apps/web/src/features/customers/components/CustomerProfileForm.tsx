@@ -13,6 +13,7 @@ import {
 } from "@loan/shared-utils";
 import {
   Button,
+  DialogBody,
   DatePicker,
   Input,
   SearchInput,
@@ -101,282 +102,295 @@ export function CustomerProfileForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {topSlot}
+    // Fills the dialog and owns the scrolling itself: the body scrolls
+    // between a header the parent keeps in place and the action row
+    // below. Scrolling the whole dialog instead took the title away
+    // with the content, and left the sticky action row floating over
+    // fields it didn't fully cover.
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      <DialogBody className="space-y-5">
+        {topSlot}
 
-      {/* ── Identity ─────────────────────────────────────────────── */}
-      <Section title="Identity">
-        <Grid>
-          <Field label="First name" required>
-            <Input
-              value={form.firstName}
-              onChange={(e) => set("firstName", e.target.value)}
-              required
-            />
-          </Field>
-          <Field label="Middle name">
-            <Input
-              value={form.middleName ?? ""}
-              onChange={(e) => set("middleName", e.target.value)}
-            />
-          </Field>
-          <Field label="Last name" required>
-            <Input
-              value={form.lastName}
-              onChange={(e) => set("lastName", e.target.value)}
-              required
-            />
-          </Field>
-          <Field label="Suffix (Jr / Sr / III)">
-            <Input
-              value={form.suffix ?? ""}
-              onChange={(e) => set("suffix", e.target.value)}
-              maxLength={20}
-            />
-          </Field>
-          <Field label="Date of birth" required>
-            <DatePicker
-              value={form.dateOfBirth}
-              onChange={(v) => set("dateOfBirth", v)}
-              max={new Date().toISOString().slice(0, 10)}
-              placeholder="Date of birth"
-            />
-          </Field>
-          <Field label="Gender">
-            <EnumSelect<Gender>
-              value={form.gender}
-              onChange={(v) => set("gender", v)}
-              options={[
-                { value: "MALE", label: "Male" },
-                { value: "FEMALE", label: "Female" },
-                { value: "NON_BINARY", label: "Non-binary" },
-                { value: "PREFER_NOT_TO_SAY", label: "Prefer not to say" },
-              ]}
-            />
-          </Field>
-          <Field label="Sex">
-            <EnumSelect<Sex>
-              value={form.sex}
-              onChange={(v) => set("sex", v)}
-              options={[
-                { value: "MALE", label: "Male" },
-                { value: "FEMALE", label: "Female" },
-                { value: "INTERSEX", label: "Intersex" },
-              ]}
-            />
-          </Field>
-          <Field label="Civil status">
-            <EnumSelect<CivilStatus>
-              value={form.civilStatus}
-              onChange={(v) => set("civilStatus", v)}
-              options={[
-                { value: "SINGLE", label: "Single" },
-                { value: "MARRIED", label: "Married" },
-                { value: "WIDOWED", label: "Widowed" },
-                { value: "SEPARATED", label: "Separated" },
-                { value: "ANNULLED", label: "Annulled" },
-                { value: "DIVORCED", label: "Divorced" },
-              ]}
-            />
-          </Field>
-        </Grid>
-      </Section>
-
-      {/* ── Spouse (conditional) ─────────────────────────────────── */}
-      {isMarried && (
-        <Section title="Spouse details">
+        {/* ── Identity ─────────────────────────────────────────────── */}
+        <Section title="Identity">
           <Grid>
-            <Field label="Spouse full name" required className="sm:col-span-2">
+            <Field label="First name" required>
               <Input
-                value={form.spouseName ?? ""}
-                onChange={(e) => set("spouseName", e.target.value)}
+                value={form.firstName}
+                onChange={(e) => set("firstName", e.target.value)}
                 required
               />
             </Field>
-            <Field label="Spouse date of birth">
-              <DatePicker
-                value={form.spouseDateOfBirth ?? ""}
-                onChange={(v) => set("spouseDateOfBirth", v)}
-                max={new Date().toISOString().slice(0, 10)}
-              />
-            </Field>
-            <Field label="Spouse contact">
-              <PhoneInput
-                value={form.spouseContact ?? ""}
-                onChange={(v) => set("spouseContact", v)}
-                optional
-              />
-            </Field>
-            <Field label="Spouse occupation" className="sm:col-span-2">
+            <Field label="Middle name">
               <Input
-                value={form.spouseOccupation ?? ""}
-                onChange={(e) => set("spouseOccupation", e.target.value)}
+                value={form.middleName ?? ""}
+                onChange={(e) => set("middleName", e.target.value)}
+              />
+            </Field>
+            <Field label="Last name" required>
+              <Input
+                value={form.lastName}
+                onChange={(e) => set("lastName", e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Suffix (Jr / Sr / III)">
+              <Input
+                value={form.suffix ?? ""}
+                onChange={(e) => set("suffix", e.target.value)}
+                maxLength={20}
+              />
+            </Field>
+            <Field label="Date of birth" required>
+              <DatePicker
+                value={form.dateOfBirth}
+                onChange={(v) => set("dateOfBirth", v)}
+                max={new Date().toISOString().slice(0, 10)}
+                placeholder="Date of birth"
+              />
+            </Field>
+            <Field label="Gender">
+              <EnumSelect<Gender>
+                value={form.gender}
+                onChange={(v) => set("gender", v)}
+                options={[
+                  { value: "MALE", label: "Male" },
+                  { value: "FEMALE", label: "Female" },
+                  { value: "NON_BINARY", label: "Non-binary" },
+                  { value: "PREFER_NOT_TO_SAY", label: "Prefer not to say" },
+                ]}
+              />
+            </Field>
+            <Field label="Sex">
+              <EnumSelect<Sex>
+                value={form.sex}
+                onChange={(v) => set("sex", v)}
+                options={[
+                  { value: "MALE", label: "Male" },
+                  { value: "FEMALE", label: "Female" },
+                  { value: "INTERSEX", label: "Intersex" },
+                ]}
+              />
+            </Field>
+            <Field label="Civil status">
+              <EnumSelect<CivilStatus>
+                value={form.civilStatus}
+                onChange={(v) => set("civilStatus", v)}
+                options={[
+                  { value: "SINGLE", label: "Single" },
+                  { value: "MARRIED", label: "Married" },
+                  { value: "WIDOWED", label: "Widowed" },
+                  { value: "SEPARATED", label: "Separated" },
+                  { value: "ANNULLED", label: "Annulled" },
+                  { value: "DIVORCED", label: "Divorced" },
+                ]}
               />
             </Field>
           </Grid>
         </Section>
-      )}
 
-      {/* ── Contact ──────────────────────────────────────────────── */}
-      <Section title="Contact">
-        <Grid>
-          <Field label="Primary phone" required>
-            <PhoneInput
-              value={form.phone}
-              onChange={(v) => set("phone", v)}
-              required
-            />
-          </Field>
-          <Field label="Secondary phone">
-            <PhoneInput
-              value={form.secondaryPhone ?? ""}
-              onChange={(v) => set("secondaryPhone", v)}
-              placeholder="Optional"
-              optional
-            />
-          </Field>
-          <Field label="Email" required className="sm:col-span-2">
-            <Input
-              type="email"
-              value={form.email ?? ""}
-              onChange={(e) => set("email", e.target.value)}
-              placeholder="customer@example.com"
-              required
-            />
-          </Field>
-        </Grid>
-      </Section>
-
-      {/* ── Address ──────────────────────────────────────────────── */}
-      <Section title="Address">
-        <AddressBlock
-          region={form.region}
-          province={form.province}
-          city={form.city}
-          barangay={form.barangay}
-          address={form.address}
-          addressLine2={form.addressLine2}
-          postalCode={form.postalCode}
-          onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
-        />
-      </Section>
-
-      {/* ── Government ID ────────────────────────────────────────── */}
-      <Section title="Government ID">
-        <Grid>
-          <Field label="ID type" required>
-            <EnumSelect
-              value={form.governmentIdType}
-              onChange={(v) => set("governmentIdType", v ?? "NATIONAL_ID")}
-              options={[
-                { value: "PASSPORT", label: "Passport" },
-                { value: "DRIVERS_LICENSE", label: "Driver's License" },
-                { value: "NATIONAL_ID", label: "National ID (PhilSys)" },
-                { value: "SSS", label: "SSS" },
-                { value: "TIN", label: "TIN" },
-                { value: "OTHER", label: "Other" },
-              ]}
-            />
-          </Field>
-          <Field label="ID number" required>
-            <Input
-              value={form.governmentIdNumber}
-              onChange={(e) => set("governmentIdNumber", e.target.value)}
-              required
-            />
-          </Field>
-        </Grid>
-      </Section>
-
-      {/* ── Employment ───────────────────────────────────────────── */}
-      <Section title="Employment">
-        <Grid>
-          <Field label="Employment status" required>
-            <EnumSelect
-              value={form.employmentStatus}
-              onChange={(v) => set("employmentStatus", v ?? "EMPLOYED")}
-              options={[
-                { value: "EMPLOYED", label: "Employed" },
-                { value: "SELF_EMPLOYED", label: "Self-employed" },
-                { value: "FREELANCE", label: "Freelance / Contract" },
-                { value: "UNEMPLOYED", label: "Unemployed" },
-                { value: "RETIRED", label: "Retired" },
-                { value: "STUDENT", label: "Student" },
-              ]}
-            />
-          </Field>
-          <Field label="Monthly income (₱)" required>
-            <Input
-              type="number"
-              min={0}
-              value={form.monthlyIncome}
-              onChange={(e) => set("monthlyIncome", Number(e.target.value))}
-              required
-            />
-          </Field>
-          {needsEmployer && (
-            <>
+        {/* ── Spouse (conditional) ─────────────────────────────────── */}
+        {isMarried && (
+          <Section title="Spouse details">
+            <Grid>
               <Field
-                label="Company / Employer"
+                label="Spouse full name"
                 required
                 className="sm:col-span-2"
               >
                 <Input
-                  value={form.employerName ?? ""}
-                  onChange={(e) => set("employerName", e.target.value)}
+                  value={form.spouseName ?? ""}
+                  onChange={(e) => set("spouseName", e.target.value)}
                   required
                 />
               </Field>
-              <Field label="Job title">
-                <Input
-                  value={form.jobTitle ?? ""}
-                  onChange={(e) => set("jobTitle", e.target.value)}
-                />
-              </Field>
-              <Field label="Position / Designation">
-                <Input
-                  value={form.position ?? ""}
-                  onChange={(e) => set("position", e.target.value)}
-                />
-              </Field>
-              <Field label="Hire date">
+              <Field label="Spouse date of birth">
                 <DatePicker
-                  value={form.hireDate ?? ""}
-                  onChange={(v) => set("hireDate", v)}
+                  value={form.spouseDateOfBirth ?? ""}
+                  onChange={(v) => set("spouseDateOfBirth", v)}
                   max={new Date().toISOString().slice(0, 10)}
                 />
               </Field>
-              <Field label="Regularization date">
-                <DatePicker
-                  value={form.regularizationDate ?? ""}
-                  onChange={(v) => set("regularizationDate", v)}
-                  max={new Date().toISOString().slice(0, 10)}
+              <Field label="Spouse contact">
+                <PhoneInput
+                  value={form.spouseContact ?? ""}
+                  onChange={(v) => set("spouseContact", v)}
+                  optional
                 />
               </Field>
-              <Field label="Years at current job">
+              <Field label="Spouse occupation" className="sm:col-span-2">
                 <Input
-                  type="number"
-                  min={0}
-                  step="0.5"
-                  value={form.yearsAtCurrentJob ?? ""}
-                  onChange={(e) =>
-                    set(
-                      "yearsAtCurrentJob",
-                      e.target.value === ""
-                        ? undefined
-                        : Number(e.target.value),
-                    )
-                  }
+                  value={form.spouseOccupation ?? ""}
+                  onChange={(e) => set("spouseOccupation", e.target.value)}
                 />
               </Field>
-            </>
-          )}
-        </Grid>
-      </Section>
+            </Grid>
+          </Section>
+        )}
 
-      {bottomSlot}
+        {/* ── Contact ──────────────────────────────────────────────── */}
+        <Section title="Contact">
+          <Grid>
+            <Field label="Primary phone" required>
+              <PhoneInput
+                value={form.phone}
+                onChange={(v) => set("phone", v)}
+                required
+              />
+            </Field>
+            <Field label="Secondary phone">
+              <PhoneInput
+                value={form.secondaryPhone ?? ""}
+                onChange={(v) => set("secondaryPhone", v)}
+                placeholder="Optional"
+                optional
+              />
+            </Field>
+            <Field label="Email" required className="sm:col-span-2">
+              <Input
+                type="email"
+                value={form.email ?? ""}
+                onChange={(e) => set("email", e.target.value)}
+                placeholder="customer@example.com"
+                required
+              />
+            </Field>
+          </Grid>
+        </Section>
 
-      <div className="sticky bottom-0 bg-surface-2 pt-2 -mx-6 px-6 border-t border-default flex justify-end gap-2">
+        {/* ── Address ──────────────────────────────────────────────── */}
+        <Section title="Address">
+          <AddressBlock
+            region={form.region}
+            province={form.province}
+            city={form.city}
+            barangay={form.barangay}
+            address={form.address}
+            addressLine2={form.addressLine2}
+            postalCode={form.postalCode}
+            onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+          />
+        </Section>
+
+        {/* ── Government ID ────────────────────────────────────────── */}
+        <Section title="Government ID">
+          <Grid>
+            <Field label="ID type" required>
+              <EnumSelect
+                value={form.governmentIdType}
+                onChange={(v) => set("governmentIdType", v ?? "NATIONAL_ID")}
+                options={[
+                  { value: "PASSPORT", label: "Passport" },
+                  { value: "DRIVERS_LICENSE", label: "Driver's License" },
+                  { value: "NATIONAL_ID", label: "National ID (PhilSys)" },
+                  { value: "SSS", label: "SSS" },
+                  { value: "TIN", label: "TIN" },
+                  { value: "OTHER", label: "Other" },
+                ]}
+              />
+            </Field>
+            <Field label="ID number" required>
+              <Input
+                value={form.governmentIdNumber}
+                onChange={(e) => set("governmentIdNumber", e.target.value)}
+                required
+              />
+            </Field>
+          </Grid>
+        </Section>
+
+        {/* ── Employment ───────────────────────────────────────────── */}
+        <Section title="Employment">
+          <Grid>
+            <Field label="Employment status" required>
+              <EnumSelect
+                value={form.employmentStatus}
+                onChange={(v) => set("employmentStatus", v ?? "EMPLOYED")}
+                options={[
+                  { value: "EMPLOYED", label: "Employed" },
+                  { value: "SELF_EMPLOYED", label: "Self-employed" },
+                  { value: "FREELANCE", label: "Freelance / Contract" },
+                  { value: "UNEMPLOYED", label: "Unemployed" },
+                  { value: "RETIRED", label: "Retired" },
+                  { value: "STUDENT", label: "Student" },
+                ]}
+              />
+            </Field>
+            <Field label="Monthly income (₱)" required>
+              <Input
+                type="number"
+                min={0}
+                value={form.monthlyIncome}
+                onChange={(e) => set("monthlyIncome", Number(e.target.value))}
+                required
+              />
+            </Field>
+            {needsEmployer && (
+              <>
+                <Field
+                  label="Company / Employer"
+                  required
+                  className="sm:col-span-2"
+                >
+                  <Input
+                    value={form.employerName ?? ""}
+                    onChange={(e) => set("employerName", e.target.value)}
+                    required
+                  />
+                </Field>
+                <Field label="Job title">
+                  <Input
+                    value={form.jobTitle ?? ""}
+                    onChange={(e) => set("jobTitle", e.target.value)}
+                  />
+                </Field>
+                <Field label="Position / Designation">
+                  <Input
+                    value={form.position ?? ""}
+                    onChange={(e) => set("position", e.target.value)}
+                  />
+                </Field>
+                <Field label="Hire date">
+                  <DatePicker
+                    value={form.hireDate ?? ""}
+                    onChange={(v) => set("hireDate", v)}
+                    max={new Date().toISOString().slice(0, 10)}
+                  />
+                </Field>
+                <Field label="Regularization date">
+                  <DatePicker
+                    value={form.regularizationDate ?? ""}
+                    onChange={(v) => set("regularizationDate", v)}
+                    max={new Date().toISOString().slice(0, 10)}
+                  />
+                </Field>
+                <Field label="Years at current job">
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.5"
+                    value={form.yearsAtCurrentJob ?? ""}
+                    onChange={(e) =>
+                      set(
+                        "yearsAtCurrentJob",
+                        e.target.value === ""
+                          ? undefined
+                          : Number(e.target.value),
+                      )
+                    }
+                  />
+                </Field>
+              </>
+            )}
+          </Grid>
+        </Section>
+
+        {bottomSlot}
+      </DialogBody>
+
+      {/* Outside the scroll area, so it's always reachable without
+          hiding anything. */}
+      <div className="flex shrink-0 justify-end gap-2 border-t border-default px-6 py-3">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>

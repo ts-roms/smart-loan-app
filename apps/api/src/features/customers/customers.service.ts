@@ -1,3 +1,5 @@
+import { phoneChangeError } from "@loan/shared-utils";
+
 import type {
   Customer,
   CustomerListFilter,
@@ -25,6 +27,31 @@ import { toDateOrUndefined } from "./helpers";
  *   - Routes / controllers stay thin and the same business operation
  *     can be reused (e.g. by a future CLI importer or a job).
  */
+interface PhoneIssue {
+  path: [string];
+  message: string;
+}
+
+export type UpdateResult =
+  | { ok: true; customer: Customer }
+  | { ok: false; reason: "NotFound" }
+  | { ok: false; reason: "Invalid"; issues: PhoneIssue[] };
+
+/**
+ * A phone complaint, or null when there's nothing to complain about —
+ * the field wasn't sent, or it matches what's already on file.
+ */
+function phoneIssue(
+  field: string,
+  next: string | undefined,
+  previous: string | null | undefined,
+  optional = false,
+): PhoneIssue | null {
+  if (next === undefined) return null;
+  const message = phoneChangeError(next, previous, { optional });
+  return message ? { path: [field], message } : null;
+}
+
 export class CustomerService {
   constructor(
     private readonly customers: CustomerRepository,
@@ -75,16 +102,39 @@ export class CustomerService {
   async update(
     idOrNumber: string,
     input: CustomerPatchInput,
-  ): Promise<Customer | null> {
+  ): Promise<UpdateResult> {
     const existing = await this.customers.findByIdOrNumber(idOrNumber);
-    if (!existing) return null;
-    return this.customers.update(existing.id, {
+    if (!existing) return { ok: false, reason: "NotFound" };
+
+    // Phone numbers are validated on CHANGE, not on presence. The form
+    // resubmits every field it rendered, so checking the value alone
+    // would let one bad legacy number block every future edit of the
+    // record — including the edit that fixes it.
+    const issues = [
+      phoneIssue("phone", input.phone, existing.phone),
+      phoneIssue(
+        "secondaryPhone",
+        input.secondaryPhone,
+        existing.secondaryPhone,
+        true,
+      ),
+      phoneIssue(
+        "spouseContact",
+        input.spouseContact,
+        existing.spouseContact,
+        true,
+      ),
+    ].filter((i): i is PhoneIssue => i !== null);
+    if (issues.length > 0) return { ok: false, reason: "Invalid", issues };
+
+    const customer = await this.customers.update(existing.id, {
       ...input,
       dateOfBirth: toDateOrUndefined(input.dateOfBirth),
       hireDate: toDateOrUndefined(input.hireDate),
       regularizationDate: toDateOrUndefined(input.regularizationDate),
       spouseDateOfBirth: toDateOrUndefined(input.spouseDateOfBirth),
     });
+    return { ok: true, customer };
   }
 
   /**

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPhone, isValidPhone, normalizePhone, phoneError } from "./phone";
+import {
+  formatPhone,
+  isValidPhone,
+  normalizePhone,
+  phoneChangeError,
+  phoneError,
+} from "./phone";
 
 describe("normalizePhone", () => {
   it("strips punctuation and spacing", () => {
@@ -74,5 +80,39 @@ describe("formatPhone", () => {
     // screen would lose information the operator needs to fix it.
     expect(formatPhone("123")).toBe("123");
     expect(formatPhone("ext. 4021")).toBe("ext. 4021");
+  });
+});
+
+describe("phoneChangeError", () => {
+  it("allows a bad number through when it isn't being changed", () => {
+    // The whole point: a form resubmits every field it rendered, and
+    // one bad legacy number must not block editing the address.
+    expect(phoneChangeError("12345", "12345")).toBeNull();
+  });
+
+  it("ignores formatting differences when deciding what changed", () => {
+    // Same number, typed differently — not a change.
+    expect(phoneChangeError("0917 123 4567", "09171234567")).toBeNull();
+    expect(phoneChangeError("+639171234567", "09171234567")).toBeNull();
+  });
+
+  it("enforces the rule on an actual change", () => {
+    expect(phoneChangeError("12345", "09171234567")).toContain("Too short");
+    expect(phoneChangeError("999", "12345")).toContain("Too short");
+  });
+
+  it("accepts a change that fixes a bad number", () => {
+    expect(phoneChangeError("09171234567", "12345")).toBeNull();
+  });
+
+  it("treats a missing previous value as a change", () => {
+    expect(phoneChangeError("12345", null)).toContain("Too short");
+    expect(phoneChangeError("09171234567", null)).toBeNull();
+  });
+
+  it("lets an optional field be cleared", () => {
+    expect(phoneChangeError("", "09171234567", { optional: true })).toBeNull();
+    // Required ones still can't be blanked.
+    expect(phoneChangeError("", "09171234567")).toBe("Enter a phone number");
   });
 });

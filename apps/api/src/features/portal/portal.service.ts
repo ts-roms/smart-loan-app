@@ -1,3 +1,4 @@
+import { phoneChangeError } from "@loan/shared-utils";
 import {
   type CooperativeRepository,
   type CreditScoreRepository,
@@ -132,7 +133,26 @@ export class PortalService {
     };
   }
 
+  /**
+   * Returns a validation complaint instead of writing when the
+   * borrower CHANGED their phone to something unusable. An unchanged
+   * number passes untouched, so a legacy value can't lock someone out
+   * of editing their own address.
+   */
   async updateProfile(customerId: string, input: ProfileUpdateInput) {
+    if (input.phone !== undefined) {
+      const current = await this.prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { phone: true },
+      });
+      const message = phoneChangeError(input.phone, current?.phone);
+      if (message) {
+        return {
+          error: "ValidationError" as const,
+          issues: [{ path: ["phone"], message }],
+        };
+      }
+    }
     return this.prisma.customer.update({
       where: { id: customerId },
       data: input,

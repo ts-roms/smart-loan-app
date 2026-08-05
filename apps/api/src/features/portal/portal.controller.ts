@@ -41,7 +41,14 @@ export class PortalController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return req.portalServices!.portal.updateProfile(auth, parsed.data);
+    const result = await req.portalServices!.portal.updateProfile(
+      auth,
+      parsed.data,
+    );
+    // The phone rule needs the stored number to know whether this is a
+    // change, so it runs in the service — see updateProfile.
+    if ("error" in result) return reply.code(400).send(result);
+    return result;
   };
 
   // ─── loans ────────────────────────────────────────────────────────
