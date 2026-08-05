@@ -26,8 +26,9 @@ import {
   SkeletonCard,
   useToast,
 } from "@loan/ui";
+import { DocumentThumbnail } from "../../../components/DocumentPreview";
 import { FileUpload } from "../../../components/FileUpload";
-import { formatDate, formatMoney } from "@loan/shared-utils";
+import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
 import { FileUp, Gauge, Pencil, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -223,12 +224,33 @@ export function CustomerDetailPage() {
                 )}
               </div>
             )}
+            {/* Submitted documents. The thumbnail is the point — the
+                list used to be a type and a status badge, so there was
+                no way to see what had actually been uploaded without
+                going to the KYC review queue. */}
             <ul className="text-xs divide-y divide-default">
               {(kycDocs.data ?? []).map((d) => (
-                <li key={d.id} className="py-1.5 flex justify-between">
-                  <span>
-                    {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
-                  </span>
+                <li key={d.id} className="py-2 flex items-center gap-2">
+                  <DocumentThumbnail
+                    url={d.documentUrl}
+                    label={DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">
+                      {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
+                    </div>
+                    <div className="text-[10px] text-fg-subtle">
+                      {formatDateTime(d.submittedAt)}
+                    </div>
+                    {/* Why it bounced — otherwise a REJECTED badge
+                        tells an operator to resubmit without saying
+                        what to fix. */}
+                    {d.status === "REJECTED" && d.reason && (
+                      <div className="text-[10px] text-danger mt-0.5">
+                        {d.reason}
+                      </div>
+                    )}
+                  </div>
                   <Badge
                     variant={
                       d.status === "VERIFIED"

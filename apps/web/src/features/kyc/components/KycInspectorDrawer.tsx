@@ -30,6 +30,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 // Direct import — see customers/constants.ts for why.
+import { DocumentThumbnail } from "../../../components/DocumentPreview";
 import { DOC_TYPE_LABELS } from "../../customers/constants";
 
 /**
@@ -220,7 +221,13 @@ function KycInspector({
             {items.map((d) => (
               <li key={d.id} className="p-2.5 text-sm">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  {/* Reviewers decide from this drawer — seeing the
+                      document shouldn't cost a trip to another tab. */}
+                  <DocumentThumbnail
+                    url={d.documentUrl}
+                    label={DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
+                  />
+                  <div className="min-w-0 flex-1">
                     <div className="font-medium">
                       {DOC_TYPE_LABELS[d.documentType] ?? d.documentType}
                     </div>
