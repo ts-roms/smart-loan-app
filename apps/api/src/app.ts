@@ -10,7 +10,6 @@ import helmet from "@fastify/helmet";
 import sensible from "@fastify/sensible";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
-import staticPlugin from "@fastify/static";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyError } from "fastify";
@@ -22,6 +21,7 @@ import { decorateFeatureGate } from "./features/licensing/feature-gate.plugin";
 import { platformRoutes } from "./features/platform/index";
 import { publicRoutes } from "./features/public/index";
 import { registerRoutes } from "./routes/index";
+import { uploadStaticPlugin } from "./features/uploads/static.plugin";
 
 /**
  * Sentry is opt-in via SENTRY_DSN — keeping the dep skin-deep so local
@@ -103,8 +103,7 @@ export async function buildApp() {
           // (impersonating ADMIN_USER) triggered a 500".
           const impersonator = (
             req.user as
-              | { impersonatedBy?: { platformUserEmail?: string } }
-              | undefined
+              { impersonatedBy?: { platformUserEmail?: string } } | undefined
           )?.impersonatedBy;
           if (impersonator) {
             scope.setTag("impersonated", "true");
@@ -183,13 +182,12 @@ export async function buildApp() {
   decorateFeatureGate(app);
 
   // Static uploads: KYC documents, customer ID scans, etc.
+  //
+  // Registered as its own plugin so the signature check is scoped to
+  // these routes and testable on its own — see static.plugin.ts.
   const uploadsDir = config.uploadsDir || join(process.cwd(), "uploads");
   await mkdir(uploadsDir, { recursive: true });
-  await app.register(staticPlugin, {
-    root: uploadsDir,
-    prefix: "/uploads/",
-    decorateReply: false,
-  });
+  await app.register(uploadStaticPlugin, { root: uploadsDir });
 
   await app.register(swagger, {
     openapi: {

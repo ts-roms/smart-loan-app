@@ -24,10 +24,10 @@
  *   • `:subdir` is allowlisted, and the stored extension can only ever
  *     be one of the literal strings in ALLOWED_EXT — so neither can
  *     carry a `..` traversal into the join().
- *   • `/uploads/` is served statically with no auth (see app.ts), so
- *     the UUID filename is the only thing protecting a stored KYC
- *     document from being read by URL. That predates this module; it's
- *     called out here because this is where the filenames are minted.
+ *   • `/uploads/` is served statically, but protected subdirs now
+ *     require a signature minted by `POST /uploads-api/sign` (see
+ *     signing.ts). The UUID filename is no longer the only thing
+ *     standing between a stored KYC document and the public internet.
  *
  * Size is capped at 5 MB by the `@fastify/multipart` registration in
  * app.ts. A file that trips the cap is deleted rather than left on
@@ -43,6 +43,7 @@ import { pipeline } from "node:stream/promises";
 import type { FastifyInstance } from "fastify";
 
 import { config } from "../../config";
+import { isProtectedUploadPath, signUploadPath } from "./signing";
 
 /**
  * Mirrors `UploadSubdir` in libs/api-client/src/hooks/use-upload.ts.
@@ -132,5 +133,38 @@ export async function uploadRoutes(app: FastifyInstance) {
       filename,
       mimetype: file.mimetype,
     });
+  });
+
+  /**
+   * Mint a time-limited URL for a stored upload.
+   *
+   * A POST rather than a GET because the path travels in the body:
+   * a KYC filename in a query string ends up in access logs and
+   * browser history, which is the leak this endpoint exists to close.
+   *
+   * Authenticated (the preHandler above) but not permission-gated, for
+   * the same reason uploading isn't — see the module comment, and
+   * signing.ts for what this does and doesn't scope.
+   */
+  app.post<{ Body: { url?: unknown } }>("/sign", async (req, reply) => {
+    const raw = typeof req.body?.url === "string" ? req.body.url : "";
+    // Strip any existing query so a signature can't be re-signed into
+    // the path, and reject anything that isn't a plain upload path —
+    // an absolute URL here would let a caller mint a signature for
+    // another origin's path shape.
+    const pathname = raw.split("?")[0] ?? "";
+    if (!pathname.startsWith("/uploads/") || pathname.includes("..")) {
+      return reply
+        .code(400)
+        .send({ error: "BadRequest", message: "Not an upload path" });
+    }
+
+    if (!isProtectedUploadPath(pathname)) {
+      // Public subdirs need no signature; hand the path straight back
+      // so callers don't have to know which is which.
+      return { url: pathname, expiresAt: null };
+    }
+
+    return signUploadPath(pathname);
   });
 }

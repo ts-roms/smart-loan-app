@@ -1,4 +1,35 @@
+import {
+  PHONE_MAX_DIGITS,
+  PHONE_MIN_DIGITS,
+  isValidPhone,
+  normalizePhone,
+} from "@loan/shared-utils";
 import { z } from "zod";
+
+/**
+ * A PH phone number: 10 or 11 digits once punctuation and a country
+ * code are stripped, stored normalised so "+63 917 123 4567" and
+ * "09171234567" are one value rather than two.
+ *
+ * `transform` runs after the check, so what reaches the repository is
+ * always digits — search and duplicate detection depend on that.
+ */
+const phone = () =>
+  z
+    .string()
+    .refine((v) => isValidPhone(v), {
+      message: `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`,
+    })
+    .transform((v) => normalizePhone(v));
+
+/** Same rule, but an empty string passes through as "not given". */
+const optionalPhone = () =>
+  z
+    .string()
+    .refine((v) => v.trim() === "" || isValidPhone(v), {
+      message: `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`,
+    })
+    .transform((v) => (v.trim() === "" ? "" : normalizePhone(v)));
 
 /**
  * Customer registration schema — expanded for PH-standard borrower
@@ -36,8 +67,8 @@ export const customerBaseSchema = z.object({
   // notification dispatch, and portal account provisioning. Operators
   // can still leave it blank temporarily by holding the form in draft;
   // the API enforces it on commit.
-  phone: z.string().min(7).max(40),
-  secondaryPhone: z.string().max(40).optional(),
+  phone: phone(),
+  secondaryPhone: optionalPhone().optional(),
   email: z.string().email(),
 
   // Address (PSGC-style)
@@ -52,7 +83,7 @@ export const customerBaseSchema = z.object({
   // Spouse (validated below)
   spouseName: z.string().max(160).optional(),
   spouseDateOfBirth: z.string().optional(),
-  spouseContact: z.string().max(40).optional(),
+  spouseContact: optionalPhone().optional(),
   spouseOccupation: z.string().max(120).optional(),
 
   // Government ID

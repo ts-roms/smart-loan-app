@@ -1,3 +1,9 @@
+import { PhoneInput } from "../../../components/PhoneInput";
+import {
+  BarangayPicker,
+  CityPicker,
+  ProvincePicker,
+} from "../../../components/PsgcFields";
 import {
   useCompleteProfile,
   type CompleteProfileInput,
@@ -176,18 +182,18 @@ export function CompleteProfilePage() {
 
             <Section icon={MapPin} title="Contact and address">
               <Field label="Mobile number" required>
-                <Input
-                  inputMode="tel"
+                <PhoneInput
                   value={form.phone}
-                  onChange={(e) => set("phone", e.target.value)}
+                  onChange={(v) => set("phone", v)}
                   required
                 />
               </Field>
               <Field label="Alternate number">
-                <Input
-                  inputMode="tel"
+                <PhoneInput
                   value={form.secondaryPhone ?? ""}
-                  onChange={(e) => set("secondaryPhone", e.target.value)}
+                  onChange={(v) => set("secondaryPhone", v)}
+                  placeholder="Optional"
+                  optional
                 />
               </Field>
               <Field
@@ -213,23 +219,26 @@ export function CompleteProfilePage() {
                   onChange={(e) => set("addressLine2", e.target.value)}
                 />
               </Field>
-              <Field label="Barangay">
-                <Input
-                  value={form.barangay ?? ""}
-                  onChange={(e) => set("barangay", e.target.value)}
+              <Field label="Province">
+                <ProvincePicker
+                  value={form.province ?? ""}
+                  onChange={(v) => set("province", v)}
                 />
               </Field>
               <Field label="City or municipality" required>
-                <Input
+                <CityPicker
+                  province={form.province}
                   value={form.city}
-                  onChange={(e) => set("city", e.target.value)}
+                  onChange={(v) => set("city", v)}
                   required
                 />
               </Field>
-              <Field label="Province">
-                <Input
-                  value={form.province ?? ""}
-                  onChange={(e) => set("province", e.target.value)}
+              <Field label="Barangay">
+                <BarangayPicker
+                  province={form.province}
+                  city={form.city}
+                  value={form.barangay ?? ""}
+                  onChange={(v) => set("barangay", v)}
                 />
               </Field>
               <Field label="Postal code">

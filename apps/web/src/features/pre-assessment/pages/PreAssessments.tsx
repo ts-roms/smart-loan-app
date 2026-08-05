@@ -24,6 +24,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+
+import { PhoneInput } from "../../../components/PhoneInput";
 import { Link, useNavigate } from "react-router-dom";
 
 import { PreAssessmentVerdict } from "../components/PreAssessmentVerdict";
@@ -224,12 +226,12 @@ export function PreAssessmentsPage() {
                   />
                 </Field>
                 <Field label="Phone">
-                  <Input
+                  {/* A prospect isn't a customer yet — a walk-in who
+                      won't give a number still gets assessed. */}
+                  <PhoneInput
                     value={form.prospectPhone}
-                    onChange={(e) =>
-                      setForm({ ...form, prospectPhone: e.target.value })
-                    }
-                    placeholder="0917 000 0000"
+                    onChange={(v) => setForm({ ...form, prospectPhone: v })}
+                    optional
                   />
                 </Field>
                 <Field label="Email">

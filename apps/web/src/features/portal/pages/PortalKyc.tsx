@@ -22,7 +22,8 @@ import { useState, type FormEvent } from "react";
 
 // Direct import — see customers/constants.ts for why.
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
-import { DOC_TYPE_LABELS } from "../../customers/constants";
+import { FileUpload } from "../../../components/FileUpload";
+import { CAMERA_MODE, DOC_TYPE_LABELS } from "../../customers/constants";
 
 const DOC_OPTIONS: KycDocumentType[] = [
   "ID_FRONT",
@@ -37,10 +38,18 @@ const DOC_OPTIONS: KycDocumentType[] = [
 ];
 
 /**
- * Self-serve KYC document upload. We don't ship a file uploader here yet —
- * the customer pastes a URL pointing at the file they uploaded (matching
- * how the officer flow works today). A real implementation would wire
- * multipart upload into /uploads/kyc.
+ * Self-serve KYC document upload.
+ *
+ * This asked for a document URL until now, which no borrower can
+ * produce — it presumed they had already hosted the file somewhere.
+ * It uses the same capture widget as the officer form: camera-first
+ * for anything photographed (ID, selfie, OR/CR, title), file picker
+ * for the rest, streamed through /uploads-api/kyc for a stable URL
+ * before the submission is posted.
+ *
+ * Uploading is open to any authenticated user by design — the returned
+ * UUID URL is inert until a gated endpoint stores it, and this one is
+ * gated on the borrower's own record. See uploads.routes.ts.
  */
 export function PortalKyc() {
   const kyc = usePortalKyc();
@@ -52,6 +61,10 @@ export function PortalKyc() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!documentUrl) {
+      toast.error("Attach a photo or file first");
+      return;
+    }
     try {
       await submit.mutateAsync({
         documentType,
@@ -166,12 +179,18 @@ export function PortalKyc() {
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-fg-muted">Document URL</label>
-              <Input
-                placeholder="https://… (upload your scan first)"
-                value={documentUrl}
-                onChange={(e) => setDocumentUrl(e.target.value)}
-                required
+              <label className="text-xs text-fg-muted">
+                {CAMERA_MODE[documentType]
+                  ? "Photograph the document or upload a file"
+                  : "Upload a file"}
+              </label>
+              <FileUpload
+                subdir="kyc"
+                value={documentUrl || null}
+                onUploaded={setDocumentUrl}
+                onClear={() => setDocumentUrl("")}
+                capture={CAMERA_MODE[documentType]}
+                label="Choose a file"
               />
             </div>
             <div className="space-y-1">

@@ -3,6 +3,8 @@ import { Button, SelfieCapture, useToast } from "@loan/ui";
 import { Camera, Upload, X } from "lucide-react";
 import { useRef, useState, type ChangeEvent } from "react";
 
+import { DocumentThumbnail } from "./DocumentPreview";
+
 /**
  * Reusable upload widget. Calls /uploads-api/<subdir>, returns the public
  * URL to the parent via `onUploaded`. Use the lower-level useUpload hook
@@ -65,27 +67,16 @@ export function FileUpload({
   };
 
   if (value) {
-    const isImage = /\.(jpe?g|png|webp|heic)$/i.test(value);
     return (
       <div className="flex items-center gap-2">
-        {isImage ? (
-          <a href={value} target="_blank" rel="noopener noreferrer">
-            <img
-              src={value}
-              alt="upload preview"
-              className="h-16 w-16 rounded-md border border-default object-cover"
-            />
-          </a>
-        ) : (
-          <a
-            href={value}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-info hover:underline"
-          >
-            View file
-          </a>
-        )}
+        {/* Opens the shared preview modal. Checking an upload used to
+            mean a new tab, which on a phone is a context switch away
+            from the half-filled form you were checking it for. */}
+        <DocumentThumbnail
+          url={value}
+          label={label}
+          className="h-16 w-16 rounded-md"
+        />
         {onClear && (
           <button
             type="button"

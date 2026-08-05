@@ -37,7 +37,7 @@ import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 import { CustomerLedgerPanel } from "../components/CustomerLedgerPanel";
 import { DorsiScreenBanner } from "../components/DorsiScreenBanner";
 import { EditCustomerDialog } from "../components/EditCustomerDialog";
-import { DOC_TYPES, DOC_TYPE_LABELS } from "../constants";
+import { CAMERA_MODE, DOC_TYPES, DOC_TYPE_LABELS } from "../constants";
 
 // Re-exported here for back-compat with anything that still imports
 // from this file path. New code should import from
@@ -53,9 +53,18 @@ export { DOC_TYPE_LABELS };
 export function CustomerDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const customer = useCustomer(id);
-  const kycDocs = useKycForCustomer(id);
-  const kycStatus = useKycStatus(id);
-  const score = useCustomerScore(id);
+  // Every link into this page uses the customer NUMBER ("PICKER-008"),
+  // and only /customers/:idOrNumber resolves one — the KYC and scoring
+  // endpoints match on the UUID. Passing the URL param to them meant a
+  // customer who had submitted documents and taken the survey saw an
+  // empty KYC list and "no score yet", permanently.
+  //
+  // Null until the customer loads, which leaves the queries disabled
+  // rather than firing a request that would 404.
+  const customerId = customer.data?.id ?? null;
+  const kycDocs = useKycForCustomer(customerId);
+  const kycStatus = useKycStatus(customerId);
+  const score = useCustomerScore(customerId);
   const [editing, setEditing] = useState(false);
 
   // Name the breadcrumb crumb for this route. Called before the early
@@ -278,22 +287,6 @@ export function CustomerDetailPage() {
 }
 
 /**
- * Document types that ship with a camera-first flow. SELFIE uses the
- * front-facing lens; physical ID / OR / CR / title shots default to the
- * rear camera (better for sharp photos of a document on a desk).
- * Anything else falls through to the plain file picker (typed PDFs,
- * income docs, tax declarations).
- */
-const CAMERA_MODE: Partial<Record<KycDocumentType, "user" | "environment">> = {
-  SELFIE: "user",
-  ID_FRONT: "environment",
-  ID_BACK: "environment",
-  VEHICLE_OR: "environment",
-  VEHICLE_CR: "environment",
-  PROPERTY_TITLE: "environment",
-};
-
-/**
  * Inline KYC submission form. Replaces the old paste-a-URL flow with a
  * proper capture/upload widget — operators can now snap a photo with
  * the webcam (or rear camera on a tablet) or drop in a file, and we
@@ -352,7 +345,6 @@ function SubmitKycForm({
       available[0].value !== documentType
     ) {
       setDocumentType(available[0].value);
-      setDocumentUrl("");
     }
   }, [taken, documentType, available]);
 
@@ -394,12 +386,13 @@ function SubmitKycForm({
       </div>
       <Select
         value={documentType}
-        onValueChange={(v) => {
-          setDocumentType(v as KycDocumentType);
-          // Reset the staged upload when the type changes — the asset
-          // was tied to the previous type's capture mode.
-          setDocumentUrl("");
-        }}
+        // The staged upload deliberately SURVIVES a type change. It
+        // used to be cleared, on the theory that the file belonged to
+        // the previous type's capture mode — but a file is just a
+        // file, and picking the wrong type first is the common case.
+        // Losing the upload to fix the label is the wrong trade; the
+        // thumbnail shows what's attached, and X clears it.
+        onValueChange={(v) => setDocumentType(v as KycDocumentType)}
       >
         <SelectTrigger className="h-9">
           <SelectValue />

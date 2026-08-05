@@ -1,3 +1,5 @@
+import { PhoneInput } from "../../../components/PhoneInput";
+import { CityPicker, ProvincePicker } from "../../../components/PsgcFields";
 import {
   usePortalMe,
   usePortalUpdateProfile,
@@ -126,11 +128,9 @@ export function PortalProfile() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Phone</Label>
-                <Input
+                <PhoneInput
                   value={form.phone ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, phone: e.target.value }))
-                  }
+                  onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
                   required
                 />
               </div>
@@ -156,22 +156,24 @@ export function PortalProfile() {
                 />
               </div>
               <div className="space-y-1">
-                <Label>City</Label>
-                <Input
-                  value={form.city ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, city: e.target.value }))
+                <Label>Province</Label>
+                <ProvincePicker
+                  value={form.province ?? ""}
+                  onChange={(v) =>
+                    // Changing province doesn't clear the city: a
+                    // borrower correcting one field shouldn't lose the
+                    // other, and the city list still contains it.
+                    setForm((f) => ({ ...f, province: v }))
                   }
-                  required
                 />
               </div>
               <div className="space-y-1">
-                <Label>Province</Label>
-                <Input
-                  value={form.province ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, province: e.target.value }))
-                  }
+                <Label>City</Label>
+                <CityPicker
+                  province={form.province}
+                  value={form.city ?? ""}
+                  onChange={(v) => setForm((f) => ({ ...f, city: v }))}
+                  required
                 />
               </div>
               <div className="space-y-1">

@@ -52,17 +52,28 @@ export function isEmail(v: string): boolean {
 }
 
 export {
+  PHONE_MAX_DIGITS,
+  PHONE_MIN_DIGITS,
+  formatPhone,
+  isValidPhone,
+  normalizePhone,
+  phoneError,
+} from "./lib/phone";
+
+export {
   PSGC_REGIONS,
   PSGC_PROVINCES,
   PSGC_CITIES,
-  PSGC_BARANGAYS,
   provincesForRegion,
+  regionHasProvinces,
   citiesForProvince,
   citiesForRegion,
-  barangaysForCity,
+  citiesFor,
+  findCity,
+  loadBarangaysForCity,
+  locateCity,
   regionForName,
   type PsgcRegion,
   type PsgcProvince,
   type PsgcCity,
-  type PsgcBarangay,
 } from "./lib/psgc";

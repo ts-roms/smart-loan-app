@@ -1,3 +1,4 @@
+import { DocumentThumbnail } from "../../../components/DocumentPreview";
 import {
   useAnnualDocs,
   useCreateAnnualDoc,
@@ -151,14 +152,11 @@ function DocRow({
             {formatDate(doc.effectiveFrom)} → {formatDate(doc.expiresAt)}
           </span>
           {doc.documentUrl && (
-            <a
-              href={doc.documentUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-info hover:underline"
-            >
-              view
-            </a>
+            <DocumentThumbnail
+              url={doc.documentUrl}
+              label={doc.name}
+              className="h-6 w-6 rounded"
+            />
           )}
         </div>
         {doc.notes && (

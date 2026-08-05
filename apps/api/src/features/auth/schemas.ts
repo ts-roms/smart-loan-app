@@ -1,4 +1,35 @@
+import {
+  PHONE_MAX_DIGITS,
+  PHONE_MIN_DIGITS,
+  isValidPhone,
+  normalizePhone,
+} from "@loan/shared-utils";
 import { z } from "zod";
+
+/**
+ * A PH phone number: 10 or 11 digits once punctuation and a country
+ * code are stripped, stored normalised so "+63 917 123 4567" and
+ * "09171234567" are one value rather than two.
+ *
+ * `transform` runs after the check, so what reaches the repository is
+ * always digits — search and duplicate detection depend on that.
+ */
+const phone = () =>
+  z
+    .string()
+    .refine((v) => isValidPhone(v), {
+      message: `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`,
+    })
+    .transform((v) => normalizePhone(v));
+
+/** Same rule, but an empty string passes through as "not given". */
+const optionalPhone = () =>
+  z
+    .string()
+    .refine((v) => v.trim() === "" || isValidPhone(v), {
+      message: `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`,
+    })
+    .transform((v) => (v.trim() === "" ? "" : normalizePhone(v)));
 
 /** Tenant slug — same regex as the platform-side schema. */
 const tenantSlugField = z
@@ -90,8 +121,8 @@ export const completeProfileSchema = z.object({
     .optional(),
 
   // Contact
-  phone: z.string().min(7).max(30),
-  secondaryPhone: z.string().max(30).optional(),
+  phone: phone(),
+  secondaryPhone: optionalPhone().optional(),
   /**
    * Optional: the account's login email is used when this is absent.
    * Present so a borrower can route loan correspondence somewhere

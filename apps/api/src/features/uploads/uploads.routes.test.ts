@@ -195,3 +195,60 @@ describe("POST /uploads-api/:subdir", () => {
     expect(await readdir(join(uploadsDir, "misc"))).toEqual(before);
   });
 });
+
+describe("POST /uploads-api/sign", () => {
+  const KYC = "/uploads/kyc/6f1c2b8a-0000-4000-8000-000000000000.png";
+
+  function sign(url: unknown, auth = true) {
+    return app.inject({
+      method: "POST",
+      url: "/api/v1/uploads-api/sign",
+      headers: auth ? { authorization: `Bearer ${token}` } : {},
+      payload: { url },
+    });
+  }
+
+  it("rejects an unauthenticated caller", async () => {
+    const res = await sign(KYC, false);
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns a signed URL for a protected path", async () => {
+    const res = await sign(KYC);
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.url).toMatch(
+      /^\/uploads\/kyc\/[0-9a-f-]{36}\.png\?exp=\d+&sig=[0-9a-f]{64}$/,
+    );
+    expect(body.expiresAt).toBeGreaterThan(Date.now());
+  });
+
+  it("hands back a public path unchanged", async () => {
+    // Callers shouldn't have to know which subdirs need a signature.
+    const res = await sign("/uploads/branding/logo.svg");
+    expect(res.json()).toEqual({
+      url: "/uploads/branding/logo.svg",
+      expiresAt: null,
+    });
+  });
+
+  it("strips an existing query rather than signing over it", async () => {
+    const res = await sign(`${KYC}?exp=1&sig=deadbeef`);
+    const { url } = res.json();
+    expect(url.startsWith(`${KYC}?exp=`)).toBe(true);
+    expect(url).not.toContain("deadbeef");
+  });
+
+  it("refuses anything that isn't an upload path", async () => {
+    for (const bad of [
+      "https://evil.test/uploads/kyc/x.png",
+      "/uploads/../../etc/passwd",
+      "/etc/passwd",
+      "",
+      42,
+    ]) {
+      const res = await sign(bad);
+      expect(res.statusCode, `for ${String(bad)}`).toBe(400);
+    }
+  });
+});
