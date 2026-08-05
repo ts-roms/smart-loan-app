@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
   DatePicker,
+  Input,
   Label,
   useToast,
 } from "@loan/ui";
@@ -15,6 +16,7 @@ import {
   FileWarning,
   Gavel,
   Layers,
+  PhoneCall,
   ScrollText,
   ShieldAlert,
   ShieldCheck,
@@ -37,10 +39,22 @@ interface ReportDef {
   description: string;
   cadence: string;
   needsDateRange: boolean;
+  /** Offers province/city inputs — only the collections aging report. */
+  hasAreaFilter?: boolean;
   icon: typeof ShieldCheck;
 }
 
 const REPORTS: ReportDef[] = [
+  {
+    type: "collections-aging",
+    title: "Collections aging",
+    description:
+      "Delinquency snapshot at run time — per-account outstanding, days overdue, aging bucket, area and assigned collector. Optionally narrowed to a province / city.",
+    cadence: "Weekly",
+    needsDateRange: false,
+    hasAreaFilter: true,
+    icon: PhoneCall,
+  },
   {
     type: "dorsi-utilization",
     title: "DORSI utilization",
@@ -143,6 +157,8 @@ function ReportCard({ report }: { report: ReportDef }) {
 
   const [from, setFrom] = useState(monthAgo);
   const [to, setTo] = useState(today);
+  const [province, setProvince] = useState("");
+  const [city, setCity] = useState("");
   const [busy, setBusy] = useState(false);
   const Icon = report.icon;
 
@@ -153,6 +169,12 @@ function ReportCard({ report }: { report: ReportDef }) {
       if (report.needsDateRange) {
         params.set("from", new Date(from).toISOString());
         params.set("to", new Date(to).toISOString());
+      }
+      // Blank means "everywhere" — the server treats absence as no
+      // narrowing, so empty inputs are simply not sent.
+      if (report.hasAreaFilter) {
+        if (province.trim()) params.set("province", province.trim());
+        if (city.trim()) params.set("city", city.trim());
       }
       const token = localStorage.getItem("loan.auth.token");
       const url = `/api/v1/reports/${report.type}?${params.toString()}`;
@@ -202,6 +224,30 @@ function ReportCard({ report }: { report: ReportDef }) {
             <div>
               <Label>To</Label>
               <DatePicker value={to} onChange={setTo} min={from} />
+            </div>
+          </div>
+        )}
+        {/* Free text rather than dropdowns: this page has no queue data
+            to build option lists from, and typing the area you already
+            know beats loading the whole delinquent book to offer it.
+            Matching is case-insensitive server-side. */}
+        {report.hasAreaFilter && (
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div>
+              <Label>Province</Label>
+              <Input
+                placeholder="All"
+                value={province}
+                onChange={(e) => setProvince(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>City</Label>
+              <Input
+                placeholder="All"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              />
             </div>
           </div>
         )}

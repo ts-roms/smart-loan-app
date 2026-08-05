@@ -3,9 +3,16 @@ import {
   useBranding,
   useEffectiveIdlePolicy,
 } from "@loan/api-client";
-import { Button, IdleWarningDialog, cn, useIdleLogout } from "@loan/ui";
+import {
+  Button,
+  IdleWarningDialog,
+  cn,
+  sweepDriverResidue,
+  useIdleLogout,
+} from "@loan/ui";
 import {
   BookOpen,
+  ClipboardCheck,
   CreditCard,
   FileCheck2,
   Gauge,
@@ -38,6 +45,20 @@ export function PortalShell({ children }: { children: ReactNode }) {
   // over the page you just asked for.
   useEffect(() => {
     setNavOpen(false);
+  }, [pathname]);
+
+  // Enforce the shell's no-body-scroll assumption + sweep stranded tour
+  // overlays on every navigation. Same reasoning as DashboardShell —
+  // see the comments there.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+  useEffect(() => {
+    sweepDriverResidue();
   }, [pathname]);
   const handleSignOut = () => {
     if (refreshToken) void logoutSession(refreshToken).catch(() => {});
@@ -119,6 +140,12 @@ export function PortalShell({ children }: { children: ReactNode }) {
         <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
           {[
             { to: "/portal", label: "Dashboard", icon: Gauge, end: true },
+            {
+              to: "/portal/pre-assess",
+              label: "Check eligibility",
+              icon: ClipboardCheck,
+              end: false,
+            },
             { to: "/portal/apply", label: "New loan", icon: Plus, end: false },
             {
               to: "/portal/loans",
@@ -212,7 +239,12 @@ export function PortalShell({ children }: { children: ReactNode }) {
           </button>
           <span className="text-sm font-medium truncate">{brandName}</span>
         </div>
-        <div className="p-6 max-w-5xl mx-auto space-y-4">
+        {/* Keyed on the route so the entrance replays per navigation —
+            see the note in DashboardShell. */}
+        <div
+          key={pathname}
+          className="page-enter p-6 max-w-5xl mx-auto space-y-4"
+        >
           <Breadcrumbs variant="portal" />
           {children}
         </div>

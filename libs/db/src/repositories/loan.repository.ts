@@ -5,7 +5,9 @@ import {
   preTerminationFeeEntry,
 } from "@loan/accounting";
 import {
+  type LoanBalance,
   type LoanProductConfig,
+  balanceFromTotals,
   computeAmortizationFor,
   computeFees,
   daysBetweenInstallments,
@@ -31,6 +33,52 @@ import {
   nextPropertyNumber,
   nextVehicleNumber,
 } from "../lib/reference-numbers";
+import {
+  resolvePaging,
+  toPage,
+  type Page,
+  type PageParams,
+} from "../lib/pagination";
+import { contains, tokenizedWhere } from "../lib/search";
+
+/**
+ * Filters for the loan list. All optional — an empty filter is the
+ * historical behaviour (200 most recent).
+ */
+export interface LoanListFilter extends PageParams {
+  /**
+   * Free text over the loan number and the borrower's name / reference.
+   * Tokenized, so "cruz salary" and "juan LN-2026" both work — see
+   * lib/search.ts.
+   */
+  q?: string;
+  status?: LoanStatus;
+  productCode?: string;
+}
+
+/** Slim borrower projection carried on each list row. */
+export interface LoanListCustomer {
+  id: string;
+  number: string;
+  firstName: string;
+  lastName: string;
+}
+
+export type LoanListRow = LoanApplication & {
+  customer: LoanListCustomer;
+  /**
+   * Where the loan actually stands. Null before disbursement — there are
+   * no instalments yet, and reporting a zero balance on an approved loan
+   * would read as "nothing to pay" rather than "nothing scheduled yet".
+   */
+  balance: LoanBalance | null;
+};
+
+/**
+ * 200 by default to match the historical uncapped-feeling behaviour the
+ * dashboard still relies on. The loans table asks for 25.
+ */
+const LOAN_PAGING = { defaultPageSize: 200, maxPageSize: 500 };
 
 export interface VehicleInput {
   kind: "CAR" | "MOTORCYCLE";
@@ -199,11 +247,103 @@ export class LoanRepository {
     this.accounting = new AccountingRepository(prisma);
   }
 
-  list(): Promise<LoanApplication[]> {
-    return this.prisma.loanApplication.findMany({
-      orderBy: { submittedAt: "desc" },
-      take: 200,
+  /**
+   * Filtering happens in Postgres, not in the client. The list is capped,
+   * so a client-side filter would only ever search the newest page and
+   * quietly miss the older loan the operator is looking for.
+   *
+   * Rows carry a slim borrower projection — four columns, not the whole
+   * customer record. Without it, searching by borrower name would match
+   * rows the operator can't see the reason for; with the whole record it
+   * would ship every borrower's income and government ID to a screen
+   * that shows neither.
+   */
+  async list(filter: LoanListFilter = {}): Promise<Page<LoanListRow>> {
+    const paging = resolvePaging(filter, LOAN_PAGING);
+    const where = {
+      status: filter.status,
+      productCode: filter.productCode,
+      ...(tokenizedWhere(filter.q, (token) => [
+        { number: contains(token) },
+        { customer: { number: contains(token) } },
+        { customer: { firstName: contains(token) } },
+        { customer: { middleName: contains(token) } },
+        { customer: { lastName: contains(token) } },
+      ]) ?? {}),
+    };
+
+    // One transaction so the count and the rows describe the same
+    // snapshot. Run separately, a loan submitted between the two makes
+    // the footer claim a total the table can't page to.
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.loanApplication.findMany({
+        where,
+        orderBy: { submittedAt: "desc" },
+        skip: paging.skip,
+        take: paging.take,
+        include: {
+          customer: {
+            select: { id: true, number: true, firstName: true, lastName: true },
+          },
+        },
+      }),
+      this.prisma.loanApplication.count({ where }),
+    ]);
+
+    const balances = await this.balancesFor(rows.map((r) => r.id));
+    return toPage(
+      rows.map((row) => ({ ...row, balance: balances.get(row.id) ?? null })),
+      total,
+      paging,
+    );
+  }
+
+  /**
+   * Current balance for each of the given loans, keyed by loan id.
+   *
+   * One `groupBy` rather than a schedule `include`: a 360-month loan is
+   * 360 rows, and a page of 200 such loans would ship and fold 72,000
+   * rows to render one number each. Postgres sums them instead and we
+   * get one row per loan back.
+   *
+   * `_count: { paidInFullAt: true }` counts non-null values, which is
+   * exactly the settled-instalment count — the repository sets that
+   * column only once principal AND interest are both covered.
+   *
+   * Loans with no schedule are absent from the result rather than
+   * present with zeros, so callers can tell "not disbursed" from
+   * "nothing left to pay".
+   */
+  async balancesFor(loanIds: string[]): Promise<Map<string, LoanBalance>> {
+    if (loanIds.length === 0) return new Map();
+    const groups = await this.prisma.loanSchedule.groupBy({
+      by: ["loanId"],
+      where: { loanId: { in: loanIds } },
+      _sum: {
+        totalDue: true,
+        principalDue: true,
+        principalPaid: true,
+        interestPaid: true,
+      },
+      _count: { _all: true, paidInFullAt: true },
     });
+
+    return new Map(
+      groups.map((g) => {
+        const principalPaid = Number(g._sum.principalPaid ?? 0);
+        return [
+          g.loanId,
+          balanceFromTotals({
+            scheduled: Number(g._sum.totalDue ?? 0),
+            paid: principalPaid + Number(g._sum.interestPaid ?? 0),
+            principalScheduled: Number(g._sum.principalDue ?? 0),
+            principalPaid,
+            paidInstallments: g._count.paidInFullAt,
+            totalInstallments: g._count._all,
+          }),
+        ];
+      }),
+    );
   }
 
   findById(id: string) {

@@ -4,11 +4,19 @@ import type {
   EmploymentStatus,
   Gender,
   GovernmentIdType,
+  KycStatus,
   LoanStatus,
   PrismaClient,
   Sex,
 } from "@prisma/client";
+import {
+  resolvePaging,
+  toPage,
+  type Page,
+  type PageParams,
+} from "../lib/pagination";
 import { idOrNumberWhere, nextCustomerNumber } from "../lib/reference-numbers";
+import { contains, tokenizedWhere } from "../lib/search";
 
 /**
  * Input shape for creating a customer. Mirrors the expanded schema —
@@ -112,31 +120,82 @@ export type CustomerListItem = Customer & {
   hasDefaulted: boolean;
 };
 
+/**
+ * Filters for the customer list. All optional — an empty filter is the
+ * historical behaviour (200 most recent).
+ */
+export interface CustomerListFilter extends PageParams {
+  /**
+   * Free text over the customer's reference number, name, phone, email
+   * and government ID. Tokenized: "dela cruz" and "cruz juan" both find
+   * Juan Dela Cruz. See lib/search.ts.
+   */
+  q?: string;
+  kycStatus?: KycStatus;
+}
+
+/**
+ * 200 by default because this endpoint feeds every borrower picker in the
+ * app as well as the customers table. The table asks for 25; the pickers
+ * pass nothing and want a usable pool. Shrinking this default would
+ * silently give them 25 customers to choose from.
+ */
+const CUSTOMER_PAGING = { defaultPageSize: 200, maxPageSize: 500 };
+
 export class CustomerRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async list(): Promise<CustomerListItem[]> {
-    const rows = await this.prisma.customer.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      include: {
-        // Statuses only — two independent flags can't come from a single
-        // `_count` (Prisma allows one filter per relation), so we pull the
-        // handful of interesting rows and fold them below.
-        loanApplications: {
-          where: {
-            status: {
-              in: [...ACTIVE_LOAN_STATUSES, ...DEFAULTED_LOAN_STATUSES],
+  /**
+   * Filtering and paging happen in Postgres, not in the client. The list
+   * is capped, so a client-side filter would only ever search the page it
+   * was handed — quietly missing the older customer the operator is
+   * actually looking for, which is worse than having no search at all.
+   */
+  async list(filter: CustomerListFilter = {}): Promise<Page<CustomerListItem>> {
+    const paging = resolvePaging(filter, CUSTOMER_PAGING);
+    const where = {
+      kycStatus: filter.kycStatus,
+      ...(tokenizedWhere(filter.q, (token) => [
+        { number: contains(token) },
+        { firstName: contains(token) },
+        { middleName: contains(token) },
+        { lastName: contains(token) },
+        { phone: contains(token) },
+        { email: contains(token) },
+        { governmentIdNumber: contains(token) },
+      ]) ?? {}),
+    };
+
+    // One transaction so the count and the rows describe the same
+    // snapshot. Run separately, a customer created between the two makes
+    // the footer claim a total the table can't page to.
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.customer.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: paging.skip,
+        take: paging.take,
+        include: {
+          // Statuses only — two independent flags can't come from a single
+          // `_count` (Prisma allows one filter per relation), so we pull the
+          // handful of interesting rows and fold them below.
+          loanApplications: {
+            where: {
+              status: {
+                in: [...ACTIVE_LOAN_STATUSES, ...DEFAULTED_LOAN_STATUSES],
+              },
             },
+            select: { status: true },
           },
-          select: { status: true },
         },
-      },
-    });
+      }),
+      this.prisma.customer.count({ where }),
+    ]);
+
     // Fold the relation away so the wire payload stays a plain customer
     // record plus two booleans. Callers that need real counts or amounts
     // use /customers/:id/summary.
-    return rows.map(({ loanApplications, ...customer }) => ({
+    const items = rows.map(({ loanApplications, ...customer }) => ({
       ...customer,
       hasLoans: loanApplications.some((l) =>
         ACTIVE_LOAN_STATUSES.includes(l.status),
@@ -145,6 +204,7 @@ export class CustomerRepository {
         DEFAULTED_LOAN_STATUSES.includes(l.status),
       ),
     }));
+    return toPage(items, total, paging);
   }
 
   findById(id: string): Promise<Customer | null> {

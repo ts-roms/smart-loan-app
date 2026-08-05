@@ -83,6 +83,10 @@ export async function collectionsRoutes(app: FastifyInstance) {
     assign,
     ctrl.unassign,
   );
+  // POST, not PUT: unlike the per-loan assignee this doesn't name a
+  // single resource — it's a batch action over whatever the supervisor
+  // filtered ("everything overdue in Bulacan → Ana").
+  app.post("/assignees/bulk", assign, ctrl.assignBulk);
 
   app.get<{ Params: { loanId: string } }>(
     "/loans/:loanId/notes",

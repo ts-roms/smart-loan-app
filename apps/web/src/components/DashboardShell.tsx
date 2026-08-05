@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
   IdleWarningDialog,
   cn,
+  sweepDriverResidue,
   useIdleLogout,
 } from "@loan/ui";
 import {
@@ -22,6 +23,7 @@ import {
   CalendarClock,
   Car,
   ChevronDown,
+  ClipboardCheck,
   Clock,
   CreditCard,
   FileCheck2,
@@ -112,6 +114,12 @@ const NAV_SECTIONS: NavSection[] = [
         permission: "kyc.read",
       },
       {
+        to: "/pre-assessments",
+        label: "Pre-assessment",
+        icon: ClipboardCheck,
+        permission: "pre_assessment.run",
+      },
+      {
         to: "/loans",
         label: "Loans",
         icon: CreditCard,
@@ -157,6 +165,13 @@ const NAV_SECTIONS: NavSection[] = [
         label: "Lease-to-Own",
         icon: Car,
         permission: "lease.read",
+      },
+      {
+        // The cashier's counter — search a loan, record a payment.
+        to: "/payments",
+        label: "Payments",
+        icon: Wallet,
+        permission: "payments.record",
       },
       {
         to: "/payments/bulk",
@@ -423,6 +438,32 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     setMobileNavOpen(false);
   }, [currentPath]);
 
+  /*
+   * The shell is the viewport (h-screen + overflow-hidden); <main> is
+   * the only intended scroller. That assumption was never ENFORCED:
+   * anything with real height that lands directly in <body> — a leaked
+   * third-party overlay, an extension-injected element — makes the
+   * document taller than the viewport, and the page grows a second,
+   * body-level scrollbar with a dead region below the shell. Locking
+   * body overflow while the shell is mounted makes the assumption a
+   * rule. Scoped here rather than in global CSS because the login and
+   * registration pages genuinely rely on body scroll.
+   */
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  // Belt and braces against stranded tour overlays: sweep on every
+  // route change, not only on pages that mount a TourButton — detail
+  // pages have no tour, so a sweep scoped to useTour never ran there.
+  useEffect(() => {
+    sweepDriverResidue();
+  }, [currentPath]);
+
   const [openSection, setOpenSection] = useState<string | null>(
     sectionWithRoute,
   );
@@ -675,7 +716,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           don't need an inner column cap.
         */}
         <LicenseBanner />
-        <div className="p-6 space-y-4">
+        {/*
+          `key` on the pathname, not just the class. Without it React
+          reuses this subtree across navigations, the CSS animation
+          never restarts, and only the very first page ever animates.
+          Re-keying remounts the children, which replays it.
+        */}
+        <div key={currentPath} className="page-enter p-6 space-y-4">
           <ActiveDelegationBanner />
           <Breadcrumbs variant="staff" />
           {children}

@@ -35,7 +35,8 @@ async function nextSeq(
     | "kycSubmission"
     | "paymentIntent"
     | "loanApplication"
-    | "journalEntry",
+    | "journalEntry"
+    | "preAssessment",
   prefix: string,
   year: number,
 ): Promise<number> {
@@ -81,6 +82,15 @@ export async function nextPaymentIntentNumber(
   const y = YEAR();
   const seq = await nextSeq(prisma, "paymentIntent", "PI", y);
   return `PI-${y}-${pad6(seq)}`;
+}
+
+/** "PA-2026-000123" — per-year reset. */
+export async function nextPreAssessmentNumber(
+  prisma: PrismaClient,
+): Promise<string> {
+  const y = YEAR();
+  const seq = await nextSeq(prisma, "preAssessment", "PA", y);
+  return `PA-${y}-${pad6(seq)}`;
 }
 
 /** "VEH-000123" — flat counter; year is meaningless for collateral. */

@@ -37,6 +37,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { downloadPdf } from "../../../lib/download-pdf";
 
@@ -414,9 +415,18 @@ function LedgerTable({ entries }: { entries: CustomerLedgerEntry[] }) {
                     </div>
                   )}
                   {e.loanNumber && (
-                    <Badge variant="muted" className="mt-1">
-                      {e.loanNumber}
-                    </Badge>
+                    <Link
+                      to={`/loans/${e.loanNumber}`}
+                      className="inline-block"
+                      title="Open loan"
+                    >
+                      <Badge
+                        variant="muted"
+                        className="mt-1 hover:text-info hover:border-sky-400/40"
+                      >
+                        {e.loanNumber}
+                      </Badge>
+                    </Link>
                   )}
                 </td>
                 <td className="py-2 px-2 text-right tabular">

@@ -127,7 +127,8 @@ code 200 "admin: admin/users" "$API/admin/users" -H "$HA"
 
 echo "── picker flags (hasLoans / hasDefaulted) ────────────────────────"
 FLAGS=$(curl -s "$API/customers" -H "$HO" | node -pe "
-const r=JSON.parse(require('fs').readFileSync(0,'utf8'));
+const p=JSON.parse(require('fs').readFileSync(0,'utf8'));
+const r=p.rows??p; // paginated envelope since the list endpoints paged
 const g=n=>r.find(c=>c.number===n);
 [g('PICKER-001'),g('PICKER-006'),g('PICKER-009'),g('PICKER-011')]
   .map(c=>c? (c.number+':'+(c.hasLoans?'L':'-')+(c.hasDefaulted?'D':'-')) : 'missing').join(' ');
@@ -153,7 +154,8 @@ code 400 "webhook/gcash -> ProviderMismatch" -X POST "$API/payments/webhook/gcas
   -H "Content-Type: application/json" -d '{"data":{"id":"x","status":"PAID"}}'
 
 LOAN=$(curl -s "$API/loans" -H "$HO" | node -pe "
-const r=JSON.parse(require('fs').readFileSync(0,'utf8'));
+const p=JSON.parse(require('fs').readFileSync(0,'utf8'));
+const r=p.rows??p; // paginated envelope since the list endpoints paged
 const l=r.find(x=>['ACTIVE','DISBURSED'].includes(x.status))||r[0];
 l?l.id:'';
 ")

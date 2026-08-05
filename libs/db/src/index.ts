@@ -35,6 +35,7 @@ export {
   type JournalLine,
   type LoanProduct,
   type PaymentIntent,
+  type PreAssessment,
   type PromiseToPay,
   type Vehicle,
   type Property,
@@ -86,6 +87,8 @@ export {
   PaymentIntentStatus,
   PaymentProvider as PaymentProviderEnum,
   PeriodStatus,
+  PreAssessmentSource,
+  PreAssessmentVerdict,
   PromiseStatus,
   UserRole,
 } from "@prisma/client";
@@ -121,12 +124,22 @@ export {
   type AdoptExistingOptions,
   type AdoptExistingResult,
 } from "./lib/adopt-existing";
+export { contains, searchTokens, tokenizedWhere } from "./lib/search";
+export {
+  resolvePaging,
+  toPage,
+  type Page,
+  type PageParams,
+  type PagingBounds,
+  type ResolvedPaging,
+} from "./lib/pagination";
 export {
   isUuid,
   idOrNumberWhere,
   nextCustomerNumber,
   nextKycNumber,
   nextPaymentIntentNumber,
+  nextPreAssessmentNumber,
   nextVehicleNumber,
   nextPropertyNumber,
 } from "./lib/reference-numbers";
@@ -146,6 +159,7 @@ export * from "./repositories/notification.repository";
 export * from "./repositories/screening.repository";
 export * from "./repositories/co-maker.repository";
 export * from "./repositories/decision-rule.repository";
+export * from "./repositories/pre-assessment.repository";
 export * from "./repositories/rbac.repository";
 export * from "./repositories/delegation.repository";
 export * from "./repositories/bank-reconciliation.repository";

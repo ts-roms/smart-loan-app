@@ -42,6 +42,7 @@ import { kycRoutes } from "./kyc/index";
 import { loanRoutes } from "./loans/index";
 import { notificationRoutes } from "./notifications/index";
 import { paymentsRoutes } from "./payments/index";
+import { preAssessmentRoutes } from "./pre-assessment/index";
 import { rbacRoutes } from "./rbac/index";
 import { scoringRoutes } from "./scoring/index";
 import { screeningRoutes } from "./screening/index";
@@ -143,6 +144,9 @@ async function buildHarness(): Promise<Harness> {
   await app.register(notificationRoutes, { prefix: "/api/v1/notifications" });
   await app.register(scoringRoutes, { prefix: "/api/v1/scoring" });
   await app.register(decisionRuleRoutes, { prefix: "/api/v1/decision-rules" });
+  await app.register(preAssessmentRoutes, {
+    prefix: "/api/v1/pre-assessments",
+  });
   await app.register(delegationRoutes, { prefix: "/api/v1/delegations" });
   await app.register(paymentsRoutes, { prefix: "/api/v1/payments" });
   await app.register(rbacRoutes, { prefix: "/api/v1/admin" });
@@ -518,6 +522,26 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: "/api/v1/delegations/users/directory",
     permission: "loans.read",
     roles: ["LOAN_OFFICER", "ACCOUNTANT", "ADMIN"],
+  },
+
+  // ── pre-assessment ───────────────────────────────────────────────
+  // A borrower has their own /portal/pre-assessments, which forces the
+  // subject to their own record. These staff routes take any customerId
+  // (or none at all, for a walk-in), so a CUSTOMER token must not reach
+  // them — otherwise a borrower could probe the rules against anyone.
+  {
+    group: "pre-assessments",
+    method: "GET",
+    url: "/api/v1/pre-assessments",
+    permission: "pre_assessment.read",
+    roles: ["LOAN_OFFICER", "ADMIN"],
+  },
+  {
+    group: "pre-assessments",
+    method: "POST",
+    url: "/api/v1/pre-assessments",
+    permission: "pre_assessment.run",
+    roles: ["LOAN_OFFICER", "ADMIN"],
   },
 
   // ── payments intents ─────────────────────────────────────────────

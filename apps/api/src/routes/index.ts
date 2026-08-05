@@ -49,6 +49,7 @@ import { loanRoutes, loanApprovalRoutes } from "../features/loans/index";
 import { notificationRoutes } from "../features/notifications/index";
 import { paymentsRoutes } from "../features/payments/index";
 import { portalRoutes } from "../features/portal/index";
+import { preAssessmentRoutes } from "../features/pre-assessment/index";
 import { rbacRoutes } from "../features/rbac/index";
 import { reconciliationRoutes } from "../features/reconciliation/index";
 import { reportRoutes } from "../features/reports/index";
@@ -168,6 +169,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(notificationRoutes, { prefix: "/notifications" });
   await app.register(screeningRoutes, { prefix: "/screening" });
   await app.register(decisionRuleRoutes, { prefix: "/decision-rules" });
+  // Pre-application eligibility checks. Sits beside /decision-rules
+  // because it's the same engine, evaluated before a loan exists.
+  await app.register(preAssessmentRoutes, { prefix: "/pre-assessments" });
   // PDF documents: officer view + customer-scoped portal mirror.
   await app.register(documentRoutes);
   await app.register(portalDocumentRoutes, { prefix: "/portal" });

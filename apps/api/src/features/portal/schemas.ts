@@ -47,6 +47,8 @@ export const applySchema = z.object({
     })
     .optional(),
   applicationSelfieUrl: z.string().max(500).optional(),
+  /** The borrower's own pre-assessment this application came out of. */
+  preAssessmentId: z.string().uuid().optional(),
 });
 export type ApplyInput = z.infer<typeof applySchema>;
 

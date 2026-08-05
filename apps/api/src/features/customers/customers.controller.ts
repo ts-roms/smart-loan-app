@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { customerBaseSchema, customerSchema } from "./schemas";
+import {
+  customerBaseSchema,
+  customerListQuerySchema,
+  customerSchema,
+} from "./schemas";
 
 /**
  * Presentation layer for the base customer CRUD surface.
@@ -16,7 +20,15 @@ import { customerBaseSchema, customerSchema } from "./schemas";
  * undefined` at runtime, not a silent cross-tenant leak.
  */
 export class CustomerController {
-  list = async (req: FastifyRequest) => req.customerServices!.customer.list();
+  list = async (req: FastifyRequest, reply: FastifyReply) => {
+    const parsed = customerListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    return req.customerServices!.customer.list(parsed.data);
+  };
 
   show = async (
     req: FastifyRequest<{ Params: { id: string } }>,

@@ -25,6 +25,36 @@ import "driver.js/dist/driver.css";
 
 const STORAGE_PREFIX = "loan.tour.";
 
+/**
+ * Force-remove any driver.js DOM that outlived its instance.
+ *
+ * driver.js appends its overlay (a document-sized SVG) and popover
+ * straight to `<body>` — outside the app's h-screen shell. `destroy()`
+ * is supposed to remove them, but when it runs mid-transition — exactly
+ * what happens when a user clicks a link inside the highlighted element
+ * and navigation unmounts the page — the removal can be lost, and the
+ * stranded overlay keeps its document-sized height. The shell stays
+ * pinned to the viewport, so the page grows a second (body-level)
+ * scrollbar with a huge dead region below the content.
+ *
+ * The selectors and body classes below are driver.js 1.8's own
+ * (`.driver-overlay`, `.driver-popover`, `driver-active driver-fade
+ * driver-simple driver-no-interaction`). Removing them when no tour is
+ * running is always safe: this DOM has no state worth preserving.
+ */
+export function sweepDriverResidue() {
+  if (typeof document === "undefined") return;
+  document
+    .querySelectorAll(".driver-overlay, .driver-popover")
+    .forEach((el) => el.remove());
+  document.body.classList.remove(
+    "driver-active",
+    "driver-fade",
+    "driver-simple",
+    "driver-no-interaction",
+  );
+}
+
 export interface UseTourResult {
   /** True if the user has already finished this tour in the past. */
   completed: boolean;
@@ -53,9 +83,22 @@ export function useTour(
   const driverRef = useRef<ReturnType<typeof driver> | null>(null);
 
   useEffect(() => {
+    // A page mounting is also the moment to clear any overlay a
+    // *previous* page's tour stranded — that page's cleanup already ran
+    // and failed, so nobody else is left to do it.
+    sweepDriverResidue();
     return () => {
-      driverRef.current?.destroy();
+      // destroy() can throw when it races its own transition (the same
+      // race that strands the overlay). Swallow it so the sweep below
+      // always runs — the sweep is the part that actually guarantees a
+      // clean <body>.
+      try {
+        driverRef.current?.destroy();
+      } catch {
+        // fall through to the sweep
+      }
       driverRef.current = null;
+      sweepDriverResidue();
     };
   }, []);
 
@@ -69,7 +112,14 @@ export function useTour(
   }, [key]);
 
   const start = useCallback(() => {
-    driverRef.current?.destroy();
+    try {
+      driverRef.current?.destroy();
+    } catch {
+      // ignore — the sweep handles whatever destroy left behind
+    }
+    // Restarting over a stranded overlay would stack a second one on
+    // top; start from a clean floor.
+    sweepDriverResidue();
     const d = driver({
       showProgress: true,
       animate: true,

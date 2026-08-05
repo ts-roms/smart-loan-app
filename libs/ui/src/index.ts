@@ -69,7 +69,12 @@ export {
   type PromptOptions,
   type ConfirmTone,
 } from "./components/confirm";
-export { useTour, type TourStep, type UseTourResult } from "./components/tour";
+export {
+  sweepDriverResidue,
+  useTour,
+  type TourStep,
+  type UseTourResult,
+} from "./components/tour";
 export {
   FileDropzone,
   type FileDropzoneProps,
@@ -98,6 +103,7 @@ export {
 } from "./components/charts";
 export { Delta, type DeltaProps } from "./components/delta";
 export { SearchInput, type SearchInputProps } from "./components/search-input";
+export { Pagination, type PaginationProps } from "./components/pagination";
 export {
   useIdleLogout,
   IdleWarningDialog,

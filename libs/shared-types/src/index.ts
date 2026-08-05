@@ -354,7 +354,13 @@ export type LoanStatus =
   | "ACTIVE"
   | "CLOSED"
   | "DEFAULTED"
-  | "CANCELLED";
+  | "CANCELLED"
+  // Both exist in the Prisma enum and are reachable through
+  // /loans/:id/restructure and /loans/:id/write-off; they were missing
+  // here, so any client narrowing on this type couldn't name a loan it
+  // would still be served.
+  | "RESTRUCTURED"
+  | "WRITTEN_OFF";
 
 /**
  * Product types are a string code now — the catalog is dynamic and admins
@@ -484,6 +490,96 @@ export interface Property extends Omit<
   updatedAt: string;
 }
 
+/**
+ * Borrower projection carried on loan list rows. Four columns rather than
+ * the whole customer: the list needs a name to show and to search on, and
+ * has no business shipping every borrower's income and government ID to a
+ * screen that displays neither.
+ */
+export interface LoanListCustomer {
+  id: string;
+  number: string;
+  firstName: string;
+  lastName: string;
+}
+
+/**
+ * Where a loan actually stands, folded from its persisted schedule.
+ *
+ * Computed server-side by @loan/loans so the borrower's dashboard, the
+ * amortization panel and the statement PDF can't quote three different
+ * balances for the same loan.
+ */
+export interface LoanBalanceSummary {
+  /** Contractual total across every instalment: principal + interest. */
+  scheduled: number;
+  /** Everything credited so far, principal and interest together. */
+  paid: number;
+  /** `scheduled - paid`, floored at zero. What's left to hand over. */
+  outstanding: number;
+  /** Principal only — what a payoff quote is built from. */
+  principalScheduled: number;
+  principalPaid: number;
+  principalOutstanding: number;
+  paidInstallments: number;
+  totalInstallments: number;
+}
+
+/**
+ * Envelope returned by the paginated list endpoints.
+ *
+ * `total` is the count matching the filter across all pages — not
+ * `rows.length`. Both come from one transaction, so they always describe
+ * the same snapshot.
+ */
+export interface Paginated<T> {
+  rows: T[];
+  total: number;
+  /** The page actually served, after server-side clamping. */
+  page: number;
+  /** The page size actually used, after server-side clamping. */
+  pageSize: number;
+  /** At least 1, so an empty result reads "Page 1 of 1", not "of 0". */
+  totalPages: number;
+}
+
+/** Page controls shared by every paginated list query. */
+export interface PageQuery {
+  /** 1-indexed. Out-of-range values are clamped server-side, not rejected. */
+  page?: number;
+  /**
+   * Rows per page. Defaults to 200 server-side — the list endpoints also
+   * feed the app's pickers, which want a pool rather than a page. The
+   * tables pass a real page size.
+   */
+  pageSize?: number;
+}
+
+/**
+ * Query-string for GET /loans. All optional — the bare call returns the
+ * 200 most recent, as it always has.
+ */
+export interface LoanListQuery extends PageQuery {
+  /**
+   * Free text over the loan number and the borrower's name / reference.
+   * Tokenized server-side: "cruz salary" and "juan LN-2026" both work.
+   */
+  q?: string;
+  status?: LoanStatus;
+  productCode?: string;
+}
+
+/** Query-string for GET /customers. Same shape of contract as above. */
+export interface CustomerListQuery extends PageQuery {
+  /**
+   * Free text over reference number, name, phone, email and government
+   * ID. Tokenized, so "dela cruz" and "cruz juan" both find the same
+   * person.
+   */
+  q?: string;
+  kycStatus?: KycStatus;
+}
+
 export interface LoanApplication {
   id: string;
   number: string;
@@ -512,6 +608,21 @@ export interface LoanApplication {
   property?: Property | null;
   product?: LoanProduct;
   applicationSelfieUrl: string | null;
+  /**
+   * Borrower. Present as a slim four-field projection on rows from
+   * GET /loans (see {@link LoanListCustomer}) so the list can show and
+   * search by who the loan is for; the detail endpoint carries the full
+   * record. Absent on payloads that don't join it at all.
+   */
+  customer?: LoanListCustomer | null;
+  /**
+   * Where the loan actually stands, attached by the list endpoints.
+   *
+   * Null before disbursement: there are no instalments yet, and a zero
+   * balance on an approved loan reads as "nothing to pay" rather than
+   * "nothing scheduled yet".
+   */
+  balance?: LoanBalanceSummary | null;
   /** true when submitted by a customer with prior CLOSED loans. */
   isRepeat?: boolean;
   // Face-match (selfie ↔ ID) outputs. All four are null until an
@@ -555,6 +666,12 @@ export interface LoanApplyInput {
   vehicle?: VehicleInput;
   property?: PropertyInput;
   applicationSelfieUrl?: string;
+  /**
+   * The pre-assessment this application came out of, when the officer or
+   * borrower reached the form from one. Links the two records; never
+   * required, and a bad id is ignored rather than failing the apply.
+   */
+  preAssessmentId?: string;
 }
 
 export interface UploadResult {
@@ -1584,6 +1701,111 @@ export interface LoanDryRunResult {
 }
 
 /**
+ * ─── Pre-assessment ────────────────────────────────────────────────
+ *
+ * A saved run of the rules engine against a prospective loan, taken
+ * before any application exists. Two producers:
+ *
+ *   • POST /portal/pre-assessments   — borrower checks themselves.
+ *   • POST /pre-assessments          — staff check a walk-in prospect
+ *                                      (or an existing customer).
+ *
+ * Distinct from POST /loans/dry-run, which previews one in-flight
+ * application inside the officer's wizard and persists nothing.
+ */
+
+export type PreAssessmentVerdict = "APPROVE" | "REVIEW" | "REJECT";
+export type PreAssessmentSource = "PORTAL" | "OFFICER";
+
+/**
+ * Officer-side request. Supply `customerId` to assess someone already on
+ * file — score, AML and KYC are then read off their record. Supply the
+ * `prospect*` fields instead for a walk-in with no Customer row, in which
+ * case the verdict is indicative only (see `basis` on the response).
+ */
+export interface PreAssessmentInput {
+  customerId?: string;
+  prospectName?: string;
+  prospectPhone?: string;
+  prospectEmail?: string;
+  /** Required when there's no customerId — nothing to read it from. */
+  monthlyIncome?: number;
+  /** Required when there's no customerId. Years. */
+  applicantAge?: number;
+  productCode: string;
+  principal: number;
+  termMonths: number;
+  /** Annual rate as a decimal, e.g. 0.24 for 24% APR. */
+  annualInterestRate: number;
+}
+
+/** Borrower-side request. The customer is the caller, so it isn't named. */
+export type PortalPreAssessmentInput = Pick<
+  PreAssessmentInput,
+  "productCode" | "principal" | "termMonths" | "annualInterestRate"
+>;
+
+export interface PreAssessment {
+  id: string;
+  /** "PA-2026-000123". */
+  number: string;
+  source: PreAssessmentSource;
+
+  customerId: string | null;
+  prospectName: string | null;
+  prospectPhone: string | null;
+  prospectEmail: string | null;
+
+  productCode: string;
+  principal: number;
+  termMonths: number;
+  annualInterestRate: number;
+  monthlyIncome: number;
+  applicantAge: number;
+
+  verdict: PreAssessmentVerdict;
+  reason: string;
+  matchedRuleId: string | null;
+  /** Snapshotted — the rule itself may since have been edited or deleted. */
+  matchedRuleName: string | null;
+
+  /**
+   * How much the engine actually knew. `FULL` means score, AML and KYC
+   * came off a real Customer row. `INDICATIVE` means the subject is a
+   * prospect and those inputs were absent, so the verdict is a guide, not
+   * a decision.
+   */
+  basis: "FULL" | "INDICATIVE";
+
+  /** Null on prospect rows — no customer, no gates to check. */
+  gates: LoanDryRunResult["gates"] | null;
+  anomalies: AnomalyFlag[];
+  context: {
+    principal: number;
+    termMonths: number;
+    annualInterestRate: number;
+    productCode: string;
+    creditScore: number | null;
+    tier: CreditTier | null;
+    monthlyIncome: number;
+    existingActiveLoans: number;
+  };
+
+  /** Set once this assessment turned into a real application. */
+  loanId: string | null;
+  convertedAt: string | null;
+  createdAt: string;
+  createdById: string | null;
+  /** Joined for the staff list view; absent on prospect rows. */
+  customer?: {
+    id: string;
+    number: string;
+    firstName: string;
+    lastName: string;
+  } | null;
+}
+
+/**
  * In-progress loan-wizard state. Persisted via /loans/drafts so an
  * officer can pause + resume across sessions / devices. The `formState`
  * field is opaque to the API — the wizard owns its shape — but the
@@ -1692,12 +1914,26 @@ export interface OverdueRow {
   status: LoanStatus;
   customerId: string;
   customerName: string;
+  /**
+   * Borrower's area, for routing accounts to the collector who covers
+   * it. City is required on Customer; province isn't.
+   */
+  customerCity: string;
+  customerProvince: string | null;
   principal: string | number;
   daysOverdue: number;
   outstanding: number;
   overdueCount: number;
   /** Null when the account is still in the unassigned pool. */
   assignee: QueueAssignee | null;
+}
+
+/** Result of POST /collections/assignees/bulk. */
+export interface BulkAssignResult {
+  /** Accounts now owned by the collector (upserts — includes moves). */
+  assigned: number;
+  /** Requested ids that matched no loan; nothing was written for them. */
+  missing: string[];
 }
 
 /**

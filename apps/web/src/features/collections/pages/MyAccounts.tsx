@@ -22,7 +22,8 @@ import {
   useToast,
 } from "@loan/ui";
 import { formatMoney } from "@loan/shared-utils";
-import { Inbox, UserPlus, Users, X } from "lucide-react";
+import { Inbox, MapPin, UserPlus, Users, X } from "lucide-react";
+import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 // Direct import (not via ../../customers barrel) to avoid Rollup's
@@ -78,24 +79,79 @@ export function MyAccountsPage() {
   const canAssign = usePermission("collections.assign");
 
   /*
-   * Scope lives in the URL, not component state.
+   * Scope AND area live in the URL, not component state.
    *
-   * "Here are the twelve accounts nobody owns" is a link a supervisor
-   * sends to another supervisor, and the back button should return you
-   * to the list you were looking at rather than snapping to "mine".
-   * Unrecognised values fall back to "mine" instead of being passed to
-   * the API — the server validates the enum too, but a typo'd query
-   * string should show the collector their own work, not a 400.
+   * "Here are the twelve accounts nobody owns in Bulacan" is a link a
+   * supervisor sends to another supervisor, and the back button should
+   * return you to the list you were looking at rather than snapping to
+   * "mine". Unrecognised scope values fall back to "mine" instead of
+   * being passed to the API — the server validates the enum too, but a
+   * typo'd query string should show the collector their own work, not a
+   * 400. A stale area value just shows an empty list with an area
+   * message, which is honest.
    */
   const [params, setParams] = useSearchParams();
   const raw = params.get("scope");
   const scope: QueueScope =
     raw === "unassigned" || raw === "all" ? raw : "mine";
-  const setScope = (next: QueueScope) =>
-    setParams(next === "mine" ? {} : { scope: next }, { replace: true });
+  const province = params.get("province") ?? "ALL";
+  const city = params.get("city") ?? "ALL";
+
+  // One updater, defaults omitted from the URL so the bare route stays
+  // the canonical "my accounts" link. Changing province resets city —
+  // the old city likely isn't in the new province.
+  const update = (next: {
+    scope?: QueueScope;
+    province?: string;
+    city?: string;
+  }) => {
+    const merged = { scope, province, city, ...next };
+    const out: Record<string, string> = {};
+    if (merged.scope !== "mine") out.scope = merged.scope;
+    if (merged.province !== "ALL") out.province = merged.province;
+    if (merged.city !== "ALL") out.city = merged.city;
+    setParams(out, { replace: true });
+  };
+  const setScope = (next: QueueScope) => update({ scope: next });
+  const setProvince = (next: string) => update({ province: next, city: "ALL" });
+  const setCity = (next: string) => update({ city: next });
 
   const queue = useOverdueQueue(scope);
-  const rows = queue.data ?? [];
+  const rows = useMemo(() => queue.data ?? [], [queue.data]);
+
+  // Area options come from the rows on screen — the dropdowns never
+  // offer a province or city with nothing in it. Same convention as the
+  // collections queue: "—" buckets customers with no recorded province.
+  const provinces = useMemo(
+    () =>
+      [...new Set(rows.map((r) => r.customerProvince ?? "—"))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [rows],
+  );
+  const cities = useMemo(
+    () =>
+      [
+        ...new Set(
+          rows
+            .filter(
+              (r) =>
+                province === "ALL" || (r.customerProvince ?? "—") === province,
+            )
+            .map((r) => r.customerCity),
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
+    [rows, province],
+  );
+  const visible = useMemo(
+    () =>
+      rows.filter(
+        (r) =>
+          (province === "ALL" || (r.customerProvince ?? "—") === province) &&
+          (city === "ALL" || r.customerCity === city),
+      ),
+    [rows, province, city],
+  );
 
   return (
     <div className="space-y-4">
@@ -108,7 +164,7 @@ export function MyAccountsPage() {
               : scope === "unassigned"
                 ? "Unassigned accounts"
                 : "All delinquent accounts"}
-            <Badge variant="muted">{rows.length}</Badge>
+            <Badge variant="muted">{visible.length}</Badge>
           </CardTitle>
           {/*
             Supervisors need to move between "what am I carrying" and
@@ -136,21 +192,63 @@ export function MyAccountsPage() {
           )}
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Area filter — for a collector this is route planning ("what
+              do I have in Malolos today"), for a supervisor it scopes the
+              pool before handing it out. The aging summary below reflects
+              the filtered view for the same reason. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <MapPin className="h-4 w-4 text-fg-subtle" />
+            <Select value={province} onValueChange={setProvince}>
+              <SelectTrigger className="w-44" aria-label="Filter by province">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All provinces</SelectItem>
+                {provinces.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={city} onValueChange={setCity}>
+              <SelectTrigger className="w-44" aria-label="Filter by city">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All cities</SelectItem>
+                {cities.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(province !== "ALL" || city !== "ALL") && (
+              <span className="text-xs text-fg-muted">
+                {visible.length} of {rows.length} account
+                {rows.length === 1 ? "" : "s"}
+              </span>
+            )}
+          </div>
+
           {queue.isLoading ? (
             <SkeletonCard />
           ) : (
             <>
-              <AgingSummary rows={rows} />
+              <AgingSummary rows={visible} />
               <AccountsTable
-                rows={rows}
+                rows={visible}
                 scope={scope}
                 canAssign={canAssign}
                 emptyMessage={
-                  scope === "mine"
-                    ? "Nothing assigned to you. A supervisor hands accounts out from the unassigned pool."
-                    : scope === "unassigned"
-                      ? "Every delinquent account has an owner."
-                      : "No delinquent accounts."
+                  rows.length > 0
+                    ? "No accounts in that area."
+                    : scope === "mine"
+                      ? "Nothing assigned to you. A supervisor hands accounts out from the unassigned pool."
+                      : scope === "unassigned"
+                        ? "Every delinquent account has an owner."
+                        : "No delinquent accounts."
                 }
               />
             </>
@@ -238,11 +336,12 @@ function AccountsTable({
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[46rem] text-sm">
+      <table className="w-full min-w-[52rem] text-sm">
         <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
           <tr>
             <th className="py-2 px-2">Loan</th>
             <th className="py-2 px-2">Customer</th>
+            <th className="py-2 px-2">Area</th>
             <th className="py-2 px-2 text-right">Outstanding</th>
             <th className="py-2 px-2 text-right">Days</th>
             <th className="py-2 px-2">Aging</th>
@@ -261,6 +360,10 @@ function AccountsTable({
                 <CustomerSummaryLink customerId={r.customerId}>
                   {r.customerName}
                 </CustomerSummaryLink>
+              </td>
+              <td className="py-1.5 px-2 text-xs text-fg-muted">
+                {r.customerCity}
+                {r.customerProvince ? `, ${r.customerProvince}` : ""}
               </td>
               <td className="py-1.5 px-2 text-right font-mono">
                 {formatMoney(Number(r.outstanding))}

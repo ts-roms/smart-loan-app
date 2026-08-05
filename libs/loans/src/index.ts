@@ -225,3 +225,6 @@ function round2(n: number): number {
 
 export * from "./products";
 export * from "./late-fees";
+// Balance arithmetic over a *persisted* schedule — where a loan actually
+// stands, as opposed to the projection math above.
+export * from "./schedule-balance";

@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import {
   assignSchema,
+  bulkAssignSchema,
   noteSchema,
   ptpSchema,
   queueScopeSchema,
@@ -60,6 +61,31 @@ export class CollectionsController {
           .code(404)
           .send({ error: "UnknownLoan", message: "No such loan." });
       }
+      return reply.code(422).send({
+        error: result.kind,
+        message:
+          result.kind === "UnknownCollector"
+            ? "No such user."
+            : "That user is deactivated and cannot be assigned accounts.",
+      });
+    }
+    return result.value;
+  };
+
+  assignBulk = async (req: FastifyRequest, reply: FastifyReply) => {
+    const parsed = bulkAssignSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await req.collectionsServices!.collections.assignBulk({
+      input: parsed.data,
+      actorId: req.user.sub,
+    });
+    if (!result.ok) {
+      // Same 422 shape as the single assign — the ids in the body were
+      // fine as a request; it's the collector that can't take the work.
       return reply.code(422).send({
         error: result.kind,
         message:

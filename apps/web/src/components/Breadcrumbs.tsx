@@ -12,11 +12,11 @@ import { useCrumbTitles } from "../providers/breadcrumb-titles";
  *   /loans/new/:draftId  resuming a draft is still "New loan", so the
  *                        draft id is dropped and /loans/new supplies
  *                        the crumb.
- *   /payments, /compliance
- *                        neither is a real page; /payments/bulk and
- *                        /compliance/dorsi hang off nothing. Rather
- *                        than invent a dead crumb, the trail goes
- *                        Dashboard › Bulk payments.
+ *   /compliance          not a real page; /compliance/dorsi hangs off
+ *                        nothing. Rather than invent a dead crumb, the
+ *                        trail goes Dashboard › DORSI compliance.
+ *                        (/payments used to sit here too, until the
+ *                        payments console made it a real page.)
  *
  * Labels match the sidebar wording wherever a route has a nav entry, so
  * the crumb and the highlighted rail agree. Where they differ it's
@@ -33,6 +33,7 @@ const STAFF_ROUTES: readonly CrumbRoute[] = [
   ["/customers/:id/survey", "Credit survey"],
   ["/kyc", "KYC review"],
 
+  ["/pre-assessments", "Pre-assessment"],
   ["/loans", "Loans"],
   ["/loans/drafts", "Drafts"],
   ["/loans/new", "New loan"],
@@ -44,6 +45,7 @@ const STAFF_ROUTES: readonly CrumbRoute[] = [
   ["/collections/demand-letters", "Demand letters"],
   ["/repossession", "Repossession"],
   ["/lease", "Lease-to-Own"],
+  ["/payments", "Payments"],
   ["/payments/bulk", "Bulk payments"],
 
   ["/accounting", "Accounting"],
@@ -81,6 +83,7 @@ const STAFF_ROUTES: readonly CrumbRoute[] = [
 
 const PORTAL_ROUTES: readonly CrumbRoute[] = [
   ["/portal", "Dashboard"],
+  ["/portal/pre-assess", "Check eligibility"],
   ["/portal/apply", "New loan"],
   ["/portal/loans", "My loans"],
   ["/portal/loans/:id", ""],

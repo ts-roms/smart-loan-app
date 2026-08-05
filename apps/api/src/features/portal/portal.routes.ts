@@ -17,14 +17,18 @@ import {
   CooperativeRepository,
   CreditScoreRepository,
   CustomerLedgerRepository,
+  DecisionRuleRepository,
   KycRepository,
   LoanRepository,
   PaymentIntentRepository,
+  PreAssessmentRepository,
 } from "@loan/db";
 import { MockProvider } from "@loan/payments";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { config } from "../../config";
+import { PreAssessmentService } from "../pre-assessment/index";
+
 import { PortalController } from "./portal.controller";
 import { PortalService } from "./portal.service";
 
@@ -59,6 +63,19 @@ export async function portalRoutes(app: FastifyInstance) {
         new CustomerLedgerRepository(prisma),
         new PaymentIntentRepository(prisma, provider),
         intentWebhookUrl,
+        // Same service the staff /pre-assessments routes build. The
+        // borrower endpoint differs only in forcing the subject to the
+        // caller's own customer row.
+        new PreAssessmentService(
+          {
+            prisma,
+            screening: app.screening(prisma),
+            scores: new CreditScoreRepository(prisma),
+            kyc: new KycRepository(prisma),
+            rules: new DecisionRuleRepository(prisma),
+          },
+          new PreAssessmentRepository(prisma),
+        ),
       ),
     };
   });
@@ -77,6 +94,12 @@ export async function portalRoutes(app: FastifyInstance) {
     ctrl.signBorrower,
   );
   app.post("/loans/apply", ctrl.applyLoan);
+
+  // ─── pre-assessment ───────────────────────────────────────────────
+  // "Would I be approved?" before committing to an application. Saved,
+  // so the borrower can come back to what they were told.
+  app.get("/pre-assessments", ctrl.listPreAssessments);
+  app.post("/pre-assessments", ctrl.preAssess);
 
   // ─── KYC ─────────────────────────────────────────────────────────
   app.get("/kyc", ctrl.listKyc);

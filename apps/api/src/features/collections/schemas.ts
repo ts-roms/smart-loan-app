@@ -46,6 +46,19 @@ export const assignSchema = z.object({
 export type AssignInput = z.infer<typeof assignSchema>;
 
 /**
+ * Bulk assignment — one collector, many accounts. Capped at 500 like
+ * the other batch endpoints; the queue itself is far smaller in any
+ * sane book, and a runaway client shouldn't be able to queue thousands
+ * of upserts in one transaction.
+ */
+export const bulkAssignSchema = z.object({
+  loanIds: z.array(z.string().uuid()).min(1).max(500),
+  collector: z.union([z.string().uuid(), z.string().email()]),
+  note: z.string().max(500).optional(),
+});
+export type BulkAssignInput = z.infer<typeof bulkAssignSchema>;
+
+/**
  * Queue scope.
  *
  *   all         every delinquent account (the existing shared worklist)
