@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { config } from "./config";
 import { decorateFeatureGate } from "./features/licensing/feature-gate.plugin";
 import { platformRoutes } from "./features/platform/index";
+import { coMakerConsentRoutes } from "./features/co-maker/consent.routes";
 import { publicRoutes } from "./features/public/index";
 import { registerRoutes } from "./routes/index";
 import { uploadStaticPlugin } from "./features/uploads/static.plugin";
@@ -214,6 +215,11 @@ export async function buildApp() {
   // tenant API stays uncluttered.
   await app.register(platformRoutes, { prefix: "/platform" });
   await app.register(publicRoutes, { prefix: "/public" });
+  // Co-maker consent. Anonymous like /public, but kept out of
+  // publicRoutes because that file's contract is "nothing here touches
+  // user data" and this reads a loan. The invite token is the
+  // authorization; see consent.routes.
+  await app.register(coMakerConsentRoutes, { prefix: "/public/co-maker" });
 
   return app;
 }

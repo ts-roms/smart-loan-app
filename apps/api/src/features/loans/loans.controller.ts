@@ -138,7 +138,26 @@ export class LoanWorkflowController {
     }
   };
 
-  disburse = async (req: FastifyRequest<{ Params: { id: string } }>) => {
-    return req.loanCtx!.workflowService.disburse(req.params.id, req.user.sub);
+  disburse = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const result = await req.loanCtx!.workflowService.disburse(
+      req.params.id,
+      req.user.sub,
+    );
+    if (!result.ok) {
+      if (result.kind === "NotFound") {
+        return reply.code(404).send({ error: "NotFound" });
+      }
+      // 409, with names: the officer needs to know who to chase, not
+      // just that something is outstanding.
+      return reply.code(409).send({
+        error: "CoMakersPending",
+        message: "Every co-maker has to approve before funds are released.",
+        coMakers: result.coMakers,
+      });
+    }
+    return result.loan;
   };
 }

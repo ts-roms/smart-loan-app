@@ -58,6 +58,7 @@ import { LoanStatusBadge } from "../components/StatusBadge";
 import { PenaltyPanel } from "../components/PenaltyPanel";
 import { AnnualDocsPanel } from "../components/AnnualDocsPanel";
 import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
+import { CoMakersPanel } from "../components/CoMakersPanel";
 import { FaceMatchPanel } from "../components/FaceMatchPanel";
 import { LeasePanel } from "../components/LeasePanel";
 import { useAnswerDeclarations } from "@loan/api-client";
@@ -288,6 +289,9 @@ export function LoanDetailPage() {
           is persisted on the loan + audit-logged.
         */}
         <FaceMatchPanel loan={l} />
+
+        {/* Consent gate on disburse — see CoMakersPanel. */}
+        <CoMakersPanel loanId={l.id} />
         {/*
           AI assistant — explain the loan's decisioning verdict in plain
           language. Local LLM only; never sends data off-server. Officer

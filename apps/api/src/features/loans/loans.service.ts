@@ -1,5 +1,6 @@
 import type {
   AuditLogRepository,
+  CoMakerRepository,
   CreditScoreRepository,
   DecisionRuleRepository,
   KycRepository,
@@ -69,6 +70,25 @@ export type ApplyResult =
       screeningId: string;
     }
   | { ok: false; kind: "BadRequest"; message: string; issues?: unknown };
+
+/**
+ * Result of a disburse attempt. CoMakersPending → 409 with the names,
+ * so the officer can see who to chase rather than a bare refusal.
+ */
+export type DisburseResult =
+  | { ok: true; loan: LoanApplication }
+  | { ok: false; kind: "NotFound" }
+  | {
+      ok: false;
+      kind: "CoMakersPending";
+      coMakers: Array<{
+        id: string;
+        fullName: string;
+        status: string;
+        declineReason: string | null;
+        invited: boolean;
+      }>;
+    };
 
 /**
  * Result of a decide attempt. NotFound → 404, KycIncomplete → 409
@@ -156,6 +176,13 @@ export class LoanWorkflowService {
      * pre-assessment don't have to construct one.
      */
     private readonly preAssessments?: PreAssessmentRepository,
+    /**
+     * Consent gate on disburse. Optional for the same reason as
+     * `preAssessments` — plenty of call sites construct this service
+     * without ever reaching disburse, and a loan with no co-makers
+     * passes the gate trivially.
+     */
+    private readonly coMakers?: CoMakerRepository,
   ) {}
 
   /**
@@ -459,10 +486,29 @@ export class LoanWorkflowService {
    * if the borrower has an email on file. The notification is
    * best-effort: a failed dispatch must not undo the disburse.
    */
-  async disburse(
-    idOrNumber: string,
-    actorId: string,
-  ): Promise<LoanApplication> {
+  async disburse(idOrNumber: string, actorId: string): Promise<DisburseResult> {
+    // Co-makers are jointly liable, so releasing funds before they've
+    // agreed hands someone a debt they never accepted. Checked here
+    // rather than in the repository because the answer is a 409 with
+    // names in it, not an exception.
+    const target = await this.loans.findByIdOrNumber(idOrNumber);
+    if (!target) return { ok: false, kind: "NotFound" };
+    const outstanding =
+      (await this.coMakers?.notApprovedForLoan(target.id)) ?? [];
+    if (outstanding.length > 0) {
+      return {
+        ok: false,
+        kind: "CoMakersPending",
+        coMakers: outstanding.map((c) => ({
+          id: c.id,
+          fullName: c.fullName,
+          status: c.status,
+          declineReason: c.declineReason,
+          invited: c.inviteSentAt !== null,
+        })),
+      };
+    }
+
     const disbursed = await this.loans.disburse(idOrNumber, {
       disbursedById: actorId,
     });
@@ -493,7 +539,7 @@ export class LoanWorkflowService {
       // Non-fatal — the disburse already committed.
     }
 
-    return disbursed;
+    return { ok: true, loan: disbursed };
   }
 
   /**
