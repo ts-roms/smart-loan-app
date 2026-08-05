@@ -7,6 +7,8 @@ import {
   citiesFor,
   citiesForProvince,
   citiesForRegion,
+  findCity,
+  loadBarangaysForCity,
   locateCity,
   provincesForRegion,
   regionForName,
@@ -195,5 +197,70 @@ describe("the Maguindanao split", () => {
     const south = citiesForProvince("Maguindanao del Sur").map((c) => c.name);
     expect(north.length).toBeGreaterThan(0);
     expect(north).toEqual(south);
+  });
+});
+
+describe("findCity", () => {
+  it("resolves a unique name without any scope", () => {
+    expect(findCity("Quezon City")?.regionCode).toBe("1300000000");
+  });
+
+  it("uses the province to disambiguate a repeated name", () => {
+    // Nationally ambiguous, unique inside a province — which is
+    // exactly why the barangay picker passes its scope in.
+    expect(findCity("San Isidro")).toBeNull();
+    expect(findCity("San Isidro", "Region III", "Nueva Ecija")).not.toBeNull();
+  });
+
+  it("returns null for a name that isn't a city", () => {
+    expect(findCity("Not A Place", "Region VII", "Cebu")).toBeNull();
+    expect(findCity("")).toBeNull();
+  });
+
+  it("ignores surrounding whitespace and case", () => {
+    expect(findCity("  quezon city ")?.name).toBe("Quezon City");
+  });
+});
+
+describe("loadBarangaysForCity", () => {
+  it("loads a city's barangays on demand", async () => {
+    const city = findCity("City of Cebu", "Region VII", "Cebu");
+    const rows = await loadBarangaysForCity(city);
+    expect(rows.length).toBeGreaterThan(70);
+    // PSGC marks poblacion barangays: "Lahug (Pob.)", not "Lahug".
+    expect(rows).toContain("Lahug (Pob.)");
+    expect(rows).toContain("Guadalupe");
+  });
+
+  it("covers a city the old hand-written list never reached", () => {
+    // Apas is one of the Cebu City barangays the 77-entry table
+    // omitted; a resident there had no valid option.
+    return expect(
+      loadBarangaysForCity(findCity("City of Cebu", "Region VII", "Cebu")),
+    ).resolves.toContain("Apas");
+  });
+
+  it("resolves to empty rather than throwing for an unknown city", async () => {
+    // A legacy free-text city has no list; the field stays usable.
+    await expect(loadBarangaysForCity(null)).resolves.toEqual([]);
+  });
+
+  it("serves the Maguindanao halves despite their suffixed codes", async () => {
+    // Those city codes carry a ":N"/":S" the barangay data knows
+    // nothing about, so the lookup has to strip it.
+    const city = findCity(
+      "Datu Odin Sinsuat",
+      "BARMM",
+      "Maguindanao del Norte",
+    );
+    expect(city?.code).toContain(":");
+    await expect(loadBarangaysForCity(city)).resolves.not.toEqual([]);
+  });
+
+  it("returns the same rows on a repeated call", async () => {
+    const city = findCity("Quezon City");
+    const a = await loadBarangaysForCity(city);
+    const b = await loadBarangaysForCity(city);
+    expect(b).toEqual(a);
   });
 });

@@ -218,3 +218,69 @@ export function locateCity(cityName: string): {
     region,
   };
 }
+
+// ─── Barangays (lazy) ───────────────────────────────────────────────────
+
+import { BARANGAY_CHUNKS } from "./psgc-barangays/index";
+
+/**
+ * Barangays are loaded on demand, never bundled.
+ *
+ * There are 42,046 of them — ~580 KB of source that would otherwise sit
+ * in the main bundle for the benefit of the one form that asks. They're
+ * sharded by region (17 chunks, 1,100–4,400 barangays each), so opening
+ * an address form in Cebu fetches Region VII and nothing else.
+ *
+ * Names only, keyed by city code. Nothing reads a barangay code — the
+ * customer row stores the name — and dropping it roughly halves each
+ * chunk.
+ */
+const chunkCache = new Map<string, Promise<Record<string, string[]>>>();
+
+/**
+ * Barangays in a city, fetched on first use and cached thereafter.
+ *
+ * Resolves to `[]` for a city that isn't in PSGC rather than throwing:
+ * a legacy free-text city has no barangay list, and the caller's field
+ * should stay usable rather than error.
+ */
+export async function loadBarangaysForCity(
+  city: PsgcCity | null | undefined,
+): Promise<string[]> {
+  if (!city) return [];
+  const load = BARANGAY_CHUNKS[city.regionCode];
+  if (!load) return [];
+  let chunk = chunkCache.get(city.regionCode);
+  if (!chunk) {
+    // Cache the PROMISE, not the result — two fields mounting together
+    // would otherwise each start their own fetch of the same chunk.
+    chunk = load().then((m) => m.BARANGAYS);
+    chunkCache.set(city.regionCode, chunk);
+  }
+  const byCity = await chunk;
+  // The Maguindanao halves carry a ":N"/":S" suffix on the city code
+  // that the barangay data knows nothing about.
+  return byCity[city.code.split(":")[0]!] ?? [];
+}
+
+/**
+ * The city a name refers to, within an optional region/province scope.
+ *
+ * Scoping is what makes this usable at all: "San Isidro" is a dozen
+ * different municipalities nationally but exactly one inside a chosen
+ * province. Returns null when it's still ambiguous, which is the
+ * caller's cue to leave barangay as free text rather than offer some
+ * other town's list.
+ */
+export function findCity(
+  cityName: string,
+  regionName?: string | null,
+  provinceName?: string | null,
+): PsgcCity | null {
+  const target = cityName.trim().toLowerCase();
+  if (!target) return null;
+  const matches = citiesFor(regionName, provinceName).filter(
+    (c) => c.name.toLowerCase() === target,
+  );
+  return matches.length === 1 ? matches[0]! : null;
+}

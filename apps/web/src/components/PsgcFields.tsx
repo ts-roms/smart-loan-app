@@ -1,6 +1,8 @@
 import {
   PSGC_REGIONS,
   citiesFor,
+  findCity,
+  loadBarangaysForCity,
   provincesForRegion,
   regionHasProvinces,
 } from "@loan/shared-utils";
@@ -210,6 +212,68 @@ export function CityPicker({
       }))}
       placeholder="City or municipality"
       required={required}
+      disabled={disabled}
+    />
+  );
+}
+
+/**
+ * Barangays for the chosen city, fetched on demand.
+ *
+ * The full set is 42,046 entries, so the region's chunk loads only
+ * once a city is identified — see `loadBarangaysForCity`. Until then,
+ * and for a city that isn't in PSGC, this is an ordinary text input:
+ * suggestions are a convenience, never a gate.
+ *
+ * Identifying the city needs the region/province scope, because a bare
+ * name like "San Isidro" matches a dozen municipalities. Without a
+ * unique match there's no list to offer, and offering some other
+ * town's barangays would be worse than offering none.
+ */
+export function BarangayPicker({
+  region,
+  province,
+  city,
+  value,
+  onChange,
+  disabled,
+}: {
+  region?: string | null;
+  province?: string | null;
+  city: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  const resolved = useMemo(
+    () => findCity(city, region, province),
+    [city, region, province],
+  );
+  const [options, setOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!resolved) {
+      setOptions([]);
+      return;
+    }
+    // Guarded against the city changing mid-flight: without this, a
+    // slow chunk for the previous city could land after the new one
+    // and offer the wrong list.
+    let live = true;
+    void loadBarangaysForCity(resolved).then((rows) => {
+      if (live) setOptions(rows);
+    });
+    return () => {
+      live = false;
+    };
+  }, [resolved]);
+
+  return (
+    <SuggestInput
+      value={value}
+      onChange={onChange}
+      suggestions={options.map((name) => ({ key: name, label: name }))}
+      placeholder={city ? "Barangay" : "Barangay — pick a city for suggestions"}
       disabled={disabled}
     />
   );

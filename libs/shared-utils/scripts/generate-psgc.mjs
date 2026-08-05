@@ -17,15 +17,19 @@
  */
 
 import { createRequire } from "node:module";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+
+/** Emitting source files means writing newlines into strings a lot. */
+const NEWLINE = String.fromCharCode(10);
 
 const require = createRequire(import.meta.url);
 const base = "ph-geo-admin-divisions/lib/";
 const { regions } = require(base + "regions");
 const { provinces } = require(base + "provinces");
 const { municipalities } = require(base + "combined-municipalities");
+const { baranggays } = require(base + "baranggays");
 
 /**
  * Short region labels. NOT taken from the dataset: these are the
@@ -192,6 +196,86 @@ export const PSGC_CITIES_DATA: ReadonlyArray<PsgcCity> = [
 ${cityRows.map((c) => `  { code: ${lit(c.code)}, name: ${lit(c.name)}, provinceCode: ${lit(c.provinceCode)}, regionCode: ${lit(c.regionCode)}${c.isCapital ? ", isCapital: true" : ""} },`).join("\n")}
 ];
 `;
+
+// ── Barangays, sharded by region ─────────────────────────────────────
+//
+// 42,046 of them — ~1.3 MB as one file, which is why they're loaded on
+// demand rather than bundled. Sharded by region (17 chunks, 1,100 to
+// 4,400 each) because an address form only ever needs one region's
+// worth, and a single chunk would make the first barangay lookup pay
+// for the whole country.
+//
+// Only names are stored, keyed by city code. Nothing reads a barangay
+// code — the customer row holds the name — and dropping it roughly
+// halves each chunk.
+const chunkDir = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "src",
+  "lib",
+  "psgc-barangays",
+);
+mkdirSync(chunkDir, { recursive: true });
+
+const byRegion = new Map();
+for (const b of baranggays) {
+  // Verified against the full set: every barangay's city is its own
+  // PSGC id with the barangay digits cleared.
+  const cityCode = b.psgcId.slice(0, 7) + "000";
+  const perRegion = byRegion.get(b.regionId) ?? new Map();
+  const names = perRegion.get(cityCode) ?? [];
+  names.push(b.name);
+  perRegion.set(cityCode, names);
+  byRegion.set(b.regionId, perRegion);
+}
+
+const chunkFiles = [];
+for (const region of regionRows) {
+  const perRegion = byRegion.get(region.regionId);
+  if (!perRegion) continue;
+  const entries = [...perRegion.entries()].sort((a, b2) =>
+    a[0].localeCompare(b2[0]),
+  );
+  const body = entries
+    .map(
+      ([cityCode, names]) =>
+        `  ${JSON.stringify(cityCode)}: ${JSON.stringify(names.sort((a, b2) => a.localeCompare(b2)))},`,
+    )
+    .join(NEWLINE);
+  const total = entries.reduce((n, [, names]) => n + names.length, 0);
+  writeFileSync(
+    join(chunkDir, `${region.regionId}.ts`),
+    `/** GENERATED — ${region.name}: ${total} barangays across ${entries.length} cities. */
+export const BARANGAYS: Record<string, string[]> = {
+${body}
+};
+`,
+    "utf8",
+  );
+  chunkFiles.push({ regionId: region.regionId, code: region.code, total });
+}
+
+writeFileSync(
+  join(chunkDir, "index.ts"),
+  `/**
+ * GENERATED — dynamic-import map for the barangay chunks.
+ *
+ * Written as an explicit literal rather than a template path so the
+ * bundler can see every chunk and split them; \`import(\`./\${id}\`)\`
+ * would either fail to resolve or pull all seventeen into one.
+ */
+export const BARANGAY_CHUNKS: Record<
+  string,
+  () => Promise<{ BARANGAYS: Record<string, string[]> }>
+> = {
+${chunkFiles.map((c) => `  ${JSON.stringify(c.code)}: () => import("./${c.regionId}"),`).join(NEWLINE)}
+};
+`,
+  "utf8",
+);
+console.log(
+  `wrote ${chunkFiles.length} barangay chunks, ${chunkFiles.reduce((n, c) => n + c.total, 0)} barangays`,
+);
 
 const target = join(
   dirname(fileURLToPath(import.meta.url)),

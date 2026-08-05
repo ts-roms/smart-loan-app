@@ -25,7 +25,7 @@ import {
 } from "@loan/ui";
 import { useMemo, type FormEvent } from "react";
 
-import { SuggestInput } from "../../../components/PsgcFields";
+import { BarangayPicker, SuggestInput } from "../../../components/PsgcFields";
 
 /**
  * Shared sectioned customer-profile form used by both the create flow
@@ -400,9 +400,9 @@ export function CustomerProfileForm({
  * NCR has no provinces — its cities sit directly under the region — so
  * the province field says so instead of sitting empty and broken.
  *
- * Barangay stays free-text: the real list is ~42,000 entries, and a
- * partial one tells a resident of an omitted barangay that their
- * address is invalid.
+ * Barangay suggestions load on demand once the city resolves — all
+ * 42,046 of them exist, sharded by region, so nothing is bundled for
+ * the forms that never ask.
  */
 function AddressBlock({
   region,
@@ -549,11 +549,12 @@ function AddressBlock({
       </Field>
 
       <Field label="Barangay">
-        {/* Free text on purpose — see the AddressBlock comment. */}
-        <Input
+        <BarangayPicker
+          region={region}
+          province={province}
+          city={city}
           value={barangay ?? ""}
-          onChange={(e) => onChange({ barangay: e.target.value || undefined })}
-          placeholder="Barangay name"
+          onChange={(v) => onChange({ barangay: v || undefined })}
         />
       </Field>
 

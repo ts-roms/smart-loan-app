@@ -60,6 +60,8 @@ export {
   citiesForProvince,
   citiesForRegion,
   citiesFor,
+  findCity,
+  loadBarangaysForCity,
   locateCity,
   regionForName,
   type PsgcRegion,
