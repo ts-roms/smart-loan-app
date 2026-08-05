@@ -53,9 +53,18 @@ export { DOC_TYPE_LABELS };
 export function CustomerDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const customer = useCustomer(id);
-  const kycDocs = useKycForCustomer(id);
-  const kycStatus = useKycStatus(id);
-  const score = useCustomerScore(id);
+  // Every link into this page uses the customer NUMBER ("PICKER-008"),
+  // and only /customers/:idOrNumber resolves one — the KYC and scoring
+  // endpoints match on the UUID. Passing the URL param to them meant a
+  // customer who had submitted documents and taken the survey saw an
+  // empty KYC list and "no score yet", permanently.
+  //
+  // Null until the customer loads, which leaves the queries disabled
+  // rather than firing a request that would 404.
+  const customerId = customer.data?.id ?? null;
+  const kycDocs = useKycForCustomer(customerId);
+  const kycStatus = useKycStatus(customerId);
+  const score = useCustomerScore(customerId);
   const [editing, setEditing] = useState(false);
 
   // Name the breadcrumb crumb for this route. Called before the early

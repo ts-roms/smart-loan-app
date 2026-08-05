@@ -68,8 +68,11 @@ function useCatalogMutation<TArgs>(
     mutationFn: fn,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: scoringCatalogKeys.all });
-      // The survey page renders from the catalog too.
-      void qc.invalidateQueries({ queryKey: ["scoring", "questions"] });
+      // The survey page renders from the catalog too. Key must match
+      // useSurveyQuestions exactly — ["scoring", "questions"] matched
+      // nothing, so an edited catalog left the borrower-facing survey
+      // showing the old questions until its hour-long staleTime ran out.
+      void qc.invalidateQueries({ queryKey: ["scoring", "survey-questions"] });
     },
   });
 }
