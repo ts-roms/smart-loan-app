@@ -4,7 +4,6 @@ import type {
   LoanStatus,
 } from "@loan/shared-types";
 import {
-  Badge,
   Button,
   Card,
   CardContent,
