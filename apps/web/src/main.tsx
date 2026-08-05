@@ -9,7 +9,13 @@ import { AuthProvider } from "./providers/auth";
 import { BreadcrumbTitleProvider } from "./providers/breadcrumb-titles";
 import { PwaProvider } from "./providers/pwa";
 import { ThemeProvider } from "./providers/theme";
+import { installStaleBundleRecovery } from "./lib/stale-bundle-recovery";
 import "./index.css";
+
+// Before anything renders: if a stale precached bundle crashes against a
+// newer API, self-heal by dropping the SW + caches and reloading once.
+// See the module for why the update-prompt flow can't save itself here.
+installStaleBundleRecovery();
 
 const queryClient = new QueryClient({
   defaultOptions: {
