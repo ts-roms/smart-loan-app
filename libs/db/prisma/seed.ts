@@ -8,6 +8,7 @@ import { hashPassword } from "@loan/auth";
 import { AccountingRepository } from "../src/repositories/accounting.repository";
 import { LoanProductRepository } from "../src/repositories/loan-product.repository";
 import { DecisionRuleRepository } from "../src/repositories/decision-rule.repository";
+import { seedScoringCatalog } from "../src/repositories/scoring-catalog.repository";
 import {
   PermissionRepository,
   RoleRepository,
@@ -69,6 +70,12 @@ async function main() {
   const ruleRepo = new DecisionRuleRepository(prisma);
   const rules = await ruleRepo.seedDefaults();
 
+  // Credit survey catalog — the factors and questions behind a
+  // borrower's score. Idempotent by key and never overwrites, so an
+  // admin's tuning survives a reseed. Without this the catalog admin
+  // page opens empty on a database created before the feature landed.
+  const survey = await seedScoringCatalog(prisma);
+
   // RBAC: permission catalog + canonical roles + backfill assignments
   // for the seeded users.
   const permRepo = new PermissionRepository(prisma);
@@ -90,6 +97,9 @@ async function main() {
   );
   console.log(
     `Decision rules:    ${rules.created} created, ${rules.existing} already present.`,
+  );
+  console.log(
+    `Credit survey:     ${survey.factors} factors, ${survey.questions} questions created.`,
   );
   console.log(
     `Permissions:       ${perms.created} created, ${perms.existing} already present.`,

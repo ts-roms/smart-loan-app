@@ -160,6 +160,7 @@ export * from "./repositories/screening.repository";
 export * from "./repositories/co-maker.repository";
 export * from "./repositories/decision-rule.repository";
 export * from "./repositories/pre-assessment.repository";
+export * from "./repositories/scoring-catalog.repository";
 export * from "./repositories/rbac.repository";
 export * from "./repositories/delegation.repository";
 export * from "./repositories/bank-reconciliation.repository";

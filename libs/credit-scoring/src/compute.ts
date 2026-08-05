@@ -1,6 +1,11 @@
 import {
+  resolveFactorPoints,
+  TOTAL_RAW_POINTS,
+  type ResolvedFactor,
+  type ScoringCatalog,
+} from "./catalog";
+import {
   FACTORS,
-  MAX_RAW_SCORE,
   SURVEY_QUESTIONS,
   type SurveyAnswer,
   type SurveyQuestion,
@@ -40,22 +45,49 @@ export interface CreditScoreResult {
 }
 
 /**
+ * The catalog as shipped, used when no tenant catalog is supplied.
+ *
+ * Weights ARE the historical maxPoints, and they already sum to 150, so
+ * normalization is a no-op on them — a deployment that never touches
+ * the catalog scores exactly as it always did.
+ */
+export const DEFAULT_CATALOG: ScoringCatalog = {
+  factors: FACTORS.map((f) => ({
+    id: f.id,
+    label: f.label,
+    weight: f.maxPoints,
+    computed: f.id === "on_time" || f.id === "defaults",
+  })),
+  questions: SURVEY_QUESTIONS,
+};
+
+/**
  * Compute a credit score from survey answers + behavioral history.
  *
  * Survey-driven factors look up their weight from the question catalog;
  * behavioral factors (on-time payments, defaults) are derived directly
  * from `behavior`. Missing answers contribute 0 — they don't crash.
+ *
+ * `catalog` is the tenant's editable factor + question set. Factor
+ * point values are DERIVED from relative weights against a fixed total
+ * (see catalog.ts), so an admin adding or removing a factor
+ * redistributes points rather than moving the 300–850 scale — a 720
+ * means the same thing before and after an edit, and decision rules
+ * that threshold on score keep their meaning.
  */
 export function computeCreditScore(input: {
   answers: Record<string, SurveyAnswer>;
   behavior?: BehaviorInput;
+  catalog?: ScoringCatalog;
 }): CreditScoreResult {
   const { answers, behavior } = input;
+  const catalog = input.catalog ?? DEFAULT_CATALOG;
+  const resolved = resolveFactorPoints(catalog.factors);
   const breakdown: FactorBreakdown[] = [];
 
   // Survey factors.
-  for (const q of SURVEY_QUESTIONS) {
-    const factor = FACTORS.find((f) => f.id === q.factorId);
+  for (const q of catalog.questions) {
+    const factor = resolved.find((f) => f.id === q.factorId);
     if (!factor) continue;
     const { weight, source } = evaluateQuestion(q, answers[q.id]);
     breakdown.push({
@@ -70,14 +102,12 @@ export function computeCreditScore(input: {
 
   // Behavioral factors (computed, not from survey).
   if (behavior) {
-    breakdown.push(...behaviorFactors(behavior));
+    breakdown.push(...behaviorFactors(behavior, resolved));
   } else {
     // No history yet — give partial credit so first-time borrowers aren't
     // dinged into oblivion. 50% of behavioral-factor max keeps them in the
     // running while still leaving room to grow.
-    for (const id of ["on_time", "defaults"]) {
-      const f = FACTORS.find((x) => x.id === id);
-      if (!f) continue;
+    for (const f of resolved.filter((x) => x.computed)) {
       breakdown.push({
         factorId: f.id,
         label: f.label,
@@ -90,12 +120,21 @@ export function computeCreditScore(input: {
   }
 
   const rawScore = breakdown.reduce((s, b) => s + b.points, 0);
-  // Linear scale to FICO-flavoured 300..850.
-  const score = Math.round(300 + (rawScore / MAX_RAW_SCORE) * (850 - 300));
+  // Linear scale to FICO-flavoured 300..850. The denominator is the
+  // FIXED total, not a sum of whatever the catalog currently holds —
+  // that pinning is what keeps the scale stable across catalog edits.
+  const score = Math.round(300 + (rawScore / TOTAL_RAW_POINTS) * (850 - 300));
   const tier = toTier(score);
   const bucket = toBureauBucket(score);
 
-  return { score, tier, bucket, rawScore, maxRaw: MAX_RAW_SCORE, breakdown };
+  return {
+    score,
+    tier,
+    bucket,
+    rawScore,
+    maxRaw: TOTAL_RAW_POINTS,
+    breakdown,
+  };
 }
 
 function evaluateQuestion(
@@ -136,16 +175,27 @@ function evaluateQuestion(
   }
 }
 
-function behaviorFactors(b: BehaviorInput): FactorBreakdown[] {
-  const onTime = FACTORS.find((f) => f.id === "on_time")!;
-  const defaults = FACTORS.find((f) => f.id === "defaults")!;
+/**
+ * On-time and default history, scored against the resolved catalog.
+ *
+ * Both factors are looked up by id and skipped when absent: an admin
+ * who removes "default history" from the catalog gets a score without
+ * it, rather than a crash on a non-null assertion.
+ */
+function behaviorFactors(
+  b: BehaviorInput,
+  resolved: ResolvedFactor[],
+): FactorBreakdown[] {
+  const onTime = resolved.find((f) => f.id === "on_time");
+  const defaults = resolved.find((f) => f.id === "defaults");
+  const out: FactorBreakdown[] = [];
 
   const onTimeWeight = b.onTimeRate ?? 0.5; // unknown → neutral
   const defaultPenalty = Math.min(1, b.defaults / Math.max(1, b.priorLoans));
   const defaultsWeight = 1 - defaultPenalty;
 
-  return [
-    {
+  if (onTime) {
+    out.push({
       factorId: onTime.id,
       label: onTime.label,
       maxPoints: onTime.maxPoints,
@@ -155,8 +205,10 @@ function behaviorFactors(b: BehaviorInput): FactorBreakdown[] {
         b.onTimeRate === null
           ? "No payments yet — neutral score"
           : `${Math.round(onTimeWeight * 100)}% on-time across ${b.priorLoans} prior loan(s)`,
-    },
-    {
+    });
+  }
+  if (defaults) {
+    out.push({
       factorId: defaults.id,
       label: defaults.label,
       maxPoints: defaults.maxPoints,
@@ -166,6 +218,7 @@ function behaviorFactors(b: BehaviorInput): FactorBreakdown[] {
         b.defaults === 0
           ? "No defaults"
           : `${b.defaults} default(s) out of ${b.priorLoans}`,
-    },
-  ];
+    });
+  }
+  return out;
 }
