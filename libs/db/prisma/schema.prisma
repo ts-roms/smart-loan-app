@@ -406,21 +406,21 @@ enum SurveyQuestionKind {
 }
 
 model SurveyFactor {
-  id String @id @default(uuid())
+  id       String  @id @default(uuid())
   /// Stable identifier referenced by questions AND by stored score
   /// breakdowns ("income", "on_time"). Renaming the label is safe;
   /// changing this orphans historical breakdowns, so the API refuses.
-  key String @unique
-  label String
+  key      String  @unique
+  label    String
   /// Relative share of the fixed total. Any positive number — only the
   /// ratio between factors matters, so 25/20 and 5/4 are identical.
-  weight Float
+  weight   Float
   /// Derived from loan history rather than a survey answer (on-time
   /// rate, defaults). Still consumes points, so it normalizes like any
   /// other factor, but the builder doesn't offer questions for it.
   computed Boolean @default(false)
-  order Int @default(0)
-  active Boolean @default(true)
+  order    Int     @default(0)
+  active   Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -431,17 +431,17 @@ model SurveyFactor {
 }
 
 model SurveyQuestionDef {
-  id String @id @default(uuid())
+  id       String             @id @default(uuid())
   /// Stable identifier answers key on. SurveyResponse.answers is
   /// `{ [key]: answer }`, so this is as immutable as the factor key.
-  key String @unique
-  kind SurveyQuestionKind
-  label String
-  help String?
+  key      String             @unique
+  kind     SurveyQuestionKind
+  label    String
+  help     String?
   /// Free-text grouping heading, same convention as KYC declarations.
   category String?
-  order Int @default(0)
-  active Boolean @default(true)
+  order    Int                @default(0)
+  active   Boolean            @default(true)
 
   /// Kind-specific configuration:
   ///   CHOICE  → { options: [{ label, value, weight }] }
