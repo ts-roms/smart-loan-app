@@ -1,5 +1,9 @@
-import { useCreateCustomer, useCustomers } from "@loan/api-client";
-import type { CustomerCreateInput, KycStatus } from "@loan/shared-types";
+import { useCreateCustomer, useCustomersPage } from "@loan/api-client";
+import type {
+  CustomerCreateInput,
+  CustomerListQuery,
+  KycStatus,
+} from "@loan/shared-types";
 import {
   Badge,
   Button,
@@ -12,13 +16,22 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  Input,
+  Pagination,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   SkeletonCard,
   useToast,
 } from "@loan/ui";
 import { formatMoney } from "@loan/shared-utils";
-import { FileSpreadsheet, Plus, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { FileSpreadsheet, Plus, Search, UserPlus, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+
+import { useDebouncedValue } from "../../../lib/use-debounced-value";
 import { CustomerProfileForm } from "../components/CustomerProfileForm";
 import { CustomerSummaryLink } from "../components/CustomerSummaryDrawer";
 import { IdOcrCard } from "../components/IdOcrCard";
@@ -28,10 +41,47 @@ import { findArticle, TourButton } from "../../help";
  * Customer master list. Each row links to the customer detail page
  * where KYC docs, credit score history, and loans live. KYC status is
  * surfaced inline so officers can triage at a glance.
+ *
+ * Search and filtering are server-side. The list is capped at 200 rows,
+ * so filtering what was already fetched would search the newest page and
+ * miss the long-standing customer the officer is looking for — the exact
+ * case where search matters most.
  */
+/** Rows per page in the table. The endpoint's own default is 200. */
+const PAGE_SIZE = 25;
+
 export function CustomersPage() {
-  const customers = useCustomers();
   const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState("");
+  const [kycStatus, setKycStatus] = useState<KycStatus | "ALL">("ALL");
+  const [page, setPage] = useState(1);
+
+  // Only the debounced copy reaches the query key, so a typed name costs
+  // one request rather than one per keystroke.
+  const q = useDebouncedValue(search.trim()) || undefined;
+  const filter: CustomerListQuery = {
+    q,
+    kycStatus: kycStatus === "ALL" ? undefined : kycStatus,
+    page,
+    pageSize: PAGE_SIZE,
+  };
+  const filtered = Boolean(filter.q || filter.kycStatus);
+
+  // Narrowing the filter reshuffles the result set, so the page the
+  // operator was on no longer means anything — page 4 of a two-page
+  // result is an empty table that reads as "no matches".
+  useEffect(() => {
+    setPage(1);
+  }, [q, kycStatus]);
+
+  const customers = useCustomersPage(filter);
+  const rows = customers.data?.rows ?? [];
+  const total = customers.data?.total ?? 0;
+
+  const clearFilters = () => {
+    setSearch("");
+    setKycStatus("ALL");
+  };
 
   return (
     <Card>
@@ -55,14 +105,57 @@ export function CustomersPage() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-subtle" />
+            <Input
+              className="pl-8"
+              placeholder="Search name, reference, phone or ID…"
+              aria-label="Search customers"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Select
+            value={kycStatus}
+            onValueChange={(v) => setKycStatus(v as KycStatus | "ALL")}
+          >
+            <SelectTrigger className="w-44" aria-label="Filter by KYC status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All KYC statuses</SelectItem>
+              <SelectItem value="NONE">No documents</SelectItem>
+              <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="VERIFIED">Verified</SelectItem>
+              <SelectItem value="REJECTED">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+          {filtered && (
+            <Button variant="ghost" onClick={clearFilters}>
+              <X className="h-3.5 w-3.5" />
+              Clear
+            </Button>
+          )}
+          {/* Match count, not row count — the table shows one page. The
+              range readout lives with the page control at the bottom. */}
+          <span className="text-xs text-fg-muted ml-auto">
+            {total} customer{total === 1 ? "" : "s"}
+          </span>
+        </div>
+
         {customers.isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <SkeletonCard /> <SkeletonCard /> <SkeletonCard />
           </div>
-        ) : (customers.data ?? []).length === 0 ? (
+        ) : rows.length === 0 ? (
+          // An empty book and an empty result set need different nudges:
+          // one is "create something", the other is "loosen the filter".
           <p className="text-sm text-fg-muted">
-            No customers yet. Add one to get started.
+            {filtered
+              ? "No customers match those filters."
+              : "No customers yet. Add one to get started."}
           </p>
         ) : (
           <table className="w-full text-sm" data-tour="customers-table">
@@ -76,7 +169,7 @@ export function CustomersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-default">
-              {(customers.data ?? []).map((c) => (
+              {rows.map((c) => (
                 <tr key={c.id} className="hover:bg-hover">
                   {/* Human reference — shown as the leftmost column so it's
                       the primary handle for an operator scanning the list. */}
@@ -101,6 +194,20 @@ export function CustomersPage() {
               ))}
             </tbody>
           </table>
+        )}
+
+        {/* Rendered whenever there's anything to page through. Hidden on
+            an empty result — "No customers" is already said above it. */}
+        {rows.length > 0 && (
+          <Pagination
+            page={customers.data?.page ?? 1}
+            totalPages={customers.data?.totalPages ?? 1}
+            total={total}
+            pageSize={customers.data?.pageSize ?? PAGE_SIZE}
+            onPageChange={setPage}
+            noun="customer"
+            busy={customers.isFetching}
+          />
         )}
       </CardContent>
       {adding && <NewCustomerDialog onClose={() => setAdding(false)} />}

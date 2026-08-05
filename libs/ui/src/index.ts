@@ -98,6 +98,7 @@ export {
 } from "./components/charts";
 export { Delta, type DeltaProps } from "./components/delta";
 export { SearchInput, type SearchInputProps } from "./components/search-input";
+export { Pagination, type PaginationProps } from "./components/pagination";
 export {
   useIdleLogout,
   IdleWarningDialog,

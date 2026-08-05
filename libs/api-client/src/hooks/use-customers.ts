@@ -2,29 +2,71 @@ import type {
   Customer,
   CustomerCreateInput,
   CustomerListItem,
+  CustomerListQuery,
   CustomerSummary,
+  Paginated,
   RepeatEligibility,
 } from "@loan/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "../client";
+import { toQueryString } from "../query-string";
 
 export const customerKeys = {
   all: ["customers"] as const,
+  // Filters are part of the key so each search is cached separately and
+  // switching back to a previous one is instant. Still prefixed with
+  // `all`, so the existing `invalidateQueries({ queryKey: all })` after a
+  // create or edit continues to refresh every filtered view.
+  list: (filter?: CustomerListQuery) =>
+    [...customerKeys.all, "list", filter ?? {}] as const,
   detail: (id: string) => [...customerKeys.all, "detail", id] as const,
   summary: (id: string) => [...customerKeys.all, "summary", id] as const,
   repeat: (id: string) => [...customerKeys.all, "repeat", id] as const,
 };
 
 /**
- * Full customer list. Rows carry `hasLoans` (an approved/disbursed/active
- * loan exists) and `hasDefaulted` (a loan went bad at some point), so
- * pickers can rank and warn without fetching `/loans`.
+ * Customer list as a plain array — the pool shape.
+ *
+ * Rows carry `hasLoans` (an approved/disbursed/active loan exists) and
+ * `hasDefaulted` (a loan went bad at some point), so pickers can rank and
+ * warn without fetching `/loans`.
+ *
+ * The endpoint is paginated, but most callers here are pickers and
+ * queues that want "the customers", not "a page of customers". `select`
+ * unwraps the envelope for them, so `useCustomers()` still returns the
+ * 200 most recent exactly as it did before pagination existed. Use
+ * {@link useCustomersPage} where the page metadata matters.
+ *
+ * Both hooks share a query key, so a screen using each fetches once.
  */
-export function useCustomers() {
+export function useCustomers(filter?: CustomerListQuery) {
   return useQuery({
-    queryKey: customerKeys.all,
-    queryFn: () => getApiClient().get<CustomerListItem[]>("/customers"),
+    queryKey: customerKeys.list(filter),
+    queryFn: () =>
+      getApiClient().get<Paginated<CustomerListItem>>(
+        `/customers${toQueryString(filter)}`,
+      ),
+    select: (page) => page.rows,
+    placeholderData: (previous) => previous,
+  });
+}
+
+/**
+ * Customer list with its page metadata — total, page, totalPages.
+ *
+ * `placeholderData` keeps the previous page's rows on screen while a new
+ * query is in flight, so typing in a search box or stepping a page
+ * doesn't flash the table back to a skeleton.
+ */
+export function useCustomersPage(filter?: CustomerListQuery) {
+  return useQuery({
+    queryKey: customerKeys.list(filter),
+    queryFn: () =>
+      getApiClient().get<Paginated<CustomerListItem>>(
+        `/customers${toQueryString(filter)}`,
+      ),
+    placeholderData: (previous) => previous,
   });
 }
 

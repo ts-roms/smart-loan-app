@@ -354,7 +354,13 @@ export type LoanStatus =
   | "ACTIVE"
   | "CLOSED"
   | "DEFAULTED"
-  | "CANCELLED";
+  | "CANCELLED"
+  // Both exist in the Prisma enum and are reachable through
+  // /loans/:id/restructure and /loans/:id/write-off; they were missing
+  // here, so any client narrowing on this type couldn't name a loan it
+  // would still be served.
+  | "RESTRUCTURED"
+  | "WRITTEN_OFF";
 
 /**
  * Product types are a string code now — the catalog is dynamic and admins
@@ -484,6 +490,74 @@ export interface Property extends Omit<
   updatedAt: string;
 }
 
+/**
+ * Borrower projection carried on loan list rows. Four columns rather than
+ * the whole customer: the list needs a name to show and to search on, and
+ * has no business shipping every borrower's income and government ID to a
+ * screen that displays neither.
+ */
+export interface LoanListCustomer {
+  id: string;
+  number: string;
+  firstName: string;
+  lastName: string;
+}
+
+/**
+ * Envelope returned by the paginated list endpoints.
+ *
+ * `total` is the count matching the filter across all pages — not
+ * `rows.length`. Both come from one transaction, so they always describe
+ * the same snapshot.
+ */
+export interface Paginated<T> {
+  rows: T[];
+  total: number;
+  /** The page actually served, after server-side clamping. */
+  page: number;
+  /** The page size actually used, after server-side clamping. */
+  pageSize: number;
+  /** At least 1, so an empty result reads "Page 1 of 1", not "of 0". */
+  totalPages: number;
+}
+
+/** Page controls shared by every paginated list query. */
+export interface PageQuery {
+  /** 1-indexed. Out-of-range values are clamped server-side, not rejected. */
+  page?: number;
+  /**
+   * Rows per page. Defaults to 200 server-side — the list endpoints also
+   * feed the app's pickers, which want a pool rather than a page. The
+   * tables pass a real page size.
+   */
+  pageSize?: number;
+}
+
+/**
+ * Query-string for GET /loans. All optional — the bare call returns the
+ * 200 most recent, as it always has.
+ */
+export interface LoanListQuery extends PageQuery {
+  /**
+   * Free text over the loan number and the borrower's name / reference.
+   * Tokenized server-side: "cruz salary" and "juan LN-2026" both work.
+   */
+  q?: string;
+  status?: LoanStatus;
+  productCode?: string;
+}
+
+/** Query-string for GET /customers. Same shape of contract as above. */
+export interface CustomerListQuery extends PageQuery {
+  /**
+   * Free text over reference number, name, phone, email and government
+   * ID. Tokenized, so "dela cruz" and "cruz juan" both find the same
+   * person.
+   */
+  q?: string;
+  kycStatus?: KycStatus;
+}
+
 export interface LoanApplication {
   id: string;
   number: string;
@@ -512,6 +586,13 @@ export interface LoanApplication {
   property?: Property | null;
   product?: LoanProduct;
   applicationSelfieUrl: string | null;
+  /**
+   * Borrower. Present as a slim four-field projection on rows from
+   * GET /loans (see {@link LoanListCustomer}) so the list can show and
+   * search by who the loan is for; the detail endpoint carries the full
+   * record. Absent on payloads that don't join it at all.
+   */
+  customer?: LoanListCustomer | null;
   /** true when submitted by a customer with prior CLOSED loans. */
   isRepeat?: boolean;
   // Face-match (selfie ↔ ID) outputs. All four are null until an

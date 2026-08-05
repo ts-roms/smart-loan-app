@@ -9,6 +9,7 @@
  */
 export {
   useLoans,
+  useLoansPage,
   useLoan,
   useQuote,
   useApplyLoan,

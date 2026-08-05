@@ -124,6 +124,15 @@ export {
   type AdoptExistingOptions,
   type AdoptExistingResult,
 } from "./lib/adopt-existing";
+export { contains, searchTokens, tokenizedWhere } from "./lib/search";
+export {
+  resolvePaging,
+  toPage,
+  type Page,
+  type PageParams,
+  type PagingBounds,
+  type ResolvedPaging,
+} from "./lib/pagination";
 export {
   isUuid,
   idOrNumberWhere,

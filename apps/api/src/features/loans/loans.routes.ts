@@ -34,6 +34,7 @@ import {
   coMakerSchema,
   draftCreateSchema,
   draftUpdateSchema,
+  loanListQuerySchema,
   paymentSchema,
   quoteSchema,
   restructureSchema,
@@ -221,7 +222,24 @@ export async function loanRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/", canRead, async (req) => req.loanCtx!.loans.list());
+  /**
+   * GET /loans — the master list, with optional search + filters. Every
+   * parameter is optional; the bare call returns the 200 most recent, as
+   * it always has.
+   *
+   * Filtering is server-side because the list is capped: a client-side
+   * filter would only ever search the page it was given and silently miss
+   * the older loan the operator went looking for.
+   */
+  app.get("/", canRead, async (req, reply) => {
+    const parsed = loanListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    return req.loanCtx!.loans.list(parsed.data);
+  });
 
   // GET /loans/:idOrNumber — accept either the UUID or the human "LN-..."
   // number. The number form is what the new frontend uses on URLs; UUIDs

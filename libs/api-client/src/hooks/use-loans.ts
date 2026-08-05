@@ -8,17 +8,26 @@ import type {
   LoanDraftUpdateInput,
   LoanDryRunInput,
   LoanDryRunResult,
+  LoanListQuery,
   LoanPayment,
   LoanPenaltyTotals,
+  Paginated,
   PenaltyWaiver,
   SelfieMatchInput,
 } from "@loan/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "../client";
+import { toQueryString } from "../query-string";
 
 export const loanKeys = {
   all: ["loans"] as const,
+  // Filters are part of the key so each search caches separately. Still
+  // prefixed with `all`, so every existing
+  // `invalidateQueries({ queryKey: loanKeys.all })` after an apply,
+  // decide or disburse continues to refresh the filtered views too.
+  list: (filter?: LoanListQuery) =>
+    [...loanKeys.all, "list", filter ?? {}] as const,
   detail: (id: string) => [...loanKeys.all, "detail", id] as const,
   kycStatus: (id: string) => [...loanKeys.all, "kyc-status", id] as const,
   penalties: (id: string) => [...loanKeys.all, "penalties", id] as const,
@@ -44,10 +53,48 @@ export interface LoanQuote {
   installments: number;
 }
 
-export function useLoans() {
+/**
+ * Loan list as a plain array — the pool shape.
+ *
+ * Searching and paging happen server-side; the list is capped, so
+ * filtering in the client would only ever search the page it was handed.
+ * Rows carry a slim `customer` projection so callers can show and search
+ * by borrower.
+ *
+ * The endpoint is paginated, but callers like the dashboard want "the
+ * loans", not "a page of loans". `select` unwraps the envelope for them,
+ * so `useLoans()` returns the 200 most recent exactly as it did before
+ * pagination existed. Use {@link useLoansPage} where the page metadata
+ * matters. Both hooks share a query key, so a screen using each fetches
+ * once.
+ */
+export function useLoans(filter?: LoanListQuery) {
   return useQuery({
-    queryKey: loanKeys.all,
-    queryFn: () => getApiClient().get<LoanApplication[]>("/loans"),
+    queryKey: loanKeys.list(filter),
+    queryFn: () =>
+      getApiClient().get<Paginated<LoanApplication>>(
+        `/loans${toQueryString(filter)}`,
+      ),
+    select: (page) => page.rows,
+    placeholderData: (previous) => previous,
+  });
+}
+
+/**
+ * Loan list with its page metadata — total, page, totalPages.
+ *
+ * `placeholderData` keeps the previous page's rows on screen while a new
+ * query is in flight, so typing in the search box or stepping a page
+ * doesn't flash the table back to a skeleton.
+ */
+export function useLoansPage(filter?: LoanListQuery) {
+  return useQuery({
+    queryKey: loanKeys.list(filter),
+    queryFn: () =>
+      getApiClient().get<Paginated<LoanApplication>>(
+        `/loans${toQueryString(filter)}`,
+      ),
+    placeholderData: (previous) => previous,
   });
 }
 

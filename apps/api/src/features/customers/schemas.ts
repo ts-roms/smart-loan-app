@@ -135,6 +135,24 @@ export const bulkImportSchema = z.object({
 
 export type BulkImportInput = z.infer<typeof bulkImportSchema>;
 
+/**
+ * Query-string for GET /customers. Every field optional — the bare
+ * endpoint keeps returning the 200 most recent, which is what the
+ * pickers around the app expect.
+ *
+ * `page` and `pageSize` are coerced because query strings are always
+ * text, and are left loosely bounded here because the repository clamps
+ * them anyway: a stale `?page=0` bookmark should land on page 1, not on
+ * a 400.
+ */
+export const customerListQuerySchema = z.object({
+  q: z.string().max(120).optional(),
+  kycStatus: z.enum(["NONE", "PENDING", "VERIFIED", "REJECTED"]).optional(),
+  page: z.coerce.number().optional(),
+  pageSize: z.coerce.number().optional(),
+});
+export type CustomerListQuery = z.infer<typeof customerListQuerySchema>;
+
 /** Ledger query-string for /:id/ledger and /:id/ledger.pdf. */
 export interface LedgerQuery {
   from?: string;

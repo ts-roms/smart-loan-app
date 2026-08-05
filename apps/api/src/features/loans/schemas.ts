@@ -50,6 +50,40 @@ export const propertySchema = z.object({
  * time (uploaded via /uploads-api/selfies) and embedded in the
  * agreement PDF for face-match.
  */
+/**
+ * Query-string for GET /loans. Every field optional — the bare endpoint
+ * keeps returning the 200 most recent.
+ *
+ * `page` and `pageSize` are coerced because query strings are always
+ * text, and are left loosely bounded here because the repository clamps
+ * them anyway: a stale `?page=0` bookmark should land on page 1, not on
+ * a 400.
+ */
+export const loanListQuerySchema = z.object({
+  /** Free text over the loan number and the borrower's name / reference. */
+  q: z.string().max(120).optional(),
+  status: z
+    .enum([
+      "DRAFT",
+      "SUBMITTED",
+      "UNDER_REVIEW",
+      "APPROVED",
+      "REJECTED",
+      "DISBURSED",
+      "ACTIVE",
+      "CLOSED",
+      "DEFAULTED",
+      "CANCELLED",
+      "RESTRUCTURED",
+      "WRITTEN_OFF",
+    ])
+    .optional(),
+  productCode: z.string().max(40).optional(),
+  page: z.coerce.number().optional(),
+  pageSize: z.coerce.number().optional(),
+});
+export type LoanListQuery = z.infer<typeof loanListQuerySchema>;
+
 export const applySchema = z.object({
   customerId: z.string().uuid(),
   productCode: z.string().min(1).max(40),

@@ -1,7 +1,9 @@
 import type {
   Customer,
+  CustomerListFilter,
   CustomerListItem,
   CustomerRepository,
+  Page,
   PrismaClient,
   ScreeningRepository,
 } from "@loan/db";
@@ -30,9 +32,13 @@ export class CustomerService {
     private readonly screening: ScreeningRepository,
   ) {}
 
-  /** List rows carry a `hasLoans` marker — see {@link CustomerListItem}. */
-  list(): Promise<CustomerListItem[]> {
-    return this.customers.list();
+  /**
+   * List rows carry a `hasLoans` marker — see {@link CustomerListItem}.
+   * Search and filtering run in Postgres; see CustomerRepository.list for
+   * why they can't run in the client.
+   */
+  list(filter: CustomerListFilter = {}): Promise<Page<CustomerListItem>> {
+    return this.customers.list(filter);
   }
 
   findByIdOrNumber(idOrNumber: string): Promise<Customer | null> {

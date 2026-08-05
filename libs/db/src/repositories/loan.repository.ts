@@ -31,6 +31,46 @@ import {
   nextPropertyNumber,
   nextVehicleNumber,
 } from "../lib/reference-numbers";
+import {
+  resolvePaging,
+  toPage,
+  type Page,
+  type PageParams,
+} from "../lib/pagination";
+import { contains, tokenizedWhere } from "../lib/search";
+
+/**
+ * Filters for the loan list. All optional — an empty filter is the
+ * historical behaviour (200 most recent).
+ */
+export interface LoanListFilter extends PageParams {
+  /**
+   * Free text over the loan number and the borrower's name / reference.
+   * Tokenized, so "cruz salary" and "juan LN-2026" both work — see
+   * lib/search.ts.
+   */
+  q?: string;
+  status?: LoanStatus;
+  productCode?: string;
+}
+
+/** Slim borrower projection carried on each list row. */
+export interface LoanListCustomer {
+  id: string;
+  number: string;
+  firstName: string;
+  lastName: string;
+}
+
+export type LoanListRow = LoanApplication & {
+  customer: LoanListCustomer;
+};
+
+/**
+ * 200 by default to match the historical uncapped-feeling behaviour the
+ * dashboard still relies on. The loans table asks for 25.
+ */
+const LOAN_PAGING = { defaultPageSize: 200, maxPageSize: 500 };
 
 export interface VehicleInput {
   kind: "CAR" | "MOTORCYCLE";
@@ -199,11 +239,49 @@ export class LoanRepository {
     this.accounting = new AccountingRepository(prisma);
   }
 
-  list(): Promise<LoanApplication[]> {
-    return this.prisma.loanApplication.findMany({
-      orderBy: { submittedAt: "desc" },
-      take: 200,
-    });
+  /**
+   * Filtering happens in Postgres, not in the client. The list is capped,
+   * so a client-side filter would only ever search the newest page and
+   * quietly miss the older loan the operator is looking for.
+   *
+   * Rows carry a slim borrower projection — four columns, not the whole
+   * customer record. Without it, searching by borrower name would match
+   * rows the operator can't see the reason for; with the whole record it
+   * would ship every borrower's income and government ID to a screen
+   * that shows neither.
+   */
+  async list(filter: LoanListFilter = {}): Promise<Page<LoanListRow>> {
+    const paging = resolvePaging(filter, LOAN_PAGING);
+    const where = {
+      status: filter.status,
+      productCode: filter.productCode,
+      ...(tokenizedWhere(filter.q, (token) => [
+        { number: contains(token) },
+        { customer: { number: contains(token) } },
+        { customer: { firstName: contains(token) } },
+        { customer: { middleName: contains(token) } },
+        { customer: { lastName: contains(token) } },
+      ]) ?? {}),
+    };
+
+    // One transaction so the count and the rows describe the same
+    // snapshot. Run separately, a loan submitted between the two makes
+    // the footer claim a total the table can't page to.
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.loanApplication.findMany({
+        where,
+        orderBy: { submittedAt: "desc" },
+        skip: paging.skip,
+        take: paging.take,
+        include: {
+          customer: {
+            select: { id: true, number: true, firstName: true, lastName: true },
+          },
+        },
+      }),
+      this.prisma.loanApplication.count({ where }),
+    ]);
+    return toPage(rows, total, paging);
   }
 
   findById(id: string) {
