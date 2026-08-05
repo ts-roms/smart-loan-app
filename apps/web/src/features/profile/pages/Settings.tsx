@@ -1,3 +1,4 @@
+import { SignedImage } from "../../../components/DocumentPreview";
 import {
   useClearMySignature,
   useMySignature,
@@ -105,8 +106,8 @@ export function SettingsPage() {
             ) : sig.data?.signatureUrl ? (
               <div className="rounded-md border border-default bg-surface-2 p-3">
                 <div className="flex items-start gap-3">
-                  <img
-                    src={sig.data.signatureUrl}
+                  <SignedImage
+                    url={sig.data.signatureUrl}
                     alt={`${user?.name} signature`}
                     className="h-24 w-auto max-w-xs rounded border border-default bg-white p-2"
                   />

@@ -1,3 +1,4 @@
+import { SignedImage } from "../../../components/DocumentPreview";
 import {
   usePortalAnswerDeclarations,
   usePortalCreatePaymentIntent,
@@ -206,8 +207,8 @@ function PortalSignaturePanel({
       </div>
       {borrowerSignatureUrl ? (
         <div className="flex items-center gap-3">
-          <img
-            src={borrowerSignatureUrl}
+          <SignedImage
+            url={borrowerSignatureUrl}
             alt="your signature"
             className="h-16 bg-white rounded p-1 border border-default"
           />

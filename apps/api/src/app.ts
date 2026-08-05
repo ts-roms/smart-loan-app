@@ -22,6 +22,10 @@ import { decorateFeatureGate } from "./features/licensing/feature-gate.plugin";
 import { platformRoutes } from "./features/platform/index";
 import { publicRoutes } from "./features/public/index";
 import { registerRoutes } from "./routes/index";
+import {
+  isProtectedUploadPath,
+  verifyUploadSignature,
+} from "./features/uploads/signing";
 
 /**
  * Sentry is opt-in via SENTRY_DSN — keeping the dep skin-deep so local
@@ -103,8 +107,7 @@ export async function buildApp() {
           // (impersonating ADMIN_USER) triggered a 500".
           const impersonator = (
             req.user as
-              | { impersonatedBy?: { platformUserEmail?: string } }
-              | undefined
+              { impersonatedBy?: { platformUserEmail?: string } } | undefined
           )?.impersonatedBy;
           if (impersonator) {
             scope.setTag("impersonated", "true");
@@ -183,12 +186,43 @@ export async function buildApp() {
   decorateFeatureGate(app);
 
   // Static uploads: KYC documents, customer ID scans, etc.
+  //
+  // Registered inside its own scope so the signature check below
+  // applies to these routes and nothing else. Bearer auth is not an
+  // option here: the browser loads these through `<img src>`, which
+  // can't carry an Authorization header — hence a signature in the
+  // query string, minted by POST /uploads-api/sign. See signing.ts.
   const uploadsDir = config.uploadsDir || join(process.cwd(), "uploads");
   await mkdir(uploadsDir, { recursive: true });
-  await app.register(staticPlugin, {
-    root: uploadsDir,
-    prefix: "/uploads/",
-    decorateReply: false,
+  await app.register(async (scope) => {
+    scope.addHook("onRequest", async (req, reply) => {
+      const [pathname, query = ""] = req.url.split("?");
+      if (!pathname || !isProtectedUploadPath(pathname)) return;
+
+      const params = new URLSearchParams(query);
+      const result = verifyUploadSignature(
+        pathname,
+        params.get("exp") ?? undefined,
+        params.get("sig") ?? undefined,
+      );
+      if (result === "ok") return;
+
+      // 401 on expiry, 403 otherwise. The client retries a 401 by
+      // re-signing; a 403 means the signature was never valid and
+      // retrying would only loop.
+      req.log.warn({ pathname, result }, "rejected unsigned upload request");
+      return reply
+        .code(result === "expired" ? 401 : 403)
+        .send({
+          error: result === "expired" ? "SignatureExpired" : "Forbidden",
+        });
+    });
+
+    await scope.register(staticPlugin, {
+      root: uploadsDir,
+      prefix: "/uploads/",
+      decorateReply: false,
+    });
   });
 
   await app.register(swagger, {

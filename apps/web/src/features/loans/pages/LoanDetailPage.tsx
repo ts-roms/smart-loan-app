@@ -1,3 +1,7 @@
+import {
+  DocumentThumbnail,
+  SignedImage,
+} from "../../../components/DocumentPreview";
 import type {
   CollectionNoteType,
   KycValidationResult,
@@ -247,17 +251,11 @@ export function LoanDetailPage() {
             <div className="text-xs uppercase tracking-wider text-fg-subtle mb-2">
               Application selfie
             </div>
-            <a
-              href={l.applicationSelfieUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img
-                src={l.applicationSelfieUrl}
-                alt="application selfie"
-                className="h-32 rounded-md border border-default object-cover"
-              />
-            </a>
+            <DocumentThumbnail
+              url={l.applicationSelfieUrl}
+              label="Application selfie"
+              className="h-32 w-32 rounded-md"
+            />
           </div>
         )}
         {/* Product declarations — view for everyone with the page,
@@ -1588,8 +1586,8 @@ function SignatureSlot({
       </div>
       {url ? (
         <div className="space-y-1">
-          <img
-            src={url}
+          <SignedImage
+            url={url}
             alt={`${label} signature`}
             className="h-16 bg-white rounded p-1 border border-default"
           />
