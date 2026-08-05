@@ -4,6 +4,7 @@ import {
   useQuote,
 } from "@loan/api-client";
 import type {
+  KycAnswers,
   LoanProduct,
   PropertyInput,
   VehicleInput,
@@ -28,6 +29,7 @@ import { Camera } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { DeclarationsForm } from "../../../components/DeclarationsForm";
 import { FileUpload } from "../../../components/FileUpload";
 
 /**
@@ -64,6 +66,7 @@ export function PortalApply() {
     appraisedValue: 0,
   });
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
+  const [kycAnswers, setKycAnswers] = useState<KycAnswers>({});
 
   const product: LoanProduct | undefined = useMemo(
     () => products.data?.find((p) => p.code === productCode),
@@ -77,6 +80,8 @@ export function PortalApply() {
     );
     setTerm((t) => clamp(t, product.minTermMonths, product.maxTermMonths));
     setRate(Number(product.defaultRate) * 100);
+    // New product, new questionnaire — answers to the old one don't apply.
+    setKycAnswers({});
     if (product.collateralKind === "VEHICLE") {
       setVehicle((v) => ({
         ...v,
@@ -127,6 +132,7 @@ export function PortalApply() {
         vehicle: collateralKind === "VEHICLE" ? vehicle : undefined,
         property: collateralKind === "PROPERTY" ? property : undefined,
         applicationSelfieUrl: selfieUrl ?? undefined,
+        kycAnswers,
         // Carried through from the eligibility check, when the borrower
         // arrived from one. Links the two records server-side.
         preAssessmentId: preAssessmentId || undefined,
@@ -338,6 +344,27 @@ export function PortalApply() {
               label="Take selfie"
             />
           </div>
+
+          {/* Product-specific declarations — housing asks about the
+              property, salary about employment. Answer here or later
+              from the loan page; required ones must be complete before
+              the loan can be approved. */}
+          {(product?.kycQuestions ?? []).length > 0 && (
+            <div className="rounded-md border border-default bg-surface-2 p-3 space-y-2">
+              <div className="text-xs uppercase tracking-wider text-fg-subtle">
+                Declarations
+              </div>
+              <p className="text-xs text-fg-muted">
+                Questions marked * are required before your loan can be approved
+                — you can also finish them later from your loan page.
+              </p>
+              <DeclarationsForm
+                questions={product?.kycQuestions ?? []}
+                answers={kycAnswers}
+                onChange={setKycAnswers}
+              />
+            </div>
+          )}
 
           {quote.data && (
             <div className="rounded-md border border-default bg-surface-2 p-3 text-sm">

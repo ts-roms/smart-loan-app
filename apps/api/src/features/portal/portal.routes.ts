@@ -94,6 +94,13 @@ export async function portalRoutes(app: FastifyInstance) {
     ctrl.signBorrower,
   );
   app.post("/loans/apply", ctrl.applyLoan);
+  // Borrower answers their product's KYC declarations — allowed until
+  // the application is decided, then frozen (the answers are part of
+  // what approval judged).
+  app.put<{ Params: { id: string } }>(
+    "/loans/:id/declarations",
+    ctrl.answerDeclarations,
+  );
 
   // ─── pre-assessment ───────────────────────────────────────────────
   // "Would I be approved?" before committing to an application. Saved,

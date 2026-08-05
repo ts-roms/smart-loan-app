@@ -473,6 +473,14 @@ model LoanProduct {
   /// Doc types required ON TOP OF the base KYC pack for this product.
   requiredKycDocs KycDocumentType[]
 
+  /// Per-product KYC declaration questionnaire, admin-built. JSON array
+  /// of `{ id, label, type, options?, required, hint? }` — see
+  /// @loan/kyc's KycQuestion. Null/empty = no questionnaire: the product
+  /// asks nothing and gates nothing. Answers are snapshotted onto
+  /// LoanApplication.kycDeclarations, so editing this never rewrites
+  /// what an applicant already attested to.
+  kycQuestions Json?
+
   minPrincipal   Decimal  @db.Decimal(14, 2)
   maxPrincipal   Decimal  @db.Decimal(14, 2)
   minTermMonths  Int
@@ -783,6 +791,14 @@ model LoanApplication {
   // Underwriting context — frozen at application time
   creditScoreAtApply Int?
   tierAtApply        CreditTier?
+
+  /// Snapshot of the product's KYC declaration questionnaire + answers
+  /// as attested: `{ items: [{id,label,type,required,answer}],
+  /// answeredAt, answeredById }`. Snapshot, not reference — the admin
+  /// can rewrite the questionnaire tomorrow and this record must not
+  /// rewrite itself with it. Null when the product had no questionnaire
+  /// at apply time. Approval gates on THIS snapshot's completeness.
+  kycDeclarations Json?
 
   status         LoanStatus @default(SUBMITTED)
   decisionReason String?

@@ -56,6 +56,10 @@ import { AnnualDocsPanel } from "../components/AnnualDocsPanel";
 import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
 import { FaceMatchPanel } from "../components/FaceMatchPanel";
 import { LeasePanel } from "../components/LeasePanel";
+import { useAnswerDeclarations } from "@loan/api-client";
+
+import { usePermission } from "../../../hooks/use-permission";
+import { DeclarationsPanel } from "../../../components/DeclarationsPanel";
 import { LoanLedgerPanel } from "../components/LoanLedgerPanel";
 import { ProjectedSchedulePanel } from "../components/ProjectedSchedulePanel";
 import { DOC_LABELS, TYPE_LABELS } from "../constants";
@@ -101,6 +105,8 @@ export function LoanDetailPage() {
   const kycStatus = useLoanKycStatus(id);
   const { user } = useAuth();
   const decide = useDecideLoan();
+  const answerDecl = useAnswerDeclarations();
+  const canSubmitKyc = usePermission("kyc.submit");
   const disburse = useDisburseLoan();
   const recordPayment = useRecordPayment();
   const toast = useToast();
@@ -254,6 +260,22 @@ export function LoanDetailPage() {
             </a>
           </div>
         )}
+        {/* Product declarations — view for everyone with the page,
+            answer/amend for kyc.submit while the loan is undecided.
+            Approval blocks on unanswered required items (same override
+            as the KYC-docs gate). */}
+        <DeclarationsPanel
+          declarations={l.kycDeclarations}
+          editable={
+            canSubmitKyc &&
+            ["DRAFT", "SUBMITTED", "UNDER_REVIEW"].includes(l.status)
+          }
+          saving={answerDecl.isPending}
+          onSave={async (answers) => {
+            await answerDecl.mutateAsync({ loanId: l.id, answers });
+          }}
+        />
+
         {/*
           Approval chain — only renders when this loan's product has one
           configured (`currentApprovalStep != null` and rows exist). For

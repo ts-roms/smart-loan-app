@@ -125,6 +125,13 @@ export interface LoanApplyInput {
   property?: PropertyInput;
   /** Optional live-capture selfie taken at apply, used for face-match + fraud. */
   applicationSelfieUrl?: string;
+  /**
+   * Snapshot of the product's KYC declaration questionnaire + answers,
+   * built by the caller with @loan/kyc's snapshotDeclarations. The repo
+   * stores it verbatim — validation is the service's job, since only it
+   * knows whether partial answers are acceptable for the flow at hand.
+   */
+  kycDeclarations?: unknown;
   /** Override initial status (used by decisioning engine). */
   initialStatus?: "SUBMITTED" | "APPROVED" | "REJECTED";
   /** Reason recorded with the decision when not SUBMITTED. */
@@ -527,6 +534,7 @@ export class LoanRepository {
           vehicleId,
           propertyId,
           applicationSelfieUrl: input.applicationSelfieUrl,
+          kycDeclarations: (input.kycDeclarations ?? undefined) as never,
           restructuredFromId: input.restructuredFromId,
           isRepeat,
           currentApprovalStep: willUseChain ? 1 : null,

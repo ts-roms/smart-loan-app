@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { applySchema, decideSchema } from "./schemas";
+import { applySchema, decideSchema, declarationAnswersSchema } from "./schemas";
 
 /**
  * Loan-workflow HTTP adapter. Owns the four orchestration-heavy
@@ -82,6 +82,15 @@ export class LoanWorkflowController {
     if (result.kind === "NotFound") {
       return reply.code(404).send({ error: "NotFound" });
     }
+    if (result.kind === "DeclarationsIncomplete") {
+      // Same 409 family as KycIncomplete — approval is blocked by KYC
+      // posture, here the unanswered required declarations.
+      return reply.code(409).send({
+        error: "DeclarationsIncomplete",
+        message: `Cannot approve ${result.loanProductCode} loan — ${result.unanswered.length} required declaration(s) unanswered.`,
+        unanswered: result.unanswered,
+      });
+    }
     // KycIncomplete — block with the missing/rejected doc lists so the
     // UI can surface them in the decide dialog.
     return reply.code(409).send({
@@ -91,6 +100,42 @@ export class LoanWorkflowController {
       rejected: result.rejected,
       status: result.status,
     });
+  };
+
+  answerDeclarations = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = declarationAnswersSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await req.loanCtx!.workflowService.answerDeclarations(
+      req.params.id,
+      parsed.data.answers,
+      req.user.sub,
+    );
+    if (result.ok) return result.declarations;
+    switch (result.kind) {
+      case "NotFound":
+        return reply.code(404).send({ error: "NotFound" });
+      case "NotEditable":
+        return reply.code(409).send({
+          error: "NotEditable",
+          message: `Declarations are frozen once a loan is ${result.status} — they are part of what the decision judged.`,
+        });
+      case "NoQuestionnaire":
+        return reply.code(404).send({
+          error: "NoQuestionnaire",
+          message: "This product has no declaration questionnaire.",
+        });
+      case "InvalidAnswers":
+        return reply
+          .code(400)
+          .send({ error: "InvalidAnswers", issues: result.invalid });
+    }
   };
 
   disburse = async (req: FastifyRequest<{ Params: { id: string } }>) => {

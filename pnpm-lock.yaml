@@ -226,6 +226,9 @@ importers:
       "@loan/features":
         specifier: workspace:*
         version: link:../../libs/features
+      "@loan/kyc":
+        specifier: workspace:*
+        version: link:../../libs/kyc
       "@loan/loans":
         specifier: workspace:*
         version: link:../../libs/loans

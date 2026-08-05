@@ -7,7 +7,15 @@ import {
   type PaymentIntentRepository,
   type PrismaClient,
 } from "@loan/db";
-import { validateKyc } from "@loan/kyc";
+import {
+  answerDeclarations,
+  snapshotDeclarations,
+  validateDeclarations,
+  validateKyc,
+  type KycAnswers,
+  type KycDeclarations,
+  type KycQuestion,
+} from "@loan/kyc";
 import { renderCustomerStatement } from "@loan/pdf";
 import { randomUUID } from "node:crypto";
 
@@ -203,7 +211,34 @@ export class PortalService {
     userId: string;
     input: ApplyInput;
   }): Promise<ApplyResult> {
-    const { preAssessmentId, ...terms } = args.input;
+    const { preAssessmentId, kycAnswers, ...terms } = args.input;
+
+    /*
+     * KYC declarations — same rules as the officer path: partial
+     * answers are accepted (completeness gates approval, and the
+     * borrower can finish from their loan page), malformed ones are
+     * rejected, and the questionnaire is snapshotted as asked.
+     */
+    const product = await this.prisma.loanProduct.findUnique({
+      where: { code: terms.productCode },
+    });
+    const questions = (product?.kycQuestions ?? []) as unknown as KycQuestion[];
+    let kycDeclarations: KycDeclarations | undefined;
+    if (questions.length > 0) {
+      const check = validateDeclarations(questions, kycAnswers ?? {});
+      if (check.invalid.length > 0) {
+        return {
+          ok: false,
+          kind: "RepoError",
+          message: "One or more declaration answers are malformed.",
+          issues: check.invalid,
+        };
+      }
+      kycDeclarations = snapshotDeclarations(questions, kycAnswers ?? {}, {
+        id: args.userId,
+      });
+    }
+
     const score = await this.scores.latestForCustomer(args.customerId);
     try {
       const created = await this.loans.apply({
@@ -212,6 +247,7 @@ export class PortalService {
         submittedById: args.userId,
         creditScoreAtApply: score?.score ?? null,
         tierAtApply: score?.tier ?? null,
+        kycDeclarations,
       });
       // Link the check the borrower ran before applying. Best-effort: the
       // loan is committed, and a stale or already-claimed assessment id is
@@ -233,6 +269,66 @@ export class PortalService {
         issues: e.issues,
       };
     }
+  }
+
+  /**
+   * The borrower answering their own declarations — the portal's
+   * KYC-stage capture. Ownership-scoped like every portal write, and
+   * frozen once the loan is decided, same as the officer path: the
+   * answers are part of what approval judged.
+   */
+  async answerDeclarations(args: {
+    customerId: string;
+    userId: string;
+    loanIdOrNumber: string;
+    answers: KycAnswers;
+  }): Promise<
+    | { ok: true; declarations: KycDeclarations }
+    | { ok: false; kind: "NotFound" }
+    | { ok: false; kind: "NotEditable"; status: string }
+    | { ok: false; kind: "NoQuestionnaire" }
+    | {
+        ok: false;
+        kind: "InvalidAnswers";
+        invalid: Array<{ id: string; reason: string }>;
+      }
+  > {
+    const loan = await this.loans.findByIdOrNumber(args.loanIdOrNumber);
+    if (!loan || loan.customerId !== args.customerId) {
+      return { ok: false, kind: "NotFound" };
+    }
+    if (!["DRAFT", "SUBMITTED", "UNDER_REVIEW"].includes(loan.status)) {
+      return { ok: false, kind: "NotEditable", status: loan.status };
+    }
+
+    const current = loan.kycDeclarations as KycDeclarations | null;
+    let next: KycDeclarations;
+    if (current && current.items.length > 0) {
+      const merged = answerDeclarations(current, args.answers, {
+        id: args.userId,
+      });
+      if (!merged.ok) {
+        return { ok: false, kind: "InvalidAnswers", invalid: merged.invalid };
+      }
+      next = merged.next;
+    } else {
+      const questions = (loan.product?.kycQuestions ??
+        []) as unknown as KycQuestion[];
+      if (questions.length === 0) return { ok: false, kind: "NoQuestionnaire" };
+      const check = validateDeclarations(questions, args.answers);
+      if (check.invalid.length > 0) {
+        return { ok: false, kind: "InvalidAnswers", invalid: check.invalid };
+      }
+      next = snapshotDeclarations(questions, args.answers, {
+        id: args.userId,
+      });
+    }
+
+    await this.prisma.loanApplication.update({
+      where: { id: loan.id },
+      data: { kycDeclarations: next as never },
+    });
+    return { ok: true, declarations: next };
   }
 
   // ─── pre-assessment ───────────────────────────────────────────────

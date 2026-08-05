@@ -330,6 +330,20 @@ export async function loanRoutes(app: FastifyInstance) {
     workflow.dryRun,
   );
 
+  /**
+   * Answer / amend the application's KYC declarations — the KYC-stage
+   * capture. `kyc.submit` rather than `loans.apply`: filling in
+   * compliance answers is document-gathering work, the same job as
+   * uploading the ID, and belongs to the same key. Frozen once the
+   * loan is decided (409) — the answers are part of what approval
+   * judged.
+   */
+  app.put<{ Params: { id: string } }>(
+    "/:id/declarations",
+    { preHandler: app.requirePermission("kyc.submit") },
+    workflow.answerDeclarations,
+  );
+
   /*
    * ─── Wizard drafts ───────────────────────────────────────────────
    * The new-loan page is a 5-step wizard; officers can hit "Save draft"

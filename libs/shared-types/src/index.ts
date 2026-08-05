@@ -372,6 +372,44 @@ export type CollateralStatus = "PROPOSED" | "VERIFIED" | "RELEASED" | "SEIZED";
 export type InterestMethod = "DECLINING" | "FLAT";
 export type PaymentFrequency = "MONTHLY" | "BIWEEKLY" | "WEEKLY";
 
+/**
+ * ─── Per-product KYC declarations ─────────────────────────────────
+ * Wire mirror of @loan/kyc's declaration types (shared-types stays
+ * dependency-free by convention — same as KycDocumentType).
+ */
+export type KycQuestionType = "TEXT" | "YES_NO" | "NUMBER" | "SELECT";
+
+export interface KycQuestion {
+  id: string;
+  label: string;
+  type: KycQuestionType;
+  options?: string[];
+  required: boolean;
+  hint?: string;
+  /** Free-text grouping heading; blank groups under "General". */
+  category?: string;
+}
+
+export interface KycDeclarationItem {
+  id: string;
+  label: string;
+  type: KycQuestionType;
+  options?: string[];
+  required: boolean;
+  category?: string;
+  answer: string | number | boolean | null;
+}
+
+/** LoanApplication.kycDeclarations — questions + answers as attested. */
+export interface KycDeclarations {
+  items: KycDeclarationItem[];
+  answeredAt: string | null;
+  answeredById: string | null;
+}
+
+/** Raw answers on the wire: question id → value. */
+export type KycAnswers = Record<string, string | number | boolean | null>;
+
 export interface LoanProduct {
   id: string;
   code: string;
@@ -379,6 +417,8 @@ export interface LoanProduct {
   description: string | null;
   collateralKind: CollateralKind;
   requiredKycDocs: KycDocumentType[];
+  /** Admin-built declaration questionnaire; null/empty = none. */
+  kycQuestions?: KycQuestion[] | null;
 
   minPrincipal: string | number;
   maxPrincipal: string | number;
@@ -414,6 +454,7 @@ export interface LoanProductCreateInput {
   description?: string;
   collateralKind?: CollateralKind;
   requiredKycDocs?: KycDocumentType[];
+  kycQuestions?: KycQuestion[] | null;
   minPrincipal: number;
   maxPrincipal: number;
   minTermMonths: number;
@@ -623,6 +664,12 @@ export interface LoanApplication {
    * "nothing scheduled yet".
    */
   balance?: LoanBalanceSummary | null;
+  /**
+   * KYC declaration snapshot — the product questionnaire + answers as
+   * attested at apply (or completed later at the KYC stage). Null when
+   * the product had no questionnaire at apply time.
+   */
+  kycDeclarations?: KycDeclarations | null;
   /** true when submitted by a customer with prior CLOSED loans. */
   isRepeat?: boolean;
   // Face-match (selfie ↔ ID) outputs. All four are null until an
@@ -672,6 +719,8 @@ export interface LoanApplyInput {
    * required, and a bad id is ignored rather than failing the apply.
    */
   preAssessmentId?: string;
+  /** Answers to the product's declaration questionnaire, by question id. */
+  kycAnswers?: KycAnswers;
 }
 
 export interface UploadResult {

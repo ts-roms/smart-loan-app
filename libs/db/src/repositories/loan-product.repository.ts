@@ -23,6 +23,8 @@ export interface LoanProductCreateInput {
   description?: string;
   collateralKind?: CollateralKind;
   requiredKycDocs?: KycDocumentType[];
+  /** Admin-built KYC declaration questionnaire — stored verbatim. */
+  kycQuestions?: unknown;
   minPrincipal: number;
   maxPrincipal: number;
   minTermMonths: number;
@@ -69,6 +71,7 @@ export class LoanProductRepository {
         description: input.description ?? null,
         collateralKind: (input.collateralKind ?? "NONE") as never,
         requiredKycDocs: (input.requiredKycDocs ?? []) as never,
+        kycQuestions: (input.kycQuestions ?? undefined) as never,
         minPrincipal: input.minPrincipal,
         maxPrincipal: input.maxPrincipal,
         minTermMonths: input.minTermMonths,
