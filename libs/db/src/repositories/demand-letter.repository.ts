@@ -367,6 +367,6 @@ export function renderBody(args: {
     "Thank you for your immediate attention.",
     "",
     "Respectfully yours,",
-    "United Financing Corporation",
+    "Smart Loan Corporation",
   ].join("\n");
 }
