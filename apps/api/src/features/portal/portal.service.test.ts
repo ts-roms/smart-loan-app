@@ -62,6 +62,7 @@ function makeService(opts: MockOptions = {}) {
     {} as never, // ledger
     intents as never,
     "https://example.test/webhook",
+    {} as never, // preAssessments — not exercised here
   );
 
   return { service, prisma, loans, intents, loanUpdate };

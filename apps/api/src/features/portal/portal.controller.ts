@@ -1,5 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
+import { portalPreAssessmentSchema } from "../pre-assessment/index";
+
 import { clientIp, parseScope, toCsv, type LedgerScope } from "./helpers";
 import {
   applySchema,
@@ -108,6 +110,34 @@ export class PortalController {
       });
     }
     return reply.code(201).send(result.loan);
+  };
+
+  // ─── pre-assessment ───────────────────────────────────────────────
+
+  preAssess = async (req: FastifyRequest, reply: FastifyReply) => {
+    const auth = await this.guard(req, reply);
+    if (!auth) return;
+    const parsed = portalPreAssessmentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await req.portalServices!.portal.preAssess({
+      customerId: auth,
+      userId: req.user.sub,
+      input: parsed.data,
+    });
+    // The guard already proved the customer row exists, so the service's
+    // CustomerNotFound arm is only reachable if it was deleted mid-request.
+    if (!result.ok) return reply.code(404).send({ error: "NotFound" });
+    return reply.code(201).send(result.assessment);
+  };
+
+  listPreAssessments = async (req: FastifyRequest, reply: FastifyReply) => {
+    const auth = await this.guard(req, reply);
+    if (!auth) return;
+    return req.portalServices!.portal.listPreAssessments(auth);
   };
 
   // ─── KYC ─────────────────────────────────────────────────────────

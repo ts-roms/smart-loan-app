@@ -33,6 +33,7 @@ const STAFF_ROUTES: readonly CrumbRoute[] = [
   ["/customers/:id/survey", "Credit survey"],
   ["/kyc", "KYC review"],
 
+  ["/pre-assessments", "Pre-assessment"],
   ["/loans", "Loans"],
   ["/loans/drafts", "Drafts"],
   ["/loans/new", "New loan"],
@@ -81,6 +82,7 @@ const STAFF_ROUTES: readonly CrumbRoute[] = [
 
 const PORTAL_ROUTES: readonly CrumbRoute[] = [
   ["/portal", "Dashboard"],
+  ["/portal/pre-assess", "Check eligibility"],
   ["/portal/apply", "New loan"],
   ["/portal/loans", "My loans"],
   ["/portal/loans/:id", ""],

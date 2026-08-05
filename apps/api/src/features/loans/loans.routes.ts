@@ -15,6 +15,7 @@ import {
   LoanDraftRepository,
   LoanNotPayableError,
   LoanRepository,
+  PreAssessmentRepository,
   idOrNumberWhere,
 } from "@loan/db";
 import { validateKyc } from "@loan/kyc";
@@ -909,6 +910,7 @@ function buildLoanCtx(app: FastifyInstance) {
       // know about any of those.
       (loanId, stepOrder) =>
         notifyApproversForStep(app, prisma, notifications, loanId, stepOrder),
+      new PreAssessmentRepository(prisma),
     );
     req.loanCtx = {
       loans,

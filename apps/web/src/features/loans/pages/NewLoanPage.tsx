@@ -139,6 +139,9 @@ export function NewLoanPage() {
   // Either path param (/loans/new/:draftId) or query (?customerId=…)
   const draftId = params.draftId ?? null;
   const seedCustomerId = searchParams.get("customerId") ?? "";
+  // Set when the officer arrived from a saved pre-assessment. Not part of
+  // the form or the draft — it's provenance, not something they edit.
+  const seedPreAssessmentId = searchParams.get("preAssessmentId") ?? "";
 
   // Form + step state. Initialized from the seed customer when starting
   // fresh from a customer detail page; overwritten on draft load.
@@ -341,6 +344,9 @@ export function NewLoanPage() {
       vehicle: collateralKind === "VEHICLE" ? form.vehicle : undefined,
       property: collateralKind === "PROPERTY" ? form.property : undefined,
       applicationSelfieUrl: form.applicationSelfieUrl ?? undefined,
+      // Carried through from /pre-assessments when the officer started
+      // here from a saved check. Links the two records server-side.
+      preAssessmentId: seedPreAssessmentId || undefined,
     };
     try {
       const created = await apply.mutateAsync(payload);

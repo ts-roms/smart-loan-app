@@ -60,6 +60,11 @@ export const applySchema = z.object({
   vehicle: vehicleSchema.optional(),
   property: propertySchema.optional(),
   applicationSelfieUrl: z.string().max(500).optional(),
+  /**
+   * The pre-assessment this application came out of, if any. Linking is
+   * best-effort and never blocks the apply — see LoanWorkflowService.
+   */
+  preAssessmentId: z.string().uuid().optional(),
 });
 
 export const decideSchema = z.object({

@@ -22,6 +22,7 @@ import {
   CalendarClock,
   Car,
   ChevronDown,
+  ClipboardCheck,
   Clock,
   CreditCard,
   FileCheck2,
@@ -110,6 +111,12 @@ const NAV_SECTIONS: NavSection[] = [
         label: "KYC review",
         icon: FileCheck2,
         permission: "kyc.read",
+      },
+      {
+        to: "/pre-assessments",
+        label: "Pre-assessment",
+        icon: ClipboardCheck,
+        permission: "pre_assessment.run",
       },
       {
         to: "/loans",

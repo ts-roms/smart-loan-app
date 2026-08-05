@@ -262,6 +262,7 @@ model Customer {
   creditScores     CreditScore[]
   amlScreenings    AmlScreening[]
   dorsiRecord      DorsiRecord?
+  preAssessments   PreAssessment[]
 
   // ── Cooperative-side activity (contributions, savings, fund movements). ──
   // A customer-borrower is also a coop member; these relations let the
@@ -827,6 +828,8 @@ model LoanApplication {
   collectionAssignment CollectionAssignment?
   leaseAgreement       LeaseAgreement?
   approvals            LoanApproval[]
+  /// The pre-assessment this application was converted from, if any.
+  preAssessment        PreAssessment?
 
   @@index([customerId, status])
   @@index([status, submittedAt])
@@ -1471,6 +1474,106 @@ model DecisionRule {
   updatedAt   DateTime   @updatedAt
 
   @@index([priority, active])
+}
+
+// ─── Pre-assessment (pre-application eligibility check) ──────────────────────
+//
+// Runs the decisioning rules WITHOUT creating a loan, and keeps the result.
+// Two callers, one table:
+//
+//   • PORTAL  — a borrower checking their own eligibility before applying.
+//               `customerId` is always set, so score / AML / KYC come off
+//               their record and the verdict is as good as a dry-run's.
+//   • OFFICER — staff assessing a walk-in prospect who has no Customer row.
+//               Only the hand-entered figures are known, so the context
+//               carries nulls for score / tier / AML and `kycComplete:
+//               false`. Indicative, not a decision.
+//
+// Deliberately NOT the same thing as POST /loans/dry-run: that previews one
+// in-flight application inside the officer's wizard and stores nothing. A
+// pre-assessment outlives the session — it is what the applicant was told,
+// and `loanId` links it to the application it became.
+
+enum PreAssessmentSource {
+  /// Borrower ran it on themselves from the portal.
+  PORTAL
+  /// Staff ran it, typically for a prospect with no Customer row yet.
+  OFFICER
+}
+
+/// The rule engine's RuleAction flattened to the three outcomes the UI
+/// shows: AUTO_APPROVE → APPROVE, AUTO_REJECT → REJECT, everything else
+/// (including "no rule matched") → REVIEW.
+enum PreAssessmentVerdict {
+  APPROVE
+  REVIEW
+  REJECT
+}
+
+model PreAssessment {
+  id     String              @id @default(uuid())
+  /// Human-readable: "PA-2026-000123". Quoted to the applicant and used in
+  /// the UI in place of the UUID. Same convention as Customer.number /
+  /// LoanApplication.number, so `idOrNumberWhere` resolves it.
+  number String              @unique
+  source PreAssessmentSource
+
+  // ── Subject ─────────────────────────────────────────────────────────
+  // Exactly one side is meaningful: an existing customer, or a hand-entered
+  // prospect. Both are nullable because a PORTAL row always has the former
+  // and never the latter, and an OFFICER walk-in row has the reverse.
+  customerId    String?
+  prospectName  String?
+  prospectPhone String?
+  prospectEmail String?
+
+  // ── Inputs (what was asked for) ─────────────────────────────────────
+  productCode        String
+  principal          Decimal @db.Decimal(14, 2)
+  termMonths         Int
+  /// Annual rate as decimal: 0.18 = 18%/year. Matches LoanApplication.
+  annualInterestRate Decimal @db.Decimal(6, 4)
+  /// Read off the Customer row when there is one, declared otherwise.
+  monthlyIncome      Decimal @db.Decimal(14, 2)
+  applicantAge       Int
+
+  // ── Outcome ─────────────────────────────────────────────────────────
+  verdict         PreAssessmentVerdict
+  reason          String
+  /// The rule that fired. Not a foreign key: rules get edited and deleted,
+  /// and the verdict still has to be explainable afterwards, so the name is
+  /// snapshotted alongside the id.
+  matchedRuleId   String?
+  matchedRuleName String?
+  /// Full DecisioningContext as evaluated. The rules can change tomorrow;
+  /// this is what they saw today.
+  context         Json
+  /// AML / KYC pre-flight gates. Null on prospect rows — no customer, no
+  /// gates to check.
+  gates           Json?
+  /// Statistical anomaly flags, same shape as the dry-run's.
+  anomalies       Json?
+
+  // ── Conversion ──────────────────────────────────────────────────────
+  /// Set when this assessment turned into a real application.
+  loanId      String?   @unique
+  convertedAt DateTime?
+
+  createdAt   DateTime @default(now())
+  /// Who ran it — the borrower's own login for PORTAL rows, the officer for
+  /// OFFICER rows. Not a foreign key, same reasoning as Customer.erasedById:
+  /// staff leave, and the assessment stays on file for years after.
+  createdById String?
+
+  // SetNull on both sides. An erased customer or a deleted loan shouldn't
+  // take the assessment history with it — the figures and the verdict are
+  // still a record of what we told someone.
+  customer Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  loan     LoanApplication? @relation(fields: [loanId], references: [id], onDelete: SetNull)
+
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([verdict])
 }
 
 // ─── RBAC: permissions + dynamic roles ───────────────────────────────────────

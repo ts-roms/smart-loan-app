@@ -37,6 +37,23 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
   // Loans
   { key: "loans.read", label: "View loans", category: "Loans" },
   { key: "loans.apply", label: "Submit applications", category: "Loans" },
+  // Pre-assessment: run the decisioning rules before an application
+  // exists. Its own prefix (like repossession.* and lease.*) rather than
+  // a loans.* key, because the subject may be a walk-in prospect with no
+  // Customer row — it is upstream of the loan pipeline, not part of it.
+  //
+  // Split read/run so a branch receptionist can quote a figure without
+  // also gaining the history of everyone else's checks.
+  {
+    key: "pre_assessment.run",
+    label: "Run a pre-assessment",
+    category: "Loans",
+  },
+  {
+    key: "pre_assessment.read",
+    label: "View pre-assessment history",
+    category: "Loans",
+  },
   {
     key: "loans.decide",
     label: "Approve / reject (legacy single-decide)",
@@ -387,6 +404,8 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
     permissions: [
       "loans.read",
       "loans.apply",
+      "pre_assessment.run",
+      "pre_assessment.read",
       "loans.decide",
       "loans.disburse",
       "loans.restructure",

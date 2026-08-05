@@ -57,6 +57,10 @@ const LoanDetailPage = lazyNamed(
   "LoanDetailPage",
 );
 const NewLoanPage = lazyNamed(() => import("./features/loans"), "NewLoanPage");
+const PreAssessmentsPage = lazyNamed(
+  () => import("./features/pre-assessment"),
+  "PreAssessmentsPage",
+);
 const LoanDraftsPage = lazyNamed(
   () => import("./features/loans"),
   "LoanDraftsPage",
@@ -189,6 +193,10 @@ const PortalDashboard = lazyNamed(
   "PortalDashboard",
 );
 const PortalKyc = lazyNamed(() => import("./features/portal"), "PortalKyc");
+const PortalPreAssess = lazyNamed(
+  () => import("./features/portal"),
+  "PortalPreAssess",
+);
 const PortalLoanDetail = lazyNamed(
   () => import("./features/portal"),
   "PortalLoanDetail",
@@ -253,6 +261,7 @@ export function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/portal" element={<PortalDashboard />} />
+            <Route path="/portal/pre-assess" element={<PortalPreAssess />} />
             <Route path="/portal/apply" element={<PortalApply />} />
             <Route path="/portal/loans" element={<PortalLoans />} />
             <Route path="/portal/savings" element={<PortalSavings />} />
@@ -287,6 +296,7 @@ export function App() {
           <Route path="/loans/new" element={<NewLoanPage />} />
           <Route path="/loans/new/:draftId" element={<NewLoanPage />} />
           <Route path="/loans/:id" element={<LoanDetailPage />} />
+          <Route path="/pre-assessments" element={<PreAssessmentsPage />} />
           <Route path="/loan-products" element={<LoanProductsPage />} />
           <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/collections/my-accounts" element={<MyAccountsPage />} />

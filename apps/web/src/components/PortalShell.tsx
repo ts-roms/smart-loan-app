@@ -6,6 +6,7 @@ import {
 import { Button, IdleWarningDialog, cn, useIdleLogout } from "@loan/ui";
 import {
   BookOpen,
+  ClipboardCheck,
   CreditCard,
   FileCheck2,
   Gauge,
@@ -119,6 +120,12 @@ export function PortalShell({ children }: { children: ReactNode }) {
         <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
           {[
             { to: "/portal", label: "Dashboard", icon: Gauge, end: true },
+            {
+              to: "/portal/pre-assess",
+              label: "Check eligibility",
+              icon: ClipboardCheck,
+              end: false,
+            },
             { to: "/portal/apply", label: "New loan", icon: Plus, end: false },
             {
               to: "/portal/loans",

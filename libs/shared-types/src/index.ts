@@ -555,6 +555,12 @@ export interface LoanApplyInput {
   vehicle?: VehicleInput;
   property?: PropertyInput;
   applicationSelfieUrl?: string;
+  /**
+   * The pre-assessment this application came out of, when the officer or
+   * borrower reached the form from one. Links the two records; never
+   * required, and a bad id is ignored rather than failing the apply.
+   */
+  preAssessmentId?: string;
 }
 
 export interface UploadResult {
@@ -1581,6 +1587,111 @@ export interface LoanDryRunResult {
     monthlyIncome: number;
     existingActiveLoans: number;
   };
+}
+
+/**
+ * ─── Pre-assessment ────────────────────────────────────────────────
+ *
+ * A saved run of the rules engine against a prospective loan, taken
+ * before any application exists. Two producers:
+ *
+ *   • POST /portal/pre-assessments   — borrower checks themselves.
+ *   • POST /pre-assessments          — staff check a walk-in prospect
+ *                                      (or an existing customer).
+ *
+ * Distinct from POST /loans/dry-run, which previews one in-flight
+ * application inside the officer's wizard and persists nothing.
+ */
+
+export type PreAssessmentVerdict = "APPROVE" | "REVIEW" | "REJECT";
+export type PreAssessmentSource = "PORTAL" | "OFFICER";
+
+/**
+ * Officer-side request. Supply `customerId` to assess someone already on
+ * file — score, AML and KYC are then read off their record. Supply the
+ * `prospect*` fields instead for a walk-in with no Customer row, in which
+ * case the verdict is indicative only (see `basis` on the response).
+ */
+export interface PreAssessmentInput {
+  customerId?: string;
+  prospectName?: string;
+  prospectPhone?: string;
+  prospectEmail?: string;
+  /** Required when there's no customerId — nothing to read it from. */
+  monthlyIncome?: number;
+  /** Required when there's no customerId. Years. */
+  applicantAge?: number;
+  productCode: string;
+  principal: number;
+  termMonths: number;
+  /** Annual rate as a decimal, e.g. 0.24 for 24% APR. */
+  annualInterestRate: number;
+}
+
+/** Borrower-side request. The customer is the caller, so it isn't named. */
+export type PortalPreAssessmentInput = Pick<
+  PreAssessmentInput,
+  "productCode" | "principal" | "termMonths" | "annualInterestRate"
+>;
+
+export interface PreAssessment {
+  id: string;
+  /** "PA-2026-000123". */
+  number: string;
+  source: PreAssessmentSource;
+
+  customerId: string | null;
+  prospectName: string | null;
+  prospectPhone: string | null;
+  prospectEmail: string | null;
+
+  productCode: string;
+  principal: number;
+  termMonths: number;
+  annualInterestRate: number;
+  monthlyIncome: number;
+  applicantAge: number;
+
+  verdict: PreAssessmentVerdict;
+  reason: string;
+  matchedRuleId: string | null;
+  /** Snapshotted — the rule itself may since have been edited or deleted. */
+  matchedRuleName: string | null;
+
+  /**
+   * How much the engine actually knew. `FULL` means score, AML and KYC
+   * came off a real Customer row. `INDICATIVE` means the subject is a
+   * prospect and those inputs were absent, so the verdict is a guide, not
+   * a decision.
+   */
+  basis: "FULL" | "INDICATIVE";
+
+  /** Null on prospect rows — no customer, no gates to check. */
+  gates: LoanDryRunResult["gates"] | null;
+  anomalies: AnomalyFlag[];
+  context: {
+    principal: number;
+    termMonths: number;
+    annualInterestRate: number;
+    productCode: string;
+    creditScore: number | null;
+    tier: CreditTier | null;
+    monthlyIncome: number;
+    existingActiveLoans: number;
+  };
+
+  /** Set once this assessment turned into a real application. */
+  loanId: string | null;
+  convertedAt: string | null;
+  createdAt: string;
+  createdById: string | null;
+  /** Joined for the staff list view; absent on prospect rows. */
+  customer?: {
+    id: string;
+    number: string;
+    firstName: string;
+    lastName: string;
+  } | null;
 }
 
 /**

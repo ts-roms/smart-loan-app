@@ -6,6 +6,7 @@ import type {
   LoanApplication,
   LoanRepository,
   NotificationRepository,
+  PreAssessmentRepository,
   PrismaClient,
   ScreeningRepository,
 } from "@loan/db";
@@ -13,6 +14,7 @@ import { evaluateRules, type DecisioningContext } from "@loan/decisioning";
 import { validateKyc, type KycDocumentType } from "@loan/kyc";
 
 import { computeAnomalyFlags } from "../../lib/anomaly";
+import { evaluateForCustomer } from "../../lib/pre-decision";
 import type { ApplyInput, DecideInput } from "./schemas";
 
 /**
@@ -131,6 +133,12 @@ export class LoanWorkflowService {
       loanId: string,
       stepOrder: number,
     ) => Promise<void>,
+    /**
+     * Only used to link an application back to the pre-assessment it came
+     * out of. Optional so the many call sites that never see a
+     * pre-assessment don't have to construct one.
+     */
+    private readonly preAssessments?: PreAssessmentRepository,
   ) {}
 
   /**
@@ -194,6 +202,25 @@ export class LoanWorkflowService {
         message: e.message,
         issues: e.issues,
       };
+    }
+
+    // Link the pre-assessment this came out of, if the caller named one.
+    // Best-effort on purpose: the loan is already committed, and a stale
+    // or already-converted id is not a reason to fail an application the
+    // borrower has just submitted. `loanId` is unique, so a second
+    // assessment claiming the same loan lands here and is swallowed.
+    if (input.preAssessmentId && this.preAssessments) {
+      try {
+        await this.preAssessments.markConverted(
+          input.preAssessmentId,
+          created.id,
+        );
+      } catch (err) {
+        this.log.warn(
+          { err, preAssessmentId: input.preAssessmentId, loanId: created.id },
+          "could not link pre-assessment to loan",
+        );
+      }
     }
 
     if (decision.matched) {
@@ -347,92 +374,48 @@ export class LoanWorkflowService {
    * can render them as pre-flight checks.
    */
   async dryRun(input: ApplyInput): Promise<DryRunResult> {
-    // Run all the lookups in parallel — this endpoint is hit on every
-    // form-edit debounce, so latency matters.
-    const [latestScreen, score, customer, docs, product, activeLoans] =
-      await Promise.all([
-        this.screening.latestForCustomer(input.customerId),
-        this.scores.latestForCustomer(input.customerId),
-        this.prisma.customer.findUnique({ where: { id: input.customerId } }),
-        this.kyc.listForCustomer(input.customerId),
-        this.prisma.loanProduct.findUnique({
-          where: { code: input.productCode },
-        }),
-        this.prisma.loanApplication.count({
-          where: {
-            customerId: input.customerId,
-            status: { in: ["DISBURSED", "ACTIVE", "DEFAULTED"] },
-          },
-        }),
-      ]);
-
-    if (!customer) return { ok: false, kind: "CustomerNotFound" };
-
-    const extras = (product?.requiredKycDocs ?? []) as KycDocumentType[];
-    const kycRes = validateKyc(docs, extras);
-    const customerAge = Math.floor(
-      (Date.now() - customer.dateOfBirth.getTime()) / (365.25 * 86_400_000),
+    // Shared with the pre-assessment feature — see lib/pre-decision.ts for
+    // why there is exactly one context builder. The lookups inside run in
+    // parallel; this endpoint is hit on every form-edit debounce.
+    const outcome = await evaluateForCustomer(
+      {
+        prisma: this.prisma,
+        screening: this.screening,
+        scores: this.scores,
+        kyc: this.kyc,
+        rules: this.rules,
+      },
+      input.customerId,
+      {
+        productCode: input.productCode,
+        principal: input.principal,
+        termMonths: input.termMonths,
+        annualInterestRate: input.annualInterestRate,
+      },
     );
 
-    const context: DecisioningContext = {
-      productCode: input.productCode,
-      principal: input.principal,
-      termMonths: input.termMonths,
-      annualInterestRate: input.annualInterestRate,
-      tierAtApply: score?.tier ?? null,
-      creditScoreAtApply: score?.score ?? null,
-      amlStatus: latestScreen?.status ?? null,
-      kycComplete: kycRes.complete,
-      customerAge,
-      monthlyIncome: Number(customer.monthlyIncome),
-      existingActiveLoans: activeLoans,
-    };
-
-    const ruleRows = await this.rules.listActive();
-    const decision = evaluateRules(this.rules.toEvaluable(ruleRows), context);
-
-    const verdict: "APPROVE" | "REVIEW" | "REJECT" =
-      decision.action === "AUTO_APPROVE"
-        ? "APPROVE"
-        : decision.action === "AUTO_REJECT"
-          ? "REJECT"
-          : "REVIEW";
-
-    const anomalies = await computeAnomalyFlags(this.prisma, {
-      customerId: input.customerId,
-      productCode: input.productCode,
-      principal: input.principal,
-      termMonths: input.termMonths,
-      annualInterestRate: input.annualInterestRate,
-      monthlyIncome: Number(customer.monthlyIncome),
-    });
+    if (!outcome) return { ok: false, kind: "CustomerNotFound" };
 
     return {
       ok: true,
       result: {
-        verdict,
-        reason: decision.reason,
-        matchedRule: decision.matched
-          ? { id: decision.matched.id, name: decision.matched.name }
-          : null,
-        gates: {
-          amlMatch: latestScreen?.status === "MATCH",
-          kycComplete: kycRes.complete,
-          missingKycDocs: kycRes.missing,
-          rejectedKycDocs: kycRes.rejected,
-        },
-        anomalies,
+        verdict: outcome.verdict,
+        reason: outcome.reason,
+        matchedRule: outcome.matchedRule,
+        // Non-null for the customer path by construction.
+        gates: outcome.gates!,
+        anomalies: outcome.anomalies,
         // Renamed fields preserve the existing wire contract that the
         // new-loan dialog consumes; see DryRunContext.
         context: {
-          principal: input.principal,
-          termMonths: input.termMonths,
-          annualInterestRate: input.annualInterestRate,
-          productCode: input.productCode,
-          creditScore: context.creditScoreAtApply,
-          tier: context.tierAtApply,
-          monthlyIncome: context.monthlyIncome,
-          existingActiveLoans: context.existingActiveLoans,
+          principal: outcome.context.principal,
+          termMonths: outcome.context.termMonths,
+          annualInterestRate: outcome.context.annualInterestRate,
+          productCode: outcome.context.productCode,
+          creditScore: outcome.context.creditScoreAtApply,
+          tier: outcome.context.tierAtApply,
+          monthlyIncome: outcome.context.monthlyIncome,
+          existingActiveLoans: outcome.context.existingActiveLoans,
         },
       },
     };

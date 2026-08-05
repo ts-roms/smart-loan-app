@@ -24,7 +24,12 @@ export interface AnomalyFlag {
 }
 
 export interface AnomalyContext {
-  customerId: string;
+  /**
+   * The applicant, when they already have a Customer row. Omitted when
+   * pre-assessing a walk-in prospect: there's no prior history to exclude
+   * from the baseline, and no application velocity to count.
+   */
+  customerId?: string;
   productCode: string;
   principal: number;
   termMonths: number;
@@ -77,7 +82,9 @@ export async function computeAnomalyFlags(
       status: {
         in: ["SUBMITTED", "APPROVED", "DISBURSED", "ACTIVE", "CLOSED"],
       },
-      customerId: { not: ctx.customerId },
+      // Exclude the applicant's own history so they aren't compared
+      // against themselves. Nothing to exclude for a prospect.
+      customerId: ctx.customerId ? { not: ctx.customerId } : undefined,
     },
     select: { principal: true, termMonths: true, annualInterestRate: true },
     orderBy: { submittedAt: "desc" },
@@ -129,24 +136,30 @@ export async function computeAnomalyFlags(
   // ── Applicant velocity ──────────────────────────────────────────
   // Count non-DRAFT applications by this customer in the last 30
   // days. 3+ within 30 days is unusual enough to surface.
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const recentApps = await prisma.loanApplication.count({
-    where: {
-      customerId: ctx.customerId,
-      submittedAt: { gte: thirtyDaysAgo },
-      status: { not: "DRAFT" },
-    },
-  });
-  if (recentApps >= 3) {
-    flags.push({
-      code: "APPLICANT_VELOCITY",
-      severity: recentApps >= 5 ? "high" : "medium",
-      message: `${recentApps} applications from this customer in the last 30 days. Review for stacking / fraud signals.`,
-      zScore: null,
-      observed: recentApps,
-      baseline: 0,
+  //
+  // Skipped entirely for a prospect: with no Customer row there are no
+  // applications to count, and running the query unscoped would count
+  // everyone's.
+  if (ctx.customerId) {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentApps = await prisma.loanApplication.count({
+      where: {
+        customerId: ctx.customerId,
+        submittedAt: { gte: thirtyDaysAgo },
+        status: { not: "DRAFT" },
+      },
     });
+    if (recentApps >= 3) {
+      flags.push({
+        code: "APPLICANT_VELOCITY",
+        severity: recentApps >= 5 ? "high" : "medium",
+        message: `${recentApps} applications from this customer in the last 30 days. Review for stacking / fraud signals.`,
+        zScore: null,
+        observed: recentApps,
+        baseline: 0,
+      });
+    }
   }
 
   // ── Principal-to-income ratio ───────────────────────────────────

@@ -26,7 +26,7 @@ import {
 import { formatMoney } from "@loan/shared-utils";
 import { Camera } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { FileUpload } from "../../../components/FileUpload";
 
@@ -40,6 +40,10 @@ export function PortalApply() {
   const quote = useQuote();
   const toast = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Set when the borrower arrived from "Check my eligibility". Provenance
+  // only — nothing on this form reads or edits it.
+  const preAssessmentId = searchParams.get("preAssessmentId") ?? "";
 
   const [productCode, setProductCode] = useState("SALARY");
   const [principal, setPrincipal] = useState(50_000);
@@ -123,6 +127,9 @@ export function PortalApply() {
         vehicle: collateralKind === "VEHICLE" ? vehicle : undefined,
         property: collateralKind === "PROPERTY" ? property : undefined,
         applicationSelfieUrl: selfieUrl ?? undefined,
+        // Carried through from the eligibility check, when the borrower
+        // arrived from one. Links the two records server-side.
+        preAssessmentId: preAssessmentId || undefined,
       });
       toast.success(
         "Application submitted! An officer will review it shortly.",

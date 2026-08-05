@@ -13,6 +13,11 @@ import { randomUUID } from "node:crypto";
 
 import { getBranding } from "../../lib/branding";
 
+import type {
+  PortalPreAssessmentInput,
+  PreAssessmentService,
+} from "../pre-assessment/index";
+
 import type { LedgerScope } from "./helpers";
 import type {
   ApplyInput,
@@ -64,6 +69,12 @@ export class PortalService {
     private readonly ledger: CustomerLedgerRepository,
     private readonly intents: PaymentIntentRepository,
     private readonly intentWebhookUrl: string,
+    /**
+     * Shared with the staff-facing /pre-assessments feature. Reused rather
+     * than reimplemented so a borrower's self-check and an officer's check
+     * of the same borrower can't return different verdicts.
+     */
+    private readonly preAssessments: PreAssessmentService,
   ) {}
 
   /**
@@ -178,15 +189,26 @@ export class PortalService {
     userId: string;
     input: ApplyInput;
   }): Promise<ApplyResult> {
+    const { preAssessmentId, ...terms } = args.input;
     const score = await this.scores.latestForCustomer(args.customerId);
     try {
       const created = await this.loans.apply({
-        ...args.input,
+        ...terms,
         customerId: args.customerId,
         submittedById: args.userId,
         creditScoreAtApply: score?.score ?? null,
         tierAtApply: score?.tier ?? null,
       });
+      // Link the check the borrower ran before applying. Best-effort: the
+      // loan is committed, and a stale or already-claimed assessment id is
+      // not a reason to fail an application that succeeded.
+      if (preAssessmentId) {
+        try {
+          await this.preAssessments.markConverted(preAssessmentId, created.id);
+        } catch {
+          // Non-fatal — the loan stands on its own.
+        }
+      }
       return { ok: true, loan: created };
     } catch (err) {
       const e = err as Error & { issues?: unknown };
@@ -197,6 +219,33 @@ export class PortalService {
         issues: e.issues,
       };
     }
+  }
+
+  // ─── pre-assessment ───────────────────────────────────────────────
+
+  /**
+   * "Would I be approved for this?" — run before committing to an
+   * application. Same engine as the officer's, and because the caller is a
+   * real customer their score, AML status and KYC pack are all in play, so
+   * the verdict is a genuine preview rather than an estimate.
+   *
+   * `customerId` is forced from the JWT subject; the body carries only the
+   * loan terms, so a borrower can't assess anyone but themselves.
+   */
+  async preAssess(args: {
+    customerId: string;
+    userId: string;
+    input: PortalPreAssessmentInput;
+  }) {
+    return this.preAssessments.run({
+      input: { ...args.input, customerId: args.customerId },
+      source: "PORTAL",
+      actorId: args.userId,
+    });
+  }
+
+  listPreAssessments(customerId: string) {
+    return this.preAssessments.listForCustomer(customerId);
   }
 
   // ─── KYC ─────────────────────────────────────────────────────────
