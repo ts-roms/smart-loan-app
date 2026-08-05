@@ -13,6 +13,9 @@ export function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Masked until asked otherwise, every time — a remembered preference
+  // would eventually reveal a password in front of the wrong person.
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -76,14 +79,39 @@ export function Login() {
         </div>
         <div style={{ marginBottom: 20 }}>
           <label style={labelStyle}>Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={inputStyle}
-            required
-            autoComplete="current-password"
-          />
+          {/* Same reveal affordance as the tenant app, hand-rolled:
+              apps/platform doesn't depend on @loan/ui. */}
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ ...inputStyle, paddingRight: 44 }}
+              required
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              style={{
+                position: "absolute",
+                right: 0,
+                top: 0,
+                height: "100%",
+                width: 40,
+                border: "none",
+                background: "transparent",
+                color: "var(--fg-subtle)",
+                cursor: "pointer",
+                fontSize: 12,
+              }}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
         </div>
         {error && (
           <div

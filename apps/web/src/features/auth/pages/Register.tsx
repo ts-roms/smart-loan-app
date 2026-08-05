@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  PasswordInput,
   useToast,
 } from "@loan/ui";
 import { Wallet } from "lucide-react";
@@ -114,8 +115,7 @@ export function RegisterPage() {
             </div>
             <div className="space-y-1">
               <label className="text-sm">Password</label>
-              <Input
-                type="password"
+              <PasswordInput
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -129,8 +129,7 @@ export function RegisterPage() {
             </div>
             <div className="space-y-1">
               <label className="text-sm">Confirm password</label>
-              <Input
-                type="password"
+              <PasswordInput
                 autoComplete="new-password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}

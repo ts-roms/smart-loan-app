@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  PasswordInput,
   useToast,
 } from "@loan/ui";
 import { Check, Lock, Wallet } from "lucide-react";
@@ -32,7 +33,7 @@ export function LoginPage() {
   const [params] = useSearchParams();
   const tenantSlug = params.get("tenant") ?? undefined;
   const toast = useToast();
-  const [email, setEmail] = useState("admin@loan.local");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [requires2fa, setRequires2fa] = useState(false);
@@ -113,6 +114,7 @@ export function LoginPage() {
                 <Input
                   type="email"
                   autoComplete="username"
+                  placeholder="E-mail"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -120,9 +122,9 @@ export function LoginPage() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm">Password</label>
-                <Input
-                  type="password"
+                <PasswordInput
                   autoComplete="current-password"
+                  placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -196,9 +198,6 @@ export function LoginPage() {
                 >
                   Create an account
                 </Link>
-              </p>
-              <p className="text-xs text-fg-subtle text-center">
-                Default admin · admin@loan.local / P@ssw0rd123
               </p>
             </form>
           </CardContent>

@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  PasswordInput,
   Label,
   Select,
   SelectContent,
@@ -467,8 +468,7 @@ function NewUserDialog({ onClose }: { onClose: () => void }) {
             </div>
             <div className="space-y-1 md:col-span-2">
               <Label>Initial password</Label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={form.password}
                 onChange={(e) => set("password", e.target.value)}
                 required
