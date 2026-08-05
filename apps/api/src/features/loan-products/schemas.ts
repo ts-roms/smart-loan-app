@@ -19,11 +19,42 @@ const tierMap = z
   .nullable()
   .optional();
 
+/**
+ * One declaration question. Ids are slugs the builder UI generates;
+ * SELECT must offer at least two options — one option is a statement,
+ * not a question.
+ */
+const kycQuestionSchema = z
+  .object({
+    id: z
+      .string()
+      .min(1)
+      .max(60)
+      .regex(/^[a-z0-9_]+$/, "id must be a lowercase slug"),
+    label: z.string().min(1).max(300),
+    type: z.enum(["TEXT", "YES_NO", "NUMBER", "SELECT"]),
+    options: z.array(z.string().min(1).max(120)).max(20).optional(),
+    required: z.boolean(),
+    hint: z.string().max(300).optional(),
+  })
+  .refine((q) => q.type !== "SELECT" || (q.options?.length ?? 0) >= 2, {
+    message: "SELECT questions need at least two options",
+  });
+
+const kycQuestionsSchema = z
+  .array(kycQuestionSchema)
+  .max(50)
+  .refine((qs) => new Set(qs.map((q) => q.id)).size === qs.length, {
+    message: "Question ids must be unique",
+  });
+
 const baseSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(500).optional(),
   collateralKind: z.enum(["NONE", "VEHICLE", "PROPERTY"]).optional(),
   requiredKycDocs: z.array(z.enum(DOC_TYPES)).optional(),
+  /** Admin-built declaration questionnaire. Empty array clears it. */
+  kycQuestions: kycQuestionsSchema.optional(),
 
   minPrincipal: z.number().nonnegative(),
   maxPrincipal: z.number().positive(),

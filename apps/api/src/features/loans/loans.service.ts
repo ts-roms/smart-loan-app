@@ -11,7 +11,17 @@ import type {
   ScreeningRepository,
 } from "@loan/db";
 import { evaluateRules, type DecisioningContext } from "@loan/decisioning";
-import { validateKyc, type KycDocumentType } from "@loan/kyc";
+import {
+  answerDeclarations,
+  declarationsComplete,
+  snapshotDeclarations,
+  validateDeclarations,
+  validateKyc,
+  type KycAnswers,
+  type KycDeclarations,
+  type KycDocumentType,
+  type KycQuestion,
+} from "@loan/kyc";
 
 import { computeAnomalyFlags } from "../../lib/anomaly";
 import { evaluateForCustomer } from "../../lib/pre-decision";
@@ -73,6 +83,13 @@ export type DecideResult =
       missing: KycDocumentType[];
       rejected: KycDocumentType[];
       status: string;
+      loanProductCode: string;
+    }
+  | {
+      ok: false;
+      kind: "DeclarationsIncomplete";
+      /** Labels of required declarations still unanswered. */
+      unanswered: string[];
       loanProductCode: string;
     };
 
@@ -170,6 +187,36 @@ export class LoanWorkflowService {
       };
     }
 
+    /*
+     * KYC declarations. Answers may be PARTIAL — completeness gates
+     * approval, not submission, so the questionnaire can also be
+     * finished later at the KYC stage — but any answer present must fit
+     * its question (a NUMBER answering "abc" is tampering or a bug, not
+     * an unfinished form). The questions + answers are snapshotted as
+     * they stood: the admin can rewrite the questionnaire tomorrow
+     * without rewriting what this applicant attested to.
+     */
+    const product = await this.prisma.loanProduct.findUnique({
+      where: { code: input.productCode },
+    });
+    const questions = (product?.kycQuestions ?? []) as unknown as KycQuestion[];
+    let kycDeclarations: KycDeclarations | undefined;
+    if (questions.length > 0) {
+      const answers = input.kycAnswers ?? {};
+      const check = validateDeclarations(questions, answers);
+      if (check.invalid.length > 0) {
+        return {
+          ok: false,
+          kind: "BadRequest",
+          message: "One or more declaration answers are malformed.",
+          issues: check.invalid,
+        };
+      }
+      kycDeclarations = snapshotDeclarations(questions, answers, {
+        id: actorId,
+      });
+    }
+
     const ctx = await this.buildDecisioningContext(
       input,
       latestScreen?.status ?? null,
@@ -190,6 +237,7 @@ export class LoanWorkflowService {
         submittedById: actorId,
         creditScoreAtApply: ctx.creditScoreAtApply ?? null,
         tierAtApply: ctx.tierAtApply ?? null,
+        kycDeclarations,
         initialStatus,
         initialDecisionReason:
           initialStatus === "SUBMITTED" ? undefined : decision.reason,
@@ -311,6 +359,30 @@ export class LoanWorkflowService {
         }, rejected=${kycResult.rejected.join(",") || "none"}]`;
         reason = reason ? `${reason} ${note}` : note;
       }
+
+      /*
+       * Declarations gate — against the SNAPSHOT taken at apply, not
+       * the product's current questionnaire: the contract is "answer
+       * what you were asked", and an admin adding a required question
+       * tomorrow must not retroactively block yesterday's application.
+       * The same override flag covers it: "approve despite incomplete
+       * KYC" means the whole KYC posture, documents and declarations.
+       */
+      const decl = declarationsComplete(
+        loan.kycDeclarations as KycDeclarations | null,
+      );
+      if (!decl.complete) {
+        if (!input.overrideKyc) {
+          return {
+            ok: false,
+            kind: "DeclarationsIncomplete",
+            unanswered: decl.missing.map((m) => m.label),
+            loanProductCode: loan.productCode,
+          };
+        }
+        const note = `[Declarations override: ${decl.missing.length} required unanswered]`;
+        reason = reason ? `${reason} ${note}` : note;
+      }
     }
 
     const updated = await this.loans.decide(idOrNumber, {
@@ -319,6 +391,66 @@ export class LoanWorkflowService {
       decidedById: actorId,
     });
     return { ok: true, loan: updated };
+  }
+
+  /**
+   * Answer (or amend) an application's KYC declarations — the KYC-stage
+   * capture. Merges into the snapshot taken at apply, validating each
+   * answer against the question AS ASKED (types, and SELECT options as
+   * offered then). Only pre-decision applications can be edited: the
+   * declarations are part of what approval judged, and rewriting them
+   * under a decided loan would falsify the record it was decided on.
+   *
+   * When the loan predates the questionnaire (no snapshot) and the
+   * product HAS one now, a snapshot is created from the current
+   * questions — that's the officer back-filling declarations for an
+   * in-flight application after the admin added the questionnaire.
+   */
+  async answerDeclarations(
+    idOrNumber: string,
+    answers: KycAnswers,
+    actorId: string,
+  ): Promise<
+    | { ok: true; declarations: KycDeclarations }
+    | { ok: false; kind: "NotFound" }
+    | { ok: false; kind: "NotEditable"; status: string }
+    | { ok: false; kind: "NoQuestionnaire" }
+    | {
+        ok: false;
+        kind: "InvalidAnswers";
+        invalid: Array<{ id: string; reason: string }>;
+      }
+  > {
+    const loan = await this.loans.findByIdOrNumber(idOrNumber);
+    if (!loan) return { ok: false, kind: "NotFound" };
+    if (!["DRAFT", "SUBMITTED", "UNDER_REVIEW"].includes(loan.status)) {
+      return { ok: false, kind: "NotEditable", status: loan.status };
+    }
+
+    const current = loan.kycDeclarations as KycDeclarations | null;
+    let result: KycDeclarations;
+    if (current && current.items.length > 0) {
+      const merged = answerDeclarations(current, answers, { id: actorId });
+      if (!merged.ok) {
+        return { ok: false, kind: "InvalidAnswers", invalid: merged.invalid };
+      }
+      result = merged.next;
+    } else {
+      const questions = (loan.product?.kycQuestions ??
+        []) as unknown as KycQuestion[];
+      if (questions.length === 0) return { ok: false, kind: "NoQuestionnaire" };
+      const check = validateDeclarations(questions, answers);
+      if (check.invalid.length > 0) {
+        return { ok: false, kind: "InvalidAnswers", invalid: check.invalid };
+      }
+      result = snapshotDeclarations(questions, answers, { id: actorId });
+    }
+
+    await this.prisma.loanApplication.update({
+      where: { id: loan.id },
+      data: { kycDeclarations: result as never },
+    });
+    return { ok: true, declarations: result };
   }
 
   /**

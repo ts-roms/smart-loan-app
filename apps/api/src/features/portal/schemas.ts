@@ -49,8 +49,24 @@ export const applySchema = z.object({
   applicationSelfieUrl: z.string().max(500).optional(),
   /** The borrower's own pre-assessment this application came out of. */
   preAssessmentId: z.string().uuid().optional(),
+  /**
+   * Answers to the product's KYC declaration questionnaire. Partial is
+   * fine — completeness gates approval, not submission — but present
+   * answers must fit their questions (validated in the service).
+   */
+  kycAnswers: z
+    .record(z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .optional(),
 });
 export type ApplyInput = z.infer<typeof applySchema>;
+
+/** Body of PUT /portal/loans/:id/declarations. */
+export const portalDeclarationAnswersSchema = z.object({
+  answers: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])),
+});
+export type PortalDeclarationAnswersInput = z.infer<
+  typeof portalDeclarationAnswersSchema
+>;
 
 export const kycSubmitSchema = z.object({
   documentType: z.enum([

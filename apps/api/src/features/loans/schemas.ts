@@ -99,7 +99,22 @@ export const applySchema = z.object({
    * best-effort and never blocks the apply — see LoanWorkflowService.
    */
   preAssessmentId: z.string().uuid().optional(),
+  /**
+   * Answers to the product's KYC declaration questionnaire, keyed by
+   * question id. Partial is fine — completeness gates APPROVAL, not
+   * submission — but every answer present must fit its question's type
+   * (validated in the service against the product's questions).
+   */
+  kycAnswers: z
+    .record(z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .optional(),
 });
+
+/** Body of PUT /loans/:id/declarations — the KYC-stage answer/edit. */
+export const declarationAnswersSchema = z.object({
+  answers: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])),
+});
+export type DeclarationAnswersInput = z.infer<typeof declarationAnswersSchema>;
 
 export const decideSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED"]),

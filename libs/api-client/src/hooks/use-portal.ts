@@ -1,5 +1,7 @@
 import type {
   Customer,
+  KycAnswers,
+  KycDeclarations,
   KycDocumentType,
   KycSubmission,
   KycValidationResult,
@@ -67,6 +69,25 @@ export function usePortalKyc() {
   return useQuery({
     queryKey: portalKeys.kyc,
     queryFn: () => getApiClient().get<PortalKycResponse>("/portal/kyc"),
+  });
+}
+
+/**
+ * Borrower answers their application's KYC declarations from the loan
+ * page. Editable until the application is decided, then frozen.
+ */
+export function usePortalAnswerDeclarations() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { loanId: string; answers: KycAnswers }) =>
+      getApiClient().request<KycDeclarations>(
+        `/portal/loans/${input.loanId}/declarations`,
+        { method: "PUT", body: JSON.stringify({ answers: input.answers }) },
+      ),
+    onSuccess: (_d, vars) => {
+      void qc.invalidateQueries({ queryKey: portalKeys.loan(vars.loanId) });
+      void qc.invalidateQueries({ queryKey: portalKeys.loans });
+    },
   });
 }
 

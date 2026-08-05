@@ -6,6 +6,8 @@ import type {
   LoanDraft,
   LoanDraftCreateInput,
   LoanDraftUpdateInput,
+  KycAnswers,
+  KycDeclarations,
   LoanDryRunInput,
   LoanDryRunResult,
   LoanListQuery,
@@ -146,6 +148,25 @@ export function useDryRunLoan() {
   return useMutation({
     mutationFn: (input: LoanDryRunInput) =>
       getApiClient().post<LoanDryRunResult>("/loans/dry-run", input),
+  });
+}
+
+/**
+ * Answer / amend an application's KYC declarations (officer side, the
+ * KYC-stage capture). 409s once the loan is decided — the answers are
+ * part of what approval judged.
+ */
+export function useAnswerDeclarations() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { loanId: string; answers: KycAnswers }) =>
+      getApiClient().request<KycDeclarations>(
+        `/loans/${input.loanId}/declarations`,
+        { method: "PUT", body: JSON.stringify({ answers: input.answers }) },
+      ),
+    onSuccess: (_d, vars) => {
+      void qc.invalidateQueries({ queryKey: loanKeys.detail(vars.loanId) });
+    },
   });
 }
 

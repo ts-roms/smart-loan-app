@@ -83,3 +83,4 @@ export function validateKyc(
     return { complete: true, status: "VERIFIED", missing: [], rejected: [] };
   return { complete: false, status: "PENDING", missing, rejected: [] };
 }
+export * from "./declarations";

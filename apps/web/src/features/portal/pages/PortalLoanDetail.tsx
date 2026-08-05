@@ -1,4 +1,5 @@
 import {
+  usePortalAnswerDeclarations,
   usePortalCreatePaymentIntent,
   usePortalLoan,
   usePortalPaymentIntent,
@@ -35,6 +36,7 @@ import { useParams } from "react-router-dom";
 import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { downloadPdf } from "../../../lib/download-pdf";
+import { DeclarationsPanel } from "../../../components/DeclarationsPanel";
 import { SignaturePad } from "../../../components/SignaturePad";
 import { LoanLedgerPanel, ProjectedSchedulePanel } from "../../loans";
 import { LoanMessagePanel } from "../../messaging";
@@ -42,6 +44,7 @@ import { LoanMessagePanel } from "../../messaging";
 export function PortalLoanDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const loan = usePortalLoan(id);
+  const answerDecl = usePortalAnswerDeclarations();
 
   // Breadcrumb label — before the early returns, so the hook order
   // stays the same on the loading and loaded renders.
@@ -119,6 +122,19 @@ export function PortalLoanDetail() {
               borrowerSignedAt={l.borrowerSignedAt}
             />
           )}
+          {/* The borrower's own declarations — answer or amend until the
+              application is decided; required ones block approval, so
+              finishing them here is how a borrower unblocks their own
+              loan. */}
+          <DeclarationsPanel
+            declarations={l.kycDeclarations}
+            editable={["DRAFT", "SUBMITTED", "UNDER_REVIEW"].includes(l.status)}
+            saving={answerDecl.isPending}
+            onSave={async (answers) => {
+              await answerDecl.mutateAsync({ loanId: l.id, answers });
+            }}
+          />
+
           {/* The borrower's own copy of the schedule — same component
               and same payload the officer sees on /loans/:id, so the
               two can't disagree about what's due or what's been

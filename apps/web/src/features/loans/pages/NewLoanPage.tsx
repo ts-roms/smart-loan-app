@@ -2,6 +2,7 @@ import { useAddCoMaker, useCustomers } from "@loan/api-client";
 import type {
   CoMakerInput,
   CoMakerRole,
+  KycAnswers,
   LoanApplyInput,
   LoanProduct,
   PropertyInput,
@@ -40,6 +41,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
+import { DeclarationsForm } from "../../../components/DeclarationsForm";
 import { FileUpload } from "../../../components/FileUpload";
 import { AffordabilityGuardrails } from "../components/AffordabilityGuardrails";
 import { BorrowerContextBar } from "../components/BorrowerContextBar";
@@ -103,6 +105,8 @@ interface FormState {
   vehicle: VehicleInput;
   property: PropertyInput;
   applicationSelfieUrl: string | null;
+  /** Declaration answers for the selected product, by question id. */
+  kycAnswers: KycAnswers;
   coMakers: CoMakerDraft[];
 }
 
@@ -116,6 +120,7 @@ const initialForm: FormState = {
   vehicle: defaultVehicle(),
   property: defaultProperty(),
   applicationSelfieUrl: null,
+  kycAnswers: {},
   coMakers: [],
 };
 
@@ -344,6 +349,7 @@ export function NewLoanPage() {
       vehicle: collateralKind === "VEHICLE" ? form.vehicle : undefined,
       property: collateralKind === "PROPERTY" ? form.property : undefined,
       applicationSelfieUrl: form.applicationSelfieUrl ?? undefined,
+      kycAnswers: form.kycAnswers,
       // Carried through from /pre-assessments when the officer started
       // here from a saved check. Links the two records server-side.
       preAssessmentId: seedPreAssessmentId || undefined,
@@ -465,7 +471,13 @@ export function NewLoanPage() {
               product={product}
             />
           )}
-          {step === 3 && <Step4Verification form={form} setForm={setForm} />}
+          {step === 3 && (
+            <Step4Verification
+              form={form}
+              setForm={setForm}
+              product={product}
+            />
+          )}
           {step === 4 && (
             <Step5Review
               form={form}
@@ -950,10 +962,13 @@ function Step3CollateralCoMakers({
 function Step4Verification({
   form,
   setForm,
+  product,
 }: {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  product: LoanProduct | undefined;
 }) {
+  const questions = product?.kycQuestions ?? [];
   return (
     <div className="space-y-4">
       <StepHeading
@@ -988,6 +1003,23 @@ function Step4Verification({
           placeholder="e.g. Working capital, second car, refinance"
         />
       </Field>
+      {/* Product declarations. Answers can be left partial — approval,
+          not submission, gates on completeness — and they persist with
+          the draft like every other field. Stale answers from a
+          previously-selected product are harmless: the server snapshots
+          only the chosen product's questions and ignores unknown ids. */}
+      {questions.length > 0 && (
+        <fieldset className="rounded-md border border-default p-3 space-y-2">
+          <legend className="px-1 text-xs uppercase tracking-wider text-fg-subtle">
+            KYC declarations · {product?.name}
+          </legend>
+          <DeclarationsForm
+            questions={questions}
+            answers={form.kycAnswers}
+            onChange={(next) => setForm((f) => ({ ...f, kycAnswers: next }))}
+          />
+        </fieldset>
+      )}
     </div>
   );
 }
