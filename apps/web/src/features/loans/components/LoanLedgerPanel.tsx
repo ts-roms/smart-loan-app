@@ -1,4 +1,4 @@
-import { loanBalance, runningBalances, type LoanBalance } from "@loan/loans";
+import { loanBalance, runningBalances } from "@loan/loans";
 import { Badge } from "@loan/ui";
 import { formatDate, formatMoney } from "@loan/shared-utils";
 import { CalendarClock } from "lucide-react";
@@ -62,18 +62,6 @@ const STATE_VARIANT: Record<
 };
 
 /**
- * Sum the ledger.
- *
- * A thin re-export of `loanBalance` from @loan/loans, kept under the old
- * name because the feature's public API exports it. The arithmetic moved
- * to the shared lib when the API started computing the same figure for
- * the loans lists and the borrower's dashboard — three surfaces quoting
- * a balance from three implementations is how they drift.
- */
-export const ledgerTotals = loanBalance;
-export type LoanLedgerTotals = LoanBalance;
-
-/**
  * Amortization ledger for one loan.
  *
  * The schedule already drove payment allocation, penalty accrual and
@@ -112,7 +100,9 @@ export function LoanLedgerPanel({
   if (rows.length === 0) return null;
 
   const today = Date.now();
-  const totals = ledgerTotals(rows);
+  // Straight from @loan/loans — the same fold the API and the statement
+  // PDF use, so this panel can't quote a different balance than they do.
+  const totals = loanBalance(rows);
   // Both running columns, computed by the same lib the API and the PDF
   // use. Parallel to `rows` — index i belongs to rows[i].
   const balances = runningBalances(rows, principal);
