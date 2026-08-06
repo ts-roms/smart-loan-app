@@ -984,8 +984,8 @@ function CreateDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={create.isPending}>
-            {create.isPending ? "Creating…" : "Create delegation"}
+          <Button onClick={onSubmit} loading={create.isPending}>
+            Create delegation
           </Button>
         </DialogFooter>
       </DialogContent>

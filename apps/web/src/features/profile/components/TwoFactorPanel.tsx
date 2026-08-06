@@ -220,9 +220,10 @@ export function TwoFactorPanel() {
               </Button>
               <Button
                 onClick={onEnable}
-                disabled={enable.isPending || enableCode.length !== 6}
+                loading={enable.isPending}
+                disabled={enableCode.length !== 6}
               >
-                {enable.isPending ? "Verifying…" : "Enable 2FA"}
+                Enable 2FA
               </Button>
             </DialogFooter>
           </DialogContent>

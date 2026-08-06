@@ -417,8 +417,8 @@ function CreateProductDialog({ onClose }: { onClose: () => void }) {
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={create.isPending}>
-            {create.isPending ? "Creating…" : "Create product"}
+          <Button onClick={onSubmit} loading={create.isPending}>
+            Create product
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -465,8 +465,8 @@ function EditProductDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={update.isPending}>
-            {update.isPending ? "Saving…" : "Save"}
+          <Button onClick={onSubmit} loading={update.isPending}>
+            Save
           </Button>
         </DialogFooter>
       </DialogContent>

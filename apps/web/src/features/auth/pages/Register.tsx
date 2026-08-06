@@ -132,9 +132,10 @@ export function RegisterPage() {
           // here rather than the navy btn-primary.
           variant="success"
           className="w-full"
-          disabled={register.isPending || tooShort || mismatch}
+          loading={register.isPending}
+          disabled={tooShort || mismatch}
         >
-          {register.isPending ? "Creating account…" : "Create account"}
+          Create account
         </Button>
         <p className="text-xs text-fg-subtle text-center pt-2">
           Already a member?{" "}

@@ -390,10 +390,11 @@ export function PortalApply() {
 
           <Button
             type="submit"
-            disabled={!ready || apply.isPending}
+            loading={apply.isPending}
+            disabled={!ready}
             className="w-full"
           >
-            {apply.isPending ? "Submitting…" : "Submit application"}
+            Submit application
           </Button>
         </form>
       </CardContent>

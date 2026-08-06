@@ -70,13 +70,11 @@ export function EclRunsPage() {
             ECL provisioning
           </CardTitle>
           {canRun && (
-            <Button onClick={onRun} disabled={runEcl.isPending}>
-              <RefreshCw
-                className={
-                  runEcl.isPending ? "h-3 w-3 animate-spin" : "h-3 w-3"
-                }
-              />
-              {runEcl.isPending ? "Running…" : "Run ECL now"}
+            <Button onClick={onRun} loading={runEcl.isPending}>
+              {/* Icon only when idle — the Button supplies the spinner
+                  while running, and two glyphs would compete. */}
+              {!runEcl.isPending && <RefreshCw className="h-3 w-3" />}
+              Run ECL now
             </Button>
           )}
         </CardHeader>

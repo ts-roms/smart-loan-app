@@ -322,8 +322,8 @@ export function PreAssessmentsPage() {
               </Field>
             </div>
 
-            <Button type="submit" disabled={!ready || run.isPending}>
-              {run.isPending ? "Assessing…" : "Run assessment"}
+            <Button type="submit" loading={run.isPending} disabled={!ready}>
+              Run assessment
             </Button>
           </form>
 

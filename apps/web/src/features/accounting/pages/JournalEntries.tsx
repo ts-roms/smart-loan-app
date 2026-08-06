@@ -493,8 +493,8 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!balanced || post.isPending}>
-              {post.isPending ? "Posting…" : "Post entry"}
+            <Button type="submit" loading={post.isPending} disabled={!balanced}>
+              Post entry
             </Button>
           </DialogFooter>
         </form>

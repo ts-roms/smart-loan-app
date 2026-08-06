@@ -332,8 +332,8 @@ export function CompleteProfilePage() {
             </Section>
 
             <div className="flex justify-end pt-2">
-              <Button type="submit" disabled={complete.isPending}>
-                {complete.isPending ? "Saving…" : "Save and continue"}
+              <Button type="submit" loading={complete.isPending}>
+                Save and continue
               </Button>
             </div>
           </form>

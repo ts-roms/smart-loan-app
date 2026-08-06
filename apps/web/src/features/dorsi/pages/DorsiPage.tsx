@@ -462,8 +462,8 @@ function ConfigCard() {
               >
                 Cancel
               </Button>
-              <Button size="sm" onClick={onSave} disabled={update.isPending}>
-                {update.isPending ? "Saving…" : "Save"}
+              <Button size="sm" onClick={onSave} loading={update.isPending}>
+                Save
               </Button>
             </div>
           </div>
@@ -588,8 +588,8 @@ function TagDialog({ onClose }: { onClose: () => void }) {
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={tag.isPending}>
-            {tag.isPending ? "Tagging…" : "Tag customer"}
+          <Button onClick={onSubmit} loading={tag.isPending}>
+            Tag customer
           </Button>
         </DialogFooter>
       </DialogContent>

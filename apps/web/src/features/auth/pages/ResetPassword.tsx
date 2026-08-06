@@ -157,9 +157,9 @@ export function ResetPasswordPage() {
           type="submit"
           variant="success"
           className="w-full"
-          disabled={reset.isPending}
+          loading={reset.isPending}
         >
-          {reset.isPending ? "Saving…" : "Set new password"}
+          Set new password
         </Button>
       </form>
     </AuthShell>

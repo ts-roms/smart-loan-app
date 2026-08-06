@@ -118,10 +118,11 @@ export function ScreeningPage() {
             />
             <Button
               type="submit"
-              disabled={add.isPending || !draft.fullName.trim()}
+              loading={add.isPending}
+              disabled={!draft.fullName.trim()}
               className="md:col-span-5"
             >
-              {add.isPending ? "Adding…" : "Add entry"}
+              Add entry
             </Button>
           </form>
         )}

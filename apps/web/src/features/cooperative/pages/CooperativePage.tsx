@@ -331,9 +331,10 @@ function ContributionsTab() {
               </Button>
               <Button
                 onClick={onSubmit}
-                disabled={create.isPending || total <= 0}
+                loading={create.isPending}
+                disabled={total <= 0}
               >
-                {create.isPending ? "Posting…" : "Save"}
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -488,9 +489,10 @@ function SavingsTab() {
               </Button>
               <Button
                 onClick={onSubmit}
-                disabled={create.isPending || amount <= 0 || !customerId}
+                loading={create.isPending}
+                disabled={amount <= 0 || !customerId}
               >
-                {create.isPending ? "Posting…" : "Save"}
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -643,9 +645,10 @@ function FundsTab() {
               </Button>
               <Button
                 onClick={onSubmit}
-                disabled={create.isPending || amount <= 0}
+                loading={create.isPending}
+                disabled={amount <= 0}
               >
-                {create.isPending ? "Posting…" : "Save"}
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -782,9 +785,10 @@ function WithdrawalsTab() {
               </Button>
               <Button
                 onClick={onSubmit}
-                disabled={create.isPending || amount <= 0}
+                loading={create.isPending}
+                disabled={amount <= 0}
               >
-                {create.isPending ? "Posting…" : "Save"}
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -946,9 +950,10 @@ function ExpensesTab() {
               </Button>
               <Button
                 onClick={onSubmit}
-                disabled={create.isPending || !type || amount <= 0}
+                loading={create.isPending}
+                disabled={!type || amount <= 0}
               >
-                {create.isPending ? "Posting…" : "Save"}
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1082,9 +1087,10 @@ function OtherIncomeTab() {
               </Button>
               <Button
                 onClick={onSubmit}
-                disabled={create.isPending || !type || amount <= 0}
+                loading={create.isPending}
+                disabled={!type || amount <= 0}
               >
-                {create.isPending ? "Posting…" : "Save"}
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1254,9 +1260,10 @@ function BigBrotherTab() {
               </Button>
               <Button
                 onClick={onSubmit}
-                disabled={create.isPending || !name || !account || capital <= 0}
+                loading={create.isPending}
+                disabled={!name || !account || capital <= 0}
               >
-                {create.isPending ? "Posting…" : "Save"}
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>

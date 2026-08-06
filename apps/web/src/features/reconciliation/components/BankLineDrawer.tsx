@@ -252,9 +252,10 @@ function BankLineInspector({
               size="sm"
               variant="outline"
               onClick={onApplyManual}
-              disabled={matchLine.isPending || !manualType.trim()}
+              loading={matchLine.isPending}
+              disabled={!manualType.trim()}
             >
-              {matchLine.isPending ? "Matching…" : "Match manually"}
+              Match manually
             </Button>
           </div>
         </div>

@@ -118,9 +118,9 @@ export function LicensePanel() {
               spellCheck={false}
             />
             <div className="flex gap-2">
-              <Button onClick={onActivate} disabled={activate.isPending}>
-                <Key className="h-4 w-4" />
-                {activate.isPending ? "Activating…" : "Activate"}
+              <Button onClick={onActivate} loading={activate.isPending}>
+                {!activate.isPending && <Key className="h-4 w-4" />}
+                Activate
               </Button>
               {data?.status === "ACTIVE" && (
                 <Button

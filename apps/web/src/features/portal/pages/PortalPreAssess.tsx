@@ -183,8 +183,12 @@ export function PortalPreAssess() {
               </p>
             )}
 
-            <Button type="submit" disabled={!ready || preAssess.isPending}>
-              {preAssess.isPending ? "Checking…" : "Check eligibility"}
+            <Button
+              type="submit"
+              loading={preAssess.isPending}
+              disabled={!ready}
+            >
+              Check eligibility
             </Button>
           </form>
 

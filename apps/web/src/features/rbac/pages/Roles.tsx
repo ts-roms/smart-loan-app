@@ -578,8 +578,8 @@ function ImpactConfirmDialog({
           <Button variant="outline" onClick={onCancel} disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={onConfirm} disabled={isSaving}>
-            {isSaving ? "Saving…" : "Save anyway"}
+          <Button onClick={onConfirm} loading={isSaving}>
+            Save anyway
           </Button>
         </DialogFooter>
       </DialogContent>

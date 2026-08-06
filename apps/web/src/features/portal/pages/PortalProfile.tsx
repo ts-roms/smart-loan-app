@@ -187,9 +187,9 @@ export function PortalProfile() {
               </div>
             </div>
             <div className="flex items-center justify-end">
-              <Button type="submit" disabled={update.isPending}>
-                <Save className="h-4 w-4" />
-                {update.isPending ? "Saving…" : "Save changes"}
+              <Button type="submit" loading={update.isPending}>
+                {!update.isPending && <Save className="h-4 w-4" />}
+                Save changes
               </Button>
             </div>
           </form>

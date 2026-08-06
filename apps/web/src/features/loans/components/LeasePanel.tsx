@@ -327,8 +327,8 @@ function BuyoutDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={buyout.isPending}>
-            {buyout.isPending ? "Posting…" : "Post buyout"}
+          <Button onClick={onSubmit} loading={buyout.isPending}>
+            Post buyout
           </Button>
         </DialogFooter>
       </DialogContent>

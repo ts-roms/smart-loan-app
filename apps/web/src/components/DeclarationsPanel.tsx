@@ -112,8 +112,8 @@ export function DeclarationsPanel({
             onChange={setDraft}
           />
           <div className="flex gap-2">
-            <Button size="sm" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : "Save declarations"}
+            <Button size="sm" onClick={save} loading={saving}>
+              Save declarations
             </Button>
             <Button
               variant="outline"

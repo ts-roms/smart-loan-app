@@ -105,20 +105,24 @@
     --border-strong: 208 16% 50%;
 
     /*
-     * Bondi blue (#0095B6) on every field.
+     * Resting grey, bondi blue (#0095B6) on hover and focus.
      *
-     * A coloured outline rather than a grey one, so a field reads as
-     * interactive at a glance instead of as a table cell that happens
-     * to have an edge. Measures 3.51:1 against a white card, clearing
-     * the WCAG 3:1 minimum for a control boundary — which the grey it
-     * replaces only just managed at 3.08.
+     * Colour as FEEDBACK rather than decoration: a dense form has a
+     * dozen fields, and a saturated edge on all of them at once is
+     * noise — but the one you're pointing at or typing in earning a
+     * colour is signal.
      *
-     * Its own tokens rather than reusing --ring: the focus ring on
-     * buttons and links stays the navy primary, so this recolours the
-     * fields without repainting every focus state in the app.
+     * 58% resting is the lightest grey that clears the WCAG 3:1
+     * minimum for a control boundary against a white card (measured:
+     * 72% gave 2.01, 60% gave 2.89, 58% gives 3.08). Bondi measures
+     * 3.47 in the same place, so the interactive states are the
+     * stronger of the two, as they should be.
+     *
+     * Its own tokens rather than reusing --ring: focus rings on
+     * buttons and links stay the navy primary.
      */
-    --input: 191 100% 36%;
-    --input-hover: 191 100% 28%;
+    --input: 208 14% 58%;
+    --input-hover: 191 100% 36%;
     --input-ring: 191 100% 36%;
     --ring: 226 36% 45%;
 
@@ -239,11 +243,11 @@
     /* #32383e and a step either side. */
     --border: 210 11% 22%;
     --border-strong: 210 13% 52%;
-    /* Bondi lifted for a dark ground — 36% measures 4.33:1 on the
-     * dark card and works, but 45% (6.71:1) carries better against a
-     * surface this dark. */
-    --input: 191 90% 45%;
-    --input-hover: 191 90% 55%;
+    /* Bondi lifted for a dark ground: 36% measures 4.33:1 on the dark
+     * card and works, but 45% (6.21:1) carries better on a surface
+     * this dark. */
+    --input: 210 13% 44%;
+    --input-hover: 191 90% 45%;
     --input-ring: 191 90% 45%;
     --ring: 226 55% 68%;
 

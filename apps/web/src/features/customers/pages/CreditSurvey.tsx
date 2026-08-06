@@ -163,8 +163,12 @@ export function CreditSurveyPage() {
               ))}
             </ul>
             <div className="flex justify-end">
-              <Button onClick={onSubmit} disabled={!ready || submit.isPending}>
-                {submit.isPending ? "Scoring…" : "Compute score"}
+              <Button
+                onClick={onSubmit}
+                loading={submit.isPending}
+                disabled={!ready}
+              >
+                Compute score
               </Button>
             </div>
           </>

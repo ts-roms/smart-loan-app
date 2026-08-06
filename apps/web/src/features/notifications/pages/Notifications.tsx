@@ -187,8 +187,12 @@ function TestDialog({ onClose }: { onClose: () => void }) {
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={send.isPending || !recipient}>
-              {send.isPending ? "Sending…" : "Send"}
+            <Button
+              type="submit"
+              loading={send.isPending}
+              disabled={!recipient}
+            >
+              Send
             </Button>
           </DialogFooter>
         </form>

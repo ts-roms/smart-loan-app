@@ -463,8 +463,8 @@ function IdentifyDialog({ onClose }: { onClose: () => void }) {
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={open.isPending}>
-            {open.isPending ? "Opening…" : "Open case"}
+          <Button onClick={onSubmit} loading={open.isPending}>
+            Open case
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -583,8 +583,8 @@ function RecoverDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={advance.isPending}>
-            {advance.isPending ? "Recording…" : "Record recovery"}
+          <Button onClick={onSubmit} loading={advance.isPending}>
+            Record recovery
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -710,8 +710,8 @@ function AuctionDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={advance.isPending}>
-            {advance.isPending ? "Posting…" : "Post auction"}
+          <Button onClick={onSubmit} loading={advance.isPending}>
+            Post auction
           </Button>
         </DialogFooter>
       </DialogContent>

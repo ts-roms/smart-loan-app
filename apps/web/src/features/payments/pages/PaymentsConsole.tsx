@@ -330,8 +330,12 @@ function RecordPaymentDialog({
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={record.isPending || amount <= 0}>
-                {record.isPending ? "Saving…" : "Record payment"}
+              <Button
+                type="submit"
+                loading={record.isPending}
+                disabled={amount <= 0}
+              >
+                Record payment
               </Button>
             </DialogFooter>
           </form>

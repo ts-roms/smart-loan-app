@@ -102,9 +102,9 @@ export function ForgotPasswordPage() {
           type="submit"
           variant="success"
           className="w-full"
-          disabled={forgot.isPending}
+          loading={forgot.isPending}
         >
-          {forgot.isPending ? "Sending…" : "Send reset link"}
+          Send reset link
         </Button>
 
         <p className="pt-1 text-center text-sm text-fg-muted">
