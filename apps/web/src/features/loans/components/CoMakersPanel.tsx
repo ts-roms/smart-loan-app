@@ -1,4 +1,8 @@
-import { useInviteCoMaker, useLoanCoMakers } from "@loan/api-client";
+import {
+  useInviteCoMaker,
+  useLoanCoMakers,
+  useRevokeCoMakerInvite,
+} from "@loan/api-client";
 import { formatDateTime } from "@loan/shared-utils";
 import {
   Badge,
@@ -8,11 +12,13 @@ import {
   CardHeader,
   CardTitle,
   SkeletonCard,
+  useConfirm,
   useToast,
 } from "@loan/ui";
-import { Copy, Send, Users } from "lucide-react";
+import { Copy, Link2Off, Send, Users } from "lucide-react";
 
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
+import { usePermission } from "../../../hooks/use-permission";
 import { DOC_TYPE_LABELS } from "../../customers/constants";
 
 /**
@@ -31,7 +37,13 @@ import { DOC_TYPE_LABELS } from "../../customers/constants";
 export function CoMakersPanel({ loanId }: { loanId: string }) {
   const coMakers = useLoanCoMakers(loanId);
   const invite = useInviteCoMaker();
+  const revoke = useRevokeCoMakerInvite();
   const toast = useToast();
+  const confirm = useConfirm();
+  // Same key as the staff-side force logout. A co-maker has no session
+  // to end — the link IS the access — so cutting it off is the same
+  // administrative act and answers to the same permission.
+  const canRevoke = usePermission("admin.force_logout");
 
   const rows = coMakers.data ?? [];
   if (coMakers.isLoading) return <SkeletonCard />;
@@ -58,6 +70,35 @@ export function CoMakersPanel({ loanId }: { loanId: string }) {
       }
     } catch (err) {
       toast.error((err as Error).message ?? "Could not create a link");
+    }
+  };
+
+  /**
+   * Kill a co-maker's link.
+   *
+   * The dialog is explicit that their answer survives, because the
+   * obvious guess is the opposite — "revoke" reads like undoing the
+   * consent, and an officer who believed that would think they'd
+   * unblocked disbursement when they hadn't.
+   */
+  const revokeInvite = async (id: string, name: string) => {
+    const ok = await confirm({
+      title: `Revoke ${name}'s link?`,
+      message:
+        "Their consent link stops working immediately. Any answer they've already given stays on the record, and disbursement is still gated on it. You can send a new link at any time.",
+      confirmLabel: "Revoke link",
+      tone: "destructive",
+    });
+    if (!ok) return;
+    try {
+      const res = await revoke.mutateAsync(id);
+      toast.success(
+        res.hadActiveLink
+          ? `${name}'s link is dead`
+          : `${name} had no live link — nothing to revoke`,
+      );
+    } catch (err) {
+      toast.error((err as Error).message ?? "Could not revoke the link");
     }
   };
 
@@ -109,6 +150,21 @@ export function CoMakersPanel({ loanId }: { loanId: string }) {
                     </>
                   )}
                 </Button>
+                {/* Only where there's something to revoke. A co-maker
+                    who was never invited has no link to kill, and the
+                    button would just be a question mark. */}
+                {canRevoke && c.inviteSentAt && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    loading={revoke.isPending && revoke.variables === c.id}
+                    onClick={() => void revokeInvite(c.id, c.fullName)}
+                    title="Stop this co-maker's link from working"
+                  >
+                    {!revoke.isPending && <Link2Off className="h-3 w-3" />}
+                    Revoke
+                  </Button>
+                )}
               </div>
 
               {/* Their words, not a summary — the officer's next move

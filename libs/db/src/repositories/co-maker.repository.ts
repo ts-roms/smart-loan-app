@@ -96,6 +96,34 @@ export class CoMakerRepository {
   }
 
   /**
+   * Kill a co-maker's invite link.
+   *
+   * The co-maker equivalent of force-logout. They have no account and
+   * no session — their entire access to the consent page IS this
+   * token — so revoking it is the whole of "cut them off", and unlike
+   * a JWT it takes effect on the very next request because every hit
+   * on the consent page looks the token up here.
+   *
+   * `inviteToken: null` rather than a `revoked` flag: the column is
+   * uniquely indexed and nullable, so clearing it both frees the value
+   * and makes the "unknown token" path the one that already exists.
+   * `findByInviteToken` never matches null, so there's no way to bring
+   * it back by guessing.
+   *
+   * The answer they already gave is deliberately left alone. An
+   * approval that was validly given is a fact about the loan file, and
+   * revoking a link is not the same as retracting a signature — the
+   * officer who wants that has decline and delete. Only the way back in
+   * is removed.
+   */
+  revokeInvite(id: string): Promise<CoMaker> {
+    return this.prisma.coMaker.update({
+      where: { id },
+      data: { inviteToken: null, inviteExpiresAt: null },
+    });
+  }
+
+  /**
    * Resolve an invite token to its co-maker, with everything the
    * consent page needs to explain what's being asked. Returns null for
    * an unknown token — expiry is the caller's to judge, so it can tell

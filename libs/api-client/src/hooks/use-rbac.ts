@@ -207,6 +207,43 @@ export function useUnassignRole() {
   });
 }
 
+export interface ForceLogoutResponse {
+  ok: true;
+  userId: string;
+  email: string;
+  name: string;
+  /** ISO-8601. Every access token issued at or before this is now dead. */
+  revokedAt: string;
+  /**
+   * Refresh tokens killed alongside the access-token cutoff. Zero is a
+   * normal outcome — it means they had no live refresh token, not that
+   * nothing happened.
+   */
+  refreshTokensRevoked: number;
+}
+
+/**
+ * End every session a user currently holds — staff or borrower.
+ *
+ * Takes effect on their next request, not on their next login: the
+ * cutoff is checked in `app.authenticate`, so the 24h access token they
+ * already hold stops working immediately.
+ *
+ * Does NOT disable the account. They can sign in again straight away.
+ * Deactivation is a separate action and a separate decision.
+ */
+export function useForceLogout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { userId: string; reason?: string }) =>
+      getApiClient().post<ForceLogoutResponse>(
+        `/admin/users/${input.userId}/force-logout`,
+        input.reason ? { reason: input.reason } : {},
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: rbacKeys.users }),
+  });
+}
+
 export function useMyPermissions() {
   return useQuery({
     queryKey: rbacKeys.mePermissions,

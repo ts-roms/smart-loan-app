@@ -1,6 +1,7 @@
 import {
   useAssignRole,
   useCreateUser,
+  useForceLogout,
   useRoles,
   useUnassignRole,
   useUsers,
@@ -28,12 +29,14 @@ import {
   SelectValue,
   SkeletonCard,
   useConfirm,
+  usePrompt,
   useToast,
 } from "@loan/ui";
 import { formatDate } from "@loan/shared-utils";
-import { Plus, UserCog, UserPlus, X } from "lucide-react";
+import { LogOut, Plus, UserCog, UserPlus, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { usePermission } from "../../../hooks/use-permission";
 import { useAuth } from "../../../providers/auth";
 
 /**
@@ -46,10 +49,15 @@ export function UsersPage() {
   const roles = useRoles();
   const assign = useAssignRole();
   const unassign = useUnassignRole();
+  const forceLogout = useForceLogout();
   const toast = useToast();
   const confirm = useConfirm();
+  const prompt = usePrompt();
   const { user: me } = useAuth();
   const canManage = me?.role === "ADMIN";
+  // Its own permission rather than `canManage`: ending a session is
+  // meant to be grantable to someone who can't edit users at all.
+  const canForceLogout = usePermission("admin.force_logout");
   const [assigning, setAssigning] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -90,6 +98,56 @@ export function UsersPage() {
     try {
       await unassign.mutateAsync({ userId, roleKey });
       toast.success("Role removed");
+    } catch (err) {
+      toast.error((err as Error).message ?? "Failed");
+    }
+  };
+
+  /**
+   * End every session a user holds.
+   *
+   * The copy is doing real work here. "Force logout" sounds like
+   * deactivation to most people, and an admin who believes they've
+   * locked the account will stop looking for the actual off switch —
+   * so the dialog says plainly that the user can sign back in, and
+   * points at Status for the other thing.
+   *
+   * A prompt rather than a confirm because the reason is what makes
+   * the audit row worth keeping. It's optional: 2am incidents don't
+   * wait for paperwork, and blank is better than a forced "asdf".
+   */
+  const onForceLogout = async (userId: string, name: string, email: string) => {
+    const reason = await prompt({
+      title: `End all sessions for ${name}?`,
+      message: (
+        <div className="space-y-2">
+          <p>
+            Every device <strong>{email}</strong> is signed in on stops working
+            immediately, including any access token already issued.
+          </p>
+          <p className="text-fg-muted">
+            This does not disable the account — they can sign in again with the
+            same password. To stop that, set their status to Inactive.
+          </p>
+        </div>
+      ),
+      label: "Reason (optional)",
+      placeholder: "e.g. laptop reported stolen",
+      confirmLabel: "End sessions",
+    });
+    // null = cancelled. An empty string is a deliberate "no reason",
+    // and has to be allowed to proceed.
+    if (reason === null) return;
+    try {
+      const res = await forceLogout.mutateAsync({
+        userId,
+        reason: reason.trim() || undefined,
+      });
+      toast.success(
+        res.refreshTokensRevoked > 0
+          ? `${name} signed out — ${res.refreshTokensRevoked} session${res.refreshTokensRevoked === 1 ? "" : "s"} revoked`
+          : `${name} signed out`,
+      );
     } catch (err) {
       toast.error((err as Error).message ?? "Failed");
     }
@@ -215,17 +273,45 @@ export function UsersPage() {
                   <td className="py-2 px-2 text-xs text-fg-muted">
                     {formatDate(u.createdAt)}
                   </td>
-                  <td className="py-2 px-2 text-right">
-                    {canManage && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setAssigning(u.id)}
-                      >
-                        <Plus className="h-3 w-3" />
-                        Assign
-                      </Button>
-                    )}
+                  <td className="py-2 px-2">
+                    <div className="flex items-center justify-end gap-2">
+                      {canManage && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setAssigning(u.id)}
+                        >
+                          <Plus className="h-3 w-3" />
+                          Assign
+                        </Button>
+                      )}
+                      {/*
+                        Hidden on your own row rather than shown
+                        disabled. The API refuses it anyway, but a
+                        greyed-out button invites a hover to find out
+                        why, and there is nothing useful to say — you
+                        end your own session with Sign out.
+                      */}
+                      {canForceLogout && u.id !== me?.id && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          loading={
+                            forceLogout.isPending &&
+                            forceLogout.variables?.userId === u.id
+                          }
+                          onClick={() =>
+                            void onForceLogout(u.id, u.name, u.email)
+                          }
+                          title="End every session this user has"
+                        >
+                          {!forceLogout.isPending && (
+                            <LogOut className="h-3 w-3" />
+                          )}
+                          Sign out
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

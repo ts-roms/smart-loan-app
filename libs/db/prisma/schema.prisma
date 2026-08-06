@@ -50,6 +50,24 @@ model User {
   /// code is removed from this list; running out → user must reset 2FA.
   totpRecoveryCodes String[] @default([])
 
+  /// Cutoff for "force logout". Every access token issued at or before
+  /// this instant is rejected by `app.authenticate`.
+  ///
+  /// A timestamp rather than a denylist of token ids because access
+  /// tokens are stateless and we never see them again after signing:
+  /// there is nothing to add to a list. Comparing the JWT's own `iat`
+  /// against one column revokes every outstanding token for the user at
+  /// once, which is exactly what "log them out everywhere" means, and
+  /// costs one nullable column instead of a table.
+  ///
+  /// Null = never force-logged-out, the case for almost every row.
+  ///
+  /// Second-resolution, because `iat` is. See the comparison in
+  /// libs/auth/src/plugin.ts, which floors the cutoff to the second so a
+  /// token minted in the same second as the revocation is treated as
+  /// revoked rather than surviving it.
+  sessionsRevokedAt DateTime?
+
   // What this user did across the system (auditable trail)
   kycSubmissions            KycSubmission[]        @relation("KycSubmittedBy")
   kycDecisions              KycSubmission[]        @relation("KycDecidedBy")

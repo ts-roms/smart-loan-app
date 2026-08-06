@@ -14,7 +14,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fastifyAuth } from "./plugin";
+import { fastifyAuth, type SessionStatus } from "./plugin";
 import type { JwtPayload } from "./types";
 
 const SECRET = "test-secret-not-used-anywhere-real";
@@ -80,6 +80,19 @@ async function buildApp(perms: string[] = [], tenantPrisma?: unknown) {
  */
 function bearer(app: FastifyInstance, payload: Record<string, unknown>) {
   return `Bearer ${app.jwt.sign(payload as unknown as JwtPayload)}`;
+}
+
+/**
+ * A token with no `iat` at all. Nothing this app signs looks like this
+ * — `noTimestamp` is the only way to produce one — which is the point:
+ * it stands in for a malformed or hand-rolled token reaching the
+ * revocation check, where the absence of a timestamp must not be read
+ * as "issued recently".
+ */
+function bearerNoIat(app: FastifyInstance, payload: Record<string, unknown>) {
+  return `Bearer ${app.jwt.sign(payload as unknown as JwtPayload, {
+    noTimestamp: true,
+  })}`;
 }
 
 const tenantUser: Record<string, unknown> = {
@@ -344,5 +357,234 @@ describe("requireRole", () => {
     expect(res.statusCode).toBe(200);
     // No database lookup happened — that's the staleness this documents.
     expect(resolvePermissions).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Session revocation — the enforcement half of "force logout".
+ *
+ * This is the only point in the request path where an access token is
+ * checked against anything other than its own signature, so these tests
+ * decide whether force-logout is a real control or a button that lies.
+ * Every case below expecting a 401 guards an outcome where an admin was
+ * told someone had been cut off.
+ *
+ * Tokens carry an explicit `iat` rather than relying on the signer's
+ * clock: the whole mechanism is a comparison against that number, and a
+ * test that cannot place a token in time cannot test it.
+ */
+async function buildSessionApp(status: SessionStatus | null) {
+  const resolveSessionStatus = vi.fn(
+    async (_userId: string, _tenantPrisma?: unknown) => status,
+  );
+  const app: FastifyInstance = Fastify();
+  await app.register(fastifyAuth, {
+    secret: SECRET,
+    resolvePermissions: async () => new Set(["customers.read"]),
+    resolveSessionStatus,
+  });
+  app.get("/authed", { preHandler: app.authenticate }, async () => ({
+    ok: true,
+  }));
+  await app.ready();
+  return { app, resolveSessionStatus };
+}
+
+/** Seconds since epoch — the unit `iat` is in. */
+const SEC = 1_800_000_000;
+const tokenIssuedAt = (secs: number) => ({ ...tenantUser, iat: secs });
+const live: SessionStatus = { active: true, sessionsRevokedAtMs: null };
+
+describe("session revocation", () => {
+  it("lets a normal session through", async () => {
+    const { app } = await buildSessionApp(live);
+    const res = await app.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(app, tokenIssuedAt(SEC)) },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects a token issued before the revocation", async () => {
+    const { app } = await buildSessionApp({
+      active: true,
+      sessionsRevokedAtMs: SEC * 1000 + 5_000,
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(app, tokenIssuedAt(SEC)) },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().message).toMatch(/session was ended/i);
+  });
+
+  /**
+   * The point of the whole feature: a token minted AFTER the cutoff is
+   * the user signing back in, and it has to work. If this fails, force
+   * logout is indistinguishable from disabling the account.
+   */
+  it("accepts a token issued after the revocation", async () => {
+    const { app } = await buildSessionApp({
+      active: true,
+      sessionsRevokedAtMs: SEC * 1000,
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(app, tokenIssuedAt(SEC + 1)) },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  /**
+   * `iat` is whole seconds and the cutoff is milliseconds, so a token
+   * minted during the same second as the revocation is ambiguous. It
+   * has to resolve as revoked: rounding the other way lets a token live
+   * its full 24 hours past a cutoff an admin believed had taken effect.
+   */
+  it("treats the same second as revoked, not as surviving", async () => {
+    const { app } = await buildSessionApp({
+      active: true,
+      // 700ms into the same second the token claims.
+      sessionsRevokedAtMs: SEC * 1000 + 700,
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(app, tokenIssuedAt(SEC)) },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects an undatable token when a revocation exists", async () => {
+    // `noIat: true` suppresses the claim in the signer below. A token
+    // that cannot be placed in time cannot be shown to post-date the
+    // cutoff, and must not outrank it.
+    const { app } = await buildSessionApp({
+      active: true,
+      sessionsRevokedAtMs: SEC * 1000,
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearerNoIat(app, tenantUser) },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  /**
+   * The gap this closes alongside force-logout: `active` was enforced
+   * at login and at refresh but nowhere in between, so disabling an
+   * account left it working for the life of its access token.
+   */
+  it("rejects a disabled account mid-session", async () => {
+    const { app } = await buildSessionApp({
+      active: false,
+      sessionsRevokedAtMs: null,
+    });
+    const res = await app.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(app, tokenIssuedAt(SEC)) },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().message).toMatch(/disabled/i);
+  });
+
+  it("says something different for disabled than for ended", async () => {
+    // They mean different things to the person reading them: one is
+    // "sign in again", the other is "call your administrator".
+    const { app: ended } = await buildSessionApp({
+      active: true,
+      sessionsRevokedAtMs: SEC * 1000 + 1,
+    });
+    const endedRes = await ended.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(ended, tokenIssuedAt(SEC)) },
+    });
+    const { app: disabled } = await buildSessionApp({
+      active: false,
+      sessionsRevokedAtMs: null,
+    });
+    const disabledRes = await disabled.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(disabled, tokenIssuedAt(SEC)) },
+    });
+    expect(endedRes.json().message).not.toBe(disabledRes.json().message);
+  });
+
+  it("rejects a token for a user who no longer exists", async () => {
+    // Deleted mid-session, or minted against another tenant's schema.
+    // A missing row must read as "not authenticated", never as "no
+    // constraints found".
+    const { app } = await buildSessionApp(null);
+    const res = await app.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(app, tokenIssuedAt(SEC)) },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("does not hit the database for an unauthenticated caller", async () => {
+    const { app, resolveSessionStatus } = await buildSessionApp(live);
+    await app.inject({ method: "GET", url: "/authed" });
+    expect(resolveSessionStatus).not.toHaveBeenCalled();
+  });
+
+  it("passes the tenant-bound client through", async () => {
+    // Same reasoning as the permission resolver: User lives in the
+    // tenant's schema. Reading the wrong one finds nobody, which this
+    // plugin treats as reject — so a mistake fails closed, but it fails
+    // closed for every request the tenant makes.
+    const tenantPrisma = { __brand: "tenant-acme" };
+    const resolveSessionStatus = vi.fn(
+      async (_userId: string, _tenantPrisma?: unknown) => live,
+    );
+    const app: FastifyInstance = Fastify();
+    await app.register(fastifyAuth, {
+      secret: SECRET,
+      resolvePermissions: async () => new Set(),
+      resolveSessionStatus,
+    });
+    app.addHook("onRequest", async (req) => {
+      (req as { tenantCtx?: unknown }).tenantCtx = { prisma: tenantPrisma };
+    });
+    app.get("/authed", { preHandler: app.authenticate }, async () => ({
+      ok: true,
+    }));
+    await app.ready();
+
+    await app.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(app, tokenIssuedAt(SEC)) },
+    });
+    const [userId, client] = resolveSessionStatus.mock.calls[0]!;
+    expect(userId).toBe("user-1");
+    expect(client).toBe(tenantPrisma);
+    await app.close();
+  });
+
+  /**
+   * Registering without the resolver degrades to a signature check.
+   * Every other test in this file does exactly that, which is why the
+   * option is optional — but it means an API that forgets to pass it
+   * has no force-logout at all and no error saying so. Pinned here so
+   * the degradation is a known shape rather than a production
+   * discovery.
+   */
+  it("degrades to a signature check when no resolver is supplied", async () => {
+    const { app } = await buildApp([]);
+    const res = await app.inject({
+      method: "GET",
+      url: "/authed",
+      headers: { authorization: bearer(app, tokenIssuedAt(SEC)) },
+    });
+    expect(res.statusCode).toBe(200);
   });
 });

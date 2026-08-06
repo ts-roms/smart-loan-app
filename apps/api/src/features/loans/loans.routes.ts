@@ -863,6 +863,54 @@ export async function loanRoutes(app: FastifyInstance) {
     },
   );
 
+  /**
+   * Revoke a co-maker's invite link — the co-maker half of force
+   * logout.
+   *
+   * They have no account, so there is no session to end; the link IS
+   * the access. Killing the token is immediate in a way the staff-side
+   * equivalent can't be, because every load of the consent page
+   * resolves the token against the database rather than trusting a
+   * signature.
+   *
+   * Gated on `admin.force_logout` rather than `loans.apply`, matching
+   * the user endpoint: this is a "cut off access now" action, and it
+   * should be reachable by whoever holds that during an incident even
+   * if they don't work loan files.
+   */
+  app.post<{ Params: { coMakerId: string } }>(
+    "/co-makers/:coMakerId/revoke-invite",
+    { preHandler: app.requirePermission("admin.force_logout") },
+    async (req, reply) => {
+      const existing = await req.tenantCtx.prisma.coMaker.findUnique({
+        where: { id: req.params.coMakerId },
+        select: { id: true, fullName: true, loanId: true, inviteToken: true },
+      });
+      if (!existing) return reply.code(404).send({ error: "NotFound" });
+
+      // Already revoked, never invited, or expired-and-cleared. Report
+      // success rather than 409: the caller asked for this link to stop
+      // working and it doesn't work. An error here would read as "the
+      // co-maker still has access", which is the opposite of the truth.
+      const hadToken = existing.inviteToken !== null;
+      const coMaker = await req.loanCtx!.coMakers.revokeInvite(existing.id);
+
+      await req.loanCtx!.audit.record({
+        action: "CO_MAKER_INVITE_REVOKED",
+        actorId: req.user.sub,
+        targetType: "CoMaker",
+        targetId: existing.id,
+        payload: {
+          loanId: existing.loanId,
+          fullName: existing.fullName,
+          hadActiveLink: hadToken,
+        },
+      });
+
+      return { ok: true, hadActiveLink: hadToken, coMaker };
+    },
+  );
+
   app.delete<{ Params: { coMakerId: string } }>(
     "/co-makers/:coMakerId",
     { preHandler: app.requirePermission("loans.decide") },

@@ -173,6 +173,31 @@ export async function buildApp() {
       );
       return permissions;
     },
+    /*
+     * Turns `authenticate` from a signature check into a check that the
+     * account is still allowed to be here — see the comment at the use
+     * site in @loan/auth. Same tenant-client threading as the
+     * permission resolver above and for the same reason: User lives in
+     * the tenant's schema, so resolving against `app.prisma` under
+     * MULTI_TENANT=true reads the public schema and finds nobody.
+     *
+     * Reading through `tenantPrisma` also means a token minted for
+     * tenant A cannot satisfy this check against tenant B — the user id
+     * simply isn't there, the resolver returns null, and the request is
+     * rejected.
+     */
+    resolveSessionStatus: async (userId: string, tenantPrisma?: unknown) => {
+      const db = (tenantPrisma as PrismaClient | undefined) ?? app.prisma;
+      const row = await db.user.findUnique({
+        where: { id: userId },
+        select: { active: true, sessionsRevokedAt: true },
+      });
+      if (!row) return null;
+      return {
+        active: row.active,
+        sessionsRevokedAtMs: row.sessionsRevokedAt?.getTime() ?? null,
+      };
+    },
   });
   // Feature-gate decorator (`app.requireFeature`). Decorated on the root
   // instance — after auth + tenant resolution (the gate reads the
