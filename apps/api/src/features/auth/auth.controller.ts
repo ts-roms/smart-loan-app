@@ -265,28 +265,34 @@ export class AuthController {
     reply: FastifyReply,
   ) {
     if (result.kind === "InvalidCredentials") {
-      return reply
-        .code(401)
-        .send({ error: "Unauthorized", message: "Invalid credentials" });
+      // One message for a wrong email and a wrong password, on
+      // purpose: distinguishing them tells an attacker which addresses
+      // are registered. The wording just stops sounding like a log
+      // line.
+      return reply.code(401).send({
+        error: "Unauthorized",
+        message: "Invalid email or password",
+      });
     }
     if (result.kind === "Invalid2faCode") {
       return reply.code(401).send({
         error: "Unauthorized",
-        message: "Invalid 2FA code",
+        message:
+          "That code isn't right. Check your authenticator app and try again.",
         requires2fa: true,
       });
     }
     if (result.kind === "InvalidRecoveryCode") {
       return reply.code(401).send({
         error: "Unauthorized",
-        message: "Invalid recovery code",
+        message: "That recovery code isn't right, or it has already been used.",
         requires2fa: true,
       });
     }
     // Requires2fa — password was right, just need the second factor.
     return reply.code(401).send({
       error: "Unauthorized",
-      message: "2FA code required",
+      message: "Enter the code from your authenticator app.",
       requires2fa: true,
     });
   }

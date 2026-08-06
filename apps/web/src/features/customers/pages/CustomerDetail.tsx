@@ -29,7 +29,7 @@ import {
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
 import { FileUpload } from "../../../components/FileUpload";
 import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
-import { FileUp, Gauge, Pencil, ShieldCheck } from "lucide-react";
+import { FileUp, Gauge, Pencil, ShieldCheck, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
@@ -311,8 +311,8 @@ function SubmitKycForm({
   const submit = useSubmitKyc();
   const toast = useToast();
 
-  // Block doc types that are already pending/verified — the user can
-  // still resubmit if a previous attempt was rejected.
+  // Types with an active submission are out — the operator can still
+  // resubmit once a previous attempt is rejected.
   const taken = useMemo(() => {
     const set = new Set<KycDocumentType>();
     for (const d of existing) {
@@ -322,51 +322,82 @@ function SubmitKycForm({
     return set;
   }, [existing]);
 
-  const available = useMemo(
-    () => DOC_TYPES.filter((t) => !taken.has(t.value)),
-    [taken],
+  /**
+   * Attached but not yet submitted, in the order they were added.
+   *
+   * A borrower arrives with their whole folder, so the form takes
+   * several — but one at a time, through a single picker. Rendering a
+   * capture control per document type put nine buttons on screen for
+   * a job that is usually three files.
+   */
+  const [staged, setStaged] = useState<
+    Array<{ type: KycDocumentType; url: string }>
+  >([]);
+  const [busy, setBusy] = useState(false);
+
+  const remaining = useMemo(
+    () =>
+      DOC_TYPES.filter(
+        (t) => !taken.has(t.value) && !staged.some((x) => x.type === t.value),
+      ),
+    [taken, staged],
   );
 
-  // Whenever the available set changes, snap the active type to the
-  // first one that's still allowed. Avoids a stuck form where the
-  // dropdown shows a value the user can't actually submit.
   const [documentType, setDocumentType] = useState<KycDocumentType>(
-    available[0]?.value ?? "ID_FRONT",
+    DOC_TYPES[0]!.value,
   );
-  const [documentUrl, setDocumentUrl] = useState("");
 
-  // If the currently-selected type just became taken (e.g. the operator
-  // submitted it from another tab), bump the selection to the next free
-  // slot so we don't show a disabled-looking form.
+  // Keep the picker on something actually offerable: the selected type
+  // leaves `remaining` the moment it's attached, and would otherwise
+  // sit there as a value that can't be chosen again.
   useEffect(() => {
-    if (
-      taken.has(documentType) &&
-      available[0] &&
-      available[0].value !== documentType
-    ) {
-      setDocumentType(available[0].value);
+    if (remaining.length === 0) return;
+    if (!remaining.some((t) => t.value === documentType)) {
+      setDocumentType(remaining[0]!.value);
     }
-  }, [taken, documentType, available]);
+  }, [remaining, documentType]);
 
   const onSubmit = async () => {
-    try {
-      await submit.mutateAsync({ customerId, documentType, documentUrl });
-      toast.success("Document submitted");
-      setDocumentUrl("");
-    } catch (err) {
-      // Duplicate-conflict has its own copy — generic catch-all otherwise.
-      const msg = (err as Error).message ?? "";
-      if (/already exists/i.test(msg)) {
-        toast.error(
-          "A submission for this document type is already on file. Resubmit only after the existing one is rejected.",
+    if (staged.length === 0) return;
+    setBusy(true);
+    // Sequential: the API takes one document per call, and a failure
+    // has to name the type it belongs to.
+    const failed: string[] = [];
+    let sent = 0;
+    for (const item of staged) {
+      try {
+        await submit.mutateAsync({
+          customerId,
+          documentType: item.type,
+          documentUrl: item.url,
+        });
+        sent += 1;
+        // Dropped as they land, so a mid-way failure leaves exactly
+        // the unsent ones attached.
+        setStaged((prev) => prev.filter((x) => x.type !== item.type));
+      } catch (err) {
+        const msg = (err as Error).message ?? "";
+        failed.push(
+          `${DOC_TYPE_LABELS[item.type] ?? item.type} ${
+            /already exists/i.test(msg) ? "already on file" : "failed"
+          }`,
         );
-      } else {
-        toast.error(msg || "Could not submit");
       }
+    }
+    setBusy(false);
+
+    if (sent > 0 && failed.length === 0) {
+      toast.success(
+        sent === 1 ? "Document submitted" : `${sent} documents submitted`,
+      );
+    } else if (sent > 0) {
+      toast.error(`${sent} submitted · ${failed.join(", ")}`);
+    } else {
+      toast.error(failed.join(" · "));
     }
   };
 
-  if (available.length === 0) {
+  if (taken.size === DOC_TYPES.length && staged.length === 0) {
     return (
       <div className="border-t border-default pt-3 text-xs text-fg-subtle">
         <FileUp className="inline h-3 w-3 mr-1" />
@@ -382,56 +413,91 @@ function SubmitKycForm({
     <div className="space-y-3 border-t border-default pt-3">
       <div className="text-xs text-fg-subtle flex items-center gap-1">
         <FileUp className="h-3 w-3" />
-        Submit a document
+        Submit documents
       </div>
-      <Select
-        value={documentType}
-        // The staged upload deliberately SURVIVES a type change. It
-        // used to be cleared, on the theory that the file belonged to
-        // the previous type's capture mode — but a file is just a
-        // file, and picking the wrong type first is the common case.
-        // Losing the upload to fix the label is the wrong trade; the
-        // thumbnail shows what's attached, and X clears it.
-        onValueChange={(v) => setDocumentType(v as KycDocumentType)}
-      >
-        <SelectTrigger className="h-9">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {available.map((t) => (
-            <SelectItem key={t.value} value={t.value}>
-              {t.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
 
-      <div className="space-y-1">
-        <div className="text-[10px] uppercase tracking-wider text-fg-subtle">
-          {captureMode === "user"
-            ? "Capture selfie or upload a photo"
-            : captureMode === "environment"
-              ? "Photograph the document or upload a file"
-              : "Upload a file (PDF or image)"}
+      {/* Attached, waiting to go. */}
+      {staged.length > 0 && (
+        <ul className="space-y-1">
+          {staged.map((item) => (
+            <li
+              key={item.type}
+              className="flex items-center gap-2 rounded border border-default bg-surface-2 px-2 py-1.5"
+            >
+              <DocumentThumbnail
+                url={item.url}
+                label={DOC_TYPE_LABELS[item.type] ?? item.type}
+                className="h-8 w-8"
+              />
+              <span className="flex-1 min-w-0 truncate text-xs">
+                {DOC_TYPE_LABELS[item.type] ?? item.type}
+              </span>
+              <button
+                type="button"
+                aria-label={`Remove ${DOC_TYPE_LABELS[item.type] ?? item.type}`}
+                onClick={() =>
+                  setStaged((prev) => prev.filter((x) => x.type !== item.type))
+                }
+                className="text-fg-subtle hover:text-danger"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {remaining.length > 0 ? (
+        <div className="space-y-2">
+          <Select
+            value={documentType}
+            onValueChange={(v) => setDocumentType(v as KycDocumentType)}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {remaining.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Keyed on the type so the widget resets between documents
+              rather than carrying the previous one's preview. `value`
+              stays null: an attached file moves to the list above, so
+              this control is only ever the capture button. */}
+          <FileUpload
+            key={documentType}
+            subdir="kyc"
+            value={null}
+            onUploaded={(url) =>
+              setStaged((prev) => [...prev, { type: documentType, url }])
+            }
+            capture={captureMode}
+            label="Choose file"
+          />
         </div>
-        <FileUpload
-          subdir="kyc"
-          value={documentUrl || null}
-          onUploaded={setDocumentUrl}
-          onClear={() => setDocumentUrl("")}
-          capture={captureMode}
-          label="Choose file"
-        />
-      </div>
+      ) : (
+        <p className="text-[10px] text-fg-subtle">
+          Everything else already has an active submission.
+        </p>
+      )}
 
       <Button
         type="button"
         size="sm"
         className="w-full"
-        onClick={onSubmit}
-        disabled={submit.isPending || !documentUrl}
+        onClick={() => void onSubmit()}
+        disabled={busy || staged.length === 0}
       >
-        {submit.isPending ? "Submitting…" : "Submit document"}
+        {busy
+          ? "Submitting…"
+          : staged.length <= 1
+            ? "Submit document"
+            : `Submit ${staged.length} documents`}
       </Button>
     </div>
   );

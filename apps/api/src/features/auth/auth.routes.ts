@@ -142,7 +142,7 @@ function resolveTenantFromBody(app: FastifyInstance) {
     if (typeof claim !== "string" || !/^[a-z][a-z0-9-]+$/.test(claim)) {
       await reply.code(401).send({
         error: "Unauthorized",
-        message: "Invalid credentials.",
+        message: "Invalid email or password",
       });
       return;
     }
@@ -152,10 +152,11 @@ function resolveTenantFromBody(app: FastifyInstance) {
       select: { status: true },
     });
     if (!tenant || tenant.status !== "ACTIVE") {
-      // Same shape as a wrong-password reply — no enumeration.
+      // Byte-identical to the wrong-password reply — a different
+      // wording here would tell a prober the tenant exists.
       await reply.code(401).send({
         error: "Unauthorized",
-        message: "Invalid credentials.",
+        message: "Invalid email or password",
       });
       return;
     }

@@ -7,9 +7,8 @@ import {
   CardTitle,
   Input,
   PasswordInput,
-  useToast,
 } from "@loan/ui";
-import { Check, Lock, Wallet } from "lucide-react";
+import { AlertCircle, Check, Lock, Wallet } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../providers/auth";
@@ -32,16 +31,24 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const tenantSlug = params.get("tenant") ?? undefined;
-  const toast = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [requires2fa, setRequires2fa] = useState(false);
   const [useRecovery, setUseRecovery] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState("");
+  /**
+   * Shown in the form, not just as a toast.
+   *
+   * A toast slides away on a timer and sits in a corner, away from
+   * the fields it's about. Sign-in failure is the one message that has
+   * to still be there while you re-read what you typed.
+   */
+  const [error, setError] = useState<string | null>(null);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setError(null);
     try {
       const res = await login.mutateAsync({
         email,
@@ -69,12 +76,17 @@ export function LoginPage() {
         "requires2fa" in err.body
       ) {
         setRequires2fa(true);
+        // Only an error once they've actually entered a code — the
+        // first 401 here just means "now show me the second factor".
         if (totpCode || recoveryCode) {
-          toast.error((err as Error).message ?? "Wrong 2FA code");
+          setError((err as Error).message ?? "That code isn't right.");
         }
         return;
       }
-      toast.error((err as Error).message ?? "Sign-in failed");
+      setError(
+        (err as Error).message ??
+          "Couldn't sign in. Check your connection and try again.",
+      );
     }
   };
 
@@ -109,6 +121,15 @@ export function LoginPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={onSubmit} className="space-y-3">
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
+                >
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="text-sm">Email</label>
                 <Input
@@ -116,7 +137,13 @@ export function LoginPage() {
                   autoComplete="username"
                   placeholder="E-mail"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  // Clearing on edit: the message describes the attempt
+                  // you just made, and it stops describing it the
+                  // moment you start changing the inputs.
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setError(null);
+                  }}
                   required
                 />
               </div>
@@ -126,7 +153,10 @@ export function LoginPage() {
                   autoComplete="current-password"
                   placeholder="Password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError(null);
+                  }}
                   required
                 />
               </div>
