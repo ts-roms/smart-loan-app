@@ -102,13 +102,24 @@
      * disappeared. This is the third pass at making a field look like
      * a field, so it errs toward visible. */
     --border: 200 8% 92%;
-    /* 58% is not arbitrary: it's the lightest value that clears the
-     * WCAG 3:1 minimum for a control boundary against a white card
-     * (measured — 72% gave 2.01, 60% gave 2.89, 58% gives 3.08).
-     * Velzon's own #ced4da is far lighter and fails that bar; theirs
-     * sits on a grey page where the form itself provides the edge. */
     --border-strong: 208 16% 50%;
-    --input: 208 14% 58%;
+
+    /*
+     * Bondi blue (#0095B6) on every field.
+     *
+     * A coloured outline rather than a grey one, so a field reads as
+     * interactive at a glance instead of as a table cell that happens
+     * to have an edge. Measures 3.51:1 against a white card, clearing
+     * the WCAG 3:1 minimum for a control boundary — which the grey it
+     * replaces only just managed at 3.08.
+     *
+     * Its own tokens rather than reusing --ring: the focus ring on
+     * buttons and links stays the navy primary, so this recolours the
+     * fields without repainting every focus state in the app.
+     */
+    --input: 191 100% 36%;
+    --input-hover: 191 100% 28%;
+    --input-ring: 191 100% 36%;
     --ring: 226 36% 45%;
 
     /* Brand accent — same sky family, darkened for contrast on white.
@@ -228,7 +239,12 @@
     /* #32383e and a step either side. */
     --border: 210 11% 22%;
     --border-strong: 210 13% 52%;
-    --input: 210 13% 44%;
+    /* Bondi lifted for a dark ground — 36% measures 4.33:1 on the
+     * dark card and works, but 45% (6.71:1) carries better against a
+     * surface this dark. */
+    --input: 191 90% 45%;
+    --input-hover: 191 90% 55%;
+    --input-ring: 191 90% 45%;
     --ring: 226 55% 68%;
 
     /* Navy is too dark to read on a dark ground, so it lifts — same
@@ -385,18 +401,19 @@
       box-shadow 120ms ease;
   }
   .field-chrome:hover:not(:disabled):not(:focus) {
-    border-color: hsl(var(--border-strong));
+    border-color: hsl(var(--input-hover));
   }
   .field-chrome:focus-visible,
   .field-chrome:focus-within {
     outline: none;
-    border-color: hsl(var(--ring));
-    /* 0.25rem at 25% — Velzon's focus ring, which is wider and softer
-     * than a typical 2px outline and reads clearly against a white
-     * card without shouting. */
+    border-color: hsl(var(--input-ring));
+    /* 0.25rem at 25% — Velzon's focus ring geometry, wider and softer
+     * than a typical 2px outline. Focus deepens the same hue rather
+     * than switching colour, so it reads as intensity, not a change
+     * of meaning. */
     box-shadow:
       inset 0 1px 2px 0 hsl(var(--elev-shadow)),
-      0 0 0 0.25rem hsl(var(--ring) / 0.25);
+      0 0 0 0.25rem hsl(var(--input-ring) / 0.3);
   }
   .field-chrome:disabled {
     cursor: not-allowed;
