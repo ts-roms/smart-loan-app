@@ -141,6 +141,14 @@ const TrialBalancePage = lazyNamed(
   "TrialBalancePage",
 );
 
+const ForgotPasswordPage = lazyNamed(
+  () => import("./features/auth/pages/ForgotPassword"),
+  "ForgotPasswordPage",
+);
+const ResetPasswordPage = lazyNamed(
+  () => import("./features/auth/pages/ResetPassword"),
+  "ResetPasswordPage",
+);
 const CoMakerConsentPage = lazyNamed(
   () => import("./features/co-maker"),
   "CoMakerConsentPage",
@@ -264,6 +272,8 @@ export function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );

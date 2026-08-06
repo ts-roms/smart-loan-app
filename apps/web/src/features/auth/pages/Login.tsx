@@ -130,9 +130,21 @@ export function LoginPage() {
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="password" className="text-sm font-medium">
-            Password
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="password" className="text-sm font-medium">
+              Password
+            </label>
+            <Link
+              to={
+                tenantSlug
+                  ? `/forgot-password?tenant=${tenantSlug}`
+                  : "/forgot-password"
+              }
+              className="text-xs text-fg-muted underline underline-offset-4 hover:text-fg"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <PasswordInput
             id="password"
             autoComplete="current-password"

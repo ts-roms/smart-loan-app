@@ -2,7 +2,9 @@ import { AuditLogRepository, type PrismaClient } from "@loan/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { config } from "../../config";
+import { forgotPasswordSchema, resetPasswordSchema } from "./schemas";
 import { AuthController } from "./auth.controller";
+import { PasswordResetService } from "./password-reset.service";
 import { AuthService } from "./auth.service";
 
 /**
@@ -67,6 +69,68 @@ export async function authRoutes(app: FastifyInstance) {
     auth.refresh,
   );
   app.post("/logout", { preHandler: publicPre }, auth.logout);
+
+  // ── Password reset ─────────────────────────────────────────────────
+  //
+  // Harder-limited than login: a reset request sends mail, so an
+  // unthrottled endpoint is both an enumeration probe and a way to
+  // use someone's inbox as a target. 5/minute per IP.
+  const resetThrottle = {
+    config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
+  };
+
+  app.post<{ Body: unknown }>(
+    "/forgot-password",
+    { ...resetThrottle, preHandler: publicPre },
+    async (req, reply) => {
+      const parsed = forgotPasswordSchema.safeParse(req.body);
+      // Even a malformed body gets the standard answer. A 400 here
+      // would distinguish "not an email" from "no such account",
+      // which is the distinction this endpoint exists to hide.
+      if (parsed.success) {
+        await buildResetService(app, req).request(parsed.data.email);
+      }
+      return reply.code(202).send({ ok: true });
+    },
+  );
+
+  // Lets the reset page say "this link has expired" on arrival rather
+  // than after someone has typed a new password twice.
+  app.get<{ Params: { token: string } }>(
+    "/reset-password/:token",
+    { ...resetThrottle, preHandler: publicPre },
+    async (req, reply) => {
+      const result = await buildResetService(app, req).check(req.params.token);
+      if (!result.ok) {
+        return reply.code(410).send({ error: result.reason });
+      }
+      return { ok: true };
+    },
+  );
+
+  app.post<{ Body: unknown }>(
+    "/reset-password",
+    { ...resetThrottle, preHandler: publicPre },
+    async (req, reply) => {
+      const parsed = resetPasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
+      }
+      const result = await buildResetService(app, req).reset(
+        parsed.data.token,
+        parsed.data.password,
+      );
+      if (!result.ok) {
+        // 410, not 401: the link is gone, not the credentials wrong.
+        // The reason is safe to name — the caller already holds the
+        // token, so it reveals nothing about whose it is.
+        return reply.code(410).send({ error: result.reason });
+      }
+      return { ok: true };
+    },
+  );
 
   // ── Authenticated routes ───────────────────────────────────────────
   // app.authenticate verifies the JWT → req.user is set with the
@@ -179,6 +243,22 @@ function resolveTenantFromBody(app: FastifyInstance) {
  * the prisma client — cheap (just a class instance) and keeps the
  * audit trail aligned with the tenant scope.
  */
+/**
+ * Per-request, like buildAuthService — it captures the tenant client
+ * and the tenant's notification provider, so a reset mail goes out
+ * under the right cooperative's branding.
+ */
+function buildResetService(app: FastifyInstance, req: FastifyRequest) {
+  const prisma: PrismaClient = req.tenantCtx.prisma;
+  return new PasswordResetService(
+    prisma,
+    app.notifications(prisma),
+    config.webOrigin,
+    config.companyName,
+    app.log,
+  );
+}
+
 function buildAuthService(app: FastifyInstance) {
   return async (req: FastifyRequest): Promise<void> => {
     const prisma: PrismaClient = req.tenantCtx.prisma;
