@@ -255,8 +255,8 @@ function NewAccountDialog({ onClose }: { onClose: () => void }) {
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? "Creating…" : "Create"}
+            <Button type="submit" loading={create.isPending}>
+              Create
             </Button>
           </DialogFooter>
         </form>

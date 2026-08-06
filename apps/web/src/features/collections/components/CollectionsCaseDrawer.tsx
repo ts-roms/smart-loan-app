@@ -320,9 +320,10 @@ function CollectionsCaseInspector({ id }: { id: string }) {
             <Button
               size="sm"
               onClick={onCreatePromise}
-              disabled={createPromise.isPending || ptpAmount <= 0}
+              loading={createPromise.isPending}
+              disabled={ptpAmount <= 0}
             >
-              {createPromise.isPending ? "Saving…" : "Record promise"}
+              Record promise
             </Button>
           </div>
         </div>
@@ -422,9 +423,10 @@ function CollectionsCaseInspector({ id }: { id: string }) {
             <Button
               size="sm"
               onClick={onAddNote}
-              disabled={addNote.isPending || !noteBody.trim()}
+              loading={addNote.isPending}
+              disabled={!noteBody.trim()}
             >
-              {addNote.isPending ? "Saving…" : "Add note"}
+              Add note
             </Button>
           </div>
         </div>

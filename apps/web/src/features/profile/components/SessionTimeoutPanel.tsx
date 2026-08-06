@@ -300,8 +300,8 @@ function AdminPolicyForm({
         </div>
       </div>
 
-      <Button onClick={save} disabled={update.isPending}>
-        {update.isPending ? "Saving…" : "Save organization policy"}
+      <Button onClick={save} loading={update.isPending}>
+        Save organization policy
       </Button>
     </div>
   );

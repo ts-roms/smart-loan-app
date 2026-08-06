@@ -146,7 +146,7 @@ function QuickLoanInspector({ id }: { id: string }) {
 
         {/* Next due */}
         {nextDue && (
-          <div className="rounded-md border border-sky-400/30 bg-sky-500/10 p-3 text-xs">
+          <div className="rounded-md border border-info/30 bg-info/10 p-3 text-xs">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-info mb-1">
               <CalendarClock className="h-3 w-3" />
               Next due

@@ -327,9 +327,10 @@ function NewDocDialog({
           </Button>
           <Button
             onClick={onSubmit}
-            disabled={create.isPending || !name.trim()}
+            loading={create.isPending}
+            disabled={!name.trim()}
           >
-            {create.isPending ? "Saving…" : "Save renewal"}
+            Save renewal
           </Button>
         </DialogFooter>
       </DialogContent>

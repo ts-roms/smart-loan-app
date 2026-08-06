@@ -71,9 +71,9 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
   };
 
   return (
-    <div className="rounded-md border border-sky-400/20 bg-sky-500/[0.04] p-3 space-y-3">
+    <div className="rounded-md border border-info/20 bg-info/[0.04] p-3 space-y-3">
       <div className="flex items-start gap-2">
-        <div className="h-8 w-8 shrink-0 rounded-md border border-sky-400/30 bg-sky-500/10 flex items-center justify-center">
+        <div className="h-8 w-8 shrink-0 rounded-md border border-info/30 bg-info/10 flex items-center justify-center">
           <Sparkles className="h-4 w-4 text-info" />
         </div>
         <div className="flex-1 min-w-0">
@@ -138,7 +138,7 @@ export function IdOcrCard({ onApply }: IdOcrCardProps) {
       )}
 
       {error && (
-        <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-danger flex items-start gap-2">
+        <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-xs text-danger flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
             <div className="font-medium">OCR failed</div>

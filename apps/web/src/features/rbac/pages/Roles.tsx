@@ -548,7 +548,7 @@ function ImpactConfirmDialog({
             users for whom this role is the only grant will lose access
             immediately.
           </p>
-          <ul className="space-y-1.5 rounded-md border border-amber-400/30 bg-amber-500/[0.04] p-3">
+          <ul className="space-y-1.5 rounded-md border border-warning/30 bg-warning/[0.04] p-3">
             {atRisk.map((r) => (
               <li
                 key={r.key}
@@ -578,8 +578,8 @@ function ImpactConfirmDialog({
           <Button variant="outline" onClick={onCancel} disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={onConfirm} disabled={isSaving}>
-            {isSaving ? "Saving…" : "Save anyway"}
+          <Button onClick={onConfirm} loading={isSaving}>
+            Save anyway
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -219,11 +219,10 @@ function WaiveDialog({
           </Button>
           <Button
             onClick={onSubmit}
-            disabled={
-              waive.isPending || amount <= 0 || reason.trim().length < 3
-            }
+            loading={waive.isPending}
+            disabled={amount <= 0 || reason.trim().length < 3}
           >
-            {waive.isPending ? "Waiving…" : "Waive & post reversal"}
+            Waive & post reversal
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -163,8 +163,12 @@ export function CreditSurveyPage() {
               ))}
             </ul>
             <div className="flex justify-end">
-              <Button onClick={onSubmit} disabled={!ready || submit.isPending}>
-                {submit.isPending ? "Scoring…" : "Compute score"}
+              <Button
+                onClick={onSubmit}
+                loading={submit.isPending}
+                disabled={!ready}
+              >
+                Compute score
               </Button>
             </div>
           </>
@@ -202,7 +206,7 @@ function QuestionView({
                 className={
                   "rounded-md border px-3 py-1.5 text-sm transition-colors " +
                   (active
-                    ? "border-sky-400/50 bg-sky-500/15 text-info"
+                    ? "border-info/50 bg-info/15 text-info"
                     : "border-default bg-surface-2 hover:bg-hover")
                 }
               >
@@ -239,7 +243,7 @@ function QuestionView({
                 className={
                   "rounded-md border px-4 py-1.5 text-sm transition-colors " +
                   (active
-                    ? "border-sky-400/50 bg-sky-500/15 text-info"
+                    ? "border-info/50 bg-info/15 text-info"
                     : "border-default bg-surface-2 hover:bg-hover")
                 }
               >

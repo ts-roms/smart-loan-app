@@ -70,13 +70,11 @@ export function EclRunsPage() {
             ECL provisioning
           </CardTitle>
           {canRun && (
-            <Button onClick={onRun} disabled={runEcl.isPending}>
-              <RefreshCw
-                className={
-                  runEcl.isPending ? "h-3 w-3 animate-spin" : "h-3 w-3"
-                }
-              />
-              {runEcl.isPending ? "Running…" : "Run ECL now"}
+            <Button onClick={onRun} loading={runEcl.isPending}>
+              {/* Icon only when idle — the Button supplies the spinner
+                  while running, and two glyphs would compete. */}
+              {!runEcl.isPending && <RefreshCw className="h-3 w-3" />}
+              Run ECL now
             </Button>
           )}
         </CardHeader>
@@ -234,7 +232,7 @@ function LastRunSummary({ result }: { result: EclRunResult }) {
         </div>
 
         {result.perLoan.some((l) => l.stage === "STAGE_3") && (
-          <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
+          <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
             <AlertTriangle className="h-3 w-3" />
             {result.perLoan.filter((l) => l.stage === "STAGE_3").length} loan(s)
             now Stage 3 (credit-impaired) — review for write-off candidacy.

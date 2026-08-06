@@ -105,11 +105,11 @@ export function AssistantPanel({
   };
 
   return (
-    <div className="rounded-md border border-sky-400/20 bg-sky-500/[0.04] p-3 space-y-3">
+    <div className="rounded-md border border-info/20 bg-info/[0.04] p-3 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-md border border-sky-400/30 bg-sky-500/10 flex items-center justify-center shrink-0">
+          <div className="h-8 w-8 rounded-md border border-info/30 bg-info/10 flex items-center justify-center shrink-0">
             <Sparkles className="h-4 w-4 text-info" />
           </div>
           <div>
@@ -137,7 +137,7 @@ export function AssistantPanel({
 
       {/* Status notice when not configured / not ready */}
       {ping.data && !isAvailable && (
-        <div className="rounded-md border border-amber-400/30 bg-amber-500/10 p-2 text-[11px] text-warning">
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-[11px] text-warning">
           {ping.data.message}
         </div>
       )}
@@ -184,7 +184,7 @@ export function AssistantPanel({
 
       {/* Error */}
       {error && !result && (
-        <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-2 text-[11px] text-danger flex items-start gap-2">
+        <div className="rounded-md border border-danger/30 bg-danger/10 p-2 text-[11px] text-danger flex items-start gap-2">
           <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>

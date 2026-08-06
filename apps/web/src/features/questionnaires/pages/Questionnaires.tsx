@@ -685,7 +685,7 @@ function QuestionFields({
       <select
         value={kind}
         onChange={(e) => setKind(e.target.value as SurveyQuestionKind)}
-        className="rounded-md border border-default bg-surface-2 px-2 py-2 text-sm"
+        className="field-chrome rounded-md px-2 py-2 text-sm"
         aria-label="Question kind"
       >
         <option value="CHOICE">Choice</option>

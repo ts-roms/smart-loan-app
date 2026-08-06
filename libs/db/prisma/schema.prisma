@@ -70,6 +70,7 @@ model User {
   delegationsHeld           Delegation[]           @relation("Delegate")
   loanApprovals             LoanApproval[]         @relation("LoanApprover")
   refreshTokens             RefreshToken[]         @relation("UserRefreshTokens")
+  passwordResets            PasswordResetToken[]   @relation("UserPasswordResets")
   penaltyWaivers            PenaltyWaiver[]        @relation("PenaltyWaivedBy")
   annualDocuments           AnnualDocument[]       @relation("AnnualDocSubmittedBy")
   demandLettersDrafted      DemandLetter[]         @relation("DemandLetterDrafted")
@@ -1404,6 +1405,8 @@ enum NotificationEvent {
   LEASE_PULL_OUT_WARNING
   /// A co-maker has been asked to accept or decline being one.
   CO_MAKER_INVITED
+  /// Someone asked to reset their password.
+  PASSWORD_RESET
   /// A loan needs the recipient's approval (per-product approval chain).
   /// Fired on loan submit (step 1 approvers) and on each step advance
   /// (the next step's approvers). One row dispatched per recipient per
@@ -2027,6 +2030,28 @@ model BankStatementLine {
 // usable tokens. On every refresh we rotate — the old token is marked
 // revoked and replaced by a new one. If a revoked token is ever presented
 // (= token theft), we revoke the entire family for that user.
+
+/// A single-use password reset grant.
+///
+/// Same shape as RefreshToken and for the same reason: only the
+/// SHA-256 is stored, so a database compromise yields no usable reset
+/// links. Single-use is enforced by `usedAt` rather than deletion —
+/// keeping the spent row lets a second click on the same link say
+/// "already used" instead of the indistinguishable "invalid", and
+/// leaves a trail that a reset happened.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation("UserPasswordResets", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
 
 model RefreshToken {
   id           String    @id @default(uuid())

@@ -315,9 +315,10 @@ function PayNowButton({ loanId }: { loanId: string }) {
                   </Button>
                   <Button
                     onClick={onCreate}
-                    disabled={create.isPending || amount <= 0}
+                    loading={create.isPending}
+                    disabled={amount <= 0}
                   >
-                    {create.isPending ? "Generating…" : "Continue"}
+                    Continue
                   </Button>
                 </DialogFooter>
               </div>

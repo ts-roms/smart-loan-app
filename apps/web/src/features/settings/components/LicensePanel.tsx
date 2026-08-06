@@ -118,9 +118,9 @@ export function LicensePanel() {
               spellCheck={false}
             />
             <div className="flex gap-2">
-              <Button onClick={onActivate} disabled={activate.isPending}>
-                <Key className="h-4 w-4" />
-                {activate.isPending ? "Activating…" : "Activate"}
+              <Button onClick={onActivate} loading={activate.isPending}>
+                {!activate.isPending && <Key className="h-4 w-4" />}
+                Activate
               </Button>
               {data?.status === "ACTIVE" && (
                 <Button
@@ -252,7 +252,7 @@ function InactiveLicenseMessage({
 }) {
   if (!status) return null;
   return (
-    <div className="rounded-md border border-amber-300/20 bg-amber-300/[0.04] p-3 text-sm">
+    <div className="rounded-md border border-warning/20 bg-warning/[0.04] p-3 text-sm">
       <div className="font-medium text-warning mb-1">
         {status.status === "EXPIRED" && "License expired"}
         {status.status === "TAMPERED" && "License signature invalid"}

@@ -267,3 +267,36 @@ export function useDisableTwoFactor() {
     onSuccess: () => qc.invalidateQueries({ queryKey: twoFactorStatusKey }),
   });
 }
+
+/**
+ * Password reset.
+ *
+ * `useForgotPassword` never reports whether the address matched — the
+ * API answers 202 either way, by design, so the UI must show the same
+ * confirmation regardless. Anything else would leak what the endpoint
+ * is careful not to.
+ */
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: (input: { email: string; tenantSlug?: string }) =>
+      getApiClient().post<{ ok: true }>("/auth/forgot-password", input),
+  });
+}
+
+/** Is this reset link still redeemable? Checked when the page opens. */
+export function useResetTokenStatus(token: string) {
+  return useQuery({
+    queryKey: ["auth", "reset-token", token],
+    queryFn: () =>
+      getApiClient().get<{ ok: true }>(`/auth/reset-password/${token}`),
+    enabled: Boolean(token),
+    retry: false,
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: (input: { token: string; password: string }) =>
+      getApiClient().post<{ ok: true }>("/auth/reset-password", input),
+  });
+}

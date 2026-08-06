@@ -381,8 +381,8 @@ export function LoanDetailPage() {
         )}
         {canDisburse && (
           <div className="border-t border-default pt-3">
-            <Button onClick={onDisburse} disabled={disburse.isPending}>
-              {disburse.isPending ? "Disbursing…" : "Disburse funds"}
+            <Button onClick={onDisburse} loading={disburse.isPending}>
+              Disburse funds
             </Button>
           </div>
         )}
@@ -423,9 +423,10 @@ export function LoanDetailPage() {
                 />
                 <Button
                   type="submit"
-                  disabled={recordPayment.isPending || paymentAmount <= 0}
+                  loading={recordPayment.isPending}
+                  disabled={paymentAmount <= 0}
                 >
-                  {recordPayment.isPending ? "Saving…" : "Record"}
+                  Record
                 </Button>
               </div>
             </form>
@@ -482,8 +483,8 @@ function KycChecklist({ status }: { status: KycValidationResult }) {
     <div
       className={`rounded-md border p-3 ${
         isComplete
-          ? "border-emerald-400/20 bg-emerald-500/5"
-          : "border-amber-400/20 bg-amber-500/5"
+          ? "border-success/20 bg-success/5"
+          : "border-warning/20 bg-warning/5"
       }`}
     >
       <div className="text-xs uppercase tracking-wider text-fg-muted mb-2 flex items-center justify-between">
@@ -681,9 +682,10 @@ function CloseEarlyButton({ loanId }: { loanId: string }) {
                   </Button>
                   <Button
                     onClick={onConfirm}
-                    disabled={closeEarly.isPending || amount <= 0}
+                    loading={closeEarly.isPending}
+                    disabled={amount <= 0}
                   >
-                    {closeEarly.isPending ? "Settling…" : "Settle"}
+                    Settle
                   </Button>
                 </DialogFooter>
               </div>
@@ -805,9 +807,10 @@ function RestructureButton({
                 </Button>
                 <Button
                   onClick={onSubmit}
-                  disabled={restructure.isPending || principal <= 0}
+                  loading={restructure.isPending}
+                  disabled={principal <= 0}
                 >
-                  {restructure.isPending ? "Restructuring…" : "Restructure"}
+                  Restructure
                 </Button>
               </DialogFooter>
             </div>
@@ -849,7 +852,7 @@ function WriteOffButton({ loanId }: { loanId: string }) {
               <DialogTitle>Write off loan</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              <div className="rounded-md border border-rose-400/30 bg-rose-500/5 p-3 text-sm">
+              <div className="rounded-md border border-danger/30 bg-danger/5 p-3 text-sm">
                 <strong className="text-danger">Terminal action.</strong> The
                 remaining principal is posted as Bad Debt Expense and the loan
                 is closed. Cannot be undone (only reversed via a journal entry).
@@ -868,9 +871,10 @@ function WriteOffButton({ loanId }: { loanId: string }) {
                 </Button>
                 <Button
                   onClick={onSubmit}
-                  disabled={writeOff.isPending || !reason.trim()}
+                  loading={writeOff.isPending}
+                  disabled={!reason.trim()}
                 >
-                  {writeOff.isPending ? "Writing off…" : "Confirm write-off"}
+                  Confirm write-off
                 </Button>
               </DialogFooter>
             </div>
@@ -950,9 +954,10 @@ function PayOnlineButton({ loanId }: { loanId: string }) {
                   </Button>
                   <Button
                     onClick={onCreate}
-                    disabled={create.isPending || amount <= 0}
+                    loading={create.isPending}
+                    disabled={amount <= 0}
                   >
-                    {create.isPending ? "Generating…" : "Generate link"}
+                    Generate link
                   </Button>
                 </DialogFooter>
               </div>
@@ -1155,9 +1160,10 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
               type="submit"
               size="sm"
               className="w-full"
-              disabled={createPromise.isPending || ptpAmount <= 0}
+              loading={createPromise.isPending}
+              disabled={ptpAmount <= 0}
             >
-              {createPromise.isPending ? "Recording…" : "Record promise"}
+              Record promise
             </Button>
           </form>
           {promises.isLoading ? (
@@ -1525,7 +1531,7 @@ function SignaturesPanel({
               </DialogTitle>
             </DialogHeader>
             {openPad === "officer" && eligibleDelegations.length > 0 && (
-              <div className="mb-2 rounded-md border border-amber-400/40 bg-amber-400/10 p-2 text-xs">
+              <div className="mb-2 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
                 <label className="block mb-1 text-warning">
                   Sign under delegation (optional)
                 </label>

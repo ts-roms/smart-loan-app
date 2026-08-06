@@ -433,8 +433,8 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!ready || apply.isPending}>
-              {apply.isPending ? "Submitting…" : "Submit application"}
+            <Button type="submit" loading={apply.isPending} disabled={!ready}>
+              Submit application
             </Button>
           </DialogFooter>
         </form>

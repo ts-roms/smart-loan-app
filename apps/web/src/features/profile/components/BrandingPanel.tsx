@@ -259,8 +259,8 @@ export function BrandingPanel() {
             </div>
 
             <div className="flex justify-end">
-              <Button onClick={onSave} disabled={update.isPending}>
-                {update.isPending ? "Saving…" : "Save branding"}
+              <Button onClick={onSave} loading={update.isPending}>
+                Save branding
               </Button>
             </div>
           </>

@@ -92,14 +92,14 @@ export function LeasePanel({ loanId }: { loanId: string }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {l.status === "PULLED_OUT" && (
-          <div className="rounded-md border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-xs text-danger flex items-center gap-2">
+          <div className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger flex items-center gap-2">
             <AlertTriangle className="h-3 w-3" />
             Vehicle pulled out — drive the recovery via the Repossession
             workflow. Reason: {l.pullOutReason}
           </div>
         )}
         {l.status === "ACTIVE" && l.missedPaymentStreak >= 2 && (
-          <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
+          <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
             <AlertTriangle className="h-3 w-3" />
             {l.missedPaymentStreak} consecutive missed payment(s). One more and
             (for non-employees) the vehicle is eligible for pull-out.
@@ -127,7 +127,7 @@ export function LeasePanel({ loanId }: { loanId: string }) {
         </div>
 
         {l.status === "BUYOUT_COMPLETED" && (
-          <div className="rounded-md border border-emerald-400/30 bg-emerald-400/10 p-2.5 text-xs">
+          <div className="rounded-md border border-success/30 bg-success/10 p-2.5 text-xs">
             <div className="flex items-center justify-between">
               <span className="text-fg">
                 <CheckCircle2 className="inline h-3 w-3 mr-1 text-success" />
@@ -327,8 +327,8 @@ function BuyoutDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={buyout.isPending}>
-            {buyout.isPending ? "Posting…" : "Post buyout"}
+          <Button onClick={onSubmit} loading={buyout.isPending}>
+            Post buyout
           </Button>
         </DialogFooter>
       </DialogContent>

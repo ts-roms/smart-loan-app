@@ -203,7 +203,7 @@ export function AffordabilityGuardrails({
         <div
           className={`rounded-md border p-3 space-y-2 ${
             dorsiResult.status === "BOARD_REQUIRED"
-              ? "border-amber-400/30 bg-amber-500/[0.08]"
+              ? "border-warning/30 bg-warning/[0.08]"
               : "border-default bg-surface-2"
           }`}
         >

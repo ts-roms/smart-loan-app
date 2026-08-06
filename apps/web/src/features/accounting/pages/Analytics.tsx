@@ -112,7 +112,7 @@ export function AnalyticsPage() {
                   </div>
                   <div className="h-2 rounded bg-surface-2 overflow-hidden">
                     <div
-                      className="h-full bg-sky-400/70"
+                      className="h-full bg-info/70"
                       style={{
                         width: `${maxPrincipal > 0 ? (m.principal / maxPrincipal) * 100 : 0}%`,
                       }}
@@ -205,13 +205,21 @@ function Stat({
   accent: "sky" | "amber" | "emerald" | "rose";
 }) {
   const colors = {
-    sky: "text-info bg-sky-500/10 border-sky-400/20",
-    amber: "text-warning bg-amber-500/10 border-amber-400/20",
-    emerald: "text-success bg-emerald-500/10 border-emerald-400/20",
-    rose: "text-danger bg-rose-500/10 border-rose-400/20",
+    sky: "text-info bg-info/10 border-info/20",
+    amber: "text-warning bg-warning/10 border-warning/20",
+    emerald: "text-success bg-success/10 border-success/20",
+    rose: "text-danger bg-danger/10 border-danger/20",
+  };
+  // Just the ink, for the watermark — the badge's tint and border would
+  // draw a second box behind the card.
+  const ink = {
+    sky: "text-info",
+    amber: "text-warning",
+    emerald: "text-success",
+    rose: "text-danger",
   };
   return (
-    <Card>
+    <Card hover watermark={<Icon className={`h-20 w-20 ${ink[accent]}`} />}>
       <CardContent className="flex items-center justify-between gap-3 py-4">
         <div className="min-w-0">
           <div className="text-xs text-fg-muted uppercase tracking-wider">

@@ -58,9 +58,8 @@ export function Calendar({
           "aria-selected:opacity-100",
         ),
         selected:
-          "[&_button]:bg-sky-500 [&_button]:text-slate-950 [&_button]:hover:bg-sky-400 [&_button]:hover:text-slate-950",
-        today:
-          "[&_button]:border [&_button]:border-sky-400/60 [&_button]:text-fg",
+          "[&_button]:bg-info [&_button]:text-white [&_button]:hover:bg-info [&_button]:hover:text-white",
+        today: "[&_button]:border [&_button]:border-info/60 [&_button]:text-fg",
         outside: "[&_button]:text-fg-subtle",
         disabled: "[&_button]:text-fg-subtle [&_button]:cursor-not-allowed",
         hidden: "invisible",

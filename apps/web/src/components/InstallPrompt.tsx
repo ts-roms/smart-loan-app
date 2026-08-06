@@ -18,10 +18,10 @@ export function InstallPrompt({
     <div
       role="dialog"
       aria-label="Install SmartLoan"
-      className="fixed bottom-4 right-4 z-[90] w-[22rem] max-w-[calc(100vw-2rem)] rounded-lg border border-sky-400/30 bg-slate-950/90 backdrop-blur-xl shadow-2xl p-4 space-y-3"
+      className="fixed bottom-4 right-4 z-[90] w-[22rem] max-w-[calc(100vw-2rem)] rounded-lg border border-info/30 bg-surface-3/95 backdrop-blur-xl overlay-elevated p-4 space-y-3"
     >
       <div className="flex items-start gap-3">
-        <div className="h-9 w-9 shrink-0 rounded-md border border-sky-400/30 bg-sky-500/10 flex items-center justify-center">
+        <div className="h-9 w-9 shrink-0 rounded-md border border-info/30 bg-info/10 flex items-center justify-center">
           <Download className="h-4 w-4 text-info" />
         </div>
         <div className="flex-1 min-w-0">

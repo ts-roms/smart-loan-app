@@ -107,7 +107,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
       )}
       <aside
         className={cn(
-          "w-60 shrink-0 border-r border-default bg-surface-2 backdrop-blur-md flex flex-col h-full",
+          "w-60 shrink-0 border-r border-sidebar bg-sidebar flex flex-col h-full",
           "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
           navOpen ? "translate-x-0" : "-translate-x-full",
         )}
@@ -192,8 +192,8 @@ export function PortalShell({ children }: { children: ReactNode }) {
                 cn(
                   "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
                   isActive
-                    ? "bg-surface-3 text-fg"
-                    : "text-fg hover:bg-hover hover:text-fg",
+                    ? "bg-white/[0.12] text-fg"
+                    : "text-fg-muted hover-sidebar hover:text-fg",
                 )
               }
             >

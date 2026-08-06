@@ -158,9 +158,9 @@ export function FileDropzone({
       className={cn(
         "group relative flex flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed px-4 py-6 text-center transition-colors",
         "border-default bg-surface-2 cursor-pointer",
-        "hover:border-sky-400/50 hover:bg-hover",
-        "focus-within:border-sky-400/70 focus-within:bg-surface-2",
-        isDragOver && "border-sky-400 bg-sky-500/10",
+        "hover:border-info/50 hover:bg-hover",
+        "focus-within:border-info/70 focus-within:bg-surface-2",
+        isDragOver && "border-info bg-info/10",
         disabled && "pointer-events-none opacity-50",
         className,
       )}

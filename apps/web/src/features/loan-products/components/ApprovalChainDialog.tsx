@@ -266,8 +266,8 @@ export function ApprovalChainDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={update.isPending}>
-            {update.isPending ? "Saving…" : "Save chain"}
+          <Button onClick={save} loading={update.isPending}>
+            Save chain
           </Button>
         </DialogFooter>
       </DialogContent>

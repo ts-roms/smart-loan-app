@@ -125,9 +125,10 @@ export function SignaturePad({
           type="button"
           size="sm"
           onClick={submit}
-          disabled={empty || submitting}
+          loading={submitting}
+          disabled={empty}
         >
-          {submitting ? "Saving…" : "Save signature"}
+          Save signature
         </Button>
       </div>
     </div>

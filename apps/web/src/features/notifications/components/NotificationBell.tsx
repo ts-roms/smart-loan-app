@@ -92,7 +92,7 @@ export function NotificationBell() {
           <Bell className="h-4 w-4" />
           {unseen > 0 && (
             <span
-              className="absolute top-1.5 right-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-fg ring-2 ring-slate-950"
+              className="absolute top-1.5 right-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white ring-2 ring-surface-2"
               aria-label={`${unseen} unseen`}
             >
               {unseen > 9 ? "9+" : unseen}
@@ -154,7 +154,7 @@ export function NotificationBell() {
 
               const rowClass = cn(
                 "block px-3 py-2 text-xs border-b border-default last:border-b-0",
-                fresh && "bg-sky-500/[0.04]",
+                fresh && "bg-info/[0.04]",
               );
 
               // A notification with nowhere to point stays a plain row —

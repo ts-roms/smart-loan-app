@@ -29,6 +29,7 @@ export type NotificationEvent =
   | "LEASE_MAINTENANCE_REMINDER"
   | "LEASE_PULL_OUT_WARNING"
   | "CO_MAKER_INVITED"
+  | "PASSWORD_RESET"
   | "LOAN_APPROVAL_PENDING"
   | "STATEMENT_READY"
   | "DELEGATION_REVOKED"
@@ -144,6 +145,13 @@ const TEMPLATES: Record<NotificationEvent, { subject?: string; body: string }> =
     PROMISE_TO_PAY: {
       subject: "Promise to pay recorded",
       body: "Hi %{customerName}%, we have recorded your promise to pay %{amount}% on %{dueDate}% for loan %{loanNumber}%.",
+    },
+    PASSWORD_RESET: {
+      subject: "Reset your %{companyName}% password",
+      // No name in the body: the address may not belong to whoever
+      // asked, and greeting a stranger by name confirms the account
+      // exists to someone who only guessed the email.
+      body: "A password reset was requested for this address. Open %{url}% to choose a new password — the link works once and expires in %{expiresIn}%. If this wasn't you, ignore this message and nothing changes.",
     },
     CO_MAKER_INVITED: {
       subject: "%{borrowerName}% named you as a %{roleLabel}%",

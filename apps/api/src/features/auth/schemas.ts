@@ -196,3 +196,26 @@ export const totpCodeSchema = z.object({
 });
 
 export type TotpCodeInput = z.infer<typeof totpCodeSchema>;
+
+/**
+ * Start a reset. Only an email — the response is identical whether it
+ * matches an account or not, so there is nothing else to validate.
+ */
+export const forgotPasswordSchema = z.object({
+  email: z.string().email().max(200),
+  /** Present on multi-tenant deploys; resolved the same way login is. */
+  tenantSlug: z.string().max(64).optional(),
+});
+
+/**
+ * Redeem one. The password rule matches registration — a reset is not
+ * a back door to a weaker password than signup would have accepted.
+ */
+export const resetPasswordSchema = z.object({
+  token: z.string().min(20).max(200),
+  password: z.string().min(8).max(200),
+  tenantSlug: z.string().max(64).optional(),
+});
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

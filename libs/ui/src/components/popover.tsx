@@ -22,7 +22,7 @@ export const PopoverContent = forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 w-72 rounded-md border border-default bg-surface-3 backdrop-blur-xl p-3 text-fg shadow-2xl",
+        "z-50 w-72 rounded-md border border-default bg-surface-3 backdrop-blur-xl p-3 text-fg overlay-elevated",
         // See select.tsx: opacity + scale-from-anchor only, never touch
         // translate (Radix owns the positioning transform).
         "origin-[var(--radix-popover-content-transform-origin)]",

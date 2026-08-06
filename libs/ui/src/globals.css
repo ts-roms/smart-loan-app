@@ -43,11 +43,42 @@
   :root {
     color-scheme: light;
 
-    /* Surfaces — white cards on a faintly warm grey plate. */
-    --background: 220 20% 97%;
-    --surface-1: 220 20% 98%;
+    /* Surfaces — white cards on a lavender-grey plate.
+     *
+     * The plate used to sit at 97-98% lightness, which is within a
+     * couple of percent of the white cards on top of it. Everything
+     * read as one flat sheet: no separation, no depth, and the borders
+     * doing all the work. Dropping the plate to 93% and cooling the
+     * hue gives the cards something to sit ON. Cards stay pure white,
+     * so text contrast is untouched. */
+    /* #f3f3f9 — the Velzon page tone. Slightly violet rather than
+     * blue-grey, which is what keeps white cards from reading cold. */
+    --background: 240 33% 96%;
+    --surface-1: 240 30% 98%;
     --surface-2: 0 0% 100%;
     --surface-3: 0 0% 100%;
+
+    /*
+     * The nav rail gets its own tone, DARKER than the page plate.
+     *
+     * It was surface-1 at 96% — lighter than the 93% plate it sits
+     * beside and three points off the white cards, so rail, content
+     * and card were one continuous wash. Chrome should recede and
+     * content should come forward: 89% rail < 93% plate < 100% card
+     * gives three tiers you can actually tell apart.
+     */
+    --sidebar: 226 36% 39%;
+    --sidebar-border: 226 33% 33%;
+    --sidebar-hover: 0 0% 100% / 0.09;
+    /* Foregrounds INSIDE the rail. Scoped onto `.bg-sidebar` below, so
+     * every `text-fg*` utility already in the markup flips to the light
+     * end without touching a single component. */
+    --sidebar-fg: 0 0% 100%;
+    /* Measured against the rail: 4.89:1 and 4.62:1. The subtle tone
+     * carries 10px uppercase section labels, so it needs to clear AA
+     * for small text, not merely look dim. */
+    --sidebar-fg-muted: 226 40% 84%;
+    --sidebar-fg-subtle: 226 30% 81%;
 
     /* Foreground tiers. Calibrated against surface-1 (the sidebar and
      * page plate) rather than pure white — subtle at 48% cleared AA on
@@ -59,11 +90,41 @@
     --muted: 220 16% 94%;
     --muted-foreground: 220 10% 40%;
 
-    /* Borders + inputs */
-    --border: 220 15% 88%;
-    --border-strong: 220 14% 78%;
-    --input: 220 15% 88%;
-    --ring: 199 89% 42%;
+    /* Borders + inputs.
+     *
+     * `--input` is deliberately DARKER than `--border`: a field is an
+     * affordance and has to look like one, where a card edge only has
+     * to separate. At the old shared 88% an input on a white card was
+     * a suggestion of a box. */
+    /* #e9ebec for card edges. The field outline is deliberately
+     * heavier than Velzon's #ced4da — theirs relies on a filled grey
+     * page behind mostly-white forms, and on our whiter cards it
+     * disappeared. This is the third pass at making a field look like
+     * a field, so it errs toward visible. */
+    --border: 200 8% 92%;
+    --border-strong: 208 16% 50%;
+
+    /*
+     * Resting grey, bondi blue (#0095B6) on hover and focus.
+     *
+     * Colour as FEEDBACK rather than decoration: a dense form has a
+     * dozen fields, and a saturated edge on all of them at once is
+     * noise — but the one you're pointing at or typing in earning a
+     * colour is signal.
+     *
+     * 58% resting is the lightest grey that clears the WCAG 3:1
+     * minimum for a control boundary against a white card (measured:
+     * 72% gave 2.01, 60% gave 2.89, 58% gives 3.08). Bondi measures
+     * 3.47 in the same place, so the interactive states are the
+     * stronger of the two, as they should be.
+     *
+     * Its own tokens rather than reusing --ring: focus rings on
+     * buttons and links stay the navy primary.
+     */
+    --input: 208 14% 58%;
+    --input-hover: 191 100% 36%;
+    --input-ring: 191 100% 36%;
+    --ring: 226 36% 45%;
 
     /* Brand accent — same sky family, darkened for contrast on white.
      * This token is used as a foreground ("View analytics", filter
@@ -71,38 +132,74 @@
      * lighter than text can. Walked down twice against measurements:
      * 42% was 3.66:1 as link text on white, 36% was 4.12:1 as pill text
      * on its own soft tint. 32% clears both. */
-    --primary: 199 92% 32%;
-    --primary-soft: 199 92% 32% / 0.1;
+    /*
+     * #405189 — Velzon's primary, used verbatim.
+     *
+     * Read from their stylesheet rather than guessed at: the rail is
+     * declared `--vz-vertical-menu-bg: var(--vz-primary)`, so the navy
+     * IS the primary and the teal everyone notices is `success`. I had
+     * those two the wrong way round on the first pass.
+     *
+     * No lightness adjustment needed — measures 7.4:1 as text on white
+     * and the same under a white button label. */
+    --primary: 226 36% 39%;
+    --primary-soft: 226 36% 39% / 0.1;
     --primary-foreground: 0 0% 100%;
 
     /* Semantic statuses — darkened so they stay legible as TEXT on
      * white, not just as fills. The -soft tints stay light. */
-    --success: 152 62% 30%;
-    --success-soft: 152 62% 30% / 0.1;
+    /*
+     * Velzon's #0ab39c, hue kept, lightness dropped from 37% to 28%.
+     *
+     * Theirs is a fill colour; ours is also TEXT — `text-success` on
+     * badges and KPI deltas — where 37% measures 2.9:1 and fails AA.
+     * The soft tint below keeps the published brightness, so fills
+     * still look like the reference. */
+    --success: 172 88% 27%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 172 88% 37% / 0.12;
     /* 36% cleared AA on white but measured 3.99:1 as badge text on its
      * own tint — the account-type chips use a heavier wash than the
      * banners do. Amber is the worst case here: it's the lightest hue
      * at any given lightness value. */
-    --warning: 32 92% 31%;
-    --warning-soft: 32 92% 31% / 0.12;
-    --danger: 0 68% 45%;
-    --danger-soft: 0 68% 45% / 0.1;
-    --info: 217 75% 45%;
-    --info-soft: 217 75% 45% / 0.1;
+    /* #f7b84b, hue kept. Amber is the worst case for text contrast —
+     * the published 63% measures 1.9:1 on white. */
+    --warning: 39 91% 30%;
+    --warning-soft: 39 91% 63% / 0.16;
+    /* #f06548, hue kept, darkened for text. */
+    --danger: 9 82% 41%;
+    --danger-soft: 9 85% 61% / 0.13;
+    /* #299cdb, hue kept, darkened for text. */
+    --info: 201 71% 35%;
+    --info-soft: 201 71% 51% / 0.14;
 
-    --hover: 222 24% 12% / 0.045;
-    --divider: 220 15% 91%;
+    --hover: 222 24% 12% / 0.055;
+    --divider: 200 8% 93%;
+
+    /* Charts. The plot area gets its own fill so a graph reads as a
+     * panel rather than as ink floating on the card, and the grid is
+     * lighter than a divider — it's a reading aid, not a boundary. */
+    --chart-plot: 240 30% 97%;
+    --chart-grid: 220 14% 90%;
 
     /* Body-gradient alphas + the elevation recipe. See `body` and
      * `.card-elevated` below — on white, depth comes from a soft grey
      * shadow rather than a black one and an inner top highlight. */
-    --glow-a: 0.05;
-    --glow-b: 0.03;
+    --glow-a: 0.07;
+    --glow-b: 0.05;
     --elev-highlight: 0 0% 100% / 0;
-    --elev-hairline: 220 15% 88% / 1;
-    --elev-shadow: 220 20% 40% / 0.1;
-    --glass-bg: 222 24% 12% / 0.025;
-    --glass-border: 220 15% 88% / 1;
+    --elev-hairline: 200 8% 92% / 1;
+    /* Cool and a touch deeper. A grey shadow on a grey plate is what
+     * makes white cards look lifted rather than pasted on. */
+    --elev-shadow: 226 40% 28% / 0.14;
+    --glass-bg: 222 24% 12% / 0.03;
+    --glass-border: 200 8% 92% / 1;
+
+    /* Corner watermark on stat tiles. See `.card-watermark` — these two
+     * numbers are the ceiling that keeps the smallest text on a KPI
+     * card above 4.5:1, not a taste setting. */
+    --watermark: 0.06;
+    --watermark-hover: 0.08;
 
     /* Legacy alias — keep so existing `bg-destructive` calls still work */
     --destructive: 0 68% 45%;
@@ -117,53 +214,112 @@
   :root[data-theme="dark"] {
     color-scheme: dark;
 
-    --background: 222 16% 7%; /* deeper plate so cards stand out */
-    --surface-1: 220 14% 10%; /* page surface */
-    --surface-2: 220 13% 13%; /* default card */
-    --surface-3: 220 12% 16%; /* elevated card */
+    /* #1a1d21 / #212529 — Velzon's own dark body and card. Warmer and
+     * a good deal lighter than the near-black I had; their dark theme
+     * is a slate, not an OLED black. */
+    --background: 210 9% 11%;
+    --surface-1: 210 10% 13%;
+    --surface-2: 210 11% 15%;
+    --surface-3: 210 10% 19%;
+
+    /* On dark the rail sits just ABOVE the plate (8% vs 6%) rather
+     * than below it — going darker than a 6% plate lands in mud. What
+     * matters is that all three tiers are separable and the cards stay
+     * brightest: plate 14 < rail 18 < card 29 in luminance. */
+    /* The navy rail is the product's signature, so it stays on dark
+     * too — just deepened so it doesn't glow against a 6% plate. */
+    --sidebar: 226 34% 17%;
+    --sidebar-border: 226 30% 24%;
+    --sidebar-hover: 0 0% 100% / 0.08;
+    --sidebar-fg: 0 0% 100%;
+    --sidebar-fg-muted: 226 30% 78%;
+    --sidebar-fg-subtle: 226 22% 65%;
 
     --foreground: 213 18% 92%;
-    --foreground-muted: 215 14% 65%;
-    /* Was 48%, which measured 3.64:1 on surface-2 — under AA. 56% still
-     * left 4.43:1 on the lighter dashboard cards, so 59%. Pre-existing
-     * shortfall, found by the contrast sweep while adding light. */
-    --foreground-subtle: 215 12% 59%;
+    /*
+     * The two lower tiers move together, and they have to.
+     *
+     * `subtle` was 59%, which measured 4.33:1 on surface-3 — under AA
+     * for normal-size text, and it's used at 11px on the KPI tiles, so
+     * the large-text exemption doesn't apply. Only surface-3 failed;
+     * every other dark surface is darker and cleared it.
+     *
+     * 61% is the least that fixes it (4.62:1), but `muted` sits at 65%
+     * and 61-vs-65 leaves the two tiers 1.13:1 apart — close enough to
+     * stop reading as two tiers at all. A fix that repairs contrast by
+     * dissolving the hierarchy isn't a fix.
+     *
+     * So 62/69. Subtle clears everywhere at 4.77:1 worst case, and the
+     * gap between the tiers comes out at 1.238:1 — slightly WIDER than
+     * the 1.207:1 it had before, so the ladder reads better than it did
+     * rather than worse.
+     *
+     * The rejected alternative was darkening surface-3 instead. It
+     * reaches 4.5:1 only at 18%, where the card's separation from the
+     * surface-2 tier below falls from 1.148 to 1.108 — paying for
+     * legible text with the elevation the whole theme is built on.
+     */
+    --foreground-muted: 215 14% 69%;
+    --foreground-subtle: 215 12% 62%;
     --muted: 220 12% 18%;
-    --muted-foreground: 215 14% 65%;
+    /* Tracks --foreground-muted; they're the same tier under two names
+     * (the shadcn-shaped components reach for this one). */
+    --muted-foreground: 215 14% 69%;
 
-    --border: 217 14% 20%;
-    --border-strong: 217 14% 28%;
-    --input: 217 14% 20%;
-    --ring: 199 78% 60%;
+    /* Same reasoning as light: an input outranks a card edge. 20% was
+     * near-invisible against surface-2 at 13%. */
+    /* #32383e and a step either side. */
+    --border: 210 11% 22%;
+    --border-strong: 210 13% 52%;
+    /* Bondi lifted for a dark ground: 36% measures 4.33:1 on the dark
+     * card and works, but 45% (6.21:1) carries better on a surface
+     * this dark. */
+    --input: 210 13% 44%;
+    --input-hover: 191 90% 45%;
+    --input-ring: 191 90% 45%;
+    --ring: 226 55% 68%;
 
-    --primary: 199 78% 60%;
-    --primary-soft: 199 78% 60% / 0.12;
+    /* Navy is too dark to read on a dark ground, so it lifts — same
+     * hue, enough lightness to work as text and as a fill. */
+    --primary: 226 55% 68%;
+    --primary-soft: 226 55% 68% / 0.16;
     --primary-foreground: 220 30% 10%;
 
-    --success: 152 60% 52%;
-    --success-soft: 152 60% 52% / 0.12;
-    --warning: 38 92% 62%;
-    --warning-soft: 38 92% 62% / 0.12;
+    --success: 172 65% 52%;
+    --success-foreground: 210 11% 10%;
+    --success-soft: 172 65% 52% / 0.14;
+    --warning: 39 91% 63%;
+    --warning-soft: 39 91% 63% / 0.14;
     /* 60% measured 3.77:1 as badge text on its own tint — the DEFAULTED
      * and EXPENSE chips. Pre-existing; red is the hue that loses the
      * most contrast for a given lightness. */
-    --danger: 0 78% 71%;
-    --danger-soft: 0 78% 71% / 0.12;
+    --danger: 9 85% 70%;
+    --danger-soft: 9 85% 70% / 0.14;
     /* 65% measured 4.33:1 on the `bg-sky-500/15` active pills (filter
      * chips, wizard steps), which are a heavier wash than --info-soft. */
-    --info: 217 85% 72%;
-    --info-soft: 217 85% 72% / 0.12;
+    --info: 201 71% 64%;
+    --info-soft: 201 71% 64% / 0.14;
 
-    --hover: 0 0% 100% / 0.06;
-    --divider: 217 14% 20%;
+    --hover: 0 0% 100% / 0.07;
+    --divider: 217 15% 21%;
 
-    --glow-a: 0.06;
-    --glow-b: 0.04;
-    --elev-highlight: 0 0% 100% / 0.04;
-    --elev-hairline: 0 0% 0% / 0.4;
-    --elev-shadow: 0 0% 0% / 0.5;
+    --chart-plot: 222 18% 10%;
+    --chart-grid: 217 15% 22%;
+
+    --glow-a: 0.09;
+    --glow-b: 0.06;
+    --elev-highlight: 0 0% 100% / 0.06;
+    --elev-hairline: 0 0% 0% / 0.45;
+    --elev-shadow: 0 0% 0% / 0.6;
     --glass-bg: 0 0% 100% / 0.04;
     --glass-border: 0 0% 100% / 0.1;
+
+    /* Much higher than light, because the ink is different — see the
+     * `[data-theme="dark"] .card-watermark` rule. Black at 16% shifts
+     * this plate 8 levels, which is the same visible step the light
+     * theme gets from 6% of an accent on white. */
+    --watermark: 0.16;
+    --watermark-hover: 0.22;
 
     --destructive: 0 70% 60%;
     --destructive-foreground: 213 18% 92%;
@@ -229,8 +385,78 @@
   .bg-surface-3 {
     background-color: hsl(var(--surface-3));
   }
+  /* Plot area behind a chart — see PLOT_SURFACE in charts.tsx. */
+  .bg-chart-plot {
+    background-color: hsl(var(--chart-plot));
+  }
+  /* Nav rail. Solid, not translucent — a rail that lets the page
+   * gradient through picks up whatever is behind it and stops being a
+   * consistent tone. */
+  /*
+   * Redefining the foreground tokens on the rail itself means every
+   * `text-fg`, `text-fg-muted` and `text-fg-subtle` already in the nav
+   * markup resolves to the light end automatically — no per-element
+   * colour classes, and no risk of missing one.
+   */
+  .bg-sidebar {
+    background-color: hsl(var(--sidebar));
+    --foreground: var(--sidebar-fg);
+    --foreground-muted: var(--sidebar-fg-muted);
+    --foreground-subtle: var(--sidebar-fg-subtle);
+    --border: var(--sidebar-border);
+    --divider: var(--sidebar-border);
+  }
+  .border-sidebar {
+    border-color: hsl(var(--sidebar-border));
+  }
+  /* Nav row hover. Its own token because `--hover` is tuned for rows
+   * on a card, and the rail is a darker surface. */
+  .hover-sidebar:hover {
+    background-color: hsl(var(--sidebar-hover));
+  }
   .border-default {
     border-color: hsl(var(--border));
+  }
+
+  /*
+   * Shared chrome for every text-entry control — input, textarea,
+   * select trigger.
+   *
+   * Uses `--input`, which is deliberately darker than `--border`: a
+   * field is an affordance and has to read as one, where a card edge
+   * only has to separate. The inset shadow is what sells "you can type
+   * here" — a flat rectangle with a hairline reads as a table cell.
+   *
+   * Written as a class rather than a Tailwind string so the hover and
+   * focus states live next to the resting one, and so `--input` can be
+   * retuned in a single place.
+   */
+  .field-chrome {
+    border: 1px solid hsl(var(--input));
+    background-color: hsl(var(--surface-2));
+    box-shadow: inset 0 1px 2px 0 hsl(var(--elev-shadow));
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+  .field-chrome:hover:not(:disabled):not(:focus) {
+    border-color: hsl(var(--input-hover));
+  }
+  .field-chrome:focus-visible,
+  .field-chrome:focus-within {
+    outline: none;
+    border-color: hsl(var(--input-ring));
+    /* 0.25rem at 25% — Velzon's focus ring geometry, wider and softer
+     * than a typical 2px outline. Focus deepens the same hue rather
+     * than switching colour, so it reads as intensity, not a change
+     * of meaning. */
+    box-shadow:
+      inset 0 1px 2px 0 hsl(var(--elev-shadow)),
+      0 0 0 0.25rem hsl(var(--input-ring) / 0.3);
+  }
+  .field-chrome:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
   .border-strong {
     border-color: hsl(var(--border-strong));
@@ -321,10 +547,170 @@
   .card-elevated {
     background-color: hsl(var(--surface-3));
     border: 1px solid hsl(var(--border));
+    /* Layered rather than one big blur: a tight shadow reads as the
+     * card's contact with the plate, the wide one as the light falling
+     * past it. One 40px blur alone just looks smudged. */
     box-shadow:
       inset 0 1px 0 0 hsl(var(--elev-highlight)),
-      0 1px 0 0 hsl(var(--elev-hairline)),
-      0 20px 40px -20px hsl(var(--elev-shadow));
+      0 1px 2px 0 hsl(var(--elev-shadow)),
+      0 8px 16px -8px hsl(var(--elev-shadow)),
+      0 24px 48px -24px hsl(var(--elev-shadow));
+  }
+
+  /* The default card's depth. Softer than `.card-elevated` — enough to
+   * lift it off the plate without competing with the hero tiles. */
+  .card-resting {
+    box-shadow:
+      0 1px 2px 0 hsl(var(--elev-shadow)),
+      0 6px 16px -8px hsl(var(--elev-shadow));
+  }
+
+  /*
+   * Corner watermark for stat tiles.
+   *
+   * A big, faint copy of the tile's own icon, bled off the bottom-right
+   * corner so it reads as texture rather than as a second icon
+   * competing with the real one in the header. It's what stops a row of
+   * KPIs from looking like four identical rectangles that happen to
+   * hold different numbers.
+   *
+   * Opacity is the whole design problem, because the glyph sits under
+   * the context line and anything that tints the plate under text
+   * spends contrast the text needs. The smallest thing on a hero tile
+   * is `text-fg-subtle` at 11px, which measures 5.21:1 on white. Against
+   * the accent that costs the most — danger, the darkest of the five —
+   * 6% takes it to 4.74:1 and the 8% hover takes it to 4.59:1. Both
+   * clear AA for normal-size text; 10% would not (4.45:1), which is why
+   * the hover is a separate token rather than a multiplier someone can
+   * nudge.
+   *
+   * `z-index: -1` against `isolate` on the card, rather than wrapping
+   * the content in a positioned div: the glyph has to paint above the
+   * card's background and below its text, and isolating the card is the
+   * only way to say that without nesting every card's children.
+   */
+  .card-watermark {
+    position: absolute;
+    right: -1rem;
+    bottom: -1.5rem;
+    z-index: -1;
+    pointer-events: none;
+    user-select: none;
+    opacity: var(--watermark);
+    transition:
+      transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 300ms ease;
+  }
+
+  /*
+   * Dark reverses the ink, and this is not a style choice.
+   *
+   * On light the accent is darker than the card, so the glyph darkens
+   * the plate and the only question is how much contrast that costs.
+   * On dark the accents are LIGHTER than the card, so the same glyph
+   * would lift a near-black plate toward the text sitting on it —
+   * contrast moving the wrong way. From a `text-fg-subtle` baseline of
+   * 4.77:1 on surface-3, the dark accents land at 4.58:1 at 2% and
+   * 4.21:1 at 6%, i.e. the light theme's own opacity would fail here.
+   *
+   * Black instead. It darkens the plate, which moves contrast for light
+   * text the right way — 4.77:1 → 5.31:1 under the resting glyph, and
+   * 5.51:1 under the hover one. The watermark pays for itself on dark
+   * rather than costing something.
+   *
+   * The `*` is there because the caller puts `text-<accent>` directly
+   * on the icon; this selector out-specifies that utility without
+   * needing `!important`.
+   */
+  [data-theme="dark"] .card-watermark,
+  [data-theme="dark"] .card-watermark * {
+    color: hsl(0 0% 0%);
+  }
+
+  /*
+   * Hover for stat tiles.
+   *
+   * The card rises 3px and its shadow deepens — it moves toward the
+   * reader rather than changing colour, because every hue in this
+   * palette already means something (green healthy, amber watch, red
+   * overdue) and a hover state must not borrow one. The border picks up
+   * the same bondi used for input hover, at 40%, so "the thing under
+   * the pointer" looks the same whether it's a field or a card.
+   *
+   * The watermark grows and brightens at the same time. That's what
+   * sells the lift as depth: a card that translates on its own reads as
+   * a jump, but a card whose contents parallax slightly reads as
+   * something moving closer.
+   */
+  .card-hover:hover {
+    transform: translateY(-3px);
+    border-color: hsl(var(--input-hover) / 0.4);
+    box-shadow:
+      inset 0 1px 0 0 hsl(var(--elev-highlight)),
+      0 2px 4px 0 hsl(var(--elev-shadow)),
+      0 14px 24px -10px hsl(var(--elev-shadow)),
+      0 32px 56px -26px hsl(var(--elev-shadow));
+  }
+  .card-hover:hover .card-watermark {
+    opacity: var(--watermark-hover);
+    transform: scale(1.1) translate(-0.4rem, -0.4rem);
+  }
+
+  /*
+   * Reduced motion keeps the answer to "am I on this card?" — the
+   * shadow deepens and the watermark brightens — and drops the parts
+   * that move. The blanket rule further down collapses durations to
+   * 1ms, which on its own would turn the 3px lift into an instant jump
+   * rather than into no motion at all.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .card-hover:hover,
+    .card-hover:hover .card-watermark {
+      transform: none;
+    }
+  }
+
+  /* Menus, popovers, dialogs. Tailwind's `shadow-2xl` is a black
+   * shadow tuned for dark surfaces; on the light palette it reads as
+   * dirt under the panel. This uses the same cool `--elev-shadow` as
+   * the cards, layered, so an overlay looks lifted on both themes. */
+  .overlay-elevated {
+    box-shadow:
+      0 2px 4px -1px hsl(var(--elev-shadow)),
+      0 12px 24px -8px hsl(var(--elev-shadow)),
+      0 32px 64px -24px hsl(var(--elev-shadow));
+  }
+
+  /*
+   * Sign-in / register backdrop.
+   *
+   * Teal to navy, edge to edge — the two brand colours at full
+   * strength. These are the only screens with no nav, no data and no
+   * chrome, so they can carry the brand in a way the console never
+   * should.
+   *
+   * The dot lattice keeps a large flat gradient from banding on wide
+   * displays; it's below the threshold you'd consciously notice. Fixed
+   * hues rather than theme tokens because this panel IS the brand — it
+   * shouldn't invert when someone flips to dark.
+   */
+  .auth-backdrop {
+    background:
+      radial-gradient(
+        circle at 1px 1px,
+        hsl(0 0% 100% / 0.07) 1px,
+        transparent 0
+      ),
+      linear-gradient(115deg, hsl(172 88% 34%) 0%, hsl(210 45% 34%) 45%, hsl(226 36% 39%) 100%);
+    background-size:
+      22px 22px,
+      100% 100%;
+  }
+
+  /* Brand half of the auth card — the same ramp, darker, so the card
+   * reads as one object rather than a panel glued to a form. */
+  .auth-brand-panel {
+    background: linear-gradient(160deg, hsl(226 36% 39%) 0%, hsl(226 40% 28%) 100%);
   }
 
   /* Section header divider used between dashboard groups. The label sits

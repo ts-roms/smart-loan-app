@@ -422,7 +422,7 @@ function LedgerTable({ entries }: { entries: CustomerLedgerEntry[] }) {
                     >
                       <Badge
                         variant="muted"
-                        className="mt-1 hover:text-info hover:border-sky-400/40"
+                        className="mt-1 hover:text-info hover:border-info/40"
                       >
                         {e.loanNumber}
                       </Badge>

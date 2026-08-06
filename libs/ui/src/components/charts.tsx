@@ -49,6 +49,57 @@ const PALETTE: ChartTone[] = [
   "neutral",
 ];
 
+/**
+ * The panel a chart is drawn on.
+ *
+ * Ink floating directly on a card reads as decoration; a plot area
+ * with its own fill and a border reads as a chart. It also gives the
+ * gridlines somewhere to live — they'd be noise against the card, but
+ * they're a reading aid against a distinct surface.
+ *
+ * Class rather than an inline fill so the two tokens (`--chart-plot`,
+ * `--chart-grid`) stay the only place this is tuned.
+ */
+export const PLOT_SURFACE =
+  "rounded-lg border border-default bg-chart-plot p-3";
+
+/** Horizontal reference lines at quarters. Drawn under the data. */
+function GridLines({
+  width,
+  height,
+  padX,
+  padY,
+}: {
+  width: number;
+  height: number;
+  padX: number;
+  padY: number;
+}) {
+  const rows = [0, 0.25, 0.5, 0.75, 1];
+  return (
+    <g>
+      {rows.map((r) => {
+        const y = padY + r * (height - padY * 2);
+        return (
+          <line
+            key={r}
+            x1={padX}
+            y1={y}
+            x2={width - padX}
+            y2={y}
+            stroke="hsl(var(--chart-grid))"
+            strokeWidth={1}
+            vectorEffect="non-scaling-stroke"
+            // The baseline is the data's floor and reads as an axis;
+            // the rest are just guides.
+            strokeDasharray={r === 1 ? undefined : "3 4"}
+          />
+        );
+      })}
+    </g>
+  );
+}
+
 // ─── PieChart ────────────────────────────────────────────────────────
 
 export interface PieSegment {
@@ -245,8 +296,26 @@ export function BarChart({
   }
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
-    <div className={cn("space-y-2", className)}>
-      <div className="flex items-end gap-2" style={{ height }}>
+    <div className={cn("space-y-2", PLOT_SURFACE, className)}>
+      <div className="relative flex items-end gap-2" style={{ height }}>
+        {/* Quarter guides behind the bars — reading a height off a
+            flat panel is guesswork without them. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          {[0, 0.25, 0.5, 0.75].map((r) => (
+            <div
+              key={r}
+              className="absolute inset-x-0 border-t border-dashed"
+              style={{
+                top: `${r * 100}%`,
+                borderColor: "hsl(var(--chart-grid))",
+              }}
+            />
+          ))}
+          <div
+            className="absolute inset-x-0 bottom-0 border-t"
+            style={{ borderColor: "hsl(var(--chart-grid))" }}
+          />
+        </div>
         {data.map((d, i) => {
           const pct = (d.value / max) * 100;
           const color =
@@ -358,7 +427,7 @@ export function LineChart({
   const color = toneCss(tone);
 
   return (
-    <div className={cn("w-full", className)}>
+    <div className={cn("w-full", PLOT_SURFACE, className)}>
       <svg
         viewBox={`0 0 ${VB_W} ${VB_H}`}
         className="w-full"
@@ -367,19 +436,12 @@ export function LineChart({
       >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
+            <stop offset="0%" stopColor={color} stopOpacity={0.45} />
+            <stop offset="55%" stopColor={color} stopOpacity={0.14} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        {/* Faint baseline for visual grounding. */}
-        <line
-          x1={padX}
-          y1={VB_H - padY}
-          x2={VB_W - padX}
-          y2={VB_H - padY}
-          stroke="hsl(var(--border))"
-          strokeWidth={1}
-        />
+        <GridLines width={VB_W} height={VB_H} padX={padX} padY={padY} />
         {filled && <path d={areaPath} fill={`url(#${gradientId})`} />}
         <path
           d={linePath}
@@ -397,7 +459,7 @@ export function LineChart({
               cx={c.x}
               cy={c.y}
               r={3}
-              fill="hsl(var(--background))"
+              fill="hsl(var(--chart-plot))"
               stroke={color}
               strokeWidth={1.5}
               vectorEffect="non-scaling-stroke"

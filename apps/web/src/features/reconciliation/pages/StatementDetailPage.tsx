@@ -146,9 +146,9 @@ export function StatementDetailPage() {
                 All statements
               </RouterLink>
             </Button>
-            <Button onClick={onAutoMatch} disabled={autoMatch.isPending}>
-              <Sparkles className="h-3 w-3" />
-              {autoMatch.isPending ? "Matching…" : "Auto-match"}
+            <Button onClick={onAutoMatch} loading={autoMatch.isPending}>
+              {!autoMatch.isPending && <Sparkles className="h-3 w-3" />}
+              Auto-match
             </Button>
           </div>
         </CardHeader>

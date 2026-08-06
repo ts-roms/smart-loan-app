@@ -506,15 +506,15 @@ function SubmitKycForm({
 function TierBadge({ tier }: { tier: CreditTier }) {
   const map: Record<CreditTier, { cls: string; label: string }> = {
     A: {
-      cls: "bg-emerald-500/15 text-success border-emerald-400/30",
+      cls: "bg-success/15 text-success border-success/30",
       label: "A · Prime",
     },
     B: {
-      cls: "bg-sky-500/15 text-info border-sky-400/30",
+      cls: "bg-info/15 text-info border-info/30",
       label: "B · Good",
     },
     C: {
-      cls: "bg-amber-500/15 text-warning border-amber-400/30",
+      cls: "bg-warning/15 text-warning border-warning/30",
       label: "C · Fair",
     },
     D: {
@@ -522,7 +522,7 @@ function TierBadge({ tier }: { tier: CreditTier }) {
       label: "D · Subprime",
     },
     F: {
-      cls: "bg-rose-500/15 text-danger border-rose-400/30",
+      cls: "bg-danger/15 text-danger border-danger/30",
       label: "F · Decline",
     },
   };

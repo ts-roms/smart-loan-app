@@ -131,10 +131,10 @@ function UtilizationCard() {
             className={cn(
               "rounded-md border px-3 py-2 text-xs flex items-center gap-2",
               alert === "breach"
-                ? "border-rose-400/40 bg-rose-400/10 text-danger"
+                ? "border-danger/40 bg-danger/10 text-danger"
                 : alert === "critical"
-                  ? "border-rose-400/30 bg-rose-400/[0.06] text-danger"
-                  : "border-amber-400/40 bg-amber-400/10 text-warning",
+                  ? "border-danger/30 bg-danger/[0.06] text-danger"
+                  : "border-warning/40 bg-warning/10 text-warning",
             )}
           >
             <AlertTriangle className="h-3 w-3" />
@@ -190,12 +190,12 @@ function UtilizationCard() {
               className={cn(
                 "h-full transition-all",
                 aggPct >= 1
-                  ? "bg-rose-400"
+                  ? "bg-danger"
                   : aggPct >= 0.9
-                    ? "bg-rose-300"
+                    ? "bg-danger"
                     : aggPct >= 0.8
-                      ? "bg-amber-300"
-                      : "bg-emerald-400",
+                      ? "bg-warning"
+                      : "bg-success",
               )}
               style={{ width: `${Math.min(100, aggPct * 100)}%` }}
             />
@@ -462,8 +462,8 @@ function ConfigCard() {
               >
                 Cancel
               </Button>
-              <Button size="sm" onClick={onSave} disabled={update.isPending}>
-                {update.isPending ? "Saving…" : "Save"}
+              <Button size="sm" onClick={onSave} loading={update.isPending}>
+                Save
               </Button>
             </div>
           </div>
@@ -588,8 +588,8 @@ function TagDialog({ onClose }: { onClose: () => void }) {
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} disabled={tag.isPending}>
-            {tag.isPending ? "Tagging…" : "Tag customer"}
+          <Button onClick={onSubmit} loading={tag.isPending}>
+            Tag customer
           </Button>
         </DialogFooter>
       </DialogContent>

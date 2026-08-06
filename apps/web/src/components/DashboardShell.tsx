@@ -387,8 +387,10 @@ function NavItemLink({ item, active }: { item: NavItem; active: boolean }) {
         "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
         "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity",
         active
-          ? "bg-surface-2 text-fg before:opacity-100"
-          : "text-fg-muted hover:bg-surface-2/60 hover:text-fg",
+          ? // A white-alpha wash rather than a solid pill: the rail is
+            // dark now, and a white pill would invert the text with it.
+            "bg-white/[0.12] text-fg before:opacity-100"
+          : "text-fg-muted hover-sidebar hover:text-fg",
       )}
     >
       <item.icon className="h-4 w-4 shrink-0" />
@@ -521,7 +523,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <aside
         data-tour="nav-sidebar"
         className={cn(
-          "w-60 shrink-0 border-r border-default bg-surface-1/80 backdrop-blur-md flex flex-col h-full",
+          "w-60 shrink-0 border-r border-sidebar bg-sidebar flex flex-col h-full",
           // Off-canvas on small screens, in-flow from md up.
           "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
           mobileNavOpen ? "translate-x-0" : "-translate-x-full",
