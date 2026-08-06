@@ -1,4 +1,4 @@
-import { useAddCoMaker, useCustomers } from "@loan/api-client";
+import { useAddCoMaker } from "@loan/api-client";
 import type { CoMakerRole } from "@loan/shared-types";
 import {
   Button,
@@ -16,7 +16,9 @@ import {
   SelectValue,
   useToast,
 } from "@loan/ui";
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
+
+import { CustomerPicker } from "../../../components/CustomerPicker";
 
 /**
  * Add a co-maker to an existing loan.
@@ -45,18 +47,12 @@ export function AddCoMakerDialog({
   existingCustomerIds: string[];
   onClose: () => void;
 }) {
-  const customers = useCustomers();
   const add = useAddCoMaker();
   const toast = useToast();
 
   const [customerId, setCustomerId] = useState("");
   const [role, setRole] = useState<CoMakerRole>("CO_MAKER");
   const [relationship, setRelationship] = useState("");
-
-  const eligible = useMemo(() => {
-    const taken = new Set([borrowerId, ...existingCustomerIds]);
-    return (customers.data ?? []).filter((c) => !taken.has(c.id));
-  }, [customers.data, borrowerId, existingCustomerIds]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -85,28 +81,19 @@ export function AddCoMakerDialog({
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="cm-customer">Registered customer</Label>
-            <Select
-              value={customerId || undefined}
-              onValueChange={setCustomerId}
-            >
-              <SelectTrigger id="cm-customer">
-                <SelectValue placeholder="Choose a customer…" />
-              </SelectTrigger>
-              <SelectContent>
-                {eligible.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.firstName} {c.lastName} · {c.number}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {customers.data && eligible.length === 0 && (
-              <p className="text-[11px] text-warning">
-                No eligible customers — everyone on file is already the borrower
-                or a co-maker on this loan.
-              </p>
-            )}
+            <Label>Registered customer</Label>
+            {/*
+              A typeahead, not a dropdown. A list you scroll works for
+              ten customers and collapses at a hundred — and a lender's
+              customer list only goes one way. CustomerPicker searches
+              name, email, government ID and reference number.
+            */}
+            <CustomerPicker
+              value={customerId}
+              onChange={setCustomerId}
+              exclude={[borrowerId, ...existingCustomerIds]}
+              placeholder="Search by name, ID, or reference…"
+            />
             <p className="text-[11px] text-fg-subtle">
               Their name, number and ID come from that record. A co-maker is
               jointly liable, so they have to be someone already on file.

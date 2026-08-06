@@ -43,6 +43,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
+import { CustomerPicker } from "../../../components/CustomerPicker";
+
 import { DeclarationsForm } from "../../../components/DeclarationsForm";
 import { FileUpload } from "../../../components/FileUpload";
 import { AffordabilityGuardrails } from "../components/AffordabilityGuardrails";
@@ -914,33 +916,37 @@ function Step3CollateralCoMakers({
                     anyway. Better to not offer it than to explain it.
                   */}
                   <Field label="Co-maker (registered customer)">
-                    <Select
-                      value={cm.customerId || undefined}
-                      onValueChange={(v) => {
+                    {/*
+                      Typeahead, same component the borrower picker at
+                      the top of this wizard uses. A scrollable list of
+                      every customer stops working the moment there are
+                      more than a screenful.
+
+                      Excludes the borrower and anyone already added on
+                      this application — offering a choice the API will
+                      refuse is worse than not offering it.
+                    */}
+                    <CustomerPicker
+                      value={cm.customerId}
+                      onChange={(id) => {
                         const picked = (customers ?? []).find(
-                          (c) => c.id === v,
+                          (c) => c.id === id,
                         );
                         patchCoMaker(cm._key, {
-                          customerId: v,
+                          customerId: id,
                           _name: picked
                             ? `${picked.firstName} ${picked.lastName}`.trim()
                             : undefined,
                         });
                       }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Search customers…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(customers ?? [])
-                          .filter((c) => c.id !== borrowerId)
-                          .map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.firstName} {c.lastName} · {c.number}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                      exclude={[
+                        borrowerId,
+                        ...form.coMakers
+                          .filter((o) => o._key !== cm._key && o.customerId)
+                          .map((o) => o.customerId),
+                      ]}
+                      placeholder="Search by name, ID, or reference…"
+                    />
                   </Field>
                   <Field label="Role">
                     <Select
