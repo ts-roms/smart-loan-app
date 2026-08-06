@@ -43,7 +43,7 @@
   :root {
     color-scheme: light;
 
-    /* Surfaces — white cards on a cool grey plate.
+    /* Surfaces — white cards on a lavender-grey plate.
      *
      * The plate used to sit at 97-98% lightness, which is within a
      * couple of percent of the white cards on top of it. Everything
@@ -51,8 +51,10 @@
      * doing all the work. Dropping the plate to 93% and cooling the
      * hue gives the cards something to sit ON. Cards stay pure white,
      * so text contrast is untouched. */
-    --background: 216 28% 93%;
-    --surface-1: 216 24% 96%;
+    /* #f3f3f9 — the Velzon page tone. Slightly violet rather than
+     * blue-grey, which is what keeps white cards from reading cold. */
+    --background: 240 33% 96%;
+    --surface-1: 240 30% 98%;
     --surface-2: 0 0% 100%;
     --surface-3: 0 0% 100%;
 
@@ -65,11 +67,18 @@
      * content should come forward: 89% rail < 93% plate < 100% card
      * gives three tiers you can actually tell apart.
      */
-    --sidebar: 216 25% 89%;
-    --sidebar-border: 216 18% 80%;
-    /* Nav hover/active tints. A white active pill reads clearly once
-     * the rail beneath it is no longer white. */
-    --sidebar-hover: 222 30% 20% / 0.07;
+    --sidebar: 226 36% 39%;
+    --sidebar-border: 226 33% 33%;
+    --sidebar-hover: 0 0% 100% / 0.09;
+    /* Foregrounds INSIDE the rail. Scoped onto `.bg-sidebar` below, so
+     * every `text-fg*` utility already in the markup flips to the light
+     * end without touching a single component. */
+    --sidebar-fg: 0 0% 100%;
+    /* Measured against the rail: 4.89:1 and 4.62:1. The subtle tone
+     * carries 10px uppercase section labels, so it needs to clear AA
+     * for small text, not merely look dim. */
+    --sidebar-fg-muted: 226 40% 84%;
+    --sidebar-fg-subtle: 226 30% 81%;
 
     /* Foreground tiers. Calibrated against surface-1 (the sidebar and
      * page plate) rather than pure white — subtle at 48% cleared AA on
@@ -87,9 +96,10 @@
      * affordance and has to look like one, where a card edge only has
      * to separate. At the old shared 88% an input on a white card was
      * a suggestion of a box. */
-    --border: 216 16% 84%;
-    --border-strong: 216 16% 72%;
-    --input: 216 17% 76%;
+    /* #e9ebec and a step down from it. */
+    --border: 200 8% 92%;
+    --border-strong: 205 10% 78%;
+    --input: 205 12% 80%;
     --ring: 199 89% 42%;
 
     /* Brand accent — same sky family, darkened for contrast on white.
@@ -98,8 +108,16 @@
      * lighter than text can. Walked down twice against measurements:
      * 42% was 3.66:1 as link text on white, 36% was 4.12:1 as pill text
      * on its own soft tint. 32% clears both. */
-    --primary: 199 92% 32%;
-    --primary-soft: 199 92% 32% / 0.1;
+    /* Velzon's teal accent (#0ab39c), walked down in lightness.
+     *
+     * The published value is 37% and fails AA in both the ways this
+     * token is used: as link text on white, and under white button
+     * labels. Measured in the browser rather than guessed — 30% still
+     * only reached 3.96:1. 27% measures 4.78:1, which clears AA with
+     * a little headroom, and is still recognisably the same teal. The
+     * theme's own demo carries this weakness; no reason to inherit it. */
+    --primary: 172 88% 27%;
+    --primary-soft: 172 88% 27% / 0.1;
     --primary-foreground: 0 0% 100%;
 
     /* Semantic statuses — darkened so they stay legible as TEXT on
@@ -118,13 +136,13 @@
     --info-soft: 217 75% 45% / 0.1;
 
     --hover: 222 24% 12% / 0.055;
-    --divider: 216 16% 89%;
+    --divider: 200 8% 93%;
 
     /* Charts. The plot area gets its own fill so a graph reads as a
      * panel rather than as ink floating on the card, and the grid is
      * lighter than a divider — it's a reading aid, not a boundary. */
-    --chart-plot: 216 30% 96%;
-    --chart-grid: 216 16% 88%;
+    --chart-plot: 240 30% 97%;
+    --chart-grid: 220 14% 90%;
 
     /* Body-gradient alphas + the elevation recipe. See `body` and
      * `.card-elevated` below — on white, depth comes from a soft grey
@@ -132,12 +150,12 @@
     --glow-a: 0.07;
     --glow-b: 0.05;
     --elev-highlight: 0 0% 100% / 0;
-    --elev-hairline: 216 16% 84% / 1;
+    --elev-hairline: 200 8% 92% / 1;
     /* Cool and a touch deeper. A grey shadow on a grey plate is what
      * makes white cards look lifted rather than pasted on. */
-    --elev-shadow: 216 34% 32% / 0.16;
+    --elev-shadow: 226 40% 28% / 0.14;
     --glass-bg: 222 24% 12% / 0.03;
-    --glass-border: 216 16% 84% / 1;
+    --glass-border: 200 8% 92% / 1;
 
     /* Legacy alias — keep so existing `bg-destructive` calls still work */
     --destructive: 0 68% 45%;
@@ -161,9 +179,14 @@
      * than below it — going darker than a 6% plate lands in mud. What
      * matters is that all three tiers are separable and the cards stay
      * brightest: plate 14 < rail 18 < card 29 in luminance. */
-    --sidebar: 225 24% 8%;
-    --sidebar-border: 217 16% 18%;
-    --sidebar-hover: 0 0% 100% / 0.07;
+    /* The navy rail is the product's signature, so it stays on dark
+     * too — just deepened so it doesn't glow against a 6% plate. */
+    --sidebar: 226 34% 17%;
+    --sidebar-border: 226 30% 24%;
+    --sidebar-hover: 0 0% 100% / 0.08;
+    --sidebar-fg: 0 0% 100%;
+    --sidebar-fg-muted: 226 30% 78%;
+    --sidebar-fg-subtle: 226 22% 65%;
 
     --foreground: 213 18% 92%;
     --foreground-muted: 215 14% 65%;
@@ -181,8 +204,9 @@
     --input: 217 16% 30%;
     --ring: 199 78% 60%;
 
-    --primary: 199 78% 60%;
-    --primary-soft: 199 78% 60% / 0.12;
+    /* Teal again, lifted for a dark ground. */
+    --primary: 172 65% 52%;
+    --primary-soft: 172 65% 52% / 0.14;
     --primary-foreground: 220 30% 10%;
 
     --success: 152 60% 52%;
@@ -284,8 +308,19 @@
   /* Nav rail. Solid, not translucent — a rail that lets the page
    * gradient through picks up whatever is behind it and stops being a
    * consistent tone. */
+  /*
+   * Redefining the foreground tokens on the rail itself means every
+   * `text-fg`, `text-fg-muted` and `text-fg-subtle` already in the nav
+   * markup resolves to the light end automatically — no per-element
+   * colour classes, and no risk of missing one.
+   */
   .bg-sidebar {
     background-color: hsl(var(--sidebar));
+    --foreground: var(--sidebar-fg);
+    --foreground-muted: var(--sidebar-fg-muted);
+    --foreground-subtle: var(--sidebar-fg-subtle);
+    --border: var(--sidebar-border);
+    --divider: var(--sidebar-border);
   }
   .border-sidebar {
     border-color: hsl(var(--sidebar-border));

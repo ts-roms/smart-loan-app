@@ -192,10 +192,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
                 cn(
                   "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
                   isActive
-                    ? // White pill on the darker rail, same as the staff
-                      // shell — bg-surface-3 was invisible when the rail
-                      // was itself a card surface.
-                      "bg-surface-2 text-fg shadow-sm"
+                    ? "bg-white/[0.12] text-fg"
                     : "text-fg-muted hover-sidebar hover:text-fg",
                 )
               }

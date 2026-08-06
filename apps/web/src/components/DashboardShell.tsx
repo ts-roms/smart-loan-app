@@ -387,9 +387,9 @@ function NavItemLink({ item, active }: { item: NavItem; active: boolean }) {
         "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
         "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity",
         active
-          ? // A white pill, which only reads now the rail beneath it
-            // isn't white. Carries the card shadow for the same reason.
-            "bg-surface-2 text-fg shadow-sm before:opacity-100"
+          ? // A white-alpha wash rather than a solid pill: the rail is
+            // dark now, and a white pill would invert the text with it.
+            "bg-white/[0.12] text-fg before:opacity-100"
           : "text-fg-muted hover-sidebar hover:text-fg",
       )}
     >
