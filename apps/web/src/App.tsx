@@ -10,6 +10,10 @@ import { useAuth } from "./providers/auth";
 // them would only add a flash of the suspense fallback. Register sits
 // next to Login for the same reason: it's the other front door.
 import { CompleteProfilePage, LoginPage, RegisterPage } from "./features/auth";
+// Eager, not lazy: these are what the app falls back to when something
+// has already gone wrong, and a fallback that needs a chunk to load is
+// no fallback on a flaky connection.
+import { NotFoundPage, ServerErrorPage } from "./features/errors";
 import { DashboardPage } from "./features/dashboard";
 
 /**
@@ -274,6 +278,13 @@ export function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+        {/*
+          Stays a redirect, unlike the two authenticated catch-alls
+          below. Out here we can't tell a typo from a real deep link
+          into the app — none of those routes are registered in this
+          branch — so a signed-out reader hitting /loans/123 must be
+          sent to sign in, not told the page doesn't exist. It does.
+        */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -311,7 +322,8 @@ export function App() {
             <Route path="/portal/profile" element={<PortalProfile />} />
             <Route path="/portal/loans/:id" element={<PortalLoanDetail />} />
             <Route path="/portal/kyc" element={<PortalKyc />} />
-            <Route path="*" element={<Navigate to="/portal" replace />} />
+            <Route path="/500" element={<ServerErrorPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
       </PortalShell>
@@ -391,7 +403,19 @@ export function App() {
             path="/compliance/annual-docs"
             element={<AnnualDocsDashboardPage />}
           />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/*
+            Reachable so the page can be linked to and looked at; the
+            error boundary in main.tsx is what actually fires when
+            something breaks.
+          */}
+          <Route path="/500" element={<ServerErrorPage />} />
+          {/*
+            A page, not a redirect. Bouncing an unknown path to the
+            dashboard meant a stale bookmark or a bad link looked like
+            the app losing the reader's place, and nobody ever reported
+            the broken link because nobody could tell there was one.
+          */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
     </DashboardShell>

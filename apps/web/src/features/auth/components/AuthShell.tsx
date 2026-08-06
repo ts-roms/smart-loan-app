@@ -70,6 +70,14 @@ function BrandPanel() {
       aria-hidden="true"
       className="auth-brand-panel relative hidden flex-col justify-between overflow-hidden p-9 text-white lg:flex"
     >
+      {/*
+        Cover pattern over the gradient. Every child below already
+        carries `relative`, which is what keeps them above it — the
+        pattern is a plain absolute sibling with no z-index of its own,
+        so it paints under anything positioned.
+      */}
+      <div className="pointer-events-none absolute inset-0 bg-overlay-pattern" />
+
       <div className="relative flex items-center gap-2.5">
         <Wallet className="h-7 w-7" />
         <span className="text-xl font-semibold tracking-tight">SmartLoan</span>
