@@ -295,27 +295,35 @@ function SummaryStats({
         sub={`CBU ${formatMoney(summary.capitalBuildUp)}`}
       />
       {/*
-        "Paid in", not "depositor". This figure is every peso the
-        customer sent the coop minus every peso they received, loans
-        and savings together — so a borrower who repaid ₱56,735.76 on a
-        ₱50,000 loan shows +₱6,735.76, which is the INTEREST they were
-        charged. Calling that a deposit told the member the coop was
-        holding money for them that it does not hold and does not owe.
+        Two cards where there was one, and they must never be added.
 
-        Savings and CBU have their own cards precisely because they are
-        the balances the coop actually holds; this one is a cash-flow
-        summary and now says so.
+        The figure they replace summed repayments, savings and every
+        contribution, then subtracted disbursements — so a borrower who
+        repaid ₱56,735.76 on a ₱50,000 loan came out +₱6,735.76 and was
+        labelled a net depositor. That amount is the INTEREST he was
+        charged; the coop holds none of it.
+
+        A member with ₱10,000 saved and ₱10,000 borrowed is not square:
+        they owe and are owed, and either can be called without the
+        other. One number said zero.
       */}
       <Stat
-        label="Net position"
-        value={formatMoney(Math.abs(summary.netCustomerPosition))}
-        accent={summary.netCustomerPosition >= 0 ? "success" : "warning"}
+        label="Owes the coop"
+        value={formatMoney(summary.amountOwed)}
+        accent={summary.amountOwed > 0 ? "warning" : "success"}
         icon={Coins}
         sub={
-          summary.netCustomerPosition >= 0
-            ? "Paid in more than received"
-            : "Received more than paid in"
+          summary.amountOwed > 0
+            ? "Live loans, interest included"
+            : "Nothing outstanding"
         }
+      />
+      <Stat
+        label="Coop holds"
+        value={formatMoney(summary.amountHeld)}
+        accent="info"
+        icon={PiggyBank}
+        sub="Savings + capital build-up"
       />
     </div>
   );
@@ -472,18 +480,17 @@ function LedgerTable({
             <th className="py-2 px-2 font-medium text-right">In</th>
             <th className="py-2 px-2 font-medium text-right">Out</th>
             {/*
-              "Net paid in", not "Balance". The running total goes UP on
-              an Out row and DOWN on an In row, which under a bare
-              "Balance" reads as an arithmetic error — the eye follows
-              ₱50,000 in the In column to a balance of −₱50,000 and
-              concludes the signs are broken.
+              Two running totals, not one. A single column mixing the
+              two made ₱50,000 in the In column produce a balance of
+              −₱50,000, which reads as broken signs; and it let interest
+              paid on a loan accumulate as though it were savings.
 
-              They aren't: this accumulates what the customer has paid
-              in minus what they've received, so a fresh loan is
-              correctly negative. Naming the column after that makes the
-              direction obvious instead of alarming.
+              Owed climbs by a loan's WHOLE obligation at disbursement,
+              interest included, and falls with every payment. Held
+              tracks only what comes back to the member.
             */}
-            <th className="py-2 px-2 font-medium text-right">Net paid in</th>
+            <th className="py-2 px-2 font-medium text-right">Owed</th>
+            <th className="py-2 px-2 font-medium text-right">Held</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-default">
@@ -546,17 +553,18 @@ function LedgerTable({
                     <span className="text-fg-subtle">—</span>
                   )}
                 </td>
-                {/* Colour by sign, so a glance at any row says which
-                    way the customer stood at that point: green once
-                    they'd paid in more than they'd received, amber
-                    while they were still ahead on the money. */}
+                {/* Amber while anything is owed, green once it's clear —
+                    the debt is the thing an officer scans for. */}
                 <td
                   className={
                     "py-2 px-2 text-right tabular text-xs " +
-                    (e.runningBalance >= 0 ? "text-success" : "text-warning")
+                    (e.owedAfter > 0 ? "text-warning" : "text-fg-subtle")
                   }
                 >
-                  {formatMoney(e.runningBalance)}
+                  {formatMoney(e.owedAfter)}
+                </td>
+                <td className="py-2 px-2 text-right tabular text-xs text-info">
+                  {formatMoney(e.heldAfter)}
                 </td>
               </tr>
             );

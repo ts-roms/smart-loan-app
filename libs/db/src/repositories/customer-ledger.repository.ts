@@ -24,7 +24,10 @@
  * crossed-out totals.
  */
 
+import { ledgerPositions } from "@loan/loans";
 import type { Prisma, PrismaClient } from "@prisma/client";
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export type LedgerEntryKind =
   | "LOAN_DISBURSEMENT"
@@ -60,7 +63,24 @@ export interface LedgerEntry {
    * Accumulates oldest → newest; the returned `entries` array is in
    * newest-first order so the latest row carries the current balance.
    */
-  runningBalance: number;
+  /**
+   * What the member owed after this entry — principal plus scheduled
+   * interest on every live loan, less everything repaid or waived.
+   */
+  owedAfter: number;
+  /**
+   * What the coop held for the member after this entry — savings plus
+   * capital build-up. Deliberately NOT netted against `owedAfter`: the
+   * two are different claims, and adding them told a borrower his
+   * interest payments were a deposit.
+   */
+  heldAfter: number;
+  /**
+   * The refundable slice of a CONTRIBUTION row — the capital build-up,
+   * as against the pooled mortuary and emergency funds bundled in the
+   * same entry. Only meaningful on CONTRIBUTION.
+   */
+  refundableAmount?: number;
 }
 
 export interface LedgerSummary {
@@ -75,8 +95,21 @@ export interface LedgerSummary {
   capitalBuildUp: number;
   mortuaryFund: number;
   emergencyFund: number;
-  /** Net of customer-to-coop minus coop-to-customer for the period. */
-  netCustomerPosition: number;
+  /**
+   * What the member owes the coop right now — principal plus scheduled
+   * interest on live loans, less repayments and waivers.
+   */
+  amountOwed: number;
+  /**
+   * What the coop holds for the member — savings plus capital
+   * build-up. Excludes the mortuary and emergency funds, which are
+   * pooled and spent on claims rather than returned.
+   *
+   * NEVER add this to `amountOwed`. Their sum replaced a figure that
+   * called a borrower's interest a deposit; a member with ₱10,000 saved
+   * and ₱10,000 borrowed owes and is owed, and neither cancels.
+   */
+  amountHeld: number;
 }
 
 export interface CustomerLedger {
@@ -155,6 +188,10 @@ export class CustomerLedgerRepository {
         principal: true,
         status: true,
         disbursedAt: true,
+        // Needed for what the member actually OWES. The disbursement's
+        // cash is the principal; the debt is principal plus every
+        // scheduled interest peso, and only the schedule knows that.
+        schedule: { select: { totalDue: true } },
         payments: {
           select: {
             id: true,
@@ -175,6 +212,7 @@ export class CustomerLedgerRepository {
       },
     });
 
+    const loanObligations: Record<string, number> = {};
     let totalDisbursed = 0;
     let totalRepaid = 0;
     let totalPenaltyWaived = 0;
@@ -182,7 +220,7 @@ export class CustomerLedgerRepository {
     // Entries built without `runningBalance`; we attach it in a second
     // pass once the full combined timeline is sorted ascending. Casting
     // to LedgerEntry is then sound because the field is filled in.
-    type Partial_ = Omit<LedgerEntry, "runningBalance">;
+    type Partial_ = Omit<LedgerEntry, "owedAfter" | "heldAfter">;
     const loanEntries: Partial_[] = [];
 
     for (const loan of loans) {
@@ -201,6 +239,17 @@ export class CustomerLedgerRepository {
       ) {
         outstandingPrincipal += Math.max(principalNum - paidSum, 0);
       }
+
+      /*
+       * What this loan obliges the member to repay, in total. Scheduled
+       * amounts include interest; a loan with no schedule yet (never
+       * disbursed) falls back to its principal so the map always has an
+       * answer.
+       */
+      const obligation = loan.schedule.length
+        ? loan.schedule.reduce((sum, r) => sum + Number(r.totalDue), 0)
+        : principalNum;
+      loanObligations[loan.number] = obligation;
 
       if (loan.disbursedAt) {
         totalDisbursed += principalNum;
@@ -288,6 +337,9 @@ export class CustomerLedgerRepository {
           if (mort > 0) parts.push(`Mortuary ₱${mort.toLocaleString()}`);
           if (emer > 0) parts.push(`Emergency ₱${emer.toLocaleString()}`);
           coopEntries.push({
+            // Only the CBU comes back to the member; mortuary and
+            // emergency are pooled and spent on claims.
+            refundableAmount: cbu,
             date: c.contributedAt.toISOString(),
             kind: "CONTRIBUTION",
             description: `Contribution — ${parts.join(" · ") || "no allocation"}`,
@@ -340,15 +392,30 @@ export class CustomerLedgerRepository {
     const combined = [...loanEntries, ...coopEntries].sort(
       (a, b) => +new Date(a.date) - +new Date(b.date),
     );
-    let balance = 0;
-    const withBalance: LedgerEntry[] = combined.map((e) => {
-      // Same sign convention as the summary's netCustomerPosition:
-      // OUTFLOW (customer paid in) increases the balance, INFLOW
-      // (customer received money/value) decreases it.
-      const delta = e.direction === "OUTFLOW" ? +e.amount : -e.amount;
-      balance += delta;
-      return { ...e, runningBalance: balance };
-    });
+    /*
+     * Two positions, never one. See @loan/loans/ledger-position for why
+     * — briefly, a single "net position" made a borrower's interest
+     * payments look like a deposit, because it added a debt he was
+     * settling to savings he did not have.
+     *
+     * The obligation map is keyed by loan number and holds the FULL
+     * scheduled amount, so a disbursed loan starts owing principal plus
+     * interest rather than just the cash that changed hands.
+     */
+    const positions = ledgerPositions(
+      combined.map((e) => ({
+        kind: e.kind,
+        amount: e.amount,
+        loanNumber: e.loanNumber,
+        refundableAmount: e.refundableAmount,
+      })),
+      loanObligations,
+    );
+    const withBalance: LedgerEntry[] = combined.map((e, i) => ({
+      ...e,
+      owedAfter: positions[i]!.owedAfter,
+      heldAfter: positions[i]!.heldAfter,
+    }));
     // Display order: newest first.
     const entries = withBalance.reverse();
 
@@ -364,16 +431,27 @@ export class CustomerLedgerRepository {
       capitalBuildUp,
       mortuaryFund,
       emergencyFund,
-      // Net "what the customer has given the coop, minus what the coop
-      // has given them" — positive means the customer is a net depositor.
-      netCustomerPosition:
-        totalRepaid +
-        (savingsDeposits - savingsWithdrawals) +
-        capitalBuildUp +
-        mortuaryFund +
-        emergencyFund -
-        totalDisbursed -
-        totalPenaltyWaived,
+      /*
+       * `netCustomerPosition` used to live here: repayments plus
+       * savings plus every contribution, minus disbursements. It made a
+       * borrower who repaid ₱56,735.76 on a ₱50,000 loan look like a
+       * ₱6,735.76 depositor, because the interest he was charged landed
+       * on the same side of the sum as money the coop was holding.
+       *
+       * Replaced by two figures that answer two different questions and
+       * must never be added together. A member who has saved ₱10,000
+       * and borrowed ₱10,000 is not square with the coop: they owe and
+       * are owed, and either can be called without the other.
+       */
+      amountOwed: round2(
+        Math.max(
+          0,
+          positions.length ? positions[positions.length - 1]!.owedAfter : 0,
+        ),
+      ),
+      amountHeld: round2(
+        Math.max(0, savingsDeposits - savingsWithdrawals + capitalBuildUp),
+      ),
     };
 
     return {

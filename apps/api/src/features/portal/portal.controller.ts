@@ -290,7 +290,8 @@ export class PortalController {
         "Loan",
         "Direction",
         "Amount",
-        "Balance",
+        "Owed",
+        "Held",
         "Reference",
         "Notes",
       ];
@@ -301,7 +302,8 @@ export class PortalController {
         e.loanNumber ?? "",
         e.direction,
         e.amount.toFixed(2),
-        e.runningBalance.toFixed(2),
+        e.owedAfter.toFixed(2),
+        e.heldAfter.toFixed(2),
         e.ref ?? "",
         e.notes ?? "",
       ]);

@@ -236,14 +236,33 @@ function SummaryStats({ summary }: { summary: CustomerLedgerSummary }) {
         icon={HandCoins}
         sub={`CBU ${formatMoney(summary.capitalBuildUp)}`}
       />
+      {/*
+        This is the borrower's OWN statement, which is what made the old
+        "Net depositor ₱6,735.76" worst here: it told a member the coop
+        was holding money for them that it does not hold and does not
+        owe — the figure was the interest they had just finished paying.
+
+        Two positions now, in the second person, and never summed. What
+        you owe and what we hold are different claims; a member with
+        ₱10,000 saved and ₱10,000 borrowed is not square with the coop.
+      */}
       <Stat
-        label="Net position"
-        value={formatMoney(Math.abs(summary.netCustomerPosition))}
-        accent={summary.netCustomerPosition >= 0 ? "success" : "warning"}
+        label="You owe"
+        value={formatMoney(summary.amountOwed)}
+        accent={summary.amountOwed > 0 ? "warning" : "success"}
         icon={Coins}
         sub={
-          summary.netCustomerPosition >= 0 ? "Net depositor" : "Net borrower"
+          summary.amountOwed > 0
+            ? "On your live loans, interest included"
+            : "You're all paid up"
         }
+      />
+      <Stat
+        label="We hold for you"
+        value={formatMoney(summary.amountHeld)}
+        accent="info"
+        icon={PiggyBank}
+        sub="Your savings + capital build-up"
       />
     </div>
   );
@@ -351,7 +370,11 @@ function LedgerTable({ entries }: { entries: CustomerLedgerEntry[] }) {
             <th className="py-2 px-2 font-medium">Description</th>
             <th className="py-2 px-2 font-medium text-right">In</th>
             <th className="py-2 px-2 font-medium text-right">Out</th>
-            <th className="py-2 px-2 font-medium text-right">Balance</th>
+            {/* Two totals, never one. A single "Balance" mixing them
+                showed ₱50,000 in the In column producing −₱50,000, and
+                let interest accumulate as though it were savings. */}
+            <th className="py-2 px-2 font-medium text-right">You owe</th>
+            <th className="py-2 px-2 font-medium text-right">We hold</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-default">
@@ -408,10 +431,13 @@ function LedgerTable({ entries }: { entries: CustomerLedgerEntry[] }) {
                 <td
                   className={
                     "py-2 px-2 text-right tabular text-xs " +
-                    (e.runningBalance >= 0 ? "text-success" : "text-warning")
+                    (e.owedAfter > 0 ? "text-warning" : "text-fg-subtle")
                   }
                 >
-                  {formatMoney(e.runningBalance)}
+                  {formatMoney(e.owedAfter)}
+                </td>
+                <td className="py-2 px-2 text-right tabular text-xs text-info">
+                  {formatMoney(e.heldAfter)}
                 </td>
               </tr>
             );

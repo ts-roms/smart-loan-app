@@ -2187,11 +2187,20 @@ export interface CustomerLedgerEntry {
   ref?: string | null;
   notes?: string | null;
   /**
-   * Net customer position AFTER this entry. Positive → net depositor;
-   * negative → net borrower. Same scale as `summary.netCustomerPosition`,
-   * which equals the runningBalance of the newest entry.
+   * What the member owed after this entry — principal plus scheduled
+   * interest on live loans, less repayments and waivers.
    */
-  runningBalance: number;
+  owedAfter: number;
+  /**
+   * What the coop held for the member after this entry — savings plus
+   * capital build-up.
+   *
+   * Deliberately separate from `owedAfter` and never to be added to it.
+   * The single figure these replaced summed a debt being settled with
+   * savings the member did not have, so a borrower's interest payments
+   * came out looking like a deposit.
+   */
+  heldAfter: number;
 }
 
 export interface CustomerLedgerSummary {
@@ -2206,7 +2215,14 @@ export interface CustomerLedgerSummary {
   capitalBuildUp: number;
   mortuaryFund: number;
   emergencyFund: number;
-  netCustomerPosition: number;
+  /** Owed to the coop: live-loan obligation less repayments and waivers. */
+  amountOwed: number;
+  /**
+   * Held by the coop for the member: savings + capital build-up.
+   * Excludes mortuary and emergency, which are pooled and spent on
+   * claims rather than returned. Never add this to `amountOwed`.
+   */
+  amountHeld: number;
 }
 
 export interface CustomerLedger {

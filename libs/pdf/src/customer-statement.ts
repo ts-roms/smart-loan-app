@@ -41,7 +41,8 @@ export interface CustomerStatementEntry {
   amount: number;
   direction: CustomerStatementDirection;
   loanNumber?: string | null;
-  runningBalance: number;
+  owedAfter: number;
+  heldAfter: number;
 }
 
 export interface CustomerStatementInput {
@@ -70,7 +71,8 @@ export interface CustomerStatementInput {
     capitalBuildUp: number;
     mortuaryFund: number;
     emergencyFund: number;
-    netCustomerPosition: number;
+    amountOwed: number;
+    amountHeld: number;
   };
 
   entries: CustomerStatementEntry[];
@@ -152,14 +154,14 @@ export function renderCustomerStatement(
         "Contributions total",
         moneyPHP(input.summary.contributionsTotal),
       );
-      kv(
-        doc,
-        "Net position",
-        moneyPHP(input.summary.netCustomerPosition) +
-          (input.summary.netCustomerPosition >= 0
-            ? " (net depositor)"
-            : " (net borrower)"),
-      );
+      /*
+       * Two lines, never one. The single "net position" they replace
+       * added a debt the member was settling to savings they did not
+       * have, so a borrower's interest came out looking like a deposit
+       * on their own statement.
+       */
+      kv(doc, "You owe the coop", moneyPHP(input.summary.amountOwed));
+      kv(doc, "Coop holds for you", moneyPHP(input.summary.amountHeld));
 
       // ── Subtotal split for at-a-glance reading ──────────────────
       section(doc, "Cooperative balances");
@@ -184,19 +186,40 @@ export function renderCustomerStatement(
             entryDescription(e),
             e.direction === "INFLOW" ? moneyPHP(e.amount) : "",
             e.direction === "OUTFLOW" ? moneyPHP(e.amount) : "",
-            moneyPHP(e.runningBalance),
+            moneyPHP(e.owedAfter),
+            moneyPHP(e.heldAfter),
           ]),
           {
-            header: ["Date", "Kind", "Description", "In", "Out", "Balance"],
-            columnWidths: [
-              CONTENT_WIDTH * 0.12,
-              CONTENT_WIDTH * 0.14,
-              CONTENT_WIDTH * 0.36,
-              CONTENT_WIDTH * 0.12,
-              CONTENT_WIDTH * 0.12,
-              CONTENT_WIDTH * 0.14,
+            header: [
+              "Date",
+              "Kind",
+              "Description",
+              "In",
+              "Out",
+              "Owed",
+              "Held",
             ],
-            alignments: ["left", "left", "left", "right", "right", "right"],
+            // Seven columns now, and the fractions have to still sum
+            // to 1 — Description gives up the room the new Held column
+            // needs, since it is the one that can wrap.
+            columnWidths: [
+              CONTENT_WIDTH * 0.11,
+              CONTENT_WIDTH * 0.13,
+              CONTENT_WIDTH * 0.28,
+              CONTENT_WIDTH * 0.12,
+              CONTENT_WIDTH * 0.12,
+              CONTENT_WIDTH * 0.12,
+              CONTENT_WIDTH * 0.12,
+            ],
+            alignments: [
+              "left",
+              "left",
+              "left",
+              "right",
+              "right",
+              "right",
+              "right",
+            ],
           },
         );
       }

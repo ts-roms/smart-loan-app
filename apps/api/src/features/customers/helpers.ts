@@ -82,9 +82,9 @@ export function ledgerToCsv(ledger: CustomerLedger): string {
   lines.push(
     `#   Contributions total:    ${ledger.summary.contributionsTotal}`,
   );
-  lines.push(
-    `#   Net customer position:  ${ledger.summary.netCustomerPosition}`,
-  );
+  // Two lines, deliberately not summed. See @loan/loans/ledger-position.
+  lines.push(`#   Owed to the coop:       ${ledger.summary.amountOwed}`);
+  lines.push(`#   Held for the member:    ${ledger.summary.amountHeld}`);
   lines.push(`#`);
   lines.push(
     [
@@ -94,7 +94,8 @@ export function ledgerToCsv(ledger: CustomerLedger): string {
       "Loan",
       "Direction",
       "Amount",
-      "Balance",
+      "Owed",
+      "Held",
       "Reference",
       "Notes",
     ]
@@ -110,7 +111,8 @@ export function ledgerToCsv(ledger: CustomerLedger): string {
         e.loanNumber ?? "",
         e.direction,
         e.amount.toFixed(2),
-        e.runningBalance.toFixed(2),
+        e.owedAfter.toFixed(2),
+        e.heldAfter.toFixed(2),
         e.ref ?? "",
         e.notes ?? "",
       ]
