@@ -82,6 +82,8 @@ export const loanListQuerySchema = z.object({
     ])
     .optional(),
   productCode: z.string().max(40).optional(),
+  /** Scope to one borrower — the customer profile's loan history. */
+  customerId: z.string().uuid().optional(),
   page: z.coerce.number().optional(),
   pageSize: z.coerce.number().optional(),
 });

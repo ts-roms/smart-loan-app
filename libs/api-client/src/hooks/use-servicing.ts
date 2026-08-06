@@ -188,3 +188,70 @@ export function useSignAsBorrower(scope: "officer" | "portal" = "officer") {
     },
   });
 }
+
+// ─── Renewal ────────────────────────────────────────────────────────
+
+export interface RenewalEligibility {
+  loanNumber: string;
+  eligible: boolean;
+  /** Present when eligible — the balance the new loan settles. */
+  payoffAmount?: number;
+  /** Share of PRINCIPAL repaid, 0–1. */
+  paidFraction?: number;
+  reason?:
+    | "NotRenewableStatus"
+    | "AlreadyRenewed"
+    | "InArrears"
+    | "InsufficientlyPaid";
+  message?: string;
+  requiredFraction?: number;
+  overdueInstallments?: number;
+}
+
+/**
+ * Can this loan be renewed, and what would settling it cost?
+ *
+ * Read separately from the renew mutation so the officer sees the
+ * payoff and the net proceeds BEFORE committing — "how much do I
+ * actually get" is the borrower's first question, and answering it
+ * after the application exists is too late to be useful.
+ */
+export function useRenewalEligibility(loanIdOrNumber: string | null) {
+  return useQuery({
+    queryKey: ["renewal-eligibility", loanIdOrNumber ?? ""],
+    queryFn: () =>
+      getApiClient().get<RenewalEligibility>(
+        `/loans/${loanIdOrNumber}/renewal-eligibility`,
+      ),
+    enabled: !!loanIdOrNumber,
+    // Arrears can appear between page loads; this drives a button that
+    // must not offer a renewal the API will refuse.
+    staleTime: 15_000,
+  });
+}
+
+export function useRenewLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      loanIdOrNumber: string;
+      productCode: string;
+      principal: number;
+      termMonths: number;
+      annualInterestRate: number;
+      purpose?: string;
+    }) => {
+      const { loanIdOrNumber, ...body } = input;
+      return getApiClient().post<{
+        loan: LoanApplication;
+        payoffAmount: number;
+        netProceeds: number;
+      }>(`/loans/${loanIdOrNumber}/renew`, body);
+    },
+    onSuccess: () => {
+      // The original's status and the customer's loan list both move.
+      void qc.invalidateQueries({ queryKey: ["loans"] });
+      void qc.invalidateQueries({ queryKey: ["renewal-eligibility"] });
+    },
+  });
+}

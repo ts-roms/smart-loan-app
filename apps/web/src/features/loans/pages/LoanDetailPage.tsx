@@ -58,9 +58,14 @@ import { PenaltyPanel } from "../components/PenaltyPanel";
 import { AnnualDocsPanel } from "../components/AnnualDocsPanel";
 import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
 import { CoMakersPanel } from "../components/CoMakersPanel";
+import { RenewLoanDialog } from "../components/RenewLoanDialog";
 import { FaceMatchPanel } from "../components/FaceMatchPanel";
 import { LeasePanel } from "../components/LeasePanel";
-import { useAnswerDeclarations, useLoanApprovals } from "@loan/api-client";
+import {
+  useAnswerDeclarations,
+  useLoanApprovals,
+  useRenewalEligibility,
+} from "@loan/api-client";
 
 import { usePermission } from "../../../hooks/use-permission";
 import { DeclarationsPanel } from "../../../components/DeclarationsPanel";
@@ -127,6 +132,10 @@ export function LoanDetailPage() {
    * whether approval is even possible yet.
    */
   const approvals = useLoanApprovals(id);
+  // Drives the Renew button AND the reason it's absent, so it is
+  // fetched for every loan rather than only on demand.
+  const renewal = useRenewalEligibility(id);
+  const [renewing, setRenewing] = useState(false);
   const disburse = useDisburseLoan();
   const recordPayment = useRecordPayment();
   const toast = useToast();
@@ -434,14 +443,47 @@ export function LoanDetailPage() {
         )}
 
         {["ACTIVE", "DISBURSED"].includes(l.status) && canDecide && (
-          <div className="border-t border-default pt-3 flex flex-wrap gap-2">
-            <CloseEarlyButton loanId={l.id} />
-            <RestructureButton
-              loanId={l.id}
-              currentProductCode={l.productCode}
-            />
-            <WriteOffButton loanId={l.id} />
+          <div className="border-t border-default pt-3 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {/*
+                Renew sits with the servicing actions, next to
+                Restructure, because that is the pair an officer is
+                choosing between — one for a borrower doing well, one
+                for a borrower struggling.
+              */}
+              {renewal.data?.eligible && (
+                <Button variant="outline" onClick={() => setRenewing(true)}>
+                  <RefreshCw className="h-3 w-3" />
+                  Renew
+                </Button>
+              )}
+              <CloseEarlyButton loanId={l.id} />
+              <RestructureButton
+                loanId={l.id}
+                currentProductCode={l.productCode}
+              />
+              <WriteOffButton loanId={l.id} />
+            </div>
+            {/*
+              Why NOT, when it isn't offered. "Renew" quietly missing is
+              indistinguishable from the feature not existing, and the
+              officer is usually standing in front of the borrower who
+              just asked for it — they need the sentence, not a gap.
+            */}
+            {renewal.data && !renewal.data.eligible && (
+              <p className="text-[11px] text-fg-subtle">
+                Not renewable — {renewal.data.message}
+              </p>
+            )}
           </div>
+        )}
+        {renewing && renewal.data?.eligible && (
+          <RenewLoanDialog
+            loanNumber={l.number}
+            eligibility={renewal.data}
+            defaultProductCode={l.productCode}
+            onClose={() => setRenewing(false)}
+          />
         )}
 
         {canPay && (

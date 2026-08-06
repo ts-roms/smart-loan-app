@@ -601,6 +601,8 @@ export interface PageQuery {
  * 200 most recent, as it always has.
  */
 export interface LoanListQuery extends PageQuery {
+  /** Scope to one borrower — powers the profile's loan history. */
+  customerId?: string;
   /**
    * Free text over the loan number and the borrower's name / reference.
    * Tokenized server-side: "cruz salary" and "juan LN-2026" both work.

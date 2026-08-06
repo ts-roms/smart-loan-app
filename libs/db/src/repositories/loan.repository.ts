@@ -54,6 +54,14 @@ export interface LoanListFilter extends PageParams {
   q?: string;
   status?: LoanStatus;
   productCode?: string;
+  /**
+   * Scope to one borrower. Drives the loan history on a customer's
+   * profile — "what has this person borrowed before" is the question an
+   * officer asks before lending again, and until now the only way to
+   * answer it was to search the global list by their name and hope the
+   * spelling matched.
+   */
+  customerId?: string;
 }
 
 /** Slim borrower projection carried on each list row. */
@@ -332,6 +340,7 @@ export class LoanRepository {
     const where = {
       status: filter.status,
       productCode: filter.productCode,
+      customerId: filter.customerId,
       ...(tokenizedWhere(filter.q, (token) => [
         { number: contains(token) },
         { customer: { number: contains(token) } },
