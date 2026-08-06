@@ -8,11 +8,6 @@ import {
   CardHeader,
   CardTitle,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   SkeletonCard,
   useToast,
 } from "@loan/ui";
@@ -55,27 +50,61 @@ export function PortalKyc() {
   const kyc = usePortalKyc();
   const submit = usePortalSubmitKyc();
   const toast = useToast();
-  const [documentType, setDocumentType] = useState<KycDocumentType>("ID_FRONT");
-  const [documentUrl, setDocumentUrl] = useState("");
+  /**
+   * One staged file per document type. Borrowers photograph their ID,
+   * payslip and utility bill in one sitting; submitting them one at a
+   * time meant three round trips through the same form.
+   */
+  const [staged, setStaged] = useState<
+    Partial<Record<KycDocumentType, string>>
+  >({});
   const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const stagedTypes = DOC_OPTIONS.filter((t) => staged[t]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!documentUrl) {
+    if (stagedTypes.length === 0) {
       toast.error("Attach a photo or file first");
       return;
     }
-    try {
-      await submit.mutateAsync({
-        documentType,
-        documentUrl,
-        notes: notes || undefined,
-      });
-      toast.success("Document submitted for review");
-      setDocumentUrl("");
+    setBusy(true);
+    // Sequential: the API takes one document per call, and a failure
+    // has to name which one so the borrower knows what to retry.
+    const failed: string[] = [];
+    let sent = 0;
+    for (const documentType of stagedTypes) {
+      try {
+        await submit.mutateAsync({
+          documentType,
+          documentUrl: staged[documentType]!,
+          notes: notes || undefined,
+        });
+        sent += 1;
+        // Cleared as they land, so a mid-way failure leaves exactly
+        // the unsent ones attached.
+        setStaged((prev) => {
+          const next = { ...prev };
+          delete next[documentType];
+          return next;
+        });
+      } catch {
+        failed.push(DOC_TYPE_LABELS[documentType] ?? documentType);
+      }
+    }
+    setBusy(false);
+    if (sent > 0 && failed.length === 0) {
+      toast.success(
+        sent === 1
+          ? "Document submitted for review"
+          : `${sent} documents submitted for review`,
+      );
       setNotes("");
-    } catch (err) {
-      toast.error((err as Error).message ?? "Could not submit");
+    } else if (sent > 0) {
+      toast.error(`${sent} sent · couldn't send ${failed.join(", ")}`);
+    } else {
+      toast.error(`Couldn't send ${failed.join(", ")}`);
     }
   };
 
@@ -155,44 +184,47 @@ export function PortalKyc() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileUp className="h-4 w-4" />
-            Submit a new document
+            Submit documents
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-xs text-fg-muted">Document type</label>
-              <Select
-                value={documentType}
-                onValueChange={(v) => setDocumentType(v as KycDocumentType)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DOC_OPTIONS.map((d) => (
-                    <SelectItem key={d} value={d}>
+            <p className="text-xs text-fg-muted">
+              Attach whichever you have — they&apos;re sent together.
+            </p>
+            <ul className="space-y-2">
+              {DOC_OPTIONS.map((d) => (
+                <li
+                  key={d}
+                  className="flex items-center gap-2 rounded border border-default bg-surface-2 px-2 py-1.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs truncate">
                       {DOC_TYPE_LABELS[d] ?? d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-fg-muted">
-                {CAMERA_MODE[documentType]
-                  ? "Photograph the document or upload a file"
-                  : "Upload a file"}
-              </label>
-              <FileUpload
-                subdir="kyc"
-                value={documentUrl || null}
-                onUploaded={setDocumentUrl}
-                onClear={() => setDocumentUrl("")}
-                capture={CAMERA_MODE[documentType]}
-                label="Choose a file"
-              />
-            </div>
+                    </div>
+                    <div className="text-[10px] text-fg-subtle">
+                      {CAMERA_MODE[d] ? "Photo or file" : "PDF or image"}
+                    </div>
+                  </div>
+                  <FileUpload
+                    subdir="kyc"
+                    value={staged[d] ?? null}
+                    onUploaded={(url) =>
+                      setStaged((prev) => ({ ...prev, [d]: url }))
+                    }
+                    onClear={() =>
+                      setStaged((prev) => {
+                        const next = { ...prev };
+                        delete next[d];
+                        return next;
+                      })
+                    }
+                    capture={CAMERA_MODE[d]}
+                    label="Choose a file"
+                  />
+                </li>
+              ))}
+            </ul>
             <div className="space-y-1">
               <label className="text-xs text-fg-muted">Notes (optional)</label>
               <Input
@@ -201,8 +233,12 @@ export function PortalKyc() {
                 placeholder="Anything an officer should know"
               />
             </div>
-            <Button type="submit" disabled={submit.isPending || !documentUrl}>
-              {submit.isPending ? "Submitting…" : "Submit for review"}
+            <Button type="submit" disabled={busy || stagedTypes.length === 0}>
+              {busy
+                ? "Submitting…"
+                : stagedTypes.length <= 1
+                  ? "Submit for review"
+                  : `Submit ${stagedTypes.length} for review`}
             </Button>
           </form>
         </CardContent>
