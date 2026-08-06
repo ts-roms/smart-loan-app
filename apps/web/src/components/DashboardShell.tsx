@@ -507,7 +507,15 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     // h-screen + overflow-hidden pins the shell to the viewport so the
     // sidebar and header don't scroll with the page. Each interior region
     // (sidebar nav, main content) owns its own scroll instead.
-    <div className="h-screen flex overflow-hidden bg-background">
+    //
+    // No `bg-background` here. It painted `hsl(var(--background))`
+    // opaquely across the whole viewport — the same colour the body
+    // already paints, so it looked identical while hiding everything
+    // layered underneath: the two radial glows the body defines, and now
+    // the cover pattern. PortalShell never had it, which is why the
+    // portal has been showing those glows and the console hasn't.
+    // Dropping it makes them agree and changes no colour.
+    <div className="h-screen flex overflow-hidden">
       {/*
         Below md the sidebar slides over the content instead of sitting
         beside it. At 375px a fixed 240px rail left `main` with 135px,

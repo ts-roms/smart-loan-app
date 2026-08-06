@@ -24,6 +24,15 @@ export function AuthShell({
 }) {
   return (
     <div className="auth-backdrop relative flex min-h-screen flex-col items-center justify-center px-4 py-10">
+      {/*
+        Cover pattern across the whole backdrop. `text-white` because
+        the pattern paints in `currentColor` and this container would
+        otherwise inherit the near-black page foreground — invisible on
+        a saturated gradient. The card and the footer below are both
+        `relative`, so they stay above it without needing a z-index.
+      */}
+      <div className="pointer-events-none absolute inset-0 bg-overlay-pattern text-white" />
+
       <div className="relative w-full max-w-4xl overflow-hidden rounded-xl bg-surface-2 shadow-2xl lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
         <BrandPanel />
 

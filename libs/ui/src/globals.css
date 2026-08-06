@@ -717,17 +717,20 @@
    * hues rather than theme tokens because this panel IS the brand — it
    * shouldn't invert when someone flips to dark.
    */
+  /*
+   * Gradient only. The flat 22px dot grid that used to be baked in here
+   * has been replaced by a `.bg-overlay-pattern` element in AuthShell —
+   * stacking both gave two grids at different pitches, which reads as
+   * moiré rather than as texture. The graduated one is the look; a
+   * uniform field edge to edge was always the weaker half.
+   */
   .auth-backdrop {
-    background:
-      radial-gradient(
-        circle at 1px 1px,
-        hsl(0 0% 100% / 0.07) 1px,
-        transparent 0
-      ),
-      linear-gradient(115deg, hsl(172 88% 34%) 0%, hsl(210 45% 34%) 45%, hsl(226 36% 39%) 100%);
-    background-size:
-      22px 22px,
-      100% 100%;
+    background: linear-gradient(
+      115deg,
+      hsl(172 88% 34%) 0%,
+      hsl(210 45% 34%) 45%,
+      hsl(226 36% 39%) 100%
+    );
   }
 
   /* Brand half of the auth card — the same ramp, darker, so the card
@@ -779,7 +782,73 @@
       #000 10%,
       transparent 58%
     );
-    opacity: 0.14;
+    /*
+     * Dialable, because the same pattern has to survive two very
+     * different jobs. On the saturated auth gradient it's white dots on
+     * a dark field and 0.14 reads as texture; on the near-white console
+     * plate it's near-black dots UNDER the page heading, where 0.14
+     * would be a visible grey wash across the text. The default suits
+     * the first; `--overlay-opacity` lets the second ask for less.
+     */
+    opacity: var(--overlay-opacity, 0.14);
+  }
+
+  /*
+   * The console's own cover pattern.
+   *
+   * A `body::before` rather than an element in the shell, so it covers
+   * every screen — dashboard, tables, drawers — without a decorative
+   * div being threaded through each layout, and so it never scrolls
+   * with the content.
+   *
+   * `z-index: -1` is what keeps it in its place: negative-z children of
+   * the root paint AFTER the canvas background and BEFORE any in-flow
+   * content, which is precisely "on the page, under everything on it".
+   * At `z-index: 0` it would paint over the whole app.
+   *
+   * `currentColor` resolves from body, which is `--foreground` — so the
+   * dots are near-black on light and near-white on dark with no second
+   * rule. The opacity is the part that can't be shared: measured
+   * against the page heading, 0.05 costs it 0.3 of a contrast point and
+   * 0.14 would cost nearly two.
+   */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    /* Spelled out rather than `@apply bg-overlay-pattern`: a
+     * pseudo-element can't carry the class, and @apply of a custom
+     * utility depends on layer ordering that would break silently. */
+    background-image: radial-gradient(currentColor 1.4px, transparent 1.5px);
+    background-size: 20px 20px;
+    -webkit-mask-image: radial-gradient(
+      115% 115% at 0% 0%,
+      #000 0%,
+      #000 10%,
+      transparent 58%
+    );
+    mask-image: radial-gradient(
+      115% 115% at 0% 0%,
+      #000 0%,
+      #000 10%,
+      transparent 58%
+    );
+    /*
+     * A quarter of the auth backdrop's strength, and the number is a
+     * ceiling rather than a preference. `text-fg-subtle` measures
+     * 4.93:1 on the light plate, so there is only 0.43 of a contrast
+     * point to spend before it drops under AA. Measured over a dot:
+     *
+     *   0.035  4.61:1   ← here, 8 levels of plate shift
+     *   0.04   4.56:1
+     *   0.05   4.47:1   ← fails
+     *
+     * Eight levels is the same visible step the card watermark gets, so
+     * nothing is lost by staying under the line.
+     */
+    opacity: 0.035;
   }
 
   /* Section header divider used between dashboard groups. The label sits
