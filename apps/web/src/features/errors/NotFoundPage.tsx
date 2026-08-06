@@ -1,11 +1,12 @@
+import { useBranding } from "@loan/api-client";
 import { Button } from "@loan/ui";
-import { ArrowLeft, Home } from "lucide-react";
+import { ArrowLeft, Compass, Home } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { ErrorLayout } from "./ErrorLayout";
 
 /**
- * 404.
+ * 404 — the cover variant.
  *
  * This replaces a silent `<Navigate to="/" />` on the catch-all route.
  * The redirect was worse than it looks: a mistyped or dead link dumped
@@ -15,33 +16,38 @@ import { ErrorLayout } from "./ErrorLayout";
  * there was one.
  *
  * The path is echoed back for exactly that reason. It's usually the
- * whole diagnosis ("…/loans/undefined"), and it costs the reader
- * nothing to see it.
+ * whole diagnosis ("…/loans/undefined"), and it costs nothing to show.
  */
 export function NotFoundPage() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const branding = useBranding();
 
   return (
     <ErrorLayout
+      variant="cover"
       code="404"
-      title="We couldn't find that page"
-      message="The link may be out of date, or the page may have moved. Nothing is broken on your account."
+      // A compass rather than a warning triangle. Being on a page that
+      // doesn't exist is a navigation problem, not a fault, and the
+      // page shouldn't open by implying the reader broke something.
+      icon={Compass}
+      title="Sorry, page not found"
+      message="The link may be out of date, or the page may have moved. Nothing is wrong with your account."
       actions={
         <>
           {/*
-            Back first: a 404 is usually reached from somewhere, and
-            returning there is what the reader wants far more often than
-            starting over at the dashboard.
+            Back first: a 404 is nearly always reached FROM somewhere,
+            and returning there is what the reader wants far more often
+            than starting again at the dashboard.
           */}
           <Button variant="outline" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-4 w-4" />
             Go back
           </Button>
-          <Button asChild>
+          <Button variant="success" asChild>
             <Link to="/">
               <Home className="h-4 w-4" />
-              Dashboard
+              Back to home
             </Link>
           </Button>
         </>
@@ -54,6 +60,7 @@ export function NotFoundPage() {
           </div>
         </div>
       }
+      footer={`© ${new Date().getFullYear()} ${branding.data?.companyName ?? "SmartLoan"}`}
     />
   );
 }

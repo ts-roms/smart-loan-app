@@ -1,5 +1,5 @@
 import { Button } from "@loan/ui";
-import { Home, RefreshCw } from "lucide-react";
+import { Home, RefreshCw, Unplug } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
 import { ErrorLayout } from "./ErrorLayout";
@@ -52,6 +52,9 @@ export class AppErrorBoundary extends Component<Props, State> {
     return (
       <ErrorLayout
         tone="danger"
+        // No numeral: there is no status code here, because nothing
+        // was served. The failure is in the browser.
+        icon={Unplug}
         title="This page stopped working"
         message="Something in the app failed while drawing this screen. Reloading usually clears it, and any work already saved is safe."
         actions={
