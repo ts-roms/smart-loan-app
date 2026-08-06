@@ -22,6 +22,30 @@ export type PermissionResolver = (
   tenantPrisma?: unknown,
 ) => Promise<Set<string>>;
 
+/** What `authenticate` needs to know about the account behind a token. */
+export interface SessionStatus {
+  /** `User.active`. False → the account is disabled. */
+  active: boolean;
+  /**
+   * `User.sessionsRevokedAt`, in epoch MILLISECONDS, or null when the
+   * user has never been force-logged-out (almost every row).
+   */
+  sessionsRevokedAtMs: number | null;
+}
+
+/**
+ * Looks up the live state of the account a token claims to be.
+ *
+ * Injected by the API for the same reason as `PermissionResolver`: this
+ * package sits below @loan/db and can't see PrismaClient. Returns null
+ * when the user row is gone, which must be treated as "not
+ * authenticated" rather than as "no constraints".
+ */
+export type SessionStatusResolver = (
+  userId: string,
+  tenantPrisma?: unknown,
+) => Promise<SessionStatus | null>;
+
 declare module "fastify" {
   interface FastifyInstance {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
@@ -51,6 +75,44 @@ declare module "fastify" {
 interface Options {
   secret: string;
   resolvePermissions: PermissionResolver;
+  /**
+   * Optional so the plugin's own unit tests can register it bare. In
+   * the API it is always supplied — without it, `authenticate` degrades
+   * to a signature check and force-logout stops working, so a
+   * deployment that forgets it fails open. `createApp` passes it
+   * unconditionally for that reason.
+   */
+  resolveSessionStatus?: SessionStatusResolver;
+}
+
+/**
+ * Reject a token whose `iat` is at or before the revocation cutoff.
+ *
+ * `iat` is in whole seconds (RFC 7519) while the cutoff has millisecond
+ * precision, so the comparison has to pick a side for a token minted
+ * during the same second as the revocation. It picks revoked:
+ *
+ *   issued 10.2s, revoked 10.7s → iat 10 ≤ 10 → rejected (correct)
+ *   issued 10.9s, revoked 10.7s → iat 10 ≤ 10 → rejected (early by 0.1s)
+ *   issued 11.1s, revoked 10.7s → iat 11 > 10 → accepted (correct)
+ *
+ * The middle row is the cost: someone who signs in again inside the
+ * same second as the revocation is bounced once and has to retry. The
+ * alternative rounds the other way and lets a token minted just after
+ * the cutoff live for its full 24 hours. For a control whose entire
+ * purpose is "end this session now", failing closed on a sub-second
+ * ambiguity is the only defensible direction.
+ */
+function issuedBeforeRevocation(
+  iatSeconds: number | undefined,
+  revokedAtMs: number | null,
+): boolean {
+  if (revokedAtMs === null) return false;
+  // No `iat` means we can't place the token in time. Tokens this app
+  // signs always carry one; anything else is malformed, and a token we
+  // can't date must not outrank a revocation.
+  if (typeof iatSeconds !== "number") return true;
+  return iatSeconds <= Math.floor(revokedAtMs / 1000);
 }
 
 /**
@@ -94,6 +156,61 @@ export const fastifyAuth = fp<Options>(async (app: FastifyInstance, opts) => {
           error: "Unauthorized",
           message:
             "Platform tokens cannot access tenant routes. Use /platform/tenants/:slug/impersonate.",
+        });
+      }
+
+      /*
+       * Everything above is stateless — it proves the token was signed
+       * by us and hasn't expired, and nothing more. That was the whole
+       * of authentication until now, and it had two holes:
+       *
+       *   - `User.active` was enforced at login and at refresh but
+       *     never in between, so disabling an account left it working
+       *     until its 24h access token ran out.
+       *   - There was no way to end a session at all. Revoking refresh
+       *     tokens does nothing to the access token already in hand.
+       *
+       * Both need the same thing: asking the database whether this
+       * account is still allowed to be here.
+       *
+       * The cost is one indexed primary-key lookup per authenticated
+       * request. Deliberately uncached. Every permission-gated route
+       * already resolves the caller's permissions on each request — a
+       * multi-table join — so this is strictly smaller than what the
+       * same path already pays. A cache would trade a real correctness
+       * property (revocation takes effect NOW) for a saving nobody has
+       * shown is needed, and its staleness window would be a silent,
+       * invisible weakening of the one guarantee the feature sells. If
+       * profiling ever says otherwise, add it then, with the staleness
+       * budget written down.
+       */
+      if (!opts.resolveSessionStatus) return;
+      const payload = req.user as JwtPayload & { iat?: number };
+      const status = await opts.resolveSessionStatus(
+        payload.sub,
+        tenantPrismaOf(req),
+      );
+      // A token for a user who no longer exists. Deleted mid-session,
+      // or a token minted against another tenant's schema.
+      if (!status) {
+        return reply
+          .code(401)
+          .send({ error: "Unauthorized", message: "Invalid or missing token" });
+      }
+      if (!status.active) {
+        return reply.code(401).send({
+          error: "Unauthorized",
+          message: "This account has been disabled.",
+        });
+      }
+      if (issuedBeforeRevocation(payload.iat, status.sessionsRevokedAtMs)) {
+        // Named distinctly from the disabled case so the client can
+        // tell "sign in again" from "call your administrator", and so
+        // the person on the other end isn't told their account is gone
+        // when it isn't.
+        return reply.code(401).send({
+          error: "Unauthorized",
+          message: "Your session was ended. Please sign in again.",
         });
       }
     },

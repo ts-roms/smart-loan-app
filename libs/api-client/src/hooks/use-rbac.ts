@@ -107,10 +107,28 @@ export function useDeleteRole() {
   });
 }
 
+/**
+ * How often the user list re-reads presence.
+ *
+ * The badge is only ever as fresh as the last fetch, and without a
+ * refetch a cached list would show colleagues as online long after they
+ * had gone — worse than no indicator, because it looks authoritative.
+ * 30s matches the heartbeat interval: polling faster only re-reads
+ * numbers that cannot have changed.
+ */
+const PRESENCE_REFRESH_MS = 30_000;
+
 export function useUsers() {
   return useQuery({
     queryKey: rbacKeys.users,
     queryFn: () => getApiClient().get<UserWithRoles[]>("/admin/users"),
+    refetchInterval: PRESENCE_REFRESH_MS,
+    // Not in the background. A left-open tab polling all night would
+    // keep its own viewer's heartbeat alive and report them online
+    // while they slept — the poll would be manufacturing the presence
+    // it claims to observe.
+    refetchIntervalInBackground: false,
+    staleTime: PRESENCE_REFRESH_MS,
   });
 }
 
@@ -202,6 +220,43 @@ export function useUnassignRole() {
         {
           method: "DELETE",
         },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: rbacKeys.users }),
+  });
+}
+
+export interface ForceLogoutResponse {
+  ok: true;
+  userId: string;
+  email: string;
+  name: string;
+  /** ISO-8601. Every access token issued at or before this is now dead. */
+  revokedAt: string;
+  /**
+   * Refresh tokens killed alongside the access-token cutoff. Zero is a
+   * normal outcome — it means they had no live refresh token, not that
+   * nothing happened.
+   */
+  refreshTokensRevoked: number;
+}
+
+/**
+ * End every session a user currently holds — staff or borrower.
+ *
+ * Takes effect on their next request, not on their next login: the
+ * cutoff is checked in `app.authenticate`, so the 24h access token they
+ * already hold stops working immediately.
+ *
+ * Does NOT disable the account. They can sign in again straight away.
+ * Deactivation is a separate action and a separate decision.
+ */
+export function useForceLogout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { userId: string; reason?: string }) =>
+      getApiClient().post<ForceLogoutResponse>(
+        `/admin/users/${input.userId}/force-logout`,
+        input.reason ? { reason: input.reason } : {},
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: rbacKeys.users }),
   });

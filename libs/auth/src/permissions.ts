@@ -303,6 +303,17 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
   },
   { key: "admin.audit_log", label: "View audit log", category: "Admin" },
   {
+    // Ending someone's session is not the same power as editing them,
+    // which is why it isn't folded into admin.users. It's the action
+    // you want a duty officer or a support lead to hold during an
+    // incident — "this laptop was stolen, cut it off" — without also
+    // handing them the ability to change roles or reset passwords.
+    // Separate key so it can be granted alone, or withheld alone.
+    key: "admin.force_logout",
+    label: "End a user's sessions / revoke a co-maker link",
+    category: "Admin",
+  },
+  {
     key: "admin.system_config",
     label: "Edit system config (company equity)",
     category: "Admin",

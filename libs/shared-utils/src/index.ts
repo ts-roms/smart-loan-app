@@ -62,6 +62,15 @@ export {
 } from "./lib/phone";
 
 export {
+  HEARTBEAT_MS,
+  MIN_ONLINE_WINDOW_MS,
+  onlineWindowMs,
+  presenceOf,
+  shouldStampHeartbeat,
+  type Presence,
+} from "./lib/presence";
+
+export {
   PSGC_REGIONS,
   PSGC_PROVINCES,
   PSGC_CITIES,

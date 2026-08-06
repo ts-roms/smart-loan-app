@@ -53,15 +53,19 @@ import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { SignaturePad } from "../../../components/SignaturePad";
 import { downloadPdf } from "../../../lib/download-pdf";
-import { useAuth } from "../../../providers/auth";
 import { LoanStatusBadge } from "../components/StatusBadge";
 import { PenaltyPanel } from "../components/PenaltyPanel";
 import { AnnualDocsPanel } from "../components/AnnualDocsPanel";
 import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
 import { CoMakersPanel } from "../components/CoMakersPanel";
+import { RenewLoanDialog } from "../components/RenewLoanDialog";
 import { FaceMatchPanel } from "../components/FaceMatchPanel";
 import { LeasePanel } from "../components/LeasePanel";
-import { useAnswerDeclarations } from "@loan/api-client";
+import {
+  useAnswerDeclarations,
+  useLoanApprovals,
+  useRenewalEligibility,
+} from "@loan/api-client";
 
 import { usePermission } from "../../../hooks/use-permission";
 import { DeclarationsPanel } from "../../../components/DeclarationsPanel";
@@ -108,10 +112,30 @@ export function LoanDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const loan = useLoan(id);
   const kycStatus = useLoanKycStatus(id);
-  const { user } = useAuth();
   const decide = useDecideLoan();
   const answerDecl = useAnswerDeclarations();
   const canSubmitKyc = usePermission("kyc.submit");
+  /*
+   * Permissions, not `user.role`. The API gates these on `loans.decide`
+   * and `loans.disburse`, resolved from role ASSIGNMENTS — so the old
+   * `role === "ADMIN" || role === "LOAN_OFFICER"` check drifted in both
+   * directions: a custom role built at /roles holding loans.decide saw
+   * no buttons, and an officer whose permission had been removed still
+   * saw them and got a 403 on click. Same class of bug the sidebar had.
+   */
+  const canDecidePerm = usePermission("loans.decide");
+  const canDisbursePerm = usePermission("loans.disburse");
+  /*
+   * The approval chain, read here as well as inside ApprovalChainPanel.
+   * Same query key, so TanStack serves both from one request — this
+   * costs nothing and lets the decision buttons tell the truth about
+   * whether approval is even possible yet.
+   */
+  const approvals = useLoanApprovals(id);
+  // Drives the Renew button AND the reason it's absent, so it is
+  // fetched for every loan rather than only on demand.
+  const renewal = useRenewalEligibility(id);
+  const [renewing, setRenewing] = useState(false);
   const disburse = useDisburseLoan();
   const recordPayment = useRecordPayment();
   const toast = useToast();
@@ -129,8 +153,22 @@ export function LoanDetailPage() {
     return <p className="text-sm text-fg-muted">Loan not found.</p>;
   const l = loan.data;
 
-  const canDecide = user?.role === "ADMIN" || user?.role === "LOAN_OFFICER";
-  const canDisburse = canDecide && l.status === "APPROVED";
+  const canDecide = canDecidePerm;
+  const canDisburse = canDisbursePerm && l.status === "APPROVED";
+  /*
+   * Steps still awaiting sign-off. While any remain the API refuses to
+   * approve (409 ApprovalChainPending), so offering an Approve button
+   * would be offering an action that cannot succeed — the officer would
+   * click it and collect the same toast every time until the chain
+   * finished.
+   *
+   * Rejection stays available: a loan can be turned down at any point,
+   * and the API doesn't gate that.
+   */
+  const pendingApprovals = (approvals.data ?? []).filter(
+    (a) => a.status === "PENDING",
+  );
+  const chainBlocks = pendingApprovals.length > 0;
   const canPay = ["DISBURSED", "ACTIVE"].includes(l.status);
   const kycComplete = kycStatus.data?.complete === true;
   const decisionPending =
@@ -291,7 +329,7 @@ export function LoanDetailPage() {
         <FaceMatchPanel loan={l} />
 
         {/* Consent gate on disburse — see CoMakersPanel. */}
-        <CoMakersPanel loanId={l.id} />
+        <CoMakersPanel loanId={l.id} borrowerId={l.customerId} />
         {/*
           AI assistant — explain the loan's decisioning verdict in plain
           language. Local LLM only; never sends data off-server. Officer
@@ -366,10 +404,27 @@ export function LoanDetailPage() {
         )}
 
         {canDecide && decisionPending && (
-          <div className="flex gap-2 border-t border-default pt-3">
-            <Button onClick={onApprove} disabled={decide.isPending}>
-              {kycComplete ? "Approve" : "Approve (override KYC)"}
-            </Button>
+          <div className="flex flex-wrap items-center gap-2 border-t border-default pt-3">
+            {chainBlocks ? (
+              /*
+                Says what unlocks it and where to go, rather than a
+                disabled button with no explanation. The chain panel
+                naming these steps is directly above.
+              */
+              <p className="text-xs text-fg-muted">
+                Approval is with the chain —{" "}
+                <span className="text-fg">
+                  {pendingApprovals
+                    .map((a) => `${a.stepOrder}. ${a.stepLabel}`)
+                    .join(", ")}
+                </span>{" "}
+                still to sign off. Approve unlocks when the last one does.
+              </p>
+            ) : (
+              <Button onClick={onApprove} disabled={decide.isPending}>
+                {kycComplete ? "Approve" : "Approve (override KYC)"}
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => onDecide("REJECTED")}
@@ -388,14 +443,47 @@ export function LoanDetailPage() {
         )}
 
         {["ACTIVE", "DISBURSED"].includes(l.status) && canDecide && (
-          <div className="border-t border-default pt-3 flex flex-wrap gap-2">
-            <CloseEarlyButton loanId={l.id} />
-            <RestructureButton
-              loanId={l.id}
-              currentProductCode={l.productCode}
-            />
-            <WriteOffButton loanId={l.id} />
+          <div className="border-t border-default pt-3 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {/*
+                Renew sits with the servicing actions, next to
+                Restructure, because that is the pair an officer is
+                choosing between — one for a borrower doing well, one
+                for a borrower struggling.
+              */}
+              {renewal.data?.eligible && (
+                <Button variant="outline" onClick={() => setRenewing(true)}>
+                  <RefreshCw className="h-3 w-3" />
+                  Renew
+                </Button>
+              )}
+              <CloseEarlyButton loanId={l.id} />
+              <RestructureButton
+                loanId={l.id}
+                currentProductCode={l.productCode}
+              />
+              <WriteOffButton loanId={l.id} />
+            </div>
+            {/*
+              Why NOT, when it isn't offered. "Renew" quietly missing is
+              indistinguishable from the feature not existing, and the
+              officer is usually standing in front of the borrower who
+              just asked for it — they need the sentence, not a gap.
+            */}
+            {renewal.data && !renewal.data.eligible && (
+              <p className="text-[11px] text-fg-subtle">
+                Not renewable — {renewal.data.message}
+              </p>
+            )}
           </div>
+        )}
+        {renewing && renewal.data?.eligible && (
+          <RenewLoanDialog
+            loanNumber={l.number}
+            eligibility={renewal.data}
+            defaultProductCode={l.productCode}
+            onClose={() => setRenewing(false)}
+          />
         )}
 
         {canPay && (

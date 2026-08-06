@@ -7,7 +7,17 @@ import { Input } from "./input";
 export type PasswordInputProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
   "type"
->;
+> & {
+  /**
+   * What the toggle calls the thing it reveals, e.g. "confirmation".
+   *
+   * Exists because a form with two password fields otherwise has two
+   * buttons both announcing "Show password", and a screen-reader user
+   * moving between them has no way to tell which field they're about
+   * to unmask.
+   */
+  revealLabel?: string;
+};
 
 /**
  * Password field with a reveal toggle.
@@ -28,7 +38,7 @@ export type PasswordInputProps = Omit<
  * is the common path and shouldn't detour through an eye.
  */
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
-  ({ className, ...props }, ref) => {
+  ({ className, revealLabel = "password", ...props }, ref) => {
     const [visible, setVisible] = useState(false);
     return (
       <div className="relative">
@@ -42,7 +52,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
           type="button"
           tabIndex={-1}
           onClick={() => setVisible((v) => !v)}
-          aria-label={visible ? "Hide password" : "Show password"}
+          aria-label={`${visible ? "Hide" : "Show"} ${revealLabel}`}
           aria-pressed={visible}
           className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center text-fg-subtle transition hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-r-md"
         >

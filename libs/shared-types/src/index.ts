@@ -601,6 +601,8 @@ export interface PageQuery {
  * 200 most recent, as it always has.
  */
 export interface LoanListQuery extends PageQuery {
+  /** Scope to one borrower — powers the profile's loan history. */
+  customerId?: string;
   /**
    * Free text over the loan number and the borrower's name / reference.
    * Tokenized server-side: "cruz salary" and "juan LN-2026" both work.
@@ -884,6 +886,16 @@ export interface CoMakerInviteView {
 export interface CoMaker {
   id: string;
   loanId: string;
+  /**
+   * The registered customer standing as co-maker. Null only on rows
+   * created before co-makers had to be customers — see the migration.
+   */
+  customerId: string | null;
+  /**
+   * Snapshot taken when they were added, not a live join: the consent
+   * record and the signed agreement have to name the person who
+   * actually agreed, whatever their customer record says later.
+   */
   fullName: string;
   role: CoMakerRole;
   relationship: string | null;
@@ -900,21 +912,32 @@ export interface CoMaker {
   declineReason: string | null;
   inviteSentAt: string | null;
   inviteExpiresAt: string | null;
+  /**
+   * When the consent link was first opened; null means never.
+   *
+   * The closest thing to presence a co-maker can have — they hold no
+   * account, so this request is the only evidence the link reached a
+   * person. Paired with `inviteSentAt` it separates "they've seen it
+   * and are hesitating" from "it never arrived".
+   */
+  linkOpenedAt: string | null;
   documents?: CoMakerDocument[];
   createdAt: string;
   updatedAt: string;
 }
 
+/**
+ * Adding a co-maker — a REGISTERED CUSTOMER, not a typed-in name.
+ *
+ * Identity is deliberately absent. Name, phone, email, address and ID
+ * are snapshotted from the Customer row by the API, so a typed name and
+ * a chosen customer can never disagree. What's left is what belongs to
+ * this particular guarantee rather than to the person.
+ */
 export interface CoMakerInput {
-  fullName: string;
+  customerId: string;
   role?: CoMakerRole;
   relationship?: string;
-  phone: string;
-  email?: string;
-  address?: string;
-  governmentIdType?: GovernmentIdType;
-  governmentIdNumber?: string;
-  monthlyIncome?: number;
   signedAgreementUrl?: string;
   notes?: string;
 }
@@ -1014,6 +1037,16 @@ export interface RoleUpdateInput {
   parents?: string[];
 }
 
+/**
+ * Presence, resolved by the API against ITS clock.
+ *
+ * `NEVER` is kept apart from `OFFLINE` because "has not signed in since
+ * we started counting" and "was here this morning" are different facts
+ * about a person; collapsing them would make a dormant account look
+ * merely idle.
+ */
+export type UserPresence = "ONLINE" | "OFFLINE" | "NEVER";
+
 export interface UserWithRoles {
   id: string;
   email: string;
@@ -1021,6 +1054,16 @@ export interface UserWithRoles {
   primaryRole: UserRole;
   active: boolean;
   createdAt: string;
+  /** ISO-8601, or null if they have never made an authenticated request. */
+  lastSeenAt: string | null;
+  /**
+   * Computed server-side on purpose. Deriving it in the browser would
+   * make the badge a function of how accurately the viewer's own clock
+   * is set — a laptop ten minutes fast would show the whole company as
+   * offline. `lastSeenAt` is still sent, for the relative label where
+   * a few seconds of drift costs nothing.
+   */
+  presence: UserPresence;
   /**
    * `expiresAt` is null for perpetual grants; an ISO-8601 string
    * otherwise. A date in the past means the assignment row is still on
@@ -2144,11 +2187,20 @@ export interface CustomerLedgerEntry {
   ref?: string | null;
   notes?: string | null;
   /**
-   * Net customer position AFTER this entry. Positive → net depositor;
-   * negative → net borrower. Same scale as `summary.netCustomerPosition`,
-   * which equals the runningBalance of the newest entry.
+   * What the member owed after this entry — principal plus scheduled
+   * interest on live loans, less repayments and waivers.
    */
-  runningBalance: number;
+  owedAfter: number;
+  /**
+   * What the coop held for the member after this entry — savings plus
+   * capital build-up.
+   *
+   * Deliberately separate from `owedAfter` and never to be added to it.
+   * The single figure these replaced summed a debt being settled with
+   * savings the member did not have, so a borrower's interest payments
+   * came out looking like a deposit.
+   */
+  heldAfter: number;
 }
 
 export interface CustomerLedgerSummary {
@@ -2163,7 +2215,14 @@ export interface CustomerLedgerSummary {
   capitalBuildUp: number;
   mortuaryFund: number;
   emergencyFund: number;
-  netCustomerPosition: number;
+  /** Owed to the coop: live-loan obligation less repayments and waivers. */
+  amountOwed: number;
+  /**
+   * Held by the coop for the member: savings + capital build-up.
+   * Excludes mortuary and emergency, which are pooled and spent on
+   * claims rather than returned. Never add this to `amountOwed`.
+   */
+  amountHeld: number;
 }
 
 export interface CustomerLedger {

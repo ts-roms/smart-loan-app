@@ -176,4 +176,16 @@ export async function rbacRoutes(app: FastifyInstance) {
     { preHandler: app.requirePermission("admin.users") },
     ctrl.unassignRole,
   );
+
+  // ─── sessions ─────────────────────────────────────────────────────
+
+  // Gated on admin.force_logout ALONE — deliberately not on
+  // admin.users. Ending a session is the thing you want a duty officer
+  // to be able to do at 2am without also being able to change roles or
+  // set passwords, and the two shouldn't travel together.
+  app.post<{ Params: { userId: string } }>(
+    "/users/:userId/force-logout",
+    { preHandler: app.requirePermission("admin.force_logout") },
+    ctrl.forceLogout,
+  );
 }

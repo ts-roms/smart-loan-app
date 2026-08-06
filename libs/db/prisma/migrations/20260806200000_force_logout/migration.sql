@@ -1,0 +1,32 @@
+-- Force logout.
+--
+-- Access tokens are stateless JWTs with a 24h life, and until now
+-- `app.authenticate` only verified the signature. Two consequences,
+-- both closed by this column:
+--
+--   1. There was no way to end someone's session. Revoking refresh
+--      tokens does nothing for up to a day, because the access token
+--      they already hold never touches the database.
+--   2. `User.active` was checked at login and at refresh but nowhere
+--      else, so deactivating an account left it working until its
+--      current access token expired.
+--
+-- A cutoff timestamp rather than a denylist table: we never see an
+-- access token again after signing it, so there is nothing to enumerate
+-- and revoke individually. Comparing the token's own `iat` against one
+-- column invalidates every outstanding token for that user at once.
+--
+-- Nullable with no default. NULL means "never force-logged-out", which
+-- is every existing row and almost every future one, so the column
+-- costs nothing to carry.
+
+ALTER TABLE "User" ADD COLUMN "sessionsRevokedAt" TIMESTAMP(3);
+
+-- Deliberately NOT indexed. The column is only ever read by primary key
+-- (the session check loads one user by id) and only ever written one
+-- row at a time. An index would be paid for on every User write and
+-- read by nothing.
+--
+-- No enum change accompanies this. `AuditEvent.action` is a plain
+-- String, so the new SESSIONS_REVOKED and CO_MAKER_INVITE_REVOKED
+-- labels need no migration.

@@ -228,3 +228,18 @@ export * from "./late-fees";
 // Balance arithmetic over a *persisted* schedule — where a loan actually
 // stands, as opposed to the projection math above.
 export * from "./schedule-balance";
+
+export {
+  RENEWABLE_STATUSES,
+  checkRenewal,
+  renewalNetProceeds,
+  type RenewalCheck,
+  type RenewalCheckInput,
+} from "./renewal";
+
+export {
+  ledgerPositions,
+  type LedgerPositionKind,
+  type PositionEntryInput,
+  type PositionResult,
+} from "./ledger-position";

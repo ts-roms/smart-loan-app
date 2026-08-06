@@ -118,3 +118,29 @@ export function useInviteCoMaker() {
     },
   });
 }
+
+/**
+ * Officer side: kill a co-maker's invite link.
+ *
+ * The co-maker equivalent of force-logout. Co-makers have no account,
+ * so there is no session to end — the link is the access, and dropping
+ * the token stops it working on the very next page load.
+ *
+ * Their existing answer is left intact. An approval validly given is a
+ * fact about the loan file; this removes the way back in, not the
+ * signature. `hadActiveLink: false` means there was nothing live to
+ * revoke, which is still a success.
+ */
+export function useRevokeCoMakerInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (coMakerId: string) =>
+      getApiClient().post<{ ok: true; hadActiveLink: boolean }>(
+        `/loans/co-makers/${coMakerId}/revoke-invite`,
+        {},
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["co-makers"] });
+    },
+  });
+}

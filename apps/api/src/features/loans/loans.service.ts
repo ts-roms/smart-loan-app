@@ -1,3 +1,4 @@
+import { CustomerHasLiveLoanError } from "@loan/db";
 import type {
   AuditLogRepository,
   CoMakerRepository,
@@ -5,6 +6,7 @@ import type {
   DecisionRuleRepository,
   KycRepository,
   LoanApplication,
+  LoanApprovalRepository,
   LoanRepository,
   NotificationRepository,
   PreAssessmentRepository,
@@ -69,7 +71,19 @@ export type ApplyResult =
       message: string;
       screeningId: string;
     }
-  | { ok: false; kind: "BadRequest"; message: string; issues?: unknown };
+  | { ok: false; kind: "BadRequest"; message: string; issues?: unknown }
+  | {
+      ok: false;
+      kind: "HasLiveLoan";
+      message: string;
+      /** The loans already open, so the officer sees which. */
+      liveLoans: Array<{
+        id: string;
+        number: string;
+        status: string;
+        principal: number;
+      }>;
+    };
 
 /**
  * Result of a disburse attempt. CoMakersPending → 409 with the names,
@@ -111,6 +125,12 @@ export type DecideResult =
       /** Labels of required declarations still unanswered. */
       unanswered: string[];
       loanProductCode: string;
+    }
+  | {
+      ok: false;
+      kind: "ApprovalChainPending";
+      /** Steps still awaiting sign-off, in order. */
+      pending: Array<{ stepOrder: number; stepLabel: string }>;
     };
 
 /**
@@ -183,6 +203,16 @@ export class LoanWorkflowService {
      * passes the gate trivially.
      */
     private readonly coMakers?: CoMakerRepository,
+    /**
+     * The approval chain, for the gate in `decide`.
+     *
+     * Optional to match the two above, and its absence is handled the
+     * same way an empty chain is — as "nothing pending". That is the
+     * correct default: a product with no chain configured has always
+     * been approvable in one step, and a caller that didn't wire this up
+     * must not silently start blocking every decision.
+     */
+    private readonly approvals?: LoanApprovalRepository,
   ) {}
 
   /**
@@ -190,7 +220,9 @@ export class LoanWorkflowService {
    *   1. AML gate (403/409 if MATCH on file without override).
    *   2. Build the decisioning context (score, KYC, customer demographics,
    *      AML status, active-loan count).
-   *   3. Evaluate decision rules → AUTO_APPROVE / AUTO_REJECT / SUBMITTED.
+   *   3. Evaluate decision rules → REJECTED, or SUBMITTED. A favourable
+   *      rule (AUTO_APPROVE) is a recommendation carried in the decision
+   *      reason, not an outcome — see the note at the call site.
    *   4. Persist the loan with the chosen initial status.
    *   5. Audit the rule match (if any).
    *   6. Anomaly flagger (best-effort, never blocks).
@@ -211,6 +243,61 @@ export class LoanWorkflowService {
         kind: "AmlBlocked",
         message: "Customer has an unresolved AML match. Override required.",
         screeningId: latestScreen.id,
+      };
+    }
+
+    /*
+     * One live loan at a time.
+     *
+     * Nothing stopped a customer holding two, three, five concurrent
+     * applications: `existingActiveLoans` fed the decision rules as a
+     * number to reason about, but no rule was obliged to look at it and
+     * none of the seeded ones refused on it. So a double-submitted form
+     * became two real loans, and a borrower could quietly stack debt the
+     * capacity check had never seen together.
+     *
+     * "Live" spans both money out (DISBURSED / ACTIVE / DEFAULTED) and
+     * money promised (SUBMITTED / UNDER_REVIEW / APPROVED). An in-flight
+     * application counts because two open applications from one customer
+     * is nearly always a double-submit, and because approving the second
+     * would commit funds the first already claimed.
+     *
+     * Terminal states — CLOSED, REJECTED, CANCELLED, WRITTEN_OFF — do
+     * not block. A settled borrower is free to come back, which is the
+     * ordinary case this must not obstruct.
+     */
+    const liveLoans = await this.prisma.loanApplication.findMany({
+      where: {
+        customerId: input.customerId,
+        status: {
+          in: [
+            "SUBMITTED",
+            "UNDER_REVIEW",
+            "APPROVED",
+            "DISBURSED",
+            "ACTIVE",
+            "DEFAULTED",
+          ],
+        },
+      },
+      select: { id: true, number: true, status: true, principal: true },
+      orderBy: { submittedAt: "desc" },
+    });
+    if (liveLoans.length > 0) {
+      const first = liveLoans[0]!;
+      return {
+        ok: false,
+        kind: "HasLiveLoan",
+        message:
+          liveLoans.length === 1
+            ? `This customer already has loan ${first.number} (${first.status}). Settle or close it before applying again.`
+            : `This customer already has ${liveLoans.length} open loans (${liveLoans.map((l) => l.number).join(", ")}). Settle or close them before applying again.`,
+        liveLoans: liveLoans.map((l) => ({
+          id: l.id,
+          number: l.number,
+          status: l.status,
+          principal: Number(l.principal),
+        })),
       };
     }
 
@@ -250,12 +337,32 @@ export class LoanWorkflowService {
     );
     const ruleRows = await this.rules.listActive();
     const decision = evaluateRules(this.rules.toEvaluable(ruleRows), ctx);
+    /*
+     * AUTO_APPROVE is a RECOMMENDATION, not an outcome.
+     *
+     * It used to land the loan on APPROVED at submission, which meant a
+     * fast-tracked application was decided before any human saw it —
+     * and, because the chain is only stamped onto SUBMITTED loans, it
+     * skipped every sign-off by construction. The two seeded rules that
+     * do this (A-tier and B-tier fast-track) between them cover the
+     * healthiest applications, i.e. exactly the ones a lender is most
+     * often asked to justify afterwards.
+     *
+     * So a favourable rule now routes into the chain like everything
+     * else. The engine's finding isn't lost — it rides along as the
+     * decision reason, so the first approver opens the file already
+     * knowing scoring is in favour. What changes is who gets to say
+     * yes.
+     *
+     * AUTO_REJECT stays final. Declining is not the risk this guards
+     * against, and the rules that reject — AML hard-block, F tier — are
+     * compliance controls that SHOULD fire without waiting for a queue.
+     * A rejected applicant can be reconsidered by hand; an
+     * auto-approved one is already money out the door.
+     */
+    const autoApproved = decision.action === "AUTO_APPROVE";
     const initialStatus: "SUBMITTED" | "APPROVED" | "REJECTED" =
-      decision.action === "AUTO_APPROVE"
-        ? "APPROVED"
-        : decision.action === "AUTO_REJECT"
-          ? "REJECTED"
-          : "SUBMITTED";
+      decision.action === "AUTO_REJECT" ? "REJECTED" : "SUBMITTED";
 
     let created: LoanApplication;
     try {
@@ -266,10 +373,33 @@ export class LoanWorkflowService {
         tierAtApply: ctx.tierAtApply ?? null,
         kycDeclarations,
         initialStatus,
-        initialDecisionReason:
-          initialStatus === "SUBMITTED" ? undefined : decision.reason,
+        /*
+         * Carried for a fast-tracked loan too, marked as what it is.
+         * Without the prefix the first approver would open a SUBMITTED
+         * file whose reason reads like a decision already taken.
+         */
+        initialDecisionReason: autoApproved
+          ? `[Scoring recommends approval] ${decision.reason}`
+          : initialStatus === "SUBMITTED"
+            ? undefined
+            : decision.reason,
       });
     } catch (err) {
+      /*
+       * The repository enforces one-live-loan inside its transaction —
+       * see CustomerHasLiveLoanError. The pre-check above catches the
+       * ordinary case with a richer payload; this catches the race,
+       * where two submissions both passed that check before either
+       * inserted.
+       */
+      if (err instanceof CustomerHasLiveLoanError) {
+        return {
+          ok: false,
+          kind: "HasLiveLoan",
+          message: err.message,
+          liveLoans: err.liveLoans,
+        };
+      }
       const e = err as Error & { issues?: unknown };
       return {
         ok: false,
@@ -367,6 +497,38 @@ export class LoanWorkflowService {
     if (input.status === "APPROVED") {
       const loan = await this.loans.findByIdOrNumber(idOrNumber);
       if (!loan) return { ok: false, kind: "NotFound" };
+
+      /*
+       * The approval chain, enforced.
+       *
+       * This endpoint used to set APPROVED directly after the KYC and
+       * declarations checks, without ever looking at LoanApproval. The
+       * whole chain — per-step permissions, delegation, the frozen
+       * labels, the notifications to each step's approvers — was
+       * therefore advisory: one officer holding `loans.decide` could
+       * approve past every outstanding sign-off in a single call, and
+       * nothing recorded that the steps had been skipped.
+       *
+       * Rejection is deliberately NOT gated. A loan can be turned down
+       * at any point in the chain; requiring three sign-offs before
+       * someone may say no would keep bad applications alive for no
+       * reason.
+       *
+       * An empty chain means nothing pending, which is how products
+       * with no configured steps keep working exactly as before.
+       */
+      const pending = (await this.approvals?.pendingSteps(loan.id)) ?? [];
+      if (pending.length > 0) {
+        return {
+          ok: false,
+          kind: "ApprovalChainPending",
+          pending: pending.map((s) => ({
+            stepOrder: s.stepOrder,
+            stepLabel: s.stepLabel,
+          })),
+        };
+      }
+
       const docs = await this.kyc.listForCustomer(loan.customerId);
       const extras = (loan.product?.requiredKycDocs ?? []) as KycDocumentType[];
       const kycResult = validateKyc(docs, extras);

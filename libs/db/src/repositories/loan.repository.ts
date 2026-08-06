@@ -54,6 +54,14 @@ export interface LoanListFilter extends PageParams {
   q?: string;
   status?: LoanStatus;
   productCode?: string;
+  /**
+   * Scope to one borrower. Drives the loan history on a customer's
+   * profile — "what has this person borrowed before" is the question an
+   * officer asks before lending again, and until now the only way to
+   * answer it was to search the global list by their name and hope the
+   * spelling matched.
+   */
+  customerId?: string;
 }
 
 /** Slim borrower projection carried on each list row. */
@@ -138,6 +146,15 @@ export interface LoanApplyInput {
   initialDecisionReason?: string;
   /** If this loan replaces an older one, the original's id. */
   restructuredFromId?: string;
+  /**
+   * If this loan RENEWS an older one, that loan's id.
+   *
+   * Distinct from `restructuredFromId` because the two say opposite
+   * things about the borrower — see the schema comment. Practically, it
+   * also exempts the named loan from the one-live-loan guard, since a
+   * renewal exists precisely to replace something still open.
+   */
+  renewedFromId?: string;
 }
 
 export interface LoanDecideInput {
@@ -233,6 +250,59 @@ const PAYABLE_STATUSES: ReadonlySet<LoanStatus> = new Set<LoanStatus>([
  * Named so the HTTP layer can answer 409 rather than letting it surface
  * as a 500 — the request was well-formed, the loan's state forbids it.
  */
+/**
+ * The customer already has a loan open.
+ *
+ * Thrown from inside `apply`'s transaction rather than checked before
+ * it, for two reasons. First, there are two application paths — the
+ * officer console and the borrower portal — and only the repository is
+ * common to both; a guard in one service is a guard the other route
+ * walks straight past, which is exactly what happened. Second, a
+ * pre-flight check outside the transaction loses to a double-submit:
+ * two requests both read "no live loans" and both insert.
+ *
+ * Carries the offending loans so the HTTP layer can name them instead
+ * of just refusing.
+ */
+export class CustomerHasLiveLoanError extends Error {
+  readonly code = "HAS_LIVE_LOAN" as const;
+  constructor(
+    readonly liveLoans: Array<{
+      id: string;
+      number: string;
+      status: LoanStatus;
+      principal: number;
+    }>,
+  ) {
+    super(
+      liveLoans.length === 1
+        ? `This customer already has loan ${liveLoans[0]!.number} (${liveLoans[0]!.status}). Settle or close it before applying again.`
+        : `This customer already has ${liveLoans.length} open loans (${liveLoans.map((l) => l.number).join(", ")}). Settle or close them before applying again.`,
+    );
+    this.name = "CustomerHasLiveLoanError";
+  }
+}
+
+/**
+ * States that block a new application.
+ *
+ * Money out (DISBURSED / ACTIVE / DEFAULTED) and money promised
+ * (SUBMITTED / UNDER_REVIEW / APPROVED). An APPROVED-but-undisbursed
+ * loan counts: the funds are already committed, and it was precisely
+ * this case that slipped through when the check lived in one service.
+ *
+ * Terminal states — CLOSED, REJECTED, CANCELLED, WRITTEN_OFF — do not
+ * block. A settled borrower coming back is the ordinary case.
+ */
+export const LIVE_LOAN_STATUSES = [
+  "SUBMITTED",
+  "UNDER_REVIEW",
+  "APPROVED",
+  "DISBURSED",
+  "ACTIVE",
+  "DEFAULTED",
+] as const satisfies readonly LoanStatus[];
+
 export class LoanNotPayableError extends Error {
   readonly code = "LOAN_NOT_PAYABLE" as const;
   constructor(
@@ -270,6 +340,7 @@ export class LoanRepository {
     const where = {
       status: filter.status,
       productCode: filter.productCode,
+      customerId: filter.customerId,
       ...(tokenizedWhere(filter.q, (token) => [
         { number: contains(token) },
         { customer: { number: contains(token) } },
@@ -482,6 +553,41 @@ export class LoanRepository {
         propertyId = p.id;
       }
 
+      /*
+       * One live loan at a time — enforced HERE, inside the
+       * transaction, so neither application path can miss it and two
+       * simultaneous submissions can't both slip through a pre-check.
+       *
+       * `renewedFromId` is the one legitimate way past: a renewal
+       * exists precisely to replace a live loan, and the loan it names
+       * is allowed to be open. Everything else the customer holds still
+       * blocks.
+       */
+      const blocking = await tx.loanApplication.findMany({
+        where: {
+          customerId: input.customerId,
+          status: { in: [...LIVE_LOAN_STATUSES] },
+          ...(input.renewedFromId ? { id: { not: input.renewedFromId } } : {}),
+          // A restructure replaces its original, so the original must
+          // not block its replacement either.
+          ...(input.restructuredFromId
+            ? { id: { not: input.restructuredFromId } }
+            : {}),
+        },
+        select: { id: true, number: true, status: true, principal: true },
+        orderBy: { submittedAt: "desc" },
+      });
+      if (blocking.length > 0) {
+        throw new CustomerHasLiveLoanError(
+          blocking.map((l) => ({
+            id: l.id,
+            number: l.number,
+            status: l.status,
+            principal: Number(l.principal),
+          })),
+        );
+      }
+
       const number = await this.nextApplicationNumber(tx);
       const initialStatus = (input.initialStatus ?? "SUBMITTED") as LoanStatus;
 
@@ -536,6 +642,7 @@ export class LoanRepository {
           applicationSelfieUrl: input.applicationSelfieUrl,
           kycDeclarations: (input.kycDeclarations ?? undefined) as never,
           restructuredFromId: input.restructuredFromId,
+          renewedFromId: input.renewedFromId,
           isRepeat,
           currentApprovalStep: willUseChain ? 1 : null,
         },
@@ -683,12 +790,104 @@ export class LoanRepository {
         { postedById: input.disbursedById, tx },
       );
 
+      /*
+       * Renewal settlement — the moment the netting actually happens.
+       *
+       * A renewal's proceeds pay off the loan it replaces. That has to
+       * occur HERE, at disbursement, and inside this transaction: any
+       * earlier and the lender would have written off a live balance
+       * against a loan that might still be declined; any later and
+       * there is a window where the borrower holds both debts at once.
+       *
+       * The old loan is settled exactly as an early close would settle
+       * it — every open instalment marked paid, one payment row, one
+       * journal entry — because as far as the ledger is concerned that
+       * is precisely what happened. The only difference is where the
+       * cash came from, which is why the reference says so.
+       *
+       * The borrower receives `principal - payoff`. That difference is
+       * not computed here; `renewalPayoffAmount` is stamped on the row
+       * so the disbursement voucher and the borrower's statement can
+       * both show what was withheld and why.
+       */
+      let renewalPayoff: number | null = null;
+      if (loan.renewedFromId) {
+        const old = await tx.loanApplication.findUnique({
+          where: { id: loan.renewedFromId },
+          include: { schedule: { where: { paidInFullAt: null } } },
+        });
+        if (!old) throw new Error("Renewed loan not found");
+        if (old.status !== "ACTIVE" && old.status !== "DISBURSED") {
+          // It closed between application and disbursement — paid off
+          // in cash, perhaps. Nothing to settle, and settling anyway
+          // would double-credit it.
+          renewalPayoff = 0;
+        } else {
+          const outstanding = round2(
+            old.schedule.reduce(
+              (sum, r) =>
+                sum +
+                (Number(r.principalDue) - Number(r.principalPaid)) +
+                (Number(r.interestDue) - Number(r.interestPaid)),
+              0,
+            ),
+          );
+          renewalPayoff = outstanding;
+
+          if (outstanding > 0) {
+            const settlement = await tx.loanPayment.create({
+              data: {
+                loanId: old.id,
+                amount: outstanding,
+                paidOn: today,
+                reference: `RENEWAL_SETTLEMENT ${loan.number}`,
+                recordedById: input.disbursedById,
+              },
+            });
+            const principalPortion = round2(
+              old.schedule.reduce(
+                (sum, r) =>
+                  sum + (Number(r.principalDue) - Number(r.principalPaid)),
+                0,
+              ),
+            );
+            for (const inst of old.schedule) {
+              await tx.loanSchedule.update({
+                where: { id: inst.id },
+                data: {
+                  paidInFullAt: today,
+                  principalPaid: inst.principalDue,
+                  interestPaid: inst.interestDue,
+                },
+              });
+            }
+            await this.accounting.postIfAbsent(
+              loanPaymentEntry({
+                loanId: old.id,
+                loanNumber: old.number,
+                paymentId: settlement.id,
+                amount: outstanding,
+                interestPortion: round2(outstanding - principalPortion),
+                principalPortion,
+                paidOn: today,
+              }),
+              { postedById: input.disbursedById, tx },
+            );
+          }
+          await tx.loanApplication.update({
+            where: { id: old.id },
+            data: { status: "CLOSED", closedAt: today },
+          });
+        }
+      }
+
       const updated = await tx.loanApplication.update({
         where: { id },
         data: {
           status: "ACTIVE",
           disbursedAt: today,
           disbursedById: input.disbursedById,
+          renewalPayoffAmount: renewalPayoff,
         },
       });
 

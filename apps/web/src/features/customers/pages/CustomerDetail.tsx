@@ -27,14 +27,23 @@ import {
   useToast,
 } from "@loan/ui";
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
+import { usePermission } from "../../../hooks/use-permission";
 import { FileUpload } from "../../../components/FileUpload";
 import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
-import { FileUp, Gauge, Pencil, ShieldCheck, X } from "lucide-react";
+import {
+  CreditCard,
+  FileUp,
+  Gauge,
+  Pencil,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { CustomerLedgerPanel } from "../components/CustomerLedgerPanel";
+import { CustomerLoansPanel } from "../components/CustomerLoansPanel";
 import { DorsiScreenBanner } from "../components/DorsiScreenBanner";
 import { EditCustomerDialog } from "../components/EditCustomerDialog";
 import { CAMERA_MODE, DOC_TYPES, DOC_TYPE_LABELS } from "../constants";
@@ -65,6 +74,9 @@ export function CustomerDetailPage() {
   const kycDocs = useKycForCustomer(customerId);
   const kycStatus = useKycStatus(customerId);
   const score = useCustomerScore(customerId);
+  // Same key the API requires for POST /loans/apply, so a collector
+  // never sees a button that will 403 on them.
+  const canApply = usePermission("loans.apply");
   const [editing, setEditing] = useState(false);
 
   // Name the breadcrumb crumb for this route. Called before the early
@@ -123,6 +135,24 @@ export function CustomerDetailPage() {
               <Gauge className="h-4 w-4" />
               {score.data ? "Re-score" : "Take credit survey"}
             </Link>
+            {/*
+              Starting an application from the customer you are looking
+              at, rather than opening the wizard and searching for them
+              again. The wizard already reads `?customerId`, so this is
+              a link and not a new flow.
+
+              Gated on `loans.apply` — the same key the API requires, so
+              a collector doesn't see a button that will 403.
+            */}
+            {canApply && (
+              <Link
+                to={`/loans/new?customerId=${id}`}
+                className="inline-flex items-center gap-1 rounded-md border border-transparent bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-sm transition hover:opacity-90"
+              >
+                <CreditCard className="h-4 w-4" />
+                Apply for a loan
+              </Link>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
@@ -151,6 +181,14 @@ export function CustomerDetailPage() {
           <ExpandedDetails customer={c} />
         </CardContent>
       </Card>
+
+      {/*
+        Loan history first, then the ledger. The officer's question runs
+        in that order — what did they borrow, then what did the money
+        actually do — and the ledger reads as noise before you know how
+        many loans it spans.
+      */}
+      {customerId && <CustomerLoansPanel customerId={customerId} />}
 
       {/* Unified statement of account — loans + cooperative activity. */}
       <CustomerLedgerPanel idOrNumber={id} />

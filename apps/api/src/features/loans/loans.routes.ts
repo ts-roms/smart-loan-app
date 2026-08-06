@@ -12,6 +12,7 @@ import {
   DecisionRuleRepository,
   DelegationRepository,
   KycRepository,
+  LoanApprovalRepository,
   LoanDraftRepository,
   LoanNotPayableError,
   LoanRepository,
@@ -19,6 +20,7 @@ import {
   idOrNumberWhere,
 } from "@loan/db";
 import { validateKyc } from "@loan/kyc";
+import { checkRenewal, renewalNetProceeds } from "@loan/loans";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { config } from "../../config";
@@ -40,6 +42,7 @@ import {
   loanListQuerySchema,
   paymentSchema,
   quoteSchema,
+  renewSchema,
   restructureSchema,
   selfieMatchSchema,
   signSchema,
@@ -534,6 +537,155 @@ export async function loanRoutes(app: FastifyInstance) {
    * The new principal can be larger (top-up disbursement), equal
    * (rate/term change only), or smaller (partial write-down).
    */
+  /**
+   * Can this loan be renewed, and what would settling it cost?
+   *
+   * A preview, so the officer sees the payoff and the net proceeds
+   * BEFORE committing — the borrower's first question is always "how
+   * much do I actually get", and answering it after the application
+   * exists is too late to be useful.
+   */
+  app.get<{ Params: { id: string } }>(
+    "/:id/renewal-eligibility",
+    canRead,
+    async (req, reply) => {
+      const prisma = req.tenantCtx.prisma;
+      const loan = await prisma.loanApplication.findFirst({
+        where: idOrNumberWhere(req.params.id),
+        include: { schedule: true, renewedInto: { select: { id: true } } },
+      });
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
+      const cfg = await prisma.systemConfig.findUnique({
+        where: { id: "singleton" },
+        select: { renewalMinPaidFraction: true },
+      });
+      const check = checkRenewal({
+        status: loan.status,
+        schedule: loan.schedule.map((r) => ({
+          principalDue: Number(r.principalDue),
+          interestDue: Number(r.interestDue),
+          totalDue: Number(r.totalDue),
+          principalPaid: Number(r.principalPaid),
+          interestPaid: Number(r.interestPaid),
+          paidInFullAt: r.paidInFullAt,
+          dueDate: r.dueDate,
+        })),
+        minPaidFraction: Number(cfg?.renewalMinPaidFraction ?? 0.5),
+        now: new Date(),
+        alreadyRenewed: Boolean(loan.renewedInto),
+      });
+      return { loanNumber: loan.number, ...check };
+    },
+  );
+
+  /**
+   * Renew a loan: a new application whose proceeds settle the old one.
+   *
+   * Separate from restructure, and gated on its own permission, because
+   * the two mean opposite things — restructure rescues a loan going
+   * wrong, renewal rewards one that went right. Sharing an endpoint
+   * would make the audit trail unable to tell a rescue from a reward.
+   *
+   * The netting itself does not happen here. This creates the
+   * application; the settlement lands at DISBURSEMENT, so a renewal
+   * that is never approved leaves the original untouched.
+   */
+  app.post<{ Params: { id: string } }>(
+    "/:id/renew",
+    { preHandler: app.requirePermission("loans.restructure") },
+    async (req, reply) => {
+      const parsed = renewSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
+      }
+      const prisma = req.tenantCtx.prisma;
+      const { loans, audit } = req.loanCtx!;
+      const original = await prisma.loanApplication.findFirst({
+        where: idOrNumberWhere(req.params.id),
+        include: { schedule: true, renewedInto: { select: { id: true } } },
+      });
+      if (!original) return reply.code(404).send({ error: "NotFound" });
+
+      const cfg = await prisma.systemConfig.findUnique({
+        where: { id: "singleton" },
+        select: { renewalMinPaidFraction: true },
+      });
+      const check = checkRenewal({
+        status: original.status,
+        schedule: original.schedule.map((r) => ({
+          principalDue: Number(r.principalDue),
+          interestDue: Number(r.interestDue),
+          totalDue: Number(r.totalDue),
+          principalPaid: Number(r.principalPaid),
+          interestPaid: Number(r.interestPaid),
+          paidInFullAt: r.paidInFullAt,
+          dueDate: r.dueDate,
+        })),
+        minPaidFraction: Number(cfg?.renewalMinPaidFraction ?? 0.5),
+        now: new Date(),
+        alreadyRenewed: Boolean(original.renewedInto),
+      });
+      if (!check.eligible) {
+        return reply.code(409).send({ error: check.reason, ...check });
+      }
+
+      /*
+       * Re-checked here rather than trusted from the preview: the
+       * eligibility GET is a read the client may have made minutes ago,
+       * and a missed instalment in between must not be papered over by
+       * a stale answer.
+       */
+      // Score at renewal time, not the original's — a year of repayment
+      // is exactly the sort of thing that should move it, and freezing
+      // the old figure would make the renewal look like the loan it
+      // replaces rather than like the borrower they've become.
+      const score = await req.loanCtx!.scores.latestForCustomer(
+        original.customerId,
+      );
+      const created = await loans.apply({
+        customerId: original.customerId,
+        productCode: parsed.data.productCode,
+        principal: parsed.data.principal,
+        termMonths: parsed.data.termMonths,
+        annualInterestRate: parsed.data.annualInterestRate,
+        purpose: parsed.data.purpose,
+        submittedById: req.user.sub,
+        creditScoreAtApply: score?.score ?? null,
+        tierAtApply: score?.tier ?? null,
+        renewedFromId: original.id,
+      });
+
+      await audit.record({
+        action: "LOAN_RENEW",
+        actorId: req.user.sub,
+        targetType: "LoanApplication",
+        targetId: original.id,
+        payload: {
+          renewalId: created.id,
+          renewalNumber: created.number,
+          payoffQuoted: check.payoffAmount,
+          paidFraction: check.paidFraction,
+          newPrincipal: parsed.data.principal,
+          netProceeds: renewalNetProceeds(
+            parsed.data.principal,
+            check.payoffAmount,
+          ),
+        },
+      });
+
+      return reply.code(201).send({
+        loan: created,
+        payoffAmount: check.payoffAmount,
+        netProceeds: renewalNetProceeds(
+          parsed.data.principal,
+          check.payoffAmount,
+        ),
+      });
+    },
+  );
+
   app.post<{ Params: { id: string } }>(
     "/:id/restructure",
     { preHandler: app.requirePermission("loans.restructure") },
@@ -811,9 +963,17 @@ export async function loanRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      return reply
-        .code(201)
-        .send(await req.loanCtx!.coMakers.create(req.params.id, parsed.data));
+      const loan = await req.loanCtx!.loans.findByIdOrNumber(req.params.id);
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
+      const result = await req.loanCtx!.coMakers.create(loan.id, parsed.data);
+      if (!result.ok) {
+        // NotFound is the customer, not the loan — 404 here would read
+        // as "no such loan" to a caller that just resolved one.
+        return reply
+          .code(result.kind === "NotFound" ? 400 : 409)
+          .send({ error: result.kind, message: result.message });
+      }
+      return reply.code(201).send(result.coMaker);
     },
   );
 
@@ -860,6 +1020,54 @@ export async function loanRoutes(app: FastifyInstance) {
       // and `delivery` tells the UI whether to say "sent" or "copy
       // this to them".
       return { url, expiresAt: expiresAt.toISOString(), delivery };
+    },
+  );
+
+  /**
+   * Revoke a co-maker's invite link — the co-maker half of force
+   * logout.
+   *
+   * They have no account, so there is no session to end; the link IS
+   * the access. Killing the token is immediate in a way the staff-side
+   * equivalent can't be, because every load of the consent page
+   * resolves the token against the database rather than trusting a
+   * signature.
+   *
+   * Gated on `admin.force_logout` rather than `loans.apply`, matching
+   * the user endpoint: this is a "cut off access now" action, and it
+   * should be reachable by whoever holds that during an incident even
+   * if they don't work loan files.
+   */
+  app.post<{ Params: { coMakerId: string } }>(
+    "/co-makers/:coMakerId/revoke-invite",
+    { preHandler: app.requirePermission("admin.force_logout") },
+    async (req, reply) => {
+      const existing = await req.tenantCtx.prisma.coMaker.findUnique({
+        where: { id: req.params.coMakerId },
+        select: { id: true, fullName: true, loanId: true, inviteToken: true },
+      });
+      if (!existing) return reply.code(404).send({ error: "NotFound" });
+
+      // Already revoked, never invited, or expired-and-cleared. Report
+      // success rather than 409: the caller asked for this link to stop
+      // working and it doesn't work. An error here would read as "the
+      // co-maker still has access", which is the opposite of the truth.
+      const hadToken = existing.inviteToken !== null;
+      const coMaker = await req.loanCtx!.coMakers.revokeInvite(existing.id);
+
+      await req.loanCtx!.audit.record({
+        action: "CO_MAKER_INVITE_REVOKED",
+        actorId: req.user.sub,
+        targetType: "CoMaker",
+        targetId: existing.id,
+        payload: {
+          loanId: existing.loanId,
+          fullName: existing.fullName,
+          hadActiveLink: hadToken,
+        },
+      });
+
+      return { ok: true, hadActiveLink: hadToken, coMaker };
     },
   );
 
@@ -995,6 +1203,8 @@ function buildLoanCtx(app: FastifyInstance) {
       new PreAssessmentRepository(prisma),
       // Consent gate on disburse — see LoanWorkflowService.disburse.
       coMakers,
+      // Approval chain, for the gate in decide().
+      new LoanApprovalRepository(prisma),
     );
     req.loanCtx = {
       loans,

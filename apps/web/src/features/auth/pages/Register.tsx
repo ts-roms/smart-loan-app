@@ -80,10 +80,27 @@ export function RegisterPage() {
         )
       }
     >
+      {/*
+        Every field carries an id and every label an htmlFor. They had
+        neither: the labels were bare <label> elements sitting next to
+        unidentified inputs, so a screen reader announced four unnamed
+        edit boxes and clicking a label focused nothing. The sign-in
+        page next door has always been wired correctly, which is
+        precisely why this went unnoticed.
+
+        The validation hints are tied on with aria-describedby for the
+        same reason — a message that only exists visually is no message
+        to someone who can't see it — and paired with aria-invalid so
+        the field itself reports its state rather than relying on a
+        sentence underneath it.
+      */}
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-1">
-          <label className="text-sm">Full name</label>
+          <label htmlFor="reg-name" className="text-sm font-medium">
+            Full name
+          </label>
           <Input
+            id="reg-name"
             autoComplete="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -91,8 +108,11 @@ export function RegisterPage() {
           />
         </div>
         <div className="space-y-1">
-          <label className="text-sm">Email</label>
+          <label htmlFor="reg-email" className="text-sm font-medium">
+            Email
+          </label>
           <Input
+            id="reg-email"
             type="email"
             autoComplete="username"
             value={email}
@@ -101,27 +121,42 @@ export function RegisterPage() {
           />
         </div>
         <div className="space-y-1">
-          <label className="text-sm">Password</label>
+          <label htmlFor="reg-password" className="text-sm font-medium">
+            Password
+          </label>
           <PasswordInput
+            id="reg-password"
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            aria-invalid={tooShort || undefined}
+            aria-describedby={tooShort ? "reg-password-hint" : undefined}
             required
           />
           {tooShort && (
-            <p className="text-[11px] text-warning">At least 8 characters.</p>
+            <p id="reg-password-hint" className="text-[11px] text-warning">
+              At least 8 characters.
+            </p>
           )}
         </div>
         <div className="space-y-1">
-          <label className="text-sm">Confirm password</label>
+          <label htmlFor="reg-confirm" className="text-sm font-medium">
+            Confirm password
+          </label>
           <PasswordInput
+            id="reg-confirm"
             autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
+            // Distinct from the field above, so the two reveal toggles
+            // don't both announce "Show password".
+            revealLabel="confirmation"
+            aria-invalid={mismatch || undefined}
+            aria-describedby={mismatch ? "reg-confirm-hint" : undefined}
             required
           />
           {mismatch && (
-            <p className="text-[11px] text-warning">
+            <p id="reg-confirm-hint" className="text-[11px] text-warning">
               Passwords don&apos;t match.
             </p>
           )}

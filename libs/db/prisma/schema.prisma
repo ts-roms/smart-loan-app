@@ -50,6 +50,41 @@ model User {
   /// code is removed from this list; running out → user must reset 2FA.
   totpRecoveryCodes String[] @default([])
 
+  /// Cutoff for "force logout". Every access token issued at or before
+  /// this instant is rejected by `app.authenticate`.
+  ///
+  /// A timestamp rather than a denylist of token ids because access
+  /// tokens are stateless and we never see them again after signing:
+  /// there is nothing to add to a list. Comparing the JWT's own `iat`
+  /// against one column revokes every outstanding token for the user at
+  /// once, which is exactly what "log them out everywhere" means, and
+  /// costs one nullable column instead of a table.
+  ///
+  /// Null = never force-logged-out, the case for almost every row.
+  ///
+  /// Second-resolution, because `iat` is. See the comparison in
+  /// libs/auth/src/plugin.ts, which floors the cutoff to the second so a
+  /// token minted in the same second as the revocation is treated as
+  /// revoked rather than surviving it.
+  sessionsRevokedAt DateTime?
+
+  /// Last authenticated request from this user. Powers the online
+  /// indicator; null means they have never signed in.
+  ///
+  /// Written by `app.authenticate`, throttled — see HEARTBEAT_MS in
+  /// @loan/shared-utils. Presence is DERIVED from this at read time
+  /// rather than stored as a boolean, because a stored flag has no way
+  /// to become false: a crashed process, a closed laptop or dead wifi
+  /// all leave it stuck on "online" forever. A timestamp decays on its
+  /// own.
+  ///
+  /// Deliberately NOT indexed. It is read as part of a row already
+  /// fetched by primary key, and it is the single hottest-written
+  /// column on User — an index would be paid on every heartbeat to
+  /// serve a filtered query that does not exist yet. Add one with the
+  /// query that needs it.
+  lastSeenAt        DateTime?
+
   // What this user did across the system (auditable trail)
   kycSubmissions            KycSubmission[]        @relation("KycSubmittedBy")
   kycDecisions              KycSubmission[]        @relation("KycDecidedBy")
@@ -259,6 +294,11 @@ model Customer {
   user             User?             @relation("CustomerLogin")
   kycSubmissions   KycSubmission[]
   loanApplications LoanApplication[]
+  /// Loans this customer stands as CO-MAKER on. Distinct from
+  /// `loanApplications`, which is the debt that is theirs. Same
+  /// person, two very different kinds of liability, and the
+  /// exposure question needs both.
+  coMakerFor       CoMaker[]         @relation("CustomerCoMakerFor")
   surveyResponses  SurveyResponse[]
   creditScores     CreditScore[]
   amlScreenings    AmlScreening[]
@@ -818,6 +858,30 @@ model LoanApplication {
   /// the timeline is easy to walk forward.
   restructuredFromId String?          @unique
   restructuredFrom   LoanApplication? @relation("Restructure", fields: [restructuredFromId], references: [id])
+
+  /// The loan this one renews.
+  ///
+  /// Distinct from `restructuredFromId`, and the difference is the
+  /// borrower's standing. A restructure rescues a loan that is going
+  /// wrong — the terms change because the original ones aren't working.
+  /// A renewal rewards one that went right: a customer who has paid
+  /// down enough and is not in arrears takes a fresh loan, and the
+  /// balance of the old one is settled out of the new proceeds.
+  ///
+  /// Unique, so a loan can only be renewed once. Without it a single
+  /// old balance could be netted off two new loans and paid twice.
+  renewedFromId String?          @unique
+  renewedFrom   LoanApplication? @relation("Renewal", fields: [renewedFromId], references: [id])
+  renewedInto   LoanApplication? @relation("Renewal")
+
+  /// What the renewal actually settled, stamped at disbursement.
+  ///
+  /// Kept even though it can be recomputed: the payoff is netted out of
+  /// the proceeds, so this is the figure the borrower did NOT receive
+  /// in cash, and reconstructing it later from a schedule that has
+  /// since been marked paid is guesswork. The amount handed over is
+  /// `principal - renewalPayoffAmount`.
+  renewalPayoffAmount Decimal? @db.Decimal(14, 2)
   restructuredBy     LoanApplication? @relation("Restructure")
 
   /// True if the customer had a prior fully-paid loan when this application
@@ -1531,8 +1595,31 @@ enum CoMakerConsentStatus {
 }
 
 model CoMaker {
-  id                 String            @id @default(uuid())
-  loanId             String
+  id     String @id @default(uuid())
+  loanId String
+
+  /// The registered customer standing as co-maker.
+  ///
+  /// Co-makers used to be free text — a name and a phone number typed
+  /// into a box. That made them invisible to everything the system
+  /// knows how to do: no KYC on file, no credit history, no way to see
+  /// that the same person was already guaranteeing four other loans,
+  /// and no way to tell two spellings of one name apart. A co-maker is
+  /// jointly liable for the debt, so they are underwritten too, and
+  /// that means they have to be someone the system can actually look up.
+  ///
+  /// Nullable ONLY for rows created before this existed. New co-makers
+  /// require it — enforced in the API schema rather than the column, so
+  /// the historical rows stay readable instead of becoming invalid.
+  customerId String?
+
+  /// Snapshot of who they were when they were added.
+  ///
+  /// Denormalised from Customer on purpose, not laziness: the invite
+  /// needs a number to send to at that moment, the consent record and
+  /// the signed agreement have to name the person who actually agreed,
+  /// and a customer editing their phone next year must not silently
+  /// rewrite what a co-maker signed.
   fullName           String
   role               CoMakerRole       @default(CO_MAKER)
   relationship       String? // "Spouse" / "Parent" / "Sibling" / "Friend" / "Employer"
@@ -1562,14 +1649,41 @@ model CoMaker {
   inviteToken     String?              @unique
   inviteSentAt    DateTime?
   inviteExpiresAt DateTime?
+  /// When the consent link was FIRST opened. Null = never.
+  ///
+  /// The co-maker equivalent of presence, and the closest this system
+  /// can get: they have no account, so there is no session to observe.
+  /// What can be observed is whether the link they were sent was ever
+  /// loaded.
+  ///
+  /// First open rather than most recent, because it answers the
+  /// question an officer actually has. A co-maker who hasn't replied
+  /// leaves two possibilities — they saw it and are hesitating, or it
+  /// never reached them — and those call for completely different next
+  /// moves (a phone call versus a resend to a corrected number).
+  /// Overwriting on every view would answer "are they still looking",
+  /// which nobody asks, and would destroy "did it arrive", which
+  /// everybody does.
+  ///
+  /// Cleared by `issueInvite`: a resend is a new link, and carrying the
+  /// old one's open over would report a delivery that hasn't happened.
+  linkOpenedAt    DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   loan      LoanApplication   @relation(fields: [loanId], references: [id], onDelete: Cascade)
   documents CoMakerDocument[]
+  /// Restrict, not Cascade: deleting a customer who stands as co-maker
+  /// on a live loan would quietly remove a party to that debt. The
+  /// delete has to fail loudly so someone decides what happens to the
+  /// loan first.
+  customer  Customer?         @relation("CustomerCoMakerFor", fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([loanId])
+  /// "What else is this person guaranteeing?" — the exposure question,
+  /// which was unanswerable while co-makers were free text.
+  @@index([customerId])
 }
 
 /// A file a co-maker attached when accepting.
@@ -2616,6 +2730,13 @@ model SystemConfig {
   /// activity for this many seconds, the shell pops the warning dialog.
   /// Per-user override can be stricter but never longer. Default tracks
   /// the financial-app norm of "short fuse" — change in /settings.
+  /// Minimum share of a loan's principal that must be repaid before it
+  /// can be renewed. 0.5 = half. Configurable because "enough" is a
+  /// credit-policy judgement, not a constant — a cooperative lending
+  /// against salary deductions can afford a lower bar than one lending
+  /// against a motorcycle.
+  renewalMinPaidFraction Decimal @default(0.5) @db.Decimal(5, 4)
+
   idleTimeoutSeconds Int @default(60)
   /// Countdown shown inside the warning dialog before forced logout.
   /// The user can dismiss (Stay signed in) to reset both timers.

@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { SkeletonCard } from "@loan/ui";
 
 import { DashboardShell } from "./components/DashboardShell";
@@ -10,6 +10,10 @@ import { useAuth } from "./providers/auth";
 // them would only add a flash of the suspense fallback. Register sits
 // next to Login for the same reason: it's the other front door.
 import { CompleteProfilePage, LoginPage, RegisterPage } from "./features/auth";
+// Eager, not lazy: these are what the app falls back to when something
+// has already gone wrong, and a fallback that needs a chunk to load is
+// no fallback on a flaky connection.
+import { NotFoundPage, ServerErrorPage } from "./features/errors";
 import { DashboardPage } from "./features/dashboard";
 
 /**
@@ -248,6 +252,41 @@ function RouteFallback() {
   );
 }
 
+/*
+ * The two shells, as layout routes.
+ *
+ * They used to wrap <Routes> directly — `<Shell><Routes>…</Routes></Shell>`
+ * — which works fine right up until a route needs to render WITHOUT the
+ * chrome. The error pages do: a 404 nested inside the shell appeared in
+ * the content column with the rail and header still around it, and its
+ * `min-h-screen` measured the whole viewport while sitting in a column
+ * already 56px shorter, so it overflowed as well as looking wrong.
+ *
+ * As layout routes, the shell is applied per-route instead of to
+ * everything, and anything declared as a sibling gets the bare window.
+ * The Suspense boundary moves in here with them so a lazy chunk still
+ * shows the skeleton inside the chrome rather than replacing it.
+ */
+function ConsoleLayout() {
+  return (
+    <DashboardShell>
+      <Suspense fallback={<RouteFallback />}>
+        <Outlet />
+      </Suspense>
+    </DashboardShell>
+  );
+}
+
+function PortalLayout() {
+  return (
+    <PortalShell>
+      <Suspense fallback={<RouteFallback />}>
+        <Outlet />
+      </Suspense>
+    </PortalShell>
+  );
+}
+
 export function App() {
   const { token, user } = useAuth();
   const { pathname } = useLocation();
@@ -274,6 +313,13 @@ export function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+        {/*
+          Stays a redirect, unlike the two authenticated catch-alls
+          below. Out here we can't tell a typo from a real deep link
+          into the app — none of those routes are registered in this
+          branch — so a signed-out reader hitting /loans/123 must be
+          sent to sign in, not told the page doesn't exist. It does.
+        */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -295,105 +341,119 @@ export function App() {
   // CUSTOMER role gets the borrower portal; everyone else gets the officer console.
   if (user?.role === "CUSTOMER") {
     return (
-      <PortalShell>
-        <Suspense fallback={<RouteFallback />}>
-          <Routes>
-            <Route path="/portal" element={<PortalDashboard />} />
-            <Route path="/portal/pre-assess" element={<PortalPreAssess />} />
-            <Route path="/portal/apply" element={<PortalApply />} />
-            <Route path="/portal/loans" element={<PortalLoans />} />
-            <Route path="/portal/savings" element={<PortalSavings />} />
-            <Route
-              path="/portal/contributions"
-              element={<PortalContributions />}
-            />
-            <Route path="/portal/ledger" element={<PortalLedger />} />
-            <Route path="/portal/profile" element={<PortalProfile />} />
-            <Route path="/portal/loans/:id" element={<PortalLoanDetail />} />
-            <Route path="/portal/kyc" element={<PortalKyc />} />
-            <Route path="*" element={<Navigate to="/portal" replace />} />
-          </Routes>
-        </Suspense>
-      </PortalShell>
+      <Routes>
+        {/* Layout route, for the same reason as the console below. */}
+        <Route element={<PortalLayout />}>
+          <Route path="/portal" element={<PortalDashboard />} />
+          <Route path="/portal/pre-assess" element={<PortalPreAssess />} />
+          <Route path="/portal/apply" element={<PortalApply />} />
+          <Route path="/portal/loans" element={<PortalLoans />} />
+          <Route path="/portal/savings" element={<PortalSavings />} />
+          <Route
+            path="/portal/contributions"
+            element={<PortalContributions />}
+          />
+          <Route path="/portal/ledger" element={<PortalLedger />} />
+          <Route path="/portal/profile" element={<PortalProfile />} />
+          <Route path="/portal/loans/:id" element={<PortalLoanDetail />} />
+          <Route path="/portal/kyc" element={<PortalKyc />} />
+        </Route>
+
+        <Route path="/500" element={<ServerErrorPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
     );
   }
 
   return (
-    <DashboardShell>
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/customers" element={<CustomersPage />} />
-          {/* Bulk import comes before /:id so the static segment matches first. */}
-          <Route path="/customers/bulk" element={<BulkCustomersPage />} />
-          <Route path="/customers/:id" element={<CustomerDetailPage />} />
-          <Route path="/customers/:id/survey" element={<CreditSurveyPage />} />
-          <Route path="/loans" element={<LoansListPage />} />
-          {/* Wizard pages come before /:id so the static segments match first. */}
-          <Route path="/loans/drafts" element={<LoanDraftsPage />} />
-          <Route path="/loans/new" element={<NewLoanPage />} />
-          <Route path="/loans/new/:draftId" element={<NewLoanPage />} />
-          <Route path="/loans/:id" element={<LoanDetailPage />} />
-          <Route path="/pre-assessments" element={<PreAssessmentsPage />} />
-          <Route path="/loan-products" element={<LoanProductsPage />} />
-          <Route path="/collections" element={<CollectionsPage />} />
-          <Route path="/collections/my-accounts" element={<MyAccountsPage />} />
-          <Route
-            path="/collections/demand-letters"
-            element={<DemandLettersPage />}
-          />
-          <Route path="/repossession" element={<RepossessionPage />} />
-          <Route path="/lease" element={<LeaseQueuePage />} />
-          <Route path="/compliance/dorsi" element={<DorsiPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/help" element={<HelpPage />} />
-          <Route path="/payments" element={<PaymentsConsolePage />} />
-          <Route path="/payments/bulk" element={<BulkPaymentsPage />} />
-          <Route path="/jobs" element={<JobsPage />} />
-          <Route path="/questionnaires" element={<QuestionnairesPage />} />
-          <Route path="/decision-rules" element={<DecisionRulesPage />} />
-          <Route path="/roles" element={<RolesPage />} />
-          <Route path="/users" element={<UsersPage />} />
-          {/* Bulk import comes after the static segment so it doesn't shadow */}
-          <Route path="/users/bulk" element={<BulkUsersPage />} />
-          <Route path="/delegations" element={<DelegationsPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/screening" element={<ScreeningPage />} />
-          <Route path="/accounting/analytics" element={<AnalyticsPage />} />
-          <Route path="/kyc" element={<KycReviewPage />} />
-          <Route path="/accounting" element={<AccountingDashboardPage />} />
-          <Route
-            path="/accounting/accounts"
-            element={<ChartOfAccountsPage />}
-          />
-          <Route path="/accounting/journal" element={<JournalEntriesPage />} />
-          <Route
-            path="/accounting/trial-balance"
-            element={<TrialBalancePage />}
-          />
-          <Route
-            path="/accounting/income-statement"
-            element={<IncomeStatementPage />}
-          />
-          <Route
-            path="/accounting/balance-sheet"
-            element={<BalanceSheetPage />}
-          />
-          <Route path="/accounting/portfolio" element={<LoanPortfolioPage />} />
-          <Route path="/accounting/periods" element={<PeriodsPage />} />
-          <Route path="/accounting/ecl" element={<EclRunsPage />} />
-          <Route path="/reconciliation" element={<BankStatementsPage />} />
-          <Route path="/reconciliation/:id" element={<StatementDetailPage />} />
-          <Route path="/cooperative" element={<CooperativePage />} />
-          <Route
-            path="/compliance/annual-docs"
-            element={<AnnualDocsDashboardPage />}
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </DashboardShell>
+    <Routes>
+      {/*
+        The shell is a LAYOUT route rather than a wrapper around
+        <Routes>, so the error pages below can sit OUTSIDE it. Nested
+        inside, a 404 rendered in the content column with the rail and
+        header still around it — and its `min-h-screen` measured the
+        whole viewport while sitting in a column already 56px shorter,
+        so it overflowed as well as looking wrong. These pages are meant
+        to take the window.
+      */}
+      <Route element={<ConsoleLayout />}>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/customers" element={<CustomersPage />} />
+        {/* Bulk import comes before /:id so the static segment matches first. */}
+        <Route path="/customers/bulk" element={<BulkCustomersPage />} />
+        <Route path="/customers/:id" element={<CustomerDetailPage />} />
+        <Route path="/customers/:id/survey" element={<CreditSurveyPage />} />
+        <Route path="/loans" element={<LoansListPage />} />
+        {/* Wizard pages come before /:id so the static segments match first. */}
+        <Route path="/loans/drafts" element={<LoanDraftsPage />} />
+        <Route path="/loans/new" element={<NewLoanPage />} />
+        <Route path="/loans/new/:draftId" element={<NewLoanPage />} />
+        <Route path="/loans/:id" element={<LoanDetailPage />} />
+        <Route path="/pre-assessments" element={<PreAssessmentsPage />} />
+        <Route path="/loan-products" element={<LoanProductsPage />} />
+        <Route path="/collections" element={<CollectionsPage />} />
+        <Route path="/collections/my-accounts" element={<MyAccountsPage />} />
+        <Route
+          path="/collections/demand-letters"
+          element={<DemandLettersPage />}
+        />
+        <Route path="/repossession" element={<RepossessionPage />} />
+        <Route path="/lease" element={<LeaseQueuePage />} />
+        <Route path="/compliance/dorsi" element={<DorsiPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/help" element={<HelpPage />} />
+        <Route path="/payments" element={<PaymentsConsolePage />} />
+        <Route path="/payments/bulk" element={<BulkPaymentsPage />} />
+        <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/questionnaires" element={<QuestionnairesPage />} />
+        <Route path="/decision-rules" element={<DecisionRulesPage />} />
+        <Route path="/roles" element={<RolesPage />} />
+        <Route path="/users" element={<UsersPage />} />
+        {/* Bulk import comes after the static segment so it doesn't shadow */}
+        <Route path="/users/bulk" element={<BulkUsersPage />} />
+        <Route path="/delegations" element={<DelegationsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/screening" element={<ScreeningPage />} />
+        <Route path="/accounting/analytics" element={<AnalyticsPage />} />
+        <Route path="/kyc" element={<KycReviewPage />} />
+        <Route path="/accounting" element={<AccountingDashboardPage />} />
+        <Route path="/accounting/accounts" element={<ChartOfAccountsPage />} />
+        <Route path="/accounting/journal" element={<JournalEntriesPage />} />
+        <Route
+          path="/accounting/trial-balance"
+          element={<TrialBalancePage />}
+        />
+        <Route
+          path="/accounting/income-statement"
+          element={<IncomeStatementPage />}
+        />
+        <Route
+          path="/accounting/balance-sheet"
+          element={<BalanceSheetPage />}
+        />
+        <Route path="/accounting/portfolio" element={<LoanPortfolioPage />} />
+        <Route path="/accounting/periods" element={<PeriodsPage />} />
+        <Route path="/accounting/ecl" element={<EclRunsPage />} />
+        <Route path="/reconciliation" element={<BankStatementsPage />} />
+        <Route path="/reconciliation/:id" element={<StatementDetailPage />} />
+        <Route path="/cooperative" element={<CooperativePage />} />
+        <Route
+          path="/compliance/annual-docs"
+          element={<AnnualDocsDashboardPage />}
+        />
+      </Route>
+
+      {/* Outside the layout — full page, no rail, no header. */}
+      <Route path="/500" element={<ServerErrorPage />} />
+      {/*
+        A page, not a redirect. Bouncing an unknown path to the
+        dashboard meant a stale bookmark or a bad link looked like the
+        app losing the reader's place, and nobody ever reported the
+        broken link because nobody could tell there was one.
+      */}
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
   );
 }

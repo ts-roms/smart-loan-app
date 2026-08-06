@@ -810,7 +810,16 @@ function OriginationsChart({ data }: { data: OriginationMonth[] }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-end gap-2 h-48">
+      {/*
+        `items-stretch`, not `items-end` — same bug as BarChart in
+        @loan/ui. `items-end` shrinks each column to its content, and
+        the bar's `height: <pct>%` then resolves against a zero-height
+        parent, so the chart drew its axis and its month labels with no
+        bars between them. The inner `flex-1 flex items-end` is what
+        anchors the bar to the bottom; this row only has to supply the
+        height it measures against.
+      */}
+      <div className="flex items-stretch gap-2 h-48">
         {data.map((m) => {
           const heightPct = (m.principal / max) * 100;
           return (

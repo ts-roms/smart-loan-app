@@ -1,5 +1,6 @@
 import { phoneChangeError } from "@loan/shared-utils";
 import {
+  CustomerHasLiveLoanError,
   type CooperativeRepository,
   type CreditScoreRepository,
   type CustomerLedgerRepository,
@@ -60,7 +61,13 @@ export type LookupResult<T> =
 
 export type ApplyResult =
   | { ok: true; loan: Awaited<ReturnType<LoanRepository["apply"]>> }
-  | { ok: false; kind: "RepoError"; message: string; issues?: unknown };
+  | { ok: false; kind: "RepoError"; message: string; issues?: unknown }
+  | {
+      ok: false;
+      kind: "HasLiveLoan";
+      message: string;
+      liveLoans: Array<{ id: string; number: string; status: string }>;
+    };
 
 export interface LedgerOpts {
   from?: Date;
@@ -281,6 +288,33 @@ export class PortalService {
       }
       return { ok: true, loan: created };
     } catch (err) {
+      /*
+       * This path had NO live-loan check of its own. The officer
+       * console's guard lived in LoanWorkflowService, which the portal
+       * doesn't go through — it calls the repository directly — so a
+       * borrower could apply again from their own dashboard while a
+       * loan was approved and awaiting disbursement. The repository now
+       * enforces it for both, and this maps the refusal.
+       *
+       * Reworded for the person reading it: the officer's version says
+       * "this customer", which is nonsense addressed to the customer.
+       */
+      if (err instanceof CustomerHasLiveLoanError) {
+        const numbers = err.liveLoans.map((l) => l.number).join(", ");
+        return {
+          ok: false,
+          kind: "HasLiveLoan",
+          message:
+            err.liveLoans.length === 1
+              ? `You already have an open loan (${numbers}). It has to be settled before you can apply again.`
+              : `You already have open loans (${numbers}). They have to be settled before you can apply again.`,
+          liveLoans: err.liveLoans.map((l) => ({
+            id: l.id,
+            number: l.number,
+            status: l.status,
+          })),
+        };
+      }
       const e = err as Error & { issues?: unknown };
       return {
         ok: false,

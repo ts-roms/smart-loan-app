@@ -85,6 +85,35 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
       if (!prisma) return;
       const svc = serviceFor(prisma);
       const found = await svc.consent.lookup(req.params.token);
+
+      /*
+       * Record the open BEFORE deciding what to answer.
+       *
+       * This GET is the only moment the system ever hears from a
+       * co-maker who hasn't replied — they have no account and no
+       * session, so the request itself is the entire signal that the
+       * link reached a human. That is just as true when they click a
+       * day late: an expired open still tells the officer the link was
+       * delivered, which is precisely what separates "they've seen it"
+       * from "it never arrived". Only a token matching no row at all
+       * leaves nothing to record.
+       *
+       * Not awaited, and caught. A co-maker in front of a consent form
+       * must never be shown an error because a bookkeeping write
+       * failed; the page is the point and the timestamp is a nicety.
+       * Same reasoning as the user heartbeat in app.ts.
+       */
+      const opened =
+        found.ok || found.reason === "Expired" ? found.invite : null;
+      if (opened) {
+        void svc.repo.markLinkOpened(opened.id).catch((err: unknown) => {
+          app.log.debug(
+            { err, coMakerId: opened.id },
+            "link-open stamp failed",
+          );
+        });
+      }
+
       if (!found.ok) {
         return reply
           .code(found.reason === "Expired" ? 410 : 404)
@@ -92,6 +121,7 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
       }
       const i = found.invite;
       const loan = i.loan;
+
       const config_ = await prisma.systemConfig.findFirst({
         select: { companyName: true },
       });

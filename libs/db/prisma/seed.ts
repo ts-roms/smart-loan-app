@@ -6,6 +6,7 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "@loan/auth";
 import { AccountingRepository } from "../src/repositories/accounting.repository";
+import { LoanApprovalRepository } from "../src/repositories/loan-approval.repository";
 import { LoanProductRepository } from "../src/repositories/loan-product.repository";
 import { DecisionRuleRepository } from "../src/repositories/decision-rule.repository";
 import { seedScoringCatalog } from "../src/repositories/scoring-catalog.repository";
@@ -66,6 +67,12 @@ async function main() {
   const productRepo = new LoanProductRepository(prisma);
   const products = await productRepo.seedDefaults();
 
+  // Default approval chain — officer review, then manager sign-off.
+  // Idempotent AND per-product skip-if-configured, so an admin who has
+  // tailored a product's chain keeps it across reseeds.
+  const approvalRepo = new LoanApprovalRepository(prisma);
+  const chain = await approvalRepo.seedDefaultChain();
+
   // Default decision rules — idempotent.
   const ruleRepo = new DecisionRuleRepository(prisma);
   const rules = await ruleRepo.seedDefaults();
@@ -94,6 +101,9 @@ async function main() {
   );
   console.log(
     `Loan products:     ${products.created} created, ${products.existing} already present.`,
+  );
+  console.log(
+    `Approval chain:    ${chain.productsSeeded} product(s) seeded, ${chain.skipped} already configured.`,
   );
   console.log(
     `Decision rules:    ${rules.created} created, ${rules.existing} already present.`,

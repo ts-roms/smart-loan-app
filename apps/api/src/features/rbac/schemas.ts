@@ -125,3 +125,13 @@ export const createUserSchema = z.object({
   customerId: z.string().uuid().optional(),
 });
 export type CreateUserInput = z.infer<typeof createUserSchema>;
+
+/**
+ * Ending a user's sessions. The only field is the reason, and it's
+ * optional because an incident is a bad moment to make someone fill in
+ * a form — but the audit row is worth far more with it, so the UI asks.
+ */
+export const forceLogoutSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+export type ForceLogoutInput = z.infer<typeof forceLogoutSchema>;

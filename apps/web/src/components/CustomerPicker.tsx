@@ -25,17 +25,38 @@ export function CustomerPicker({
   value,
   onChange,
   placeholder = "Search by name, email, ID, or reference",
+  exclude,
 }: {
   value: string;
   onChange: (id: string) => void;
   required?: boolean;
   placeholder?: string;
+  /**
+   * Customer ids to keep out of the results.
+   *
+   * For the co-maker pickers: the borrower can't guarantee their own
+   * debt, and one person can only guarantee a loan once. The API
+   * refuses both, but offering a choice and then rejecting it is worse
+   * than never offering it.
+   */
+  exclude?: string[];
 }) {
   const customers = useCustomers();
   // Memoized because `?? []` allocates a fresh array on every render while
   // the query is loading, which would change the `selected` memo's deps
   // each pass and defeat it entirely.
-  const rows = useMemo(() => customers.data ?? [], [customers.data]);
+  const all = useMemo(() => customers.data ?? [], [customers.data]);
+  // `exclude` is typically a fresh array literal from the caller, so the
+  // memo keys on its CONTENTS — keying on the array itself would
+  // recompute every render and defeat the point.
+  const excludeKey = (exclude ?? []).join(",");
+  const rows = useMemo(
+    () =>
+      excludeKey
+        ? all.filter((c) => !excludeKey.split(",").includes(c.id))
+        : all,
+    [all, excludeKey],
+  );
 
   // Resolve the currently-selected customer (if any) so SearchInput can
   // render its label inside the input once chosen.

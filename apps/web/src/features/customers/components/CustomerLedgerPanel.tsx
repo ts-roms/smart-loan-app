@@ -17,6 +17,7 @@ import {
   CardTitle,
   Input,
   Label,
+  Pagination,
   SkeletonCard,
   cn,
   useToast,
@@ -55,6 +56,13 @@ export function CustomerLedgerPanel({ idOrNumber }: { idOrNumber: string }) {
   const [scope, setScope] = useState<CustomerLedgerScope>("ALL");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  /*
+   * Page 1 whenever the filters change. Staying on page 7 after
+   * narrowing to a fortnight leaves the reader staring at an empty
+   * table, convinced the filter found nothing.
+   */
+  const [page, setPage] = useState(1);
+  const resetPage = () => setPage(1);
   const toast = useToast();
 
   const ledger = useCustomerLedger(idOrNumber, {
@@ -162,17 +170,26 @@ export function CustomerLedgerPanel({ idOrNumber }: { idOrNumber: string }) {
             <ScopeChip
               label="All"
               active={scope === "ALL"}
-              onClick={() => setScope("ALL")}
+              onClick={() => {
+                resetPage();
+                setScope("ALL");
+              }}
             />
             <ScopeChip
               label="Loans"
               active={scope === "LOANS"}
-              onClick={() => setScope("LOANS")}
+              onClick={() => {
+                resetPage();
+                setScope("LOANS");
+              }}
             />
             <ScopeChip
               label="Cooperative"
               active={scope === "COOP"}
-              onClick={() => setScope("COOP")}
+              onClick={() => {
+                resetPage();
+                setScope("COOP");
+              }}
             />
           </div>
           <div className="flex items-end gap-2 ml-auto">
@@ -183,7 +200,10 @@ export function CustomerLedgerPanel({ idOrNumber }: { idOrNumber: string }) {
               <Input
                 type="date"
                 value={from}
-                onChange={(e) => setFrom(e.target.value)}
+                onChange={(e) => {
+                  resetPage();
+                  setFrom(e.target.value);
+                }}
                 className="h-8 text-xs w-36"
               />
             </div>
@@ -194,7 +214,10 @@ export function CustomerLedgerPanel({ idOrNumber }: { idOrNumber: string }) {
               <Input
                 type="date"
                 value={to}
-                onChange={(e) => setTo(e.target.value)}
+                onChange={(e) => {
+                  resetPage();
+                  setTo(e.target.value);
+                }}
                 className="h-8 text-xs w-36"
               />
             </div>
@@ -219,7 +242,11 @@ export function CustomerLedgerPanel({ idOrNumber }: { idOrNumber: string }) {
         ) : (ledger.data?.entries ?? []).length === 0 ? (
           <p className="text-sm text-fg-muted">No activity in this range.</p>
         ) : (
-          <LedgerTable entries={ledger.data!.entries} />
+          <LedgerTable
+            entries={ledger.data!.entries}
+            page={page}
+            onPageChange={setPage}
+          />
         )}
       </CardContent>
     </Card>
@@ -267,14 +294,36 @@ function SummaryStats({
         icon={HandCoins}
         sub={`CBU ${formatMoney(summary.capitalBuildUp)}`}
       />
+      {/*
+        Two cards where there was one, and they must never be added.
+
+        The figure they replace summed repayments, savings and every
+        contribution, then subtracted disbursements — so a borrower who
+        repaid ₱56,735.76 on a ₱50,000 loan came out +₱6,735.76 and was
+        labelled a net depositor. That amount is the INTEREST he was
+        charged; the coop holds none of it.
+
+        A member with ₱10,000 saved and ₱10,000 borrowed is not square:
+        they owe and are owed, and either can be called without the
+        other. One number said zero.
+      */}
       <Stat
-        label="Net position"
-        value={formatMoney(Math.abs(summary.netCustomerPosition))}
-        accent={summary.netCustomerPosition >= 0 ? "success" : "warning"}
+        label="Owes the coop"
+        value={formatMoney(summary.amountOwed)}
+        accent={summary.amountOwed > 0 ? "warning" : "success"}
         icon={Coins}
         sub={
-          summary.netCustomerPosition >= 0 ? "Net depositor" : "Net borrower"
+          summary.amountOwed > 0
+            ? "Live loans, interest included"
+            : "Nothing outstanding"
         }
+      />
+      <Stat
+        label="Coop holds"
+        value={formatMoney(summary.amountHeld)}
+        accent="info"
+        icon={PiggyBank}
+        sub="Savings + capital build-up"
       />
     </div>
   );
@@ -375,7 +424,51 @@ const KIND_ICONS: Record<CustomerLedgerEntryKind, typeof Wallet> = {
   SAVINGS_WITHDRAWAL: PiggyBank,
 };
 
-function LedgerTable({ entries }: { entries: CustomerLedgerEntry[] }) {
+/**
+ * Rows per page.
+ *
+ * A borrower on a 36-month loan generates 37 entries before they take a
+ * second one, so a few years of membership runs to hundreds — and every
+ * one of them was being rendered at once.
+ *
+ * Twelve because a ledger is mostly monthly instalments, which makes a
+ * page roughly a year of activity. That is the unit people compare in
+ * ("how did they do last year"), and it is small enough that the
+ * control appears on a realistic history rather than only on an
+ * exceptional one.
+ */
+const LEDGER_PAGE_SIZE = 12;
+
+/**
+ * Paged in the CLIENT, deliberately.
+ *
+ * The running total is cumulative from the oldest entry forward, so a
+ * server-side page can't be computed without either replaying
+ * everything before it or carrying a starting balance per page. The
+ * endpoint also feeds a PDF export and a date filter that both want the
+ * whole set. Fetching all of it and paging the render is the honest
+ * trade at this volume — bounded by one member's own history, not by
+ * the size of the book.
+ *
+ * If a member's ledger ever grows past a few thousand rows this needs
+ * to move server-side, and the balance carry is the work.
+ */
+function LedgerTable({
+  entries,
+  page,
+  onPageChange,
+}: {
+  entries: CustomerLedgerEntry[];
+  page: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(entries.length / LEDGER_PAGE_SIZE));
+  // Clamped, so deleting entries or narrowing the date filter can't
+  // strand the reader on a page that no longer exists.
+  const current = Math.min(page, totalPages);
+  const start = (current - 1) * LEDGER_PAGE_SIZE;
+  const visible = entries.slice(start, start + LEDGER_PAGE_SIZE);
+
   return (
     <div className="overflow-x-auto -mx-1">
       <table className="w-full text-sm">
@@ -386,11 +479,22 @@ function LedgerTable({ entries }: { entries: CustomerLedgerEntry[] }) {
             <th className="py-2 px-2 font-medium">Description</th>
             <th className="py-2 px-2 font-medium text-right">In</th>
             <th className="py-2 px-2 font-medium text-right">Out</th>
-            <th className="py-2 px-2 font-medium text-right">Balance</th>
+            {/*
+              Two running totals, not one. A single column mixing the
+              two made ₱50,000 in the In column produce a balance of
+              −₱50,000, which reads as broken signs; and it let interest
+              paid on a loan accumulate as though it were savings.
+
+              Owed climbs by a loan's WHOLE obligation at disbursement,
+              interest included, and falls with every payment. Held
+              tracks only what comes back to the member.
+            */}
+            <th className="py-2 px-2 font-medium text-right">Owed</th>
+            <th className="py-2 px-2 font-medium text-right">Held</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-default">
-          {entries.map((e, i) => {
+          {visible.map((e, i) => {
             const Icon = KIND_ICONS[e.kind];
             const isInflow = e.direction === "INFLOW";
             return (
@@ -449,23 +553,40 @@ function LedgerTable({ entries }: { entries: CustomerLedgerEntry[] }) {
                     <span className="text-fg-subtle">—</span>
                   )}
                 </td>
-                {/* Running balance — colour by sign so a glance at any
-                    row tells the officer whether the customer was net
-                    depositor (success) or net borrower (warning) at
-                    that point in time. */}
+                {/* Amber while anything is owed, green once it's clear —
+                    the debt is the thing an officer scans for. */}
                 <td
                   className={
                     "py-2 px-2 text-right tabular text-xs " +
-                    (e.runningBalance >= 0 ? "text-success" : "text-warning")
+                    (e.owedAfter > 0 ? "text-warning" : "text-fg-subtle")
                   }
                 >
-                  {formatMoney(e.runningBalance)}
+                  {formatMoney(e.owedAfter)}
+                </td>
+                <td className="py-2 px-2 text-right tabular text-xs text-info">
+                  {formatMoney(e.heldAfter)}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      {/*
+        Only when it earns its place. A member with eight entries gets a
+        table, not a table plus a control telling them there is one page.
+      */}
+      {totalPages > 1 && (
+        <Pagination
+          className="mt-3"
+          page={current}
+          totalPages={totalPages}
+          total={entries.length}
+          pageSize={LEDGER_PAGE_SIZE}
+          onPageChange={onPageChange}
+          noun="entry"
+          pluralNoun="entries"
+        />
+      )}
     </div>
   );
 }

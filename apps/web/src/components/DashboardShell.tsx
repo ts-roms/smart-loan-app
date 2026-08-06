@@ -56,6 +56,7 @@ import { AuditLogTrigger } from "../features/audit";
 import { HelpTrigger } from "../features/help";
 import { NotificationBell } from "../features/notifications";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { SidebarPattern } from "./SidebarPattern";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface NavItem {
@@ -384,8 +385,12 @@ function NavItemLink({ item, active }: { item: NavItem; active: boolean }) {
         // Subtle active state: a vertical accent rule on the left edge
         // plus a tinted surface. Looks more intentional than just a
         // darker background.
-        "group relative flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
-        "before:absolute before:left-0 before:top-1/2 before:h-4 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity",
+        // py-2 over py-1.5, gap-3 over gap-2.5. The old row was ~30px
+        // tall in a rail whose reference is ~47px; the difference reads
+        // as a cramped list rather than as a dense one, and the icons
+        // ran into their labels.
+        "group relative flex items-center gap-3 rounded-md px-3 py-2 text-[13px] transition-colors",
+        "before:absolute before:left-0 before:top-1/2 before:h-5 before:w-[3px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:opacity-0 before:transition-opacity",
         active
           ? // A white-alpha wash rather than a solid pill: the rail is
             // dark now, and a white pill would invert the text with it.
@@ -393,7 +398,7 @@ function NavItemLink({ item, active }: { item: NavItem; active: boolean }) {
           : "text-fg-muted hover-sidebar hover:text-fg",
       )}
     >
-      <item.icon className="h-4 w-4 shrink-0" />
+      <item.icon className="h-[18px] w-[18px] shrink-0" />
       <span className="truncate">{item.label}</span>
     </Link>
   );
@@ -433,10 +438,22 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   // Find the section that item lives in so the matching accordion panel
   // opens by default — the user lands with their context already
   // expanded instead of having to click around for it.
+  //
+  // The `??` fallback matters more than it looks. Dashboard is the one
+  // item in the UNLABELLED section, so on `/` nothing matched and every
+  // accordion stayed shut: the landing page every officer sees first
+  // offered a nav containing exactly one link, with the rest of the app
+  // behind six headings they had to guess between. Falling back to the
+  // first labelled section means the rail always shows somewhere to go.
+  //
+  // Only the initial value — `toggle` still sets null, so closing a
+  // section by hand leaves it closed rather than springing back open.
   const sectionWithRoute =
     NAV_SECTIONS.find(
       (s) => s.label && s.items.some((i) => i.to === activePath),
-    )?.label ?? null;
+    )?.label ??
+    NAV_SECTIONS.find((s) => s.label)?.label ??
+    null;
 
   // Off-canvas nav state — only meaningful below the md breakpoint.
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -503,7 +520,15 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     // h-screen + overflow-hidden pins the shell to the viewport so the
     // sidebar and header don't scroll with the page. Each interior region
     // (sidebar nav, main content) owns its own scroll instead.
-    <div className="h-screen flex overflow-hidden bg-background">
+    //
+    // No `bg-background` here. It painted `hsl(var(--background))`
+    // opaquely across the whole viewport — the same colour the body
+    // already paints, so it looked identical while hiding everything
+    // layered underneath: the two radial glows the body defines, and now
+    // the cover pattern. PortalShell never had it, which is why the
+    // portal has been showing those glows and the console hasn't.
+    // Dropping it makes them agree and changes no colour.
+    <div className="h-screen flex overflow-hidden">
       {/*
         Below md the sidebar slides over the content instead of sitting
         beside it. At 375px a fixed 240px rail left `main` with 135px,
@@ -523,17 +548,37 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <aside
         data-tour="nav-sidebar"
         className={cn(
-          "w-60 shrink-0 border-r border-sidebar bg-sidebar flex flex-col h-full",
+          "w-60 shrink-0 border-r border-sidebar bg-sidebar flex flex-col h-full isolate",
           // Off-canvas on small screens, in-flow from md up.
-          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
+          // `md:relative` rather than `md:static`: the cover pattern below
+          // is an absolutely-positioned child and needs the rail itself
+          // as its containing block, or it would size against the
+          // viewport. `relative` sits in flow exactly as `static` does.
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
           mobileNavOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="px-4 py-5 border-b border-default">
-          <div className="flex items-center gap-2.5">
-            {/* Brand glyph — uses the uploaded logo when one is set,
-                otherwise falls back to the built-in Wallet glyph. */}
-            <div className="h-8 w-8 rounded-md bg-primary-soft border border-default flex items-center justify-center overflow-hidden">
+        <SidebarPattern />
+
+        {/*
+          h-14 matches the main header exactly, so the two bottom borders
+          meet and read as one line across the top of the app instead of
+          stepping 18px at the rail's edge.
+        */}
+        <div className="flex h-14 shrink-0 items-center border-b border-default px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            {/*
+              An uploaded logo is someone else's artwork, drawn almost
+              always for a light background, so it gets a solid white
+              tile — the only container that can't swallow it. The
+              built-in fallback is ours and can sit straight on the rail.
+            */}
+            <div
+              className={cn(
+                "grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md",
+                brandLogo ? "bg-white p-1" : "bg-primary-soft text-primary",
+              )}
+            >
               {brandLogo ? (
                 <img
                   src={brandLogo}
@@ -541,21 +586,29 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   className="max-h-full max-w-full object-contain"
                 />
               ) : (
-                <Wallet className="h-4 w-4 text-primary" />
+                <Wallet className="h-[18px] w-[18px]" />
               )}
             </div>
             <div className="min-w-0">
-              <div className="text-[15px] font-semibold tracking-tight leading-tight truncate">
+              <div className="truncate text-[20px] font-semibold leading-tight tracking-tight">
                 {brandName}
               </div>
-              <div className="text-[10px] uppercase tracking-wider text-fg-subtle leading-tight truncate">
+              <div className="truncate text-[10px] uppercase leading-tight tracking-wider text-fg-subtle">
                 {brandTagline}
               </div>
             </div>
           </div>
         </div>
 
-        <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
+        {/*
+          Group separation lives on the section headings (`pt-5`), not as
+          a uniform `space-y` on this nav. A flat gap between every child
+          spaces the unsectioned top block away from the logo for no
+          reason and still leaves the headings sitting right on top of
+          the group above them — which is what made three distinct groups
+          read as one long list.
+        */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
           {NAV_SECTIONS.map((section, idx) => {
             const items = visibleItems(section.items, permissions);
             if (items.length === 0) return null;
@@ -564,7 +617,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             // how "Dashboard" stays pinned to the top, always visible.
             if (!section.label) {
               return (
-                <div key={`section-${idx}`} className="space-y-0.5">
+                <div key={`section-${idx}`} className="space-y-1">
                   {items.map((n) => (
                     <NavItemLink
                       key={n.to}
@@ -580,13 +633,17 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             const hasActiveItem = items.some((i) => i.to === activePath);
 
             return (
-              <div key={section.label} className="space-y-0.5">
+              <div key={section.label} className="space-y-1 pt-5">
                 <button
                   type="button"
                   onClick={() => toggle(section.label!)}
                   aria-expanded={isOpen}
                   className={cn(
-                    "group flex w-full items-center justify-between rounded-md px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors",
+                    // The heading is a label first and a control second,
+                    // so it sits at the same px-3 as the rows beneath it
+                    // — a heading indented differently from its own group
+                    // stops looking like it belongs to it.
+                    "group flex w-full items-center justify-between rounded-md px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors",
                     hasActiveItem
                       ? "text-fg"
                       : "text-fg-subtle hover:text-fg-muted",
@@ -613,7 +670,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                   )}
                 >
                   <div className="min-h-0 overflow-hidden">
-                    <div className="space-y-0.5 pb-1">
+                    <div className="space-y-1">
                       {items.map((n) => (
                         <NavItemLink
                           key={n.to}

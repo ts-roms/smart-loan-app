@@ -297,7 +297,24 @@ export function BarChart({
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <div className={cn("space-y-2", PLOT_SURFACE, className)}>
-      <div className="relative flex items-end gap-2" style={{ height }}>
+      {/*
+        `items-stretch`, NOT `items-end`.
+
+        This row was `items-end`, which aligns each column to the bottom
+        by shrinking it to its own content — measured, a column came out
+        19px tall (the value label) inside a 180px row. The bar inside
+        asks for `height: <pct>%`, that percentage resolved against the
+        collapsed parent, and every bar in every BarChart rendered ZERO
+        pixels tall. Gridlines, values, labels and hover targets all
+        still drew, so the chart looked populated and simply had no bars
+        in it.
+
+        Stretching the columns to full height and letting the inner
+        `flex-1 flex items-end` do the bottom-anchoring gives the same
+        visual intent with a parent the percentage can actually measure
+        against.
+      */}
+      <div className="relative flex items-stretch gap-2" style={{ height }}>
         {/* Quarter guides behind the bars — reading a height off a
             flat panel is guesswork without them. */}
         <div aria-hidden className="pointer-events-none absolute inset-0">
@@ -339,7 +356,36 @@ export function BarChart({
                   className="w-full rounded-t transition-opacity group-hover:opacity-90 relative overflow-hidden"
                   style={{
                     height: `${Math.max(pct, 2)}%`,
-                    background: `linear-gradient(to top, ${color}80, ${color})`,
+                    /*
+                     * Two declarations, and the split is the fix.
+                     *
+                     * This was one `background` shorthand doing
+                     * `${color}80` — the hex trick for 50% alpha. But
+                     * `color` is `hsl(var(--primary))` for every tone in
+                     * the palette, so it produced
+                     * `hsl(var(--primary))80`, which is not a colour.
+                     * One invalid stop invalidates the whole
+                     * `linear-gradient()`, and an invalid `background`
+                     * is dropped entirely — so every bar in every
+                     * BarChart painted nothing at all. Silently: the
+                     * values, labels, gridlines and hover targets all
+                     * still rendered, just with no bar between them.
+                     *
+                     * `backgroundColor` is a plain colour and cannot
+                     * fail, so the bar is now visible no matter what.
+                     * The gradient rides on top as an enhancement; if a
+                     * browser rejects `color-mix`, it loses the fade and
+                     * keeps the bar. The old shape had no such floor,
+                     * which is why a one-character mismatch could empty
+                     * the chart.
+                     *
+                     * `color-mix` rather than string surgery because
+                     * `d.color` is caller-supplied and may be a hex, an
+                     * rgb(), or a var — there is no suffix that works
+                     * for all three.
+                     */
+                    backgroundColor: color,
+                    backgroundImage: `linear-gradient(to top, color-mix(in srgb, ${color} 50%, transparent), ${color})`,
                   }}
                 >
                   <div className="absolute inset-x-0 top-0 h-px bg-white/30" />

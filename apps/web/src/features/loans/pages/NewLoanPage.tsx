@@ -2,6 +2,7 @@ import { useAddCoMaker, useCustomers } from "@loan/api-client";
 import type {
   CoMakerInput,
   CoMakerRole,
+  Customer,
   KycAnswers,
   LoanApplyInput,
   LoanProduct,
@@ -40,8 +41,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { PhoneInput } from "../../../components/PhoneInput";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+
+import { CustomerPicker } from "../../../components/CustomerPicker";
 
 import { DeclarationsForm } from "../../../components/DeclarationsForm";
 import { FileUpload } from "../../../components/FileUpload";
@@ -95,6 +97,13 @@ const STEPS: StepperStep[] = [
 interface CoMakerDraft extends CoMakerInput {
   /** Local tracking id so React lists are stable. Not persisted. */
   _key: string;
+  /**
+   * Display name of the chosen customer, for the review step and for
+   * error messages. UI-only, like `_key`: the server takes the name
+   * from the Customer row, never from us, so this is a label and not
+   * an input. Stripped before submit.
+   */
+  _name?: string;
 }
 
 interface FormState {
@@ -362,12 +371,12 @@ export function NewLoanPage() {
       // created (so we have an id); failures here don't roll back the
       // loan — operator can re-add via the loan detail page.
       for (const cm of form.coMakers) {
-        const { _key, ...input } = cm;
+        const { _key, _name, ...input } = cm;
         await addCoMaker
           .mutateAsync({ loanId: created.id, ...input })
           .catch((err) => {
             toast.error(
-              `Loan saved, but co-maker "${cm.fullName}" failed: ${(err as Error).message}`,
+              `Loan saved, but co-maker "${cm._name ?? "(unnamed)"}" failed: ${(err as Error).message}`,
             );
           });
       }
@@ -471,6 +480,8 @@ export function NewLoanPage() {
               form={form}
               setForm={setForm}
               product={product}
+              customers={customers.data}
+              borrowerId={form.customerId}
             />
           )}
           {step === 3 && (
@@ -808,10 +819,16 @@ function Step3CollateralCoMakers({
   form,
   setForm,
   product,
+  customers,
+  borrowerId,
 }: {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   product: LoanProduct | undefined;
+  /** Pool the co-maker picker chooses from. */
+  customers: Customer[] | undefined;
+  /** Excluded from that pool — nobody guarantees their own debt. */
+  borrowerId: string;
 }) {
   const collateralKind = product?.collateralKind ?? "NONE";
 
@@ -822,8 +839,7 @@ function Step3CollateralCoMakers({
         ...f.coMakers,
         {
           _key: `cm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          fullName: "",
-          phone: "",
+          customerId: "",
           role: "CO_MAKER",
           relationship: "",
         },
@@ -887,21 +903,49 @@ function Step3CollateralCoMakers({
                 key={cm._key}
                 className="rounded border border-default bg-surface-2 p-2 space-y-2"
               >
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                  <Field label="Full name">
-                    <Input
-                      value={cm.fullName}
-                      onChange={(e) =>
-                        patchCoMaker(cm._key, { fullName: e.target.value })
-                      }
-                      required
-                    />
-                  </Field>
-                  <Field label="Phone">
-                    <PhoneInput
-                      value={cm.phone}
-                      onChange={(v) => patchCoMaker(cm._key, { phone: v })}
-                      required
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {/*
+                    A registered customer, not a typed name. Their
+                    phone, email and ID come from that record on the
+                    server — a co-maker is jointly liable, so they get
+                    underwritten like a borrower, and none of that is
+                    possible for a name in a box.
+
+                    The borrower is filtered out of the list: nobody
+                    guarantees their own debt, and the API refuses it
+                    anyway. Better to not offer it than to explain it.
+                  */}
+                  <Field label="Co-maker (registered customer)">
+                    {/*
+                      Typeahead, same component the borrower picker at
+                      the top of this wizard uses. A scrollable list of
+                      every customer stops working the moment there are
+                      more than a screenful.
+
+                      Excludes the borrower and anyone already added on
+                      this application — offering a choice the API will
+                      refuse is worse than not offering it.
+                    */}
+                    <CustomerPicker
+                      value={cm.customerId}
+                      onChange={(id) => {
+                        const picked = (customers ?? []).find(
+                          (c) => c.id === id,
+                        );
+                        patchCoMaker(cm._key, {
+                          customerId: id,
+                          _name: picked
+                            ? `${picked.firstName} ${picked.lastName}`.trim()
+                            : undefined,
+                        });
+                      }}
+                      exclude={[
+                        borrowerId,
+                        ...form.coMakers
+                          .filter((o) => o._key !== cm._key && o.customerId)
+                          .map((o) => o.customerId),
+                      ]}
+                      placeholder="Search by name, ID, or reference…"
                     />
                   </Field>
                   <Field label="Role">
@@ -1084,7 +1128,10 @@ function Step5Review({
               form.coMakers.length === 0
                 ? "None"
                 : form.coMakers
-                    .map((cm) => `${cm.fullName} (${cm.role ?? "CO_MAKER"})`)
+                    .map(
+                      (cm) =>
+                        `${cm._name ?? "(not chosen)"} (${cm.role ?? "CO_MAKER"})`,
+                    )
                     .join(", ")
             }
           />

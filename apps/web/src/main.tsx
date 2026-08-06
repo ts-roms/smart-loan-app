@@ -4,6 +4,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
+import { AppErrorBoundary } from "./features/errors";
 import { ApiClientProvider } from "./providers/api";
 import { AuthProvider } from "./providers/auth";
 import { BreadcrumbTitleProvider } from "./providers/breadcrumb-titles";
@@ -36,28 +37,38 @@ createRoot(document.getElementById("root")!).render(
       for local dev.
     */}
     <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-      {/* Outermost of the app providers: everything below can read the
-          theme, and nothing it renders depends on auth or data. */}
-      <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <ApiClientProvider>
-              <Toaster>
-                <ConfirmDialogProvider>
-                  <PwaProvider>
-                    {/* Holds record names for the breadcrumb trail.
+      {/*
+        Outside every provider, so a throw in ANY of them is caught —
+        including AuthProvider and ApiClientProvider, which run before
+        the app has a screen to fail on. Sitting this high is only
+        possible because the fallback needs neither the router nor the
+        theme context: its colours come from `:root` in globals.css, and
+        its buttons navigate with window.location rather than a hook.
+      */}
+      <AppErrorBoundary>
+        {/* Outermost of the app providers: everything below can read the
+            theme, and nothing it renders depends on auth or data. */}
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <ApiClientProvider>
+                <Toaster>
+                  <ConfirmDialogProvider>
+                    <PwaProvider>
+                      {/* Holds record names for the breadcrumb trail.
                         Above <App /> so a title published by a detail
                         page survives navigating deeper into it. */}
-                    <BreadcrumbTitleProvider>
-                      <App />
-                    </BreadcrumbTitleProvider>
-                  </PwaProvider>
-                </ConfirmDialogProvider>
-              </Toaster>
-            </ApiClientProvider>
-          </AuthProvider>
-        </QueryClientProvider>
-      </ThemeProvider>
+                      <BreadcrumbTitleProvider>
+                        <App />
+                      </BreadcrumbTitleProvider>
+                    </PwaProvider>
+                  </ConfirmDialogProvider>
+                </Toaster>
+              </ApiClientProvider>
+            </AuthProvider>
+          </QueryClientProvider>
+        </ThemeProvider>
+      </AppErrorBoundary>
     </BrowserRouter>
   </StrictMode>,
 );

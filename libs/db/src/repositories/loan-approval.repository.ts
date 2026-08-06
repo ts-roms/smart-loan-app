@@ -53,6 +53,62 @@ export class LoanApprovalRepository {
 
   // ─── Chain definition (per product) ──────────────────────────────
 
+  /**
+   * Give every product a two-step chain if it has none.
+   *
+   * The chain machinery has existed since the feature landed but no
+   * steps were ever configured, so `willUseChain` was always false and
+   * every loan was approvable by one person in one call. Seeding turns
+   * the feature ON rather than leaving it latent behind an admin screen
+   * nobody knew to visit.
+   *
+   * Officer then manager, using permissions that already exist:
+   * `loans.approve.officer` is held by LOAN_OFFICER, `loans.approve.bm`
+   * only by ADMIN. So the second signature has to come from someone
+   * other than the officer who prepared the file, which is the entire
+   * point of a chain.
+   *
+   * Per product and skip-if-any: an admin who has already tailored a
+   * product's chain must not have it overwritten by a reseed, and the
+   * seed is expected to run repeatedly.
+   */
+  async seedDefaultChain(): Promise<{
+    productsSeeded: number;
+    skipped: number;
+  }> {
+    const DEFAULT_CHAIN = [
+      {
+        order: 1,
+        label: "Loan officer review",
+        requiredPermission: "loans.approve.officer",
+      },
+      {
+        order: 2,
+        label: "Branch manager sign-off",
+        requiredPermission: "loans.approve.bm",
+      },
+    ];
+    const products = await this.prisma.loanProduct.findMany({
+      select: { code: true },
+    });
+    let productsSeeded = 0;
+    let skipped = 0;
+    for (const p of products) {
+      const existing = await this.prisma.loanApprovalStep.count({
+        where: { productCode: p.code },
+      });
+      if (existing > 0) {
+        skipped += 1;
+        continue;
+      }
+      await this.prisma.loanApprovalStep.createMany({
+        data: DEFAULT_CHAIN.map((s) => ({ ...s, productCode: p.code })),
+      });
+      productsSeeded += 1;
+    }
+    return { productsSeeded, skipped };
+  }
+
   listSteps(productCode: string): Promise<LoanApprovalStep[]> {
     return this.prisma.loanApprovalStep.findMany({
       where: { productCode },
@@ -225,6 +281,30 @@ export class LoanApprovalRepository {
   }
 
   /** All approval rows for a loan, ordered by step. */
+  /**
+   * Steps still awaiting a decision on this loan.
+   *
+   * Exists so the single-shot `decide` endpoint can refuse to approve
+   * past a chain that hasn't finished. Returns the labels rather than a
+   * bare count, because the officer being refused needs to be told what
+   * is still outstanding and who it's waiting on — "cannot approve" with
+   * no explanation just looks broken.
+   *
+   * Zero rows is the normal case for a product with no chain, and the
+   * caller must treat that as "nothing blocking" rather than an error.
+   */
+  async pendingSteps(
+    loanId: string,
+  ): Promise<
+    Array<{ stepOrder: number; stepLabel: string; requiredPermission: string }>
+  > {
+    return this.prisma.loanApproval.findMany({
+      where: { loanId, status: "PENDING" },
+      orderBy: { stepOrder: "asc" },
+      select: { stepOrder: true, stepLabel: true, requiredPermission: true },
+    });
+  }
+
   listForLoan(loanId: string): Promise<
     Array<
       LoanApproval & {

@@ -24,6 +24,34 @@ export function AuthShell({
 }) {
   return (
     <div className="auth-backdrop relative flex min-h-screen flex-col items-center justify-center px-4 py-10">
+      {/*
+        Cover pattern, from the supplied asset rather than the CSS
+        version the console uses. It's a true alpha PNG — 88% fully
+        transparent, nothing opaque — so it lays over the gradient
+        instead of hiding it, and the dots it does carry are lighter
+        than the navy underneath, which is what makes them read at all
+        on a dark field.
+
+        The URL goes through BASE_URL because the app is served from
+        "/app/" in production and "/" locally; a hard-coded "/assets/…"
+        works in dev and 404s on the deployment.
+
+        `cover` anchored top-left rather than `contain` or a tile: the
+        asset is a one-off composition whose whole point is the dense
+        corner fading out, so it must not repeat, and the corner is the
+        part that has to survive a crop.
+
+        The card and the footer below are both `relative`, so they stay
+        above this without needing a z-index.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-cover bg-left-top bg-no-repeat opacity-60"
+        style={{
+          backgroundImage: `url("${import.meta.env.BASE_URL}assets/background/cover-pattern.png")`,
+        }}
+      />
+
       <div className="relative w-full max-w-4xl overflow-hidden rounded-xl bg-surface-2 shadow-2xl lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
         <BrandPanel />
 
@@ -70,6 +98,14 @@ function BrandPanel() {
       aria-hidden="true"
       className="auth-brand-panel relative hidden flex-col justify-between overflow-hidden p-9 text-white lg:flex"
     >
+      {/*
+        Cover pattern over the gradient. Every child below already
+        carries `relative`, which is what keeps them above it — the
+        pattern is a plain absolute sibling with no z-index of its own,
+        so it paints under anything positioned.
+      */}
+      <div className="pointer-events-none absolute inset-0 bg-overlay-pattern" />
+
       <div className="relative flex items-center gap-2.5">
         <Wallet className="h-7 w-7" />
         <span className="text-xl font-semibold tracking-tight">SmartLoan</span>

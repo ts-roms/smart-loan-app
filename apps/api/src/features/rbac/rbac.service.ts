@@ -1,4 +1,5 @@
 import { hashPassword } from "@loan/auth";
+import { onlineWindowMs, presenceOf } from "@loan/shared-utils";
 import {
   type AuditLogRepository,
   type NotificationRepository,
@@ -68,6 +69,23 @@ export type CreateUserResult =
 export type AssignRoleResult =
   | { ok: true; assignment: Awaited<ReturnType<RoleRepository["assign"]>> }
   | { ok: false; kind: "RepoError" | "BadExpiry"; message: string };
+
+export type ForceLogoutResult =
+  | {
+      ok: true;
+      userId: string;
+      email: string;
+      name: string;
+      /** When the cutoff was set. Every token issued at or before this dies. */
+      revokedAt: Date;
+      /** Refresh tokens killed alongside it. Zero is normal and fine. */
+      refreshTokensRevoked: number;
+    }
+  | {
+      ok: false;
+      kind: "NotFound" | "Self";
+      message: string;
+    };
 
 export type UnassignRoleResult =
   | { ok: true }
@@ -576,24 +594,52 @@ export class RbacService {
   // ─── users ────────────────────────────────────────────────────────
 
   async listUsers() {
-    const users = await this.prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        active: true,
-        createdAt: true,
-        roleAssignments: {
-          select: {
-            expiresAt: true,
-            role: { select: { key: true, name: true, system: true } },
+    const [users, cfg] = await Promise.all([
+      this.prisma.user.findMany({
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          active: true,
+          createdAt: true,
+          lastSeenAt: true,
+          roleAssignments: {
+            select: {
+              expiresAt: true,
+              role: { select: { key: true, name: true, system: true } },
+            },
           },
         },
-      },
-      take: 500,
-    });
+        take: 500,
+      }),
+      /*
+       * The online window follows the org's idle policy. That policy is
+       * what decides how long a real session may sit quiet — with the
+       * default 60s the shell has already signed out anyone idle for
+       * two minutes, so calling them online would be a claim the app
+       * itself has disproved.
+       */
+      this.prisma.systemConfig.findUnique({
+        where: { id: "singleton" },
+        select: { idleTimeoutSeconds: true },
+      }),
+    ]);
+
+    /*
+     * Presence is resolved HERE rather than in the browser, against one
+     * clock. Sending `lastSeenAt` alone and letting each client compare
+     * it to its own `Date.now()` would make the badge a function of how
+     * accurately the viewer's laptop is set — a machine ten minutes
+     * fast would show the whole company as offline.
+     *
+     * `lastSeenAt` still goes out, for the "last seen 4m ago" label
+     * where being a few seconds off costs nothing.
+     */
+    const now = Date.now();
+    const windowMs = onlineWindowMs(cfg?.idleTimeoutSeconds ?? 60);
+
     return users.map((u) => ({
       id: u.id,
       email: u.email,
@@ -601,6 +647,8 @@ export class RbacService {
       primaryRole: u.role,
       active: u.active,
       createdAt: u.createdAt,
+      lastSeenAt: u.lastSeenAt,
+      presence: presenceOf(u.lastSeenAt, now, windowMs),
       // Flatten + carry expiry. Note expired assignments are still
       // returned — the resolver filters them out at permission-check
       // time, but the UI wants to show "expired 3 days ago" for
@@ -685,6 +733,98 @@ export class RbacService {
       payload: { email: user.email, role: user.role },
     });
     return { ok: true, user };
+  }
+
+  /**
+   * End every session a user currently has — staff or borrower alike.
+   *
+   * Two writes, and both are needed. Stamping `sessionsRevokedAt`
+   * invalidates the access tokens already in the wild, which is the
+   * half that takes effect immediately; revoking the refresh tokens
+   * stops the client quietly minting a fresh one a moment later. Doing
+   * only the first buys seconds, and doing only the second buys
+   * nothing at all for up to 24 hours.
+   *
+   * They go in one transaction because a partial application is a
+   * silent failure: the caller is told the session ended and it didn't.
+   *
+   * This does NOT disable the account. The user can sign in again
+   * straight away with the same password, which is the right default —
+   * "log this stolen laptop out" and "this person no longer works here"
+   * are different decisions, and conflating them means every session
+   * reset becomes an offboarding. Deactivation already exists
+   * separately, and now that `authenticate` checks `active`, it takes
+   * effect immediately too.
+   */
+  async forceLogout(args: {
+    userId: string;
+    actorId: string;
+    reason?: string;
+  }): Promise<ForceLogoutResult> {
+    /*
+     * Refusing to target yourself.
+     *
+     * Not a security boundary — an admin who wants out can sign out,
+     * and could force-logout their own account through a second admin
+     * anyway. It's here because the failure is silent and confusing:
+     * the request succeeds, the response never arrives at a live
+     * session, and the admin is bounced to the login screen with no
+     * explanation, having probably meant to click the row above.
+     */
+    if (args.userId === args.actorId) {
+      return {
+        ok: false,
+        kind: "Self",
+        message:
+          "You can't end your own sessions here — use Sign out. To reset another admin, ask them or use a second admin account.",
+      };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: args.userId },
+      select: { id: true, email: true, name: true },
+    });
+    if (!user) {
+      return { ok: false, kind: "NotFound", message: "User not found" };
+    }
+
+    const revokedAt = new Date();
+    const refreshTokensRevoked = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { sessionsRevokedAt: revokedAt },
+      });
+      const { count } = await tx.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt },
+      });
+      return count;
+    });
+
+    await this.audit.record({
+      action: "SESSIONS_REVOKED",
+      actorId: args.actorId,
+      targetType: "User",
+      targetId: user.id,
+      // The reason is the whole value of this row six months later.
+      // Without it the trail says an admin cut someone off and nothing
+      // about why, which is exactly the question an auditor asks.
+      payload: {
+        email: user.email,
+        revokedAt: revokedAt.toISOString(),
+        refreshTokensRevoked,
+        reason: args.reason ?? null,
+      },
+    });
+
+    return {
+      ok: true,
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      revokedAt,
+      refreshTokensRevoked,
+    };
   }
 
   // ─── role assignments ─────────────────────────────────────────────

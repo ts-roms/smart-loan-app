@@ -6,6 +6,7 @@ import {
   createRoleSchema,
   createUserSchema,
   editImpactSchema,
+  forceLogoutSchema,
   permissionPatchSchema,
   updateRoleSchema,
   userBulkImportSchema,
@@ -220,6 +221,43 @@ export class RbacController {
         .send({ error: "BadRequest", message: result.message });
     }
     return { ok: true };
+  };
+
+  forceLogout = async (
+    req: FastifyRequest<{ Params: { userId: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = forceLogoutSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await req.rbacServices!.rbac.forceLogout({
+      userId: req.params.userId,
+      actorId: req.user.sub,
+      reason: parsed.data.reason,
+    });
+    if (!result.ok) {
+      if (result.kind === "NotFound") {
+        return reply
+          .code(404)
+          .send({ error: "NotFound", message: result.message });
+      }
+      // Self-targeting. 409 rather than 400: the request is well-formed
+      // and would have worked against any other row.
+      return reply
+        .code(409)
+        .send({ error: "Conflict", message: result.message });
+    }
+    return {
+      ok: true,
+      userId: result.userId,
+      email: result.email,
+      name: result.name,
+      revokedAt: result.revokedAt.toISOString(),
+      refreshTokensRevoked: result.refreshTokensRevoked,
+    };
   };
 
   // ─── error mapping ────────────────────────────────────────────────
