@@ -12,6 +12,7 @@ import {
   DecisionRuleRepository,
   DelegationRepository,
   KycRepository,
+  LoanApprovalRepository,
   LoanDraftRepository,
   LoanNotPayableError,
   LoanRepository,
@@ -1043,6 +1044,8 @@ function buildLoanCtx(app: FastifyInstance) {
       new PreAssessmentRepository(prisma),
       // Consent gate on disburse — see LoanWorkflowService.disburse.
       coMakers,
+      // Approval chain, for the gate in decide().
+      new LoanApprovalRepository(prisma),
     );
     req.loanCtx = {
       loans,

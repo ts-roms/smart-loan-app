@@ -82,6 +82,27 @@ export class LoanWorkflowController {
     if (result.kind === "NotFound") {
       return reply.code(404).send({ error: "NotFound" });
     }
+    if (result.kind === "ApprovalChainPending") {
+      /*
+       * Deliberately NOT overridable, unlike the KYC and declarations
+       * gates below. Those say "the file is incomplete", and an admin
+       * accepting that risk in writing is a legitimate call. This one
+       * says "the people who are supposed to approve this haven't" —
+       * an override flag would be a switch for skipping the control
+       * itself, which is the opposite of what a chain is for.
+       *
+       * The remedy is to go and approve the steps, so the message names
+       * them.
+       */
+      const names = result.pending
+        .map((s) => `${s.stepOrder}. ${s.stepLabel}`)
+        .join(", ");
+      return reply.code(409).send({
+        error: "ApprovalChainPending",
+        message: `Cannot approve — ${result.pending.length} approval step(s) still outstanding: ${names}.`,
+        pending: result.pending,
+      });
+    }
     if (result.kind === "DeclarationsIncomplete") {
       // Same 409 family as KycIncomplete — approval is blocked by KYC
       // posture, here the unanswered required declarations.
