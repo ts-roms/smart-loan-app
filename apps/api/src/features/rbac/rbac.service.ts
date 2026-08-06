@@ -1,4 +1,5 @@
 import { hashPassword } from "@loan/auth";
+import { onlineWindowMs, presenceOf } from "@loan/shared-utils";
 import {
   type AuditLogRepository,
   type NotificationRepository,
@@ -593,24 +594,52 @@ export class RbacService {
   // ─── users ────────────────────────────────────────────────────────
 
   async listUsers() {
-    const users = await this.prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        active: true,
-        createdAt: true,
-        roleAssignments: {
-          select: {
-            expiresAt: true,
-            role: { select: { key: true, name: true, system: true } },
+    const [users, cfg] = await Promise.all([
+      this.prisma.user.findMany({
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          active: true,
+          createdAt: true,
+          lastSeenAt: true,
+          roleAssignments: {
+            select: {
+              expiresAt: true,
+              role: { select: { key: true, name: true, system: true } },
+            },
           },
         },
-      },
-      take: 500,
-    });
+        take: 500,
+      }),
+      /*
+       * The online window follows the org's idle policy. That policy is
+       * what decides how long a real session may sit quiet — with the
+       * default 60s the shell has already signed out anyone idle for
+       * two minutes, so calling them online would be a claim the app
+       * itself has disproved.
+       */
+      this.prisma.systemConfig.findUnique({
+        where: { id: "singleton" },
+        select: { idleTimeoutSeconds: true },
+      }),
+    ]);
+
+    /*
+     * Presence is resolved HERE rather than in the browser, against one
+     * clock. Sending `lastSeenAt` alone and letting each client compare
+     * it to its own `Date.now()` would make the badge a function of how
+     * accurately the viewer's laptop is set — a machine ten minutes
+     * fast would show the whole company as offline.
+     *
+     * `lastSeenAt` still goes out, for the "last seen 4m ago" label
+     * where being a few seconds off costs nothing.
+     */
+    const now = Date.now();
+    const windowMs = onlineWindowMs(cfg?.idleTimeoutSeconds ?? 60);
+
     return users.map((u) => ({
       id: u.id,
       email: u.email,
@@ -618,6 +647,8 @@ export class RbacService {
       primaryRole: u.role,
       active: u.active,
       createdAt: u.createdAt,
+      lastSeenAt: u.lastSeenAt,
+      presence: presenceOf(u.lastSeenAt, now, windowMs),
       // Flatten + carry expiry. Note expired assignments are still
       // returned — the resolver filters them out at permission-check
       // time, but the UI wants to show "expired 3 days ago" for

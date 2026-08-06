@@ -107,10 +107,28 @@ export function useDeleteRole() {
   });
 }
 
+/**
+ * How often the user list re-reads presence.
+ *
+ * The badge is only ever as fresh as the last fetch, and without a
+ * refetch a cached list would show colleagues as online long after they
+ * had gone — worse than no indicator, because it looks authoritative.
+ * 30s matches the heartbeat interval: polling faster only re-reads
+ * numbers that cannot have changed.
+ */
+const PRESENCE_REFRESH_MS = 30_000;
+
 export function useUsers() {
   return useQuery({
     queryKey: rbacKeys.users,
     queryFn: () => getApiClient().get<UserWithRoles[]>("/admin/users"),
+    refetchInterval: PRESENCE_REFRESH_MS,
+    // Not in the background. A left-open tab polling all night would
+    // keep its own viewer's heartbeat alive and report them online
+    // while they slept — the poll would be manufacturing the presence
+    // it claims to observe.
+    refetchIntervalInBackground: false,
+    staleTime: PRESENCE_REFRESH_MS,
   });
 }
 

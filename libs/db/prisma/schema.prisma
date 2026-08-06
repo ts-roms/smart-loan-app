@@ -68,6 +68,23 @@ model User {
   /// revoked rather than surviving it.
   sessionsRevokedAt DateTime?
 
+  /// Last authenticated request from this user. Powers the online
+  /// indicator; null means they have never signed in.
+  ///
+  /// Written by `app.authenticate`, throttled — see HEARTBEAT_MS in
+  /// @loan/shared-utils. Presence is DERIVED from this at read time
+  /// rather than stored as a boolean, because a stored flag has no way
+  /// to become false: a crashed process, a closed laptop or dead wifi
+  /// all leave it stuck on "online" forever. A timestamp decays on its
+  /// own.
+  ///
+  /// Deliberately NOT indexed. It is read as part of a row already
+  /// fetched by primary key, and it is the single hottest-written
+  /// column on User — an index would be paid on every heartbeat to
+  /// serve a filtered query that does not exist yet. Add one with the
+  /// query that needs it.
+  lastSeenAt        DateTime?
+
   // What this user did across the system (auditable trail)
   kycSubmissions            KycSubmission[]        @relation("KycSubmittedBy")
   kycDecisions              KycSubmission[]        @relation("KycDecidedBy")

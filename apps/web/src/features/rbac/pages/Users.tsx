@@ -38,6 +38,7 @@ import { useState, type FormEvent } from "react";
 
 import { usePermission } from "../../../hooks/use-permission";
 import { useAuth } from "../../../providers/auth";
+import { PresenceBadge } from "../components/PresenceBadge";
 
 /**
  * Users + role assignments. Each row shows the user's primary role
@@ -180,6 +181,12 @@ export function UsersPage() {
                 <th className="py-2 px-2">Primary role</th>
                 <th className="py-2 px-2">Assigned roles</th>
                 <th className="py-2 px-2">Status</th>
+                {/* Its own column, not folded into Status. "Active" is
+                    whether the account may sign in; "Online" is whether
+                    they are here now. One is a permission and the other
+                    is an observation, and an admin about to end someone's
+                    session needs to read them separately. */}
+                <th className="py-2 px-2">Presence</th>
                 <th className="py-2 px-2">Created</th>
                 <th />
               </tr>
@@ -269,6 +276,12 @@ export function UsersPage() {
                     <Badge variant={u.active ? "success" : "muted"}>
                       {u.active ? "Active" : "Inactive"}
                     </Badge>
+                  </td>
+                  <td className="py-2 px-2">
+                    <PresenceBadge
+                      presence={u.presence}
+                      lastSeenAt={u.lastSeenAt}
+                    />
                   </td>
                   <td className="py-2 px-2 text-xs text-fg-muted">
                     {formatDate(u.createdAt)}

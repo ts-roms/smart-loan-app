@@ -1014,6 +1014,16 @@ export interface RoleUpdateInput {
   parents?: string[];
 }
 
+/**
+ * Presence, resolved by the API against ITS clock.
+ *
+ * `NEVER` is kept apart from `OFFLINE` because "has not signed in since
+ * we started counting" and "was here this morning" are different facts
+ * about a person; collapsing them would make a dormant account look
+ * merely idle.
+ */
+export type UserPresence = "ONLINE" | "OFFLINE" | "NEVER";
+
 export interface UserWithRoles {
   id: string;
   email: string;
@@ -1021,6 +1031,16 @@ export interface UserWithRoles {
   primaryRole: UserRole;
   active: boolean;
   createdAt: string;
+  /** ISO-8601, or null if they have never made an authenticated request. */
+  lastSeenAt: string | null;
+  /**
+   * Computed server-side on purpose. Deriving it in the browser would
+   * make the badge a function of how accurately the viewer's own clock
+   * is set — a laptop ten minutes fast would show the whole company as
+   * offline. `lastSeenAt` is still sent, for the relative label where
+   * a few seconds of drift costs nothing.
+   */
+  presence: UserPresence;
   /**
    * `expiresAt` is null for perpetual grants; an ISO-8601 string
    * otherwise. A date in the past means the assignment row is still on

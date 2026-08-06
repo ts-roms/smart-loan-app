@@ -5,6 +5,7 @@ import {
   type PrismaClient,
   resolveEffectivePermissions,
 } from "@loan/db";
+import { shouldStampHeartbeat } from "@loan/shared-utils";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import sensible from "@fastify/sensible";
@@ -190,9 +191,38 @@ export async function buildApp() {
       const db = (tenantPrisma as PrismaClient | undefined) ?? app.prisma;
       const row = await db.user.findUnique({
         where: { id: userId },
-        select: { active: true, sessionsRevokedAt: true },
+        select: { active: true, sessionsRevokedAt: true, lastSeenAt: true },
       });
       if (!row) return null;
+
+      /*
+       * Presence heartbeat, riding along on a read this request was
+       * already making.
+       *
+       * This is the only place in the app that touches the User row on
+       * every authenticated request, which makes it the one spot where
+       * "when did we last hear from them" costs nothing extra to
+       * decide. Throttled to at most one UPDATE per user per
+       * HEARTBEAT_MS — without that, a busy officer would generate a
+       * write per request to record a fact that changes once every
+       * thirty seconds.
+       *
+       * Deliberately not awaited. The answer to "is this session
+       * valid" does not depend on it, and making every request in the
+       * system wait on a bookkeeping write to power a status dot would
+       * be the wrong trade. `.catch` is not optional here: an
+       * unawaited rejection would take the process down under Node's
+       * default unhandled-rejection behaviour, and a failed heartbeat
+       * must never cost anyone their request.
+       */
+      if (shouldStampHeartbeat(row.lastSeenAt, Date.now())) {
+        void db.user
+          .update({ where: { id: userId }, data: { lastSeenAt: new Date() } })
+          .catch((err: unknown) => {
+            app.log.debug({ err, userId }, "heartbeat write failed");
+          });
+      }
+
       return {
         active: row.active,
         sessionsRevokedAtMs: row.sessionsRevokedAt?.getTime() ?? null,
