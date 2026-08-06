@@ -731,6 +731,7 @@
       hsl(210 45% 34%) 45%,
       hsl(226 36% 39%) 100%
     );
+    background-image: ();
   }
 
   /* Brand half of the auth card — the same ramp, darker, so the card

@@ -28,6 +28,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/auth";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { SidebarPattern } from "./SidebarPattern";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -107,11 +108,17 @@ export function PortalShell({ children }: { children: ReactNode }) {
       )}
       <aside
         className={cn(
-          "w-60 shrink-0 border-r border-sidebar bg-sidebar flex flex-col h-full",
-          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
+          "w-60 shrink-0 border-r border-sidebar bg-sidebar flex flex-col h-full isolate",
+          // `md:relative` rather than `md:static`: the cover pattern below
+          // is an absolutely-positioned child and needs the rail itself
+          // as its containing block, or it would size against the
+          // viewport. `relative` sits in flow exactly as `static` does.
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
           navOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
+        <SidebarPattern />
+
         {/* h-14 to line up with the main header, same as the operator
             shell. Tagline moves onto the second line of the brand block
             rather than under the whole row, which is what lets the
