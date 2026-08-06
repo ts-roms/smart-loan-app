@@ -251,8 +251,16 @@ function StatCard({
     emerald: "text-success bg-success/10 border-success/20",
     rose: "text-danger bg-danger/10 border-danger/20",
   };
+  // Just the ink, for the watermark — the badge's tint and border would
+  // draw a second box behind the card.
+  const ink = {
+    sky: "text-info",
+    amber: "text-warning",
+    emerald: "text-success",
+    rose: "text-danger",
+  };
   return (
-    <Card>
+    <Card hover watermark={<Icon className={`h-20 w-20 ${ink[accent]}`} />}>
       <CardContent className="flex items-center justify-between gap-3 py-4">
         <div className="min-w-0">
           <div className="text-xs text-fg-muted uppercase tracking-wider">

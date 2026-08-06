@@ -487,11 +487,25 @@ export function DashboardPage() {
 
 // ─── Hero KPI tile ──────────────────────────────────────────────────
 
+/**
+ * Accent → text colour. Shared by the icon badges and the corner
+ * watermarks so a tile can't end up with a teal badge and a navy glyph.
+ */
+const ACCENT_INK = {
+  primary: "text-primary",
+  success: "text-success",
+  warning: "text-warning",
+  danger: "text-danger",
+  info: "text-info",
+} as const;
+
+type Accent = keyof typeof ACCENT_INK;
+
 interface HeroKpiProps {
   label: string;
   value: string;
   icon: typeof Users;
-  accent: "primary" | "success" | "warning" | "danger" | "info";
+  accent: Accent;
   delta?: React.ReactNode;
   sparkValues: number[];
   context?: string;
@@ -517,7 +531,16 @@ function HeroKpi({
     info: "bg-info-soft text-info",
   };
   return (
-    <Card variant="elevated" className="overflow-hidden">
+    <Card
+      variant="elevated"
+      hover
+      className="overflow-hidden"
+      // Same glyph as the badge in the header, blown up and bled off the
+      // corner. Reusing the tile's own icon rather than picking a
+      // decorative one means the watermark reinforces what the tile is
+      // instead of adding a second thing to decode.
+      watermark={<Icon className={cn("h-32 w-32", ACCENT_INK[accent])} />}
+    >
       <CardContent className="p-4 pt-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -585,29 +608,25 @@ function MicroKpi({
   label: string;
   value: string;
   icon: typeof Users;
-  accent: "primary" | "success" | "warning" | "danger" | "info";
+  accent: Accent;
   sub?: string;
   asLink?: string;
 }) {
-  const accentClasses: Record<typeof accent, string> = {
-    primary: "text-primary",
-    success: "text-success",
-    warning: "text-warning",
-    danger: "text-danger",
-    info: "text-info",
-  };
   const inner = (
     <Card
-      className={cn(
-        "transition-colors h-full",
-        asLink && "hover:bg-surface-3 cursor-pointer",
-      )}
+      hover
+      className={cn("h-full", asLink && "cursor-pointer")}
+      // 80px against a ~90px tile. Sized so the glyph clears the bottom
+      // and right edges but not the top one — a mark that bleeds off
+      // three sides stops reading as a corner and starts reading as a
+      // wash behind the whole card.
+      watermark={<Icon className={cn("h-20 w-20", ACCENT_INK[accent])} />}
     >
       <CardContent className="p-4 flex items-center gap-3">
         <div
           className={cn(
             "h-8 w-8 rounded-md flex items-center justify-center bg-surface-3",
-            accentClasses[accent],
+            ACCENT_INK[accent],
           )}
         >
           <Icon className="h-4 w-4" />
