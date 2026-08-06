@@ -294,6 +294,11 @@ model Customer {
   user             User?             @relation("CustomerLogin")
   kycSubmissions   KycSubmission[]
   loanApplications LoanApplication[]
+  /// Loans this customer stands as CO-MAKER on. Distinct from
+  /// `loanApplications`, which is the debt that is theirs. Same
+  /// person, two very different kinds of liability, and the
+  /// exposure question needs both.
+  coMakerFor       CoMaker[]         @relation("CustomerCoMakerFor")
   surveyResponses  SurveyResponse[]
   creditScores     CreditScore[]
   amlScreenings    AmlScreening[]
@@ -1566,8 +1571,31 @@ enum CoMakerConsentStatus {
 }
 
 model CoMaker {
-  id                 String            @id @default(uuid())
-  loanId             String
+  id     String @id @default(uuid())
+  loanId String
+
+  /// The registered customer standing as co-maker.
+  ///
+  /// Co-makers used to be free text — a name and a phone number typed
+  /// into a box. That made them invisible to everything the system
+  /// knows how to do: no KYC on file, no credit history, no way to see
+  /// that the same person was already guaranteeing four other loans,
+  /// and no way to tell two spellings of one name apart. A co-maker is
+  /// jointly liable for the debt, so they are underwritten too, and
+  /// that means they have to be someone the system can actually look up.
+  ///
+  /// Nullable ONLY for rows created before this existed. New co-makers
+  /// require it — enforced in the API schema rather than the column, so
+  /// the historical rows stay readable instead of becoming invalid.
+  customerId String?
+
+  /// Snapshot of who they were when they were added.
+  ///
+  /// Denormalised from Customer on purpose, not laziness: the invite
+  /// needs a number to send to at that moment, the consent record and
+  /// the signed agreement have to name the person who actually agreed,
+  /// and a customer editing their phone next year must not silently
+  /// rewrite what a co-maker signed.
   fullName           String
   role               CoMakerRole       @default(CO_MAKER)
   relationship       String? // "Spouse" / "Parent" / "Sibling" / "Friend" / "Employer"
@@ -1622,8 +1650,16 @@ model CoMaker {
 
   loan      LoanApplication   @relation(fields: [loanId], references: [id], onDelete: Cascade)
   documents CoMakerDocument[]
+  /// Restrict, not Cascade: deleting a customer who stands as co-maker
+  /// on a live loan would quietly remove a party to that debt. The
+  /// delete has to fail loudly so someone decides what happens to the
+  /// loan first.
+  customer  Customer?         @relation("CustomerCoMakerFor", fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([loanId])
+  /// "What else is this person guaranteeing?" — the exposure question,
+  /// which was unanswerable while co-makers were free text.
+  @@index([customerId])
 }
 
 /// A file a co-maker attached when accepting.

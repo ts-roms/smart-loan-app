@@ -812,9 +812,17 @@ export async function loanRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      return reply
-        .code(201)
-        .send(await req.loanCtx!.coMakers.create(req.params.id, parsed.data));
+      const loan = await req.loanCtx!.loans.findByIdOrNumber(req.params.id);
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
+      const result = await req.loanCtx!.coMakers.create(loan.id, parsed.data);
+      if (!result.ok) {
+        // NotFound is the customer, not the loan — 404 here would read
+        // as "no such loan" to a caller that just resolved one.
+        return reply
+          .code(result.kind === "NotFound" ? 400 : 409)
+          .send({ error: result.kind, message: result.message });
+      }
+      return reply.code(201).send(result.coMaker);
     },
   );
 

@@ -914,16 +914,18 @@ export interface CoMaker {
   updatedAt: string;
 }
 
+/**
+ * Adding a co-maker — a REGISTERED CUSTOMER, not a typed-in name.
+ *
+ * Identity is deliberately absent. Name, phone, email, address and ID
+ * are snapshotted from the Customer row by the API, so a typed name and
+ * a chosen customer can never disagree. What's left is what belongs to
+ * this particular guarantee rather than to the person.
+ */
 export interface CoMakerInput {
-  fullName: string;
+  customerId: string;
   role?: CoMakerRole;
   relationship?: string;
-  phone: string;
-  email?: string;
-  address?: string;
-  governmentIdType?: GovernmentIdType;
-  governmentIdNumber?: string;
-  monthlyIncome?: number;
   signedAgreementUrl?: string;
   notes?: string;
 }

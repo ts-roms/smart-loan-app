@@ -1,9 +1,6 @@
-import {
-  PHONE_MAX_DIGITS,
-  PHONE_MIN_DIGITS,
-  isValidPhone,
-  normalizePhone,
-} from "@loan/shared-utils";
+// The phone helpers went with the co-maker identity fields — a
+// co-maker's number now comes from their Customer row, where it was
+// already validated on the way in.
 import { z } from "zod";
 
 /**
@@ -195,30 +192,24 @@ export const signSchema = z.object({
   delegationId: z.string().uuid().optional(),
 });
 
-/** Co-maker (co-borrower / guarantor) intake. */
+/**
+ * Co-maker intake — a REGISTERED CUSTOMER, not a typed-in name.
+ *
+ * The identity fields are gone. They used to be free text, which made a
+ * jointly-liable party invisible to everything the system can do: no
+ * KYC on file, no credit history, no way to see that the same person
+ * was already guaranteeing four other loans. Name, phone, email and
+ * address are now snapshotted from the Customer row on the server, so
+ * they can't be typed to say something the record doesn't.
+ *
+ * What remains is what genuinely belongs to THIS guarantee rather than
+ * to the person: their role on this loan, their relationship to this
+ * borrower, and the paperwork.
+ */
 export const coMakerSchema = z.object({
-  fullName: z.string().min(1).max(200),
+  customerId: z.string().uuid({ message: "Choose a registered customer." }),
   role: z.enum(["CO_BORROWER", "GUARANTOR", "CO_MAKER"]).optional(),
   relationship: z.string().max(80).optional(),
-  /**
-   * Co-makers are created and deleted, never patched, so the rule
-   * applies outright — there's no stored number to grandfather the
-   * way the customer update path does.
-   */
-  phone: z
-    .string()
-    .max(40)
-    .refine((v) => isValidPhone(v), {
-      message: `Enter a phone number with ${PHONE_MIN_DIGITS} or ${PHONE_MAX_DIGITS} digits`,
-    })
-    .transform((v) => normalizePhone(v)),
-  email: z.string().email().optional(),
-  address: z.string().max(500).optional(),
-  governmentIdType: z
-    .enum(["PASSPORT", "DRIVERS_LICENSE", "NATIONAL_ID", "SSS", "TIN", "OTHER"])
-    .optional(),
-  governmentIdNumber: z.string().max(60).optional(),
-  monthlyIncome: z.number().nonnegative().optional(),
   signedAgreementUrl: z.string().max(500).optional(),
   notes: z.string().max(500).optional(),
 });

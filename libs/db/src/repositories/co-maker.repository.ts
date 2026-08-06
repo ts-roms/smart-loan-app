@@ -6,21 +6,21 @@ import type {
   CoMaker,
   CoMakerConsentStatus,
   CoMakerRole,
-  GovernmentIdType,
   KycDocumentType,
   PrismaClient,
 } from "@prisma/client";
 
+/**
+ * What the caller supplies. Identity is NOT in here — name, phone,
+ * email, address and ID are snapshotted from the Customer row inside
+ * `create`, so there is no way for a typed name and a chosen customer
+ * to disagree. What's left is what belongs to this particular
+ * guarantee rather than to the person.
+ */
 export interface CoMakerInput {
-  fullName: string;
+  customerId: string;
   role?: CoMakerRole;
   relationship?: string;
-  phone: string;
-  email?: string;
-  address?: string;
-  governmentIdType?: GovernmentIdType;
-  governmentIdNumber?: string;
-  monthlyIncome?: number;
   signedAgreementUrl?: string;
   notes?: string;
 }
@@ -35,23 +35,103 @@ export class CoMakerRepository {
     });
   }
 
-  create(loanId: string, input: CoMakerInput): Promise<CoMaker> {
-    return this.prisma.coMaker.create({
+  /**
+   * Add a registered customer as co-maker on a loan.
+   *
+   * The identity fields are read from the Customer row, never from the
+   * caller: a co-maker is jointly liable, and letting the officer type
+   * a name alongside a customer id is an invitation for the two to
+   * disagree — with the typed version being the one that ends up on the
+   * agreement.
+   *
+   * They are still COPIED rather than joined at read time. The invite
+   * needs a number to send to at that moment, and the consent record
+   * has to name the person who actually agreed; a customer editing
+   * their phone next year must not rewrite what a co-maker signed.
+   *
+   * Three refusals, all of which were unrepresentable while co-makers
+   * were free text:
+   *   • NotFound      — the customer id doesn't exist
+   *   • IsBorrower    — you cannot guarantee your own debt
+   *   • AlreadyOnLoan — one person, one guarantee per loan
+   */
+  async create(
+    loanId: string,
+    input: CoMakerInput,
+  ): Promise<
+    | { ok: true; coMaker: CoMaker }
+    | {
+        ok: false;
+        kind: "NotFound" | "IsBorrower" | "AlreadyOnLoan";
+        message: string;
+      }
+  > {
+    const [loan, customer] = await Promise.all([
+      this.prisma.loanApplication.findUnique({
+        where: { id: loanId },
+        select: { customerId: true },
+      }),
+      this.prisma.customer.findUnique({
+        where: { id: input.customerId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          email: true,
+          address: true,
+          governmentIdType: true,
+          governmentIdNumber: true,
+          monthlyIncome: true,
+        },
+      }),
+    ]);
+    if (!customer) {
+      return { ok: false, kind: "NotFound", message: "Customer not found." };
+    }
+    if (loan && loan.customerId === customer.id) {
+      return {
+        ok: false,
+        kind: "IsBorrower",
+        message:
+          "The borrower cannot be their own co-maker — a guarantee has to add someone else's capacity to the loan.",
+      };
+    }
+    const dupe = await this.prisma.coMaker.findFirst({
+      where: { loanId, customerId: customer.id },
+      select: { id: true },
+    });
+    if (dupe) {
+      return {
+        ok: false,
+        kind: "AlreadyOnLoan",
+        message: "That customer is already a co-maker on this loan.",
+      };
+    }
+
+    const fullName = `${customer.firstName} ${customer.lastName}`.trim();
+    const coMaker = await this.prisma.coMaker.create({
       data: {
         loanId,
-        fullName: input.fullName,
+        customerId: customer.id,
+        fullName,
         role: input.role ?? "CO_MAKER",
         relationship: input.relationship,
-        phone: input.phone,
-        email: input.email,
-        address: input.address,
-        governmentIdType: input.governmentIdType,
-        governmentIdNumber: input.governmentIdNumber,
-        monthlyIncome: input.monthlyIncome,
+        // Snapshot. `phone` is non-null on CoMaker and the invite
+        // depends on it, so an empty string is the honest placeholder
+        // for a customer with no number on file — the delivery path
+        // already reports NoContact rather than pretending to send.
+        phone: customer.phone ?? "",
+        email: customer.email ?? undefined,
+        address: customer.address ?? undefined,
+        governmentIdType: customer.governmentIdType ?? undefined,
+        governmentIdNumber: customer.governmentIdNumber ?? undefined,
+        monthlyIncome: customer.monthlyIncome ?? undefined,
         signedAgreementUrl: input.signedAgreementUrl,
         notes: input.notes,
       },
     });
+    return { ok: true, coMaker };
   }
 
   update(id: string, input: Partial<CoMakerInput>): Promise<CoMaker> {
