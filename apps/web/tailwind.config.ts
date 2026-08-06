@@ -34,7 +34,10 @@ export default {
         },
         // Semantic status palette. Each gets a `-soft` variant for tinted
         // backgrounds used by chips and KPI accents.
-        success: "hsl(var(--success))",
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
         warning: "hsl(var(--warning))",
         danger: "hsl(var(--danger))",
         info: "hsl(var(--info))",

@@ -191,7 +191,12 @@ export function LoginPage() {
           </div>
         )}
 
-        <Button type="submit" className="w-full" disabled={login.isPending}>
+        <Button
+          type="submit"
+          variant="success"
+          className="w-full"
+          disabled={login.isPending}
+        >
           {login.isPending
             ? "Signing in…"
             : requires2fa

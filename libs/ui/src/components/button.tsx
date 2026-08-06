@@ -18,6 +18,11 @@ export const buttonVariants = cva(
           "bg-primary text-primary-foreground shadow-sm hover:opacity-90",
         outline: "border border-default bg-surface-2 hover:bg-hover",
         ghost: "hover:bg-hover",
+        // Velzon's btn-success — the teal. Its own foreground token
+        // because the colour lifts on dark, where a white label would
+        // drop to ~1.9:1.
+        success:
+          "bg-success text-success-foreground shadow-sm hover:opacity-90",
         destructive: "bg-danger text-white shadow-sm hover:opacity-90",
         secondary: "bg-surface-3 hover:bg-hover",
       },

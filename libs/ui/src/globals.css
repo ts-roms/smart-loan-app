@@ -96,10 +96,19 @@
      * affordance and has to look like one, where a card edge only has
      * to separate. At the old shared 88% an input on a white card was
      * a suggestion of a box. */
-    /* #e9ebec and a step down from it. */
+    /* #e9ebec for card edges. The field outline is deliberately
+     * heavier than Velzon's #ced4da — theirs relies on a filled grey
+     * page behind mostly-white forms, and on our whiter cards it
+     * disappeared. This is the third pass at making a field look like
+     * a field, so it errs toward visible. */
     --border: 200 8% 92%;
-    --border-strong: 205 10% 78%;
-    --input: 205 12% 80%;
+    /* 58% is not arbitrary: it's the lightest value that clears the
+     * WCAG 3:1 minimum for a control boundary against a white card
+     * (measured — 72% gave 2.01, 60% gave 2.89, 58% gives 3.08).
+     * Velzon's own #ced4da is far lighter and fails that bar; theirs
+     * sits on a grey page where the form itself provides the edge. */
+    --border-strong: 208 16% 50%;
+    --input: 208 14% 58%;
     --ring: 226 36% 45%;
 
     /* Brand accent — same sky family, darkened for contrast on white.
@@ -132,6 +141,7 @@
      * The soft tint below keeps the published brightness, so fills
      * still look like the reference. */
     --success: 172 88% 27%;
+    --success-foreground: 0 0% 100%;
     --success-soft: 172 88% 37% / 0.12;
     /* 36% cleared AA on white but measured 3.99:1 as badge text on its
      * own tint — the account-type chips use a heavier wash than the
@@ -217,8 +227,8 @@
      * near-invisible against surface-2 at 13%. */
     /* #32383e and a step either side. */
     --border: 210 11% 22%;
-    --border-strong: 210 11% 32%;
-    --input: 210 11% 28%;
+    --border-strong: 210 13% 52%;
+    --input: 210 13% 44%;
     --ring: 226 55% 68%;
 
     /* Navy is too dark to read on a dark ground, so it lifts — same
@@ -228,6 +238,7 @@
     --primary-foreground: 220 30% 10%;
 
     --success: 172 65% 52%;
+    --success-foreground: 210 11% 10%;
     --success-soft: 172 65% 52% / 0.14;
     --warning: 39 91% 63%;
     --warning-soft: 39 91% 63% / 0.14;
@@ -380,9 +391,12 @@
   .field-chrome:focus-within {
     outline: none;
     border-color: hsl(var(--ring));
+    /* 0.25rem at 25% — Velzon's focus ring, which is wider and softer
+     * than a typical 2px outline and reads clearly against a white
+     * card without shouting. */
     box-shadow:
       inset 0 1px 2px 0 hsl(var(--elev-shadow)),
-      0 0 0 3px hsl(var(--ring) / 0.25);
+      0 0 0 0.25rem hsl(var(--ring) / 0.25);
   }
   .field-chrome:disabled {
     cursor: not-allowed;

@@ -128,6 +128,9 @@ export function RegisterPage() {
         </div>
         <Button
           type="submit"
+          // Teal, matching Velzon's auth pages — they use btn-success
+          // here rather than the navy btn-primary.
+          variant="success"
           className="w-full"
           disabled={register.isPending || tooShort || mismatch}
         >
