@@ -246,10 +246,10 @@ function StatCard({
   accent: "sky" | "amber" | "emerald" | "rose";
 }) {
   const colors = {
-    sky: "text-info bg-sky-500/10 border-sky-400/20",
-    amber: "text-warning bg-amber-500/10 border-amber-400/20",
-    emerald: "text-success bg-emerald-500/10 border-emerald-400/20",
-    rose: "text-danger bg-rose-500/10 border-rose-400/20",
+    sky: "text-info bg-info/10 border-info/20",
+    amber: "text-warning bg-warning/10 border-warning/20",
+    emerald: "text-success bg-success/10 border-success/20",
+    rose: "text-danger bg-danger/10 border-danger/20",
   };
   return (
     <Card>

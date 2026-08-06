@@ -28,10 +28,10 @@ export function UpdatePrompt({
     <div
       role="status"
       aria-label="SmartLoan update available"
-      className="fixed bottom-4 right-4 z-[91] w-[22rem] max-w-[calc(100vw-2rem)] rounded-lg border border-emerald-400/30 bg-slate-950/90 backdrop-blur-xl shadow-2xl p-4 space-y-3"
+      className="fixed bottom-4 right-4 z-[91] w-[22rem] max-w-[calc(100vw-2rem)] rounded-lg border border-success/30 bg-surface-3/95 backdrop-blur-xl overlay-elevated p-4 space-y-3"
     >
       <div className="flex items-start gap-3">
-        <div className="h-9 w-9 shrink-0 rounded-md border border-emerald-400/30 bg-emerald-500/10 flex items-center justify-center">
+        <div className="h-9 w-9 shrink-0 rounded-md border border-success/30 bg-success/10 flex items-center justify-center">
           <RefreshCw className="h-4 w-4 text-success" />
         </div>
         <div className="flex-1 min-w-0">

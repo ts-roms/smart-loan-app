@@ -8,39 +8,49 @@ export default {
   ],
   theme: {
     extend: {
+      /*
+       * `<alpha-value>` on every token, so `bg-success/15` and
+       * `border-danger/30` actually work.
+       *
+       * Without it Tailwind can't apply an opacity modifier to an
+       * hsl() string, so a tinted status background was inexpressible
+       * in the design system — which is why ~190 hard-coded
+       * `bg-emerald-500/15`-style classes grew across the app. They
+       * weren't carelessness; the tokens left no alternative.
+       */
       colors: {
-        border: "hsl(var(--border))",
-        "border-strong": "hsl(var(--border-strong))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
+        border: "hsl(var(--border) / <alpha-value>)",
+        "border-strong": "hsl(var(--border-strong) / <alpha-value>)",
+        input: "hsl(var(--input) / <alpha-value>)",
+        ring: "hsl(var(--ring) / <alpha-value>)",
+        background: "hsl(var(--background) / <alpha-value>)",
         // Tier surfaces — see globals.css for the philosophy. Use surface-2
         // for default cards, surface-3 for elevated/hero cards.
-        "surface-1": "hsl(var(--surface-1))",
-        "surface-2": "hsl(var(--surface-2))",
-        "surface-3": "hsl(var(--surface-3))",
+        "surface-1": "hsl(var(--surface-1) / <alpha-value>)",
+        "surface-2": "hsl(var(--surface-2) / <alpha-value>)",
+        "surface-3": "hsl(var(--surface-3) / <alpha-value>)",
         foreground: {
-          DEFAULT: "hsl(var(--foreground))",
-          muted: "hsl(var(--foreground-muted))",
-          subtle: "hsl(var(--foreground-subtle))",
+          DEFAULT: "hsl(var(--foreground) / <alpha-value>)",
+          muted: "hsl(var(--foreground-muted) / <alpha-value>)",
+          subtle: "hsl(var(--foreground-subtle) / <alpha-value>)",
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          DEFAULT: "hsl(var(--muted) / <alpha-value>)",
+          foreground: "hsl(var(--muted-foreground) / <alpha-value>)",
         },
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          DEFAULT: "hsl(var(--primary) / <alpha-value>)",
+          foreground: "hsl(var(--primary-foreground) / <alpha-value>)",
         },
         // Semantic status palette. Each gets a `-soft` variant for tinted
         // backgrounds used by chips and KPI accents.
         success: {
-          DEFAULT: "hsl(var(--success))",
-          foreground: "hsl(var(--success-foreground))",
+          DEFAULT: "hsl(var(--success) / <alpha-value>)",
+          foreground: "hsl(var(--success-foreground) / <alpha-value>)",
         },
-        warning: "hsl(var(--warning))",
-        danger: "hsl(var(--danger))",
-        info: "hsl(var(--info))",
+        warning: "hsl(var(--warning) / <alpha-value>)",
+        danger: "hsl(var(--danger) / <alpha-value>)",
+        info: "hsl(var(--info) / <alpha-value>)",
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",

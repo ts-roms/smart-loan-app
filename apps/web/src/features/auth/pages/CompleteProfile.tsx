@@ -407,7 +407,7 @@ function SelectField({
       className="w-full bg-surface-2 border border-default rounded-md px-3 py-2 text-sm"
     >
       {options.map(([v, label]) => (
-        <option key={v} value={v} className="bg-slate-900">
+        <option key={v} value={v} className="bg-surface-2 text-fg">
           {label}
         </option>
       ))}

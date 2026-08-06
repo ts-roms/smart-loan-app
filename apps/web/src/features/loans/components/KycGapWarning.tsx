@@ -113,9 +113,9 @@ export function KycGapWarning({
           : "good";
 
   const toneClass = {
-    good: "border-emerald-400/30 bg-emerald-500/[0.06]",
-    warn: "border-amber-400/30 bg-amber-500/[0.06]",
-    bad: "border-rose-400/30 bg-rose-500/[0.08]",
+    good: "border-success/30 bg-success/[0.06]",
+    warn: "border-warning/30 bg-warning/[0.06]",
+    bad: "border-danger/30 bg-danger/[0.08]",
   }[tone];
 
   return (

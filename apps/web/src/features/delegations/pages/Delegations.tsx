@@ -379,7 +379,7 @@ function DelegationPreviewDialog({
         {query.isLoading ? (
           <SkeletonCard />
         ) : query.isError ? (
-          <div className="text-sm text-danger bg-rose-500/5 border border-rose-500/20 rounded px-3 py-2">
+          <div className="text-sm text-danger bg-danger/5 border border-danger/20 rounded px-3 py-2">
             {query.error.message}
           </div>
         ) : data ? (
@@ -415,7 +415,7 @@ function DelegationPreviewDialog({
                   {data.resolvedPermissions.map((p) => (
                     <span
                       key={p}
-                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-sky-400/10 text-info"
+                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-info/10 text-info"
                     >
                       {p}
                     </span>
@@ -425,7 +425,7 @@ function DelegationPreviewDialog({
             </div>
 
             {data.droppedPermissions.length > 0 && (
-              <div className="rounded-md border border-amber-400/30 bg-amber-500/[0.04] p-3">
+              <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3">
                 <div className="flex items-center gap-2 text-warning text-xs font-medium">
                   <AlertTriangle className="h-3 w-3" />
                   Dropped from the original delegation
@@ -438,7 +438,7 @@ function DelegationPreviewDialog({
                   {data.droppedPermissions.map((p) => (
                     <span
                       key={p}
-                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-amber-400/10 text-warning line-through"
+                      className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-warning/10 text-warning line-through"
                     >
                       {p}
                     </span>
@@ -486,9 +486,9 @@ function StatusChip({
   onClick: () => void;
 }) {
   const toneRing = {
-    success: "ring-emerald-400/30 hover:ring-emerald-400/60",
-    warning: "ring-amber-400/30 hover:ring-amber-400/60",
-    danger: "ring-rose-400/30 hover:ring-rose-400/60",
+    success: "ring-success/30 hover:ring-success/60",
+    warning: "ring-warning/30 hover:ring-warning/60",
+    danger: "ring-danger/30 hover:ring-danger/60",
     muted: "ring-border-strong hover:ring-border-strong",
   }[tone ?? "muted"];
   return (
@@ -498,7 +498,7 @@ function StatusChip({
       className={cn(
         "rounded-full px-2.5 py-1 text-xs font-medium border transition-colors",
         active
-          ? "border-sky-400/60 bg-sky-500/15 text-info"
+          ? "border-info/60 bg-info/15 text-info"
           : `border-transparent ring-1 ${toneRing} text-fg hover:text-fg`,
       )}
     >
@@ -517,7 +517,7 @@ function ExpiringSoonBanner({
   onExtend: (d: Delegation, days: number) => void;
 }) {
   return (
-    <div className="rounded-md border border-amber-400/30 bg-amber-500/10 p-3 space-y-2">
+    <div className="rounded-md border border-warning/30 bg-warning/10 p-3 space-y-2">
       <div className="flex items-center gap-2 text-sm font-medium text-warning">
         <AlertTriangle className="h-4 w-4 text-warning" />
         {rows.length} delegation{rows.length === 1 ? "" : "s"} expiring in the
@@ -894,7 +894,7 @@ function CreateDialog({
                     key={r.id}
                     type="button"
                     onClick={() => applyTemplate(r)}
-                    className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-500/10 hover:bg-sky-500/20 px-2.5 py-1 text-xs"
+                    className="inline-flex items-center gap-1 rounded-full border border-info/30 bg-info/10 hover:bg-info/20 px-2.5 py-1 text-xs"
                   >
                     <ShieldCheck className="h-3 w-3 text-info" />
                     Delegate as {r.name}

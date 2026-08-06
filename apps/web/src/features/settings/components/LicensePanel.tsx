@@ -252,7 +252,7 @@ function InactiveLicenseMessage({
 }) {
   if (!status) return null;
   return (
-    <div className="rounded-md border border-amber-300/20 bg-amber-300/[0.04] p-3 text-sm">
+    <div className="rounded-md border border-warning/20 bg-warning/[0.04] p-3 text-sm">
       <div className="font-medium text-warning mb-1">
         {status.status === "EXPIRED" && "License expired"}
         {status.status === "TAMPERED" && "License signature invalid"}

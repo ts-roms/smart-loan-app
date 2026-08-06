@@ -265,7 +265,7 @@ export function SelfieCapture({
           )}
           {/* Captured badge */}
           {status === "captured" && (
-            <div className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 px-2 py-1 text-[10px] uppercase tracking-wider text-success">
+            <div className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-success/15 border border-success/30 px-2 py-1 text-[10px] uppercase tracking-wider text-success">
               <CheckCircle2 className="h-3 w-3" />
               Captured
             </div>

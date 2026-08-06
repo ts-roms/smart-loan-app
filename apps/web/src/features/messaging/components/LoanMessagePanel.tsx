@@ -117,7 +117,7 @@ export function LoanMessagePanel({
                     className={cn(
                       "max-w-[80%] rounded-lg px-3 py-2 text-xs",
                       mine
-                        ? "bg-sky-500/15 text-fg border border-sky-400/30"
+                        ? "bg-info/15 text-fg border border-info/30"
                         : "bg-surface-3 text-fg border border-default",
                     )}
                   >

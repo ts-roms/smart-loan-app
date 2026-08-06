@@ -58,9 +58,9 @@ export function Toaster({ children }: { children: ReactNode }) {
             }}
             className={cn(
               "group pointer-events-auto relative flex w-[20rem] items-start gap-3 rounded-md border p-3 shadow-lg backdrop-blur-md",
-              t.kind === "success" && "border-emerald-400/30 bg-emerald-500/10",
-              t.kind === "error" && "border-rose-400/30 bg-rose-500/10",
-              t.kind === "info" && "border-sky-400/30 bg-sky-500/10",
+              t.kind === "success" && "border-success/30 bg-success/10",
+              t.kind === "error" && "border-danger/30 bg-danger/10",
+              t.kind === "info" && "border-info/30 bg-info/10",
               // Slide in from the right, slide back out on auto-dismiss /
               // close. The swipe-cancel transition lets a flicked-then-
               // released toast rubber-band back into place smoothly.

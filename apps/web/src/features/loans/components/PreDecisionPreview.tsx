@@ -235,11 +235,11 @@ function AnomalyRow({ flag }: { flag: AnomalyFlag }) {
     { color: string; label: string }
   > = {
     high: {
-      color: "text-danger bg-rose-500/10 border-rose-400/30",
+      color: "text-danger bg-danger/10 border-danger/30",
       label: "High",
     },
     medium: {
-      color: "text-warning bg-amber-500/10 border-amber-400/30",
+      color: "text-warning bg-warning/10 border-warning/30",
       label: "Medium",
     },
     low: {
@@ -265,24 +265,24 @@ const VERDICT_META = {
     label: "Likely approve",
     Icon: ThumbsUp,
     iconClass: "text-success",
-    borderClass: "border-emerald-400/30",
-    bgClass: "bg-emerald-500/[0.06]",
+    borderClass: "border-success/30",
+    bgClass: "bg-success/[0.06]",
     badgeVariant: "success" as const,
   },
   REVIEW: {
     label: "Manual review needed",
     Icon: AlertTriangle,
     iconClass: "text-warning",
-    borderClass: "border-amber-400/30",
-    bgClass: "bg-amber-500/[0.06]",
+    borderClass: "border-warning/30",
+    bgClass: "bg-warning/[0.06]",
     badgeVariant: "warning" as const,
   },
   REJECT: {
     label: "Likely reject",
     Icon: ShieldAlert,
     iconClass: "text-danger",
-    borderClass: "border-rose-400/30",
-    bgClass: "bg-rose-500/[0.08]",
+    borderClass: "border-danger/30",
+    bgClass: "bg-danger/[0.08]",
     badgeVariant: "danger" as const,
   },
 } as const;

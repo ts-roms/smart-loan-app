@@ -239,7 +239,7 @@ export function CollectionsPage() {
 
         {/* Bulk-assign action bar — appears with a selection. */}
         {canAssign && selected.size > 0 && (
-          <div className="flex items-center justify-between rounded-md border border-sky-400/30 bg-sky-500/[0.06] px-3 py-2">
+          <div className="flex items-center justify-between rounded-md border border-info/30 bg-info/[0.06] px-3 py-2">
             <span className="text-sm">
               {selected.size} account{selected.size === 1 ? "" : "s"} selected
             </span>

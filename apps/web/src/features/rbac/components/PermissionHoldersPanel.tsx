@@ -66,7 +66,7 @@ export function PermissionHoldersPanel() {
             placeholder="Search by key, label, or description…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full pl-7 pr-3 py-1.5 text-sm bg-surface-2 border border-default rounded-md outline-none focus:border-sky-400/40"
+            className="w-full pl-7 pr-3 py-1.5 text-sm bg-surface-2 border border-default rounded-md outline-none focus:border-info/40"
           />
         </div>
 
@@ -88,7 +88,7 @@ export function PermissionHoldersPanel() {
                         key={p.key}
                         onClick={() => setSelectedKey(p.key)}
                         className={`w-full text-left px-2 py-1 rounded text-xs hover:bg-hover ${
-                          selectedKey === p.key ? "bg-sky-400/10 text-info" : ""
+                          selectedKey === p.key ? "bg-info/10 text-info" : ""
                         }`}
                       >
                         <span className="font-mono">{p.key}</span>
@@ -131,7 +131,7 @@ function HoldersResult({
   if (isLoading) return <SkeletonLine />;
   if (errorMsg) {
     return (
-      <div className="text-xs text-danger bg-rose-500/5 border border-rose-500/20 rounded px-3 py-2">
+      <div className="text-xs text-danger bg-danger/5 border border-danger/20 rounded px-3 py-2">
         {errorMsg}
       </div>
     );

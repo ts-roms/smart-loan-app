@@ -482,8 +482,8 @@ function KycChecklist({ status }: { status: KycValidationResult }) {
     <div
       className={`rounded-md border p-3 ${
         isComplete
-          ? "border-emerald-400/20 bg-emerald-500/5"
-          : "border-amber-400/20 bg-amber-500/5"
+          ? "border-success/20 bg-success/5"
+          : "border-warning/20 bg-warning/5"
       }`}
     >
       <div className="text-xs uppercase tracking-wider text-fg-muted mb-2 flex items-center justify-between">
@@ -849,7 +849,7 @@ function WriteOffButton({ loanId }: { loanId: string }) {
               <DialogTitle>Write off loan</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              <div className="rounded-md border border-rose-400/30 bg-rose-500/5 p-3 text-sm">
+              <div className="rounded-md border border-danger/30 bg-danger/5 p-3 text-sm">
                 <strong className="text-danger">Terminal action.</strong> The
                 remaining principal is posted as Bad Debt Expense and the loan
                 is closed. Cannot be undone (only reversed via a journal entry).
@@ -1525,7 +1525,7 @@ function SignaturesPanel({
               </DialogTitle>
             </DialogHeader>
             {openPad === "officer" && eligibleDelegations.length > 0 && (
-              <div className="mb-2 rounded-md border border-amber-400/40 bg-amber-400/10 p-2 text-xs">
+              <div className="mb-2 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
                 <label className="block mb-1 text-warning">
                   Sign under delegation (optional)
                 </label>

@@ -41,8 +41,8 @@ export function LicenseBanner() {
 
   const className =
     tone === "rose"
-      ? "flex items-center gap-2 border-b border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs text-danger"
-      : "flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-warning";
+      ? "flex items-center gap-2 border-b border-danger/30 bg-danger/10 px-4 py-2 text-xs text-danger"
+      : "flex items-center gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-xs text-warning";
 
   let message: string;
   if (data.status === "ACTIVE" && expiringSoon) {

@@ -81,7 +81,7 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
 
   if (!c) {
     return (
-      <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-3 text-xs text-danger">
+      <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-xs text-danger">
         Customer not found.
       </div>
     );
@@ -97,11 +97,11 @@ export function BorrowerContextBar({ customerId }: { customerId: string }) {
   const tier = s?.tier ?? null;
 
   return (
-    <div className="rounded-md border border-default bg-gradient-to-br from-sky-500/[0.04] to-white/[0.02] p-3 space-y-2.5">
+    <div className="rounded-md border border-default bg-gradient-to-br from-info/[0.04] to-white/[0.02] p-3 space-y-2.5">
       {/* Identity row */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="h-8 w-8 rounded-md border border-sky-400/30 bg-sky-500/10 flex items-center justify-center shrink-0">
+          <div className="h-8 w-8 rounded-md border border-info/30 bg-info/10 flex items-center justify-center shrink-0">
             <User className="h-4 w-4 text-info" />
           </div>
           <div className="min-w-0">

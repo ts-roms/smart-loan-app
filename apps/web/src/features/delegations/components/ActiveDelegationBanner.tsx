@@ -20,7 +20,7 @@ export function ActiveDelegationBanner() {
   for (const u of users.data ?? []) userById.set(u.id, u);
 
   return (
-    <div className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-warning">
+    <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
       <div className="flex items-center gap-2 font-medium">
         <ShieldCheck className="h-3 w-3" />
         Acting under {active.data.length} active delegation

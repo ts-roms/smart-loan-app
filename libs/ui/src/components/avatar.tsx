@@ -38,12 +38,12 @@ const SIZE_CLASSES: Record<NonNullable<AvatarProps["size"]>, string> = {
  * Admin avatar at 3.19:1.
  */
 const PALETTE = [
-  "bg-sky-700 text-white ring-sky-400/40",
-  "bg-emerald-700 text-white ring-emerald-400/40",
+  "bg-info text-white ring-info/40",
+  "bg-success text-white ring-success/40",
   "bg-violet-600 text-white ring-violet-400/40",
-  "bg-amber-700 text-white ring-amber-400/40",
-  "bg-rose-600 text-white ring-rose-400/40",
-  "bg-cyan-700 text-white ring-cyan-400/40",
+  "bg-warning text-white ring-warning/40",
+  "bg-danger text-white ring-danger/40",
+  "bg-info text-white ring-info/40",
 ];
 
 function initialsOf(name: string): string {

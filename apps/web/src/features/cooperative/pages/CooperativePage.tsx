@@ -130,7 +130,7 @@ export function CooperativePage() {
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors",
                   tab === t.key
-                    ? "bg-sky-500/15 text-fg border border-sky-400/30"
+                    ? "bg-info/15 text-fg border border-info/30"
                     : "text-fg-muted hover:bg-hover hover:text-fg border border-transparent",
                 )}
               >

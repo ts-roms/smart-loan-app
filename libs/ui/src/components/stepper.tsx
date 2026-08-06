@@ -87,9 +87,9 @@ export function Stepper({
                   className={cn(
                     "inline-flex items-center justify-center h-7 w-7 rounded-full border text-xs font-semibold shrink-0 transition-colors",
                     isActive &&
-                      "border-sky-400 bg-sky-500/15 text-info ring-2 ring-sky-400/30",
+                      "border-info bg-info/15 text-info ring-2 ring-info/30",
                     isDone &&
-                      "border-emerald-400/40 bg-emerald-500/10 text-success group-hover:bg-emerald-500/20",
+                      "border-success/40 bg-success/10 text-success group-hover:bg-success/20",
                     isUpcoming && "border-default bg-surface-2 text-fg-subtle",
                   )}
                 >
@@ -123,7 +123,7 @@ export function Stepper({
                 <span
                   className={cn(
                     "flex-1 mx-2 h-px",
-                    isDone ? "bg-emerald-400/40" : "bg-surface-3",
+                    isDone ? "bg-success/40" : "bg-surface-3",
                   )}
                 />
               )}

@@ -170,7 +170,7 @@ export function FaceMatchPanel({ loan }: FaceMatchPanelProps) {
       )}
 
       {error && (
-        <div className="flex items-start gap-1.5 text-[11px] text-danger border-t border-rose-400/30 pt-2">
+        <div className="flex items-start gap-1.5 text-[11px] text-danger border-t border-danger/30 pt-2">
           <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
           <span>
             {error}{" "}
