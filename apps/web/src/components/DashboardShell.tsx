@@ -56,6 +56,7 @@ import { AuditLogTrigger } from "../features/audit";
 import { HelpTrigger } from "../features/help";
 import { NotificationBell } from "../features/notifications";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { SidebarPattern } from "./SidebarPattern";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface NavItem {
@@ -437,10 +438,22 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   // Find the section that item lives in so the matching accordion panel
   // opens by default — the user lands with their context already
   // expanded instead of having to click around for it.
+  //
+  // The `??` fallback matters more than it looks. Dashboard is the one
+  // item in the UNLABELLED section, so on `/` nothing matched and every
+  // accordion stayed shut: the landing page every officer sees first
+  // offered a nav containing exactly one link, with the rest of the app
+  // behind six headings they had to guess between. Falling back to the
+  // first labelled section means the rail always shows somewhere to go.
+  //
+  // Only the initial value — `toggle` still sets null, so closing a
+  // section by hand leaves it closed rather than springing back open.
   const sectionWithRoute =
     NAV_SECTIONS.find(
       (s) => s.label && s.items.some((i) => i.to === activePath),
-    )?.label ?? null;
+    )?.label ??
+    NAV_SECTIONS.find((s) => s.label)?.label ??
+    null;
 
   // Off-canvas nav state — only meaningful below the md breakpoint.
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -535,12 +548,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       <aside
         data-tour="nav-sidebar"
         className={cn(
-          "w-60 shrink-0 border-r border-sidebar bg-sidebar flex flex-col h-full",
+          "w-60 shrink-0 border-r border-sidebar bg-sidebar flex flex-col h-full isolate",
           // Off-canvas on small screens, in-flow from md up.
-          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
+          // `md:relative` rather than `md:static`: the cover pattern below
+          // is an absolutely-positioned child and needs the rail itself
+          // as its containing block, or it would size against the
+          // viewport. `relative` sits in flow exactly as `static` does.
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0",
           mobileNavOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
+        <SidebarPattern />
+
         {/*
           h-14 matches the main header exactly, so the two bottom borders
           meet and read as one line across the top of the app instead of
@@ -571,7 +590,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               )}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-[15px] font-semibold leading-tight tracking-tight">
+              <div className="truncate text-[20px] font-semibold leading-tight tracking-tight">
                 {brandName}
               </div>
               <div className="truncate text-[10px] uppercase leading-tight tracking-wider text-fg-subtle">
