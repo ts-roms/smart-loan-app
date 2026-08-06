@@ -56,6 +56,21 @@
     --surface-2: 0 0% 100%;
     --surface-3: 0 0% 100%;
 
+    /*
+     * The nav rail gets its own tone, DARKER than the page plate.
+     *
+     * It was surface-1 at 96% — lighter than the 93% plate it sits
+     * beside and three points off the white cards, so rail, content
+     * and card were one continuous wash. Chrome should recede and
+     * content should come forward: 89% rail < 93% plate < 100% card
+     * gives three tiers you can actually tell apart.
+     */
+    --sidebar: 216 25% 89%;
+    --sidebar-border: 216 18% 80%;
+    /* Nav hover/active tints. A white active pill reads clearly once
+     * the rail beneath it is no longer white. */
+    --sidebar-hover: 222 30% 20% / 0.07;
+
     /* Foreground tiers. Calibrated against surface-1 (the sidebar and
      * page plate) rather than pure white — subtle at 48% cleared AA on
      * white but measured 4.32:1 on the sidebar, which is where most of
@@ -141,6 +156,14 @@
     --surface-1: 222 18% 9%; /* page surface */
     --surface-2: 221 16% 12%; /* default card */
     --surface-3: 220 15% 16%; /* elevated card */
+
+    /* On dark the rail sits just ABOVE the plate (8% vs 6%) rather
+     * than below it — going darker than a 6% plate lands in mud. What
+     * matters is that all three tiers are separable and the cards stay
+     * brightest: plate 14 < rail 18 < card 29 in luminance. */
+    --sidebar: 225 24% 8%;
+    --sidebar-border: 217 16% 18%;
+    --sidebar-hover: 0 0% 100% / 0.07;
 
     --foreground: 213 18% 92%;
     --foreground-muted: 215 14% 65%;
@@ -257,6 +280,20 @@
   /* Plot area behind a chart — see PLOT_SURFACE in charts.tsx. */
   .bg-chart-plot {
     background-color: hsl(var(--chart-plot));
+  }
+  /* Nav rail. Solid, not translucent — a rail that lets the page
+   * gradient through picks up whatever is behind it and stops being a
+   * consistent tone. */
+  .bg-sidebar {
+    background-color: hsl(var(--sidebar));
+  }
+  .border-sidebar {
+    border-color: hsl(var(--sidebar-border));
+  }
+  /* Nav row hover. Its own token because `--hover` is tuned for rows
+   * on a card, and the rail is a darker surface. */
+  .hover-sidebar:hover {
+    background-color: hsl(var(--sidebar-hover));
   }
   .border-default {
     border-color: hsl(var(--border));
@@ -402,7 +439,7 @@
   .card-resting {
     box-shadow:
       0 1px 2px 0 hsl(var(--elev-shadow)),
-      0 4px 10px -6px hsl(var(--elev-shadow));
+      0 6px 16px -8px hsl(var(--elev-shadow));
   }
 
   /* Menus, popovers, dialogs. Tailwind's `shadow-2xl` is a black
