@@ -92,6 +92,31 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
       }
       const i = found.invite;
       const loan = i.loan;
+
+      /*
+       * Record the first open.
+       *
+       * This GET is the only moment the system ever hears from a
+       * co-maker who hasn't answered yet — they have no account and no
+       * session, so this request is the entire signal that the link
+       * reached a human.
+       *
+       * Not awaited, and caught. A co-maker sitting in front of a
+       * consent form must never be shown an error because a bookkeeping
+       * write failed; the page is the point and the timestamp is a
+       * nicety. Same reasoning as the user heartbeat in app.ts.
+       *
+       * Only on a SUCCESSFUL lookup, so an expired link that someone
+       * clicked too late isn't recorded as opened. That's a real gap —
+       * "they tried, but a day late" is useful to an officer — but
+       * `lookup` doesn't surface the row on expiry, and widening its
+       * return type to capture it belongs with the change that needs
+       * it.
+       */
+      void svc.repo.markLinkOpened(i.id).catch((err: unknown) => {
+        app.log.debug({ err, coMakerId: i.id }, "link-open stamp failed");
+      });
+
       const config_ = await prisma.systemConfig.findFirst({
         select: { companyName: true },
       });

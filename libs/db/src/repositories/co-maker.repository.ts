@@ -91,8 +91,34 @@ export class CoMakerRepository {
         status: "PENDING",
         respondedAt: null,
         declineReason: null,
+        // A resend is a NEW link. Carrying the previous one's open
+        // across would tell the officer this link had been delivered
+        // when nothing of the sort has happened yet — and the whole
+        // reason they resent is usually that it hadn't.
+        linkOpenedAt: null,
       },
     });
+  }
+
+  /**
+   * Record that the consent link was opened.
+   *
+   * `updateMany` filtered on `linkOpenedAt: null` rather than a read
+   * followed by a write: it keeps first-open semantics in a single
+   * atomic statement, so two tabs opening at once can't race to
+   * overwrite each other, and every call after the first is a no-op
+   * that touches no rows.
+   *
+   * Returns whether this call was the one that recorded it — useful to
+   * a caller that wants to log the first open without logging every
+   * subsequent page load.
+   */
+  async markLinkOpened(id: string, at: Date = new Date()): Promise<boolean> {
+    const { count } = await this.prisma.coMaker.updateMany({
+      where: { id, linkOpenedAt: null },
+      data: { linkOpenedAt: at },
+    });
+    return count > 0;
   }
 
   /**

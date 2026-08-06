@@ -12,10 +12,18 @@ import {
   CardHeader,
   CardTitle,
   SkeletonCard,
+  cn,
   useConfirm,
   useToast,
 } from "@loan/ui";
-import { Copy, Link2Off, Send, Users } from "lucide-react";
+import {
+  Copy,
+  Link2Off,
+  MailOpen,
+  MailWarning,
+  Send,
+  Users,
+} from "lucide-react";
 
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
 import { usePermission } from "../../../hooks/use-permission";
@@ -130,6 +138,35 @@ export function CoMakersPanel({ loanId }: { loanId: string }) {
                         ? ` · invited ${formatDateTime(c.inviteSentAt)}`
                         : " · not yet invited"}
                   </div>
+                  {/*
+                    Only while an answer is outstanding. Once they've
+                    responded, whether they opened the link first is
+                    archaeology — the answer is the fact that matters.
+                    Before then it's the whole diagnosis, and it decides
+                    the officer's next move: chase the person, or chase
+                    the number.
+                  */}
+                  {!c.respondedAt && c.inviteSentAt && (
+                    <div
+                      className={cn(
+                        "mt-0.5 inline-flex items-center gap-1 text-[10px]",
+                        c.linkOpenedAt ? "text-info" : "text-warning",
+                      )}
+                    >
+                      {c.linkOpenedAt ? (
+                        <>
+                          <MailOpen className="h-3 w-3 shrink-0" />
+                          Opened {formatDateTime(c.linkOpenedAt)} — seen, not
+                          yet answered
+                        </>
+                      ) : (
+                        <>
+                          <MailWarning className="h-3 w-3 shrink-0" />
+                          Never opened — the link may not have reached them
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <StatusBadge status={c.status} />
                 <Button

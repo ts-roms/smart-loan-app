@@ -1597,6 +1597,25 @@ model CoMaker {
   inviteToken     String?              @unique
   inviteSentAt    DateTime?
   inviteExpiresAt DateTime?
+  /// When the consent link was FIRST opened. Null = never.
+  ///
+  /// The co-maker equivalent of presence, and the closest this system
+  /// can get: they have no account, so there is no session to observe.
+  /// What can be observed is whether the link they were sent was ever
+  /// loaded.
+  ///
+  /// First open rather than most recent, because it answers the
+  /// question an officer actually has. A co-maker who hasn't replied
+  /// leaves two possibilities — they saw it and are hesitating, or it
+  /// never reached them — and those call for completely different next
+  /// moves (a phone call versus a resend to a corrected number).
+  /// Overwriting on every view would answer "are they still looking",
+  /// which nobody asks, and would destroy "did it arrive", which
+  /// everybody does.
+  ///
+  /// Cleared by `issueInvite`: a resend is a new link, and carrying the
+  /// old one's open over would report a delivery that hasn't happened.
+  linkOpenedAt    DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -900,6 +900,15 @@ export interface CoMaker {
   declineReason: string | null;
   inviteSentAt: string | null;
   inviteExpiresAt: string | null;
+  /**
+   * When the consent link was first opened; null means never.
+   *
+   * The closest thing to presence a co-maker can have — they hold no
+   * account, so this request is the only evidence the link reached a
+   * person. Paired with `inviteSentAt` it separates "they've seen it
+   * and are hesitating" from "it never arrived".
+   */
+  linkOpenedAt: string | null;
   documents?: CoMakerDocument[];
   createdAt: string;
   updatedAt: string;
