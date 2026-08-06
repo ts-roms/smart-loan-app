@@ -100,7 +100,7 @@
     --border: 200 8% 92%;
     --border-strong: 205 10% 78%;
     --input: 205 12% 80%;
-    --ring: 199 89% 42%;
+    --ring: 226 36% 45%;
 
     /* Brand accent — same sky family, darkened for contrast on white.
      * This token is used as a foreground ("View analytics", filter
@@ -108,32 +108,45 @@
      * lighter than text can. Walked down twice against measurements:
      * 42% was 3.66:1 as link text on white, 36% was 4.12:1 as pill text
      * on its own soft tint. 32% clears both. */
-    /* Velzon's teal accent (#0ab39c), walked down in lightness.
+    /*
+     * #405189 — Velzon's primary, used verbatim.
      *
-     * The published value is 37% and fails AA in both the ways this
-     * token is used: as link text on white, and under white button
-     * labels. Measured in the browser rather than guessed — 30% still
-     * only reached 3.96:1. 27% measures 4.78:1, which clears AA with
-     * a little headroom, and is still recognisably the same teal. The
-     * theme's own demo carries this weakness; no reason to inherit it. */
-    --primary: 172 88% 27%;
-    --primary-soft: 172 88% 27% / 0.1;
+     * Read from their stylesheet rather than guessed at: the rail is
+     * declared `--vz-vertical-menu-bg: var(--vz-primary)`, so the navy
+     * IS the primary and the teal everyone notices is `success`. I had
+     * those two the wrong way round on the first pass.
+     *
+     * No lightness adjustment needed — measures 7.4:1 as text on white
+     * and the same under a white button label. */
+    --primary: 226 36% 39%;
+    --primary-soft: 226 36% 39% / 0.1;
     --primary-foreground: 0 0% 100%;
 
     /* Semantic statuses — darkened so they stay legible as TEXT on
      * white, not just as fills. The -soft tints stay light. */
-    --success: 152 62% 30%;
-    --success-soft: 152 62% 30% / 0.1;
+    /*
+     * Velzon's #0ab39c, hue kept, lightness dropped from 37% to 28%.
+     *
+     * Theirs is a fill colour; ours is also TEXT — `text-success` on
+     * badges and KPI deltas — where 37% measures 2.9:1 and fails AA.
+     * The soft tint below keeps the published brightness, so fills
+     * still look like the reference. */
+    --success: 172 88% 27%;
+    --success-soft: 172 88% 37% / 0.12;
     /* 36% cleared AA on white but measured 3.99:1 as badge text on its
      * own tint — the account-type chips use a heavier wash than the
      * banners do. Amber is the worst case here: it's the lightest hue
      * at any given lightness value. */
-    --warning: 32 92% 31%;
-    --warning-soft: 32 92% 31% / 0.12;
-    --danger: 0 68% 45%;
-    --danger-soft: 0 68% 45% / 0.1;
-    --info: 217 75% 45%;
-    --info-soft: 217 75% 45% / 0.1;
+    /* #f7b84b, hue kept. Amber is the worst case for text contrast —
+     * the published 63% measures 1.9:1 on white. */
+    --warning: 39 91% 30%;
+    --warning-soft: 39 91% 63% / 0.16;
+    /* #f06548, hue kept, darkened for text. */
+    --danger: 9 82% 41%;
+    --danger-soft: 9 85% 61% / 0.13;
+    /* #299cdb, hue kept, darkened for text. */
+    --info: 201 71% 35%;
+    --info-soft: 201 71% 51% / 0.14;
 
     --hover: 222 24% 12% / 0.055;
     --divider: 200 8% 93%;
@@ -170,10 +183,13 @@
   :root[data-theme="dark"] {
     color-scheme: dark;
 
-    --background: 224 22% 6%; /* deeper, cooler plate */
-    --surface-1: 222 18% 9%; /* page surface */
-    --surface-2: 221 16% 12%; /* default card */
-    --surface-3: 220 15% 16%; /* elevated card */
+    /* #1a1d21 / #212529 — Velzon's own dark body and card. Warmer and
+     * a good deal lighter than the near-black I had; their dark theme
+     * is a slate, not an OLED black. */
+    --background: 210 9% 11%;
+    --surface-1: 210 10% 13%;
+    --surface-2: 210 11% 15%;
+    --surface-3: 210 10% 19%;
 
     /* On dark the rail sits just ABOVE the plate (8% vs 6%) rather
      * than below it — going darker than a 6% plate lands in mud. What
@@ -199,29 +215,31 @@
 
     /* Same reasoning as light: an input outranks a card edge. 20% was
      * near-invisible against surface-2 at 13%. */
-    --border: 217 15% 24%;
-    --border-strong: 217 15% 34%;
-    --input: 217 16% 30%;
-    --ring: 199 78% 60%;
+    /* #32383e and a step either side. */
+    --border: 210 11% 22%;
+    --border-strong: 210 11% 32%;
+    --input: 210 11% 28%;
+    --ring: 226 55% 68%;
 
-    /* Teal again, lifted for a dark ground. */
-    --primary: 172 65% 52%;
-    --primary-soft: 172 65% 52% / 0.14;
+    /* Navy is too dark to read on a dark ground, so it lifts — same
+     * hue, enough lightness to work as text and as a fill. */
+    --primary: 226 55% 68%;
+    --primary-soft: 226 55% 68% / 0.16;
     --primary-foreground: 220 30% 10%;
 
-    --success: 152 60% 52%;
-    --success-soft: 152 60% 52% / 0.12;
-    --warning: 38 92% 62%;
-    --warning-soft: 38 92% 62% / 0.12;
+    --success: 172 65% 52%;
+    --success-soft: 172 65% 52% / 0.14;
+    --warning: 39 91% 63%;
+    --warning-soft: 39 91% 63% / 0.14;
     /* 60% measured 3.77:1 as badge text on its own tint — the DEFAULTED
      * and EXPENSE chips. Pre-existing; red is the hue that loses the
      * most contrast for a given lightness. */
-    --danger: 0 78% 71%;
-    --danger-soft: 0 78% 71% / 0.12;
+    --danger: 9 85% 70%;
+    --danger-soft: 9 85% 70% / 0.14;
     /* 65% measured 4.33:1 on the `bg-sky-500/15` active pills (filter
      * chips, wizard steps), which are a heavier wash than --info-soft. */
-    --info: 217 85% 72%;
-    --info-soft: 217 85% 72% / 0.12;
+    --info: 201 71% 64%;
+    --info-soft: 201 71% 64% / 0.14;
 
     --hover: 0 0% 100% / 0.07;
     --divider: 217 15% 21%;
