@@ -884,6 +884,16 @@ export interface CoMakerInviteView {
 export interface CoMaker {
   id: string;
   loanId: string;
+  /**
+   * The registered customer standing as co-maker. Null only on rows
+   * created before co-makers had to be customers — see the migration.
+   */
+  customerId: string | null;
+  /**
+   * Snapshot taken when they were added, not a live join: the consent
+   * record and the signed agreement have to name the person who
+   * actually agreed, whatever their customer record says later.
+   */
   fullName: string;
   role: CoMakerRole;
   relationship: string | null;

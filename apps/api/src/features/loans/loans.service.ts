@@ -70,7 +70,19 @@ export type ApplyResult =
       message: string;
       screeningId: string;
     }
-  | { ok: false; kind: "BadRequest"; message: string; issues?: unknown };
+  | { ok: false; kind: "BadRequest"; message: string; issues?: unknown }
+  | {
+      ok: false;
+      kind: "HasLiveLoan";
+      message: string;
+      /** The loans already open, so the officer sees which. */
+      liveLoans: Array<{
+        id: string;
+        number: string;
+        status: string;
+        principal: number;
+      }>;
+    };
 
 /**
  * Result of a disburse attempt. CoMakersPending → 409 with the names,
@@ -230,6 +242,61 @@ export class LoanWorkflowService {
         kind: "AmlBlocked",
         message: "Customer has an unresolved AML match. Override required.",
         screeningId: latestScreen.id,
+      };
+    }
+
+    /*
+     * One live loan at a time.
+     *
+     * Nothing stopped a customer holding two, three, five concurrent
+     * applications: `existingActiveLoans` fed the decision rules as a
+     * number to reason about, but no rule was obliged to look at it and
+     * none of the seeded ones refused on it. So a double-submitted form
+     * became two real loans, and a borrower could quietly stack debt the
+     * capacity check had never seen together.
+     *
+     * "Live" spans both money out (DISBURSED / ACTIVE / DEFAULTED) and
+     * money promised (SUBMITTED / UNDER_REVIEW / APPROVED). An in-flight
+     * application counts because two open applications from one customer
+     * is nearly always a double-submit, and because approving the second
+     * would commit funds the first already claimed.
+     *
+     * Terminal states — CLOSED, REJECTED, CANCELLED, WRITTEN_OFF — do
+     * not block. A settled borrower is free to come back, which is the
+     * ordinary case this must not obstruct.
+     */
+    const liveLoans = await this.prisma.loanApplication.findMany({
+      where: {
+        customerId: input.customerId,
+        status: {
+          in: [
+            "SUBMITTED",
+            "UNDER_REVIEW",
+            "APPROVED",
+            "DISBURSED",
+            "ACTIVE",
+            "DEFAULTED",
+          ],
+        },
+      },
+      select: { id: true, number: true, status: true, principal: true },
+      orderBy: { submittedAt: "desc" },
+    });
+    if (liveLoans.length > 0) {
+      const first = liveLoans[0]!;
+      return {
+        ok: false,
+        kind: "HasLiveLoan",
+        message:
+          liveLoans.length === 1
+            ? `This customer already has loan ${first.number} (${first.status}). Settle or close it before applying again.`
+            : `This customer already has ${liveLoans.length} open loans (${liveLoans.map((l) => l.number).join(", ")}). Settle or close them before applying again.`,
+        liveLoans: liveLoans.map((l) => ({
+          id: l.id,
+          number: l.number,
+          status: l.status,
+          principal: Number(l.principal),
+        })),
       };
     }
 

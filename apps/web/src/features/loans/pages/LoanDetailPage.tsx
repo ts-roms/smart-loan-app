@@ -320,7 +320,7 @@ export function LoanDetailPage() {
         <FaceMatchPanel loan={l} />
 
         {/* Consent gate on disburse — see CoMakersPanel. */}
-        <CoMakersPanel loanId={l.id} />
+        <CoMakersPanel loanId={l.id} borrowerId={l.customerId} />
         {/*
           AI assistant — explain the loan's decisioning verdict in plain
           language. Local LLM only; never sends data off-server. Officer

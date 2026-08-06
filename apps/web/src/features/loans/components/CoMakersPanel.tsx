@@ -22,10 +22,14 @@ import {
   MailOpen,
   MailWarning,
   Send,
+  UserPlus,
   Users,
 } from "lucide-react";
 
+import { useState } from "react";
+
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
+import { AddCoMakerDialog } from "./AddCoMakerDialog";
 import { usePermission } from "../../../hooks/use-permission";
 import { DOC_TYPE_LABELS } from "../../customers/constants";
 
@@ -42,7 +46,18 @@ import { DOC_TYPE_LABELS } from "../../customers/constants";
  * clipboard when the co-maker rings back saying it never arrived.
  * Delivery is best-effort, so the toast says which actually happened.
  */
-export function CoMakersPanel({ loanId }: { loanId: string }) {
+export function CoMakersPanel({
+  loanId,
+  borrowerId,
+}: {
+  loanId: string;
+  /**
+   * Excluded from the add picker. Passing it in rather than reading the
+   * loan again keeps this panel a leaf — the detail page already has it.
+   */
+  borrowerId: string;
+}) {
+  const [adding, setAdding] = useState(false);
   const coMakers = useLoanCoMakers(loanId);
   const invite = useInviteCoMaker();
   const revoke = useRevokeCoMakerInvite();
@@ -52,10 +67,16 @@ export function CoMakersPanel({ loanId }: { loanId: string }) {
   // to end — the link IS the access — so cutting it off is the same
   // administrative act and answers to the same permission.
   const canRevoke = usePermission("admin.force_logout");
+  // Same key the API gates the create endpoint on.
+  const canAdd = usePermission("loans.apply");
 
   const rows = coMakers.data ?? [];
   if (coMakers.isLoading) return <SkeletonCard />;
-  if (rows.length === 0) return null;
+  /*
+   * Renders even with no co-makers now. It used to return null, which
+   * meant the only way to add one was during the new-loan wizard — a
+   * loan that turned out to need a guarantor had nowhere to say so.
+   */
 
   const blocking = rows.filter((c) => c.status !== "APPROVED");
 
@@ -117,13 +138,27 @@ export function CoMakersPanel({ loanId }: { loanId: string }) {
           <Users className="h-4 w-4" />
           Co-makers
         </CardTitle>
-        {blocking.length > 0 && (
-          <Badge variant="warning">
-            {blocking.length} blocking disbursement
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {blocking.length > 0 && (
+            <Badge variant="warning">
+              {blocking.length} blocking disbursement
+            </Badge>
+          )}
+          {canAdd && (
+            <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+              <UserPlus className="h-3 w-3" />
+              Add
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
+        {rows.length === 0 && (
+          <p className="text-xs text-fg-muted">
+            No co-makers on this loan. Adding one brings a second party&apos;s
+            capacity to the debt — and their approval before disbursement.
+          </p>
+        )}
         <ul className="divide-y divide-default">
           {rows.map((c) => (
             <li key={c.id} className="py-2 space-y-1.5">
@@ -228,11 +263,23 @@ export function CoMakersPanel({ loanId }: { loanId: string }) {
             </li>
           ))}
         </ul>
-        <p className="text-[10px] text-fg-subtle">
-          Invites go out by SMS, or email when there&apos;s no number. The link
-          is copied to your clipboard either way. Sending a new one cancels the
-          previous link and clears any answer already given.
-        </p>
+        {adding && (
+          <AddCoMakerDialog
+            loanId={loanId}
+            borrowerId={borrowerId}
+            existingCustomerIds={rows
+              .map((c) => c.customerId)
+              .filter((id): id is string => Boolean(id))}
+            onClose={() => setAdding(false)}
+          />
+        )}
+        {rows.length > 0 && (
+          <p className="text-[10px] text-fg-subtle">
+            Invites go out by SMS, or email when there&apos;s no number. The
+            link is copied to your clipboard either way. Sending a new one
+            cancels the previous link and clears any answer already given.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

@@ -40,6 +40,15 @@ export class LoanWorkflowController {
         screeningId: result.screeningId,
       });
     }
+    if (result.kind === "HasLiveLoan") {
+      // 409, same family as AmlBlocked: the request is well-formed and
+      // the refusal is about the customer's state, not the payload.
+      return reply.code(409).send({
+        error: "HasLiveLoan",
+        message: result.message,
+        liveLoans: result.liveLoans,
+      });
+    }
     // BadRequest — typically from the repo apply() validation (product
     // band check, etc.). The message is operator-facing.
     return reply.code(400).send({
