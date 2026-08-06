@@ -112,12 +112,23 @@ export function PortalShell({ children }: { children: ReactNode }) {
           navOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="px-4 py-5 border-b border-default">
-          <div className="flex items-center gap-2">
-            {/* Configured logo (PNG/SVG) or default glyph. Sized to
-                match the dashboard shell so an admin who uploads a
-                logo gets a consistent appearance across both surfaces. */}
-            <div className="h-7 w-7 rounded-md bg-primary-soft border border-default flex items-center justify-center overflow-hidden shrink-0">
+        {/* h-14 to line up with the main header, same as the operator
+            shell. Tagline moves onto the second line of the brand block
+            rather than under the whole row, which is what lets the
+            header fit that height at all. */}
+        <div className="flex h-14 shrink-0 items-center border-b border-default px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            {/* An uploaded logo gets a solid white tile: it's someone
+                else's artwork, drawn for a light background, and the
+                rail is navy. The built-in glyph is ours and reads on
+                the rail's own tint. Kept identical to the operator
+                shell so one upload looks right in both. */}
+            <div
+              className={cn(
+                "grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md",
+                brandLogo ? "bg-white p-1" : "bg-primary-soft text-primary",
+              )}
+            >
               {brandLogo ? (
                 <img
                   src={brandLogo}
@@ -125,19 +136,21 @@ export function PortalShell({ children }: { children: ReactNode }) {
                   className="max-h-full max-w-full object-contain"
                 />
               ) : (
-                <Wallet className="h-4 w-4 text-info" />
+                <Wallet className="h-[18px] w-[18px]" />
               )}
             </div>
-            <span className="text-lg font-semibold tracking-tight truncate">
-              {brandName}
-            </span>
-          </div>
-          <div className="text-[11px] uppercase tracking-wider text-fg-subtle mt-1 truncate">
-            {brandTagline}
+            <div className="min-w-0">
+              <div className="truncate text-[15px] font-semibold leading-tight tracking-tight">
+                {brandName}
+              </div>
+              <div className="truncate text-[10px] uppercase leading-tight tracking-wider text-fg-subtle">
+                {brandTagline}
+              </div>
+            </div>
           </div>
         </div>
 
-        <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {[
             { to: "/portal", label: "Dashboard", icon: Gauge, end: true },
             {
@@ -190,14 +203,17 @@ export function PortalShell({ children }: { children: ReactNode }) {
               end={n.end}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  // Matches the operator rail's rhythm — gap-3, 18px
+                  // icons. The two shells share a logo and a colour, so
+                  // rows that sit at different heights read as a bug.
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] transition-colors",
                   isActive
                     ? "bg-white/[0.12] text-fg"
                     : "text-fg-muted hover-sidebar hover:text-fg",
                 )
               }
             >
-              <n.icon className="h-4 w-4" />
+              <n.icon className="h-[18px] w-[18px] shrink-0" />
               {n.label}
             </NavLink>
           ))}

@@ -405,6 +405,29 @@
     --foreground-subtle: var(--sidebar-fg-subtle);
     --border: var(--sidebar-border);
     --divider: var(--sidebar-border);
+
+    /*
+     * `--primary` has to be remapped for the same reason the foregrounds
+     * are, and its absence here was a real bug rather than an omission
+     * of polish: on light, `--sidebar` and `--primary` are the SAME
+     * value (226 36% 39%). Anything in the rail painted `text-primary`
+     * or `bg-primary` was rendering at 1.000:1 against its own
+     * background — not subtle, not low-contrast, invisible. That is why
+     * the brand glyph and the active-item accent bar were missing.
+     *
+     * White, because on a saturated navy rail there is no tint of the
+     * brand hue that reads as an accent; the rail IS the brand hue. The
+     * accent has to come from the other end.
+     *
+     * `--primary-soft` is a full colour+alpha token rather than being
+     * derived from `--primary`, so it needs its own line or a `-soft`
+     * fill stays navy-on-navy. Same for `--primary-foreground`: leaving
+     * it white would make a `bg-primary text-primary-foreground` button
+     * white-on-white in here.
+     */
+    --primary: 0 0% 100%;
+    --primary-soft: 0 0% 100% / 0.12;
+    --primary-foreground: var(--sidebar);
   }
   .border-sidebar {
     border-color: hsl(var(--sidebar-border));
@@ -711,6 +734,52 @@
    * reads as one object rather than a panel glued to a form. */
   .auth-brand-panel {
     background: linear-gradient(160deg, hsl(226 36% 39%) 0%, hsl(226 40% 28%) 100%);
+  }
+
+  /*
+   * Cover pattern — the graduated dot field.
+   *
+   * Drawn with a repeating radial-gradient rather than shipped as an
+   * image: it stays crisp at any size and any DPI, costs no request,
+   * and takes its colour from `currentColor`, so ONE class serves the
+   * navy auth panel (white dots) and a white error page (grey dots)
+   * instead of two assets that drift apart.
+   *
+   * The mask is what makes it a cover pattern rather than wallpaper. An
+   * even field edge to edge competes with whatever sits on top of it;
+   * fading from one corner puts the texture where nothing is written
+   * and retires it before it reaches anything that has to be read. It's
+   * also why the fade is on the mask and not on `background-image` —
+   * masking removes the dots, where a gradient overlay would just wash
+   * them toward the background colour and leave a visible grey haze
+   * over the text.
+   *
+   * Unlike the reference, the dots fade rather than shrink; a CSS dot
+   * grid has one radius per layer. At this opacity the two are hard to
+   * tell apart, and the alternative is stacking several masked grids
+   * for an effect nobody will consciously see.
+   *
+   * Decoration only — put it on an `absolute inset-0 pointer-events-none`
+   * element so it can never take a click or reach the a11y tree. Flip
+   * the origin corner with a `scale-x-[-1]` / `scale-y-[-1]` utility on
+   * that same element.
+   */
+  .bg-overlay-pattern {
+    background-image: radial-gradient(currentColor 1.4px, transparent 1.5px);
+    background-size: 20px 20px;
+    -webkit-mask-image: radial-gradient(
+      115% 115% at 0% 0%,
+      #000 0%,
+      #000 10%,
+      transparent 58%
+    );
+    mask-image: radial-gradient(
+      115% 115% at 0% 0%,
+      #000 0%,
+      #000 10%,
+      transparent 58%
+    );
+    opacity: 0.14;
   }
 
   /* Section header divider used between dashboard groups. The label sits
