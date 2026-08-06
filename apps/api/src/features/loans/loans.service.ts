@@ -1,3 +1,4 @@
+import { CustomerHasLiveLoanError } from "@loan/db";
 import type {
   AuditLogRepository,
   CoMakerRepository,
@@ -384,6 +385,21 @@ export class LoanWorkflowService {
             : decision.reason,
       });
     } catch (err) {
+      /*
+       * The repository enforces one-live-loan inside its transaction —
+       * see CustomerHasLiveLoanError. The pre-check above catches the
+       * ordinary case with a richer payload; this catches the race,
+       * where two submissions both passed that check before either
+       * inserted.
+       */
+      if (err instanceof CustomerHasLiveLoanError) {
+        return {
+          ok: false,
+          kind: "HasLiveLoan",
+          message: err.message,
+          liveLoans: err.liveLoans,
+        };
+      }
       const e = err as Error & { issues?: unknown };
       return {
         ok: false,

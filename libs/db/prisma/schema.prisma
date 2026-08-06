@@ -858,6 +858,30 @@ model LoanApplication {
   /// the timeline is easy to walk forward.
   restructuredFromId String?          @unique
   restructuredFrom   LoanApplication? @relation("Restructure", fields: [restructuredFromId], references: [id])
+
+  /// The loan this one renews.
+  ///
+  /// Distinct from `restructuredFromId`, and the difference is the
+  /// borrower's standing. A restructure rescues a loan that is going
+  /// wrong — the terms change because the original ones aren't working.
+  /// A renewal rewards one that went right: a customer who has paid
+  /// down enough and is not in arrears takes a fresh loan, and the
+  /// balance of the old one is settled out of the new proceeds.
+  ///
+  /// Unique, so a loan can only be renewed once. Without it a single
+  /// old balance could be netted off two new loans and paid twice.
+  renewedFromId String?          @unique
+  renewedFrom   LoanApplication? @relation("Renewal", fields: [renewedFromId], references: [id])
+  renewedInto   LoanApplication? @relation("Renewal")
+
+  /// What the renewal actually settled, stamped at disbursement.
+  ///
+  /// Kept even though it can be recomputed: the payoff is netted out of
+  /// the proceeds, so this is the figure the borrower did NOT receive
+  /// in cash, and reconstructing it later from a schedule that has
+  /// since been marked paid is guesswork. The amount handed over is
+  /// `principal - renewalPayoffAmount`.
+  renewalPayoffAmount Decimal? @db.Decimal(14, 2)
   restructuredBy     LoanApplication? @relation("Restructure")
 
   /// True if the customer had a prior fully-paid loan when this application
@@ -2706,6 +2730,13 @@ model SystemConfig {
   /// activity for this many seconds, the shell pops the warning dialog.
   /// Per-user override can be stricter but never longer. Default tracks
   /// the financial-app norm of "short fuse" — change in /settings.
+  /// Minimum share of a loan's principal that must be repaid before it
+  /// can be renewed. 0.5 = half. Configurable because "enough" is a
+  /// credit-policy judgement, not a constant — a cooperative lending
+  /// against salary deductions can afford a lower bar than one lending
+  /// against a motorcycle.
+  renewalMinPaidFraction Decimal @default(0.5) @db.Decimal(5, 4)
+
   idleTimeoutSeconds Int @default(60)
   /// Countdown shown inside the warning dialog before forced logout.
   /// The user can dismiss (Stay signed in) to reset both timers.

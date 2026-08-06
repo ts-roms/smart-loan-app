@@ -170,6 +170,27 @@ export const restructureSchema = z.object({
   purpose: z.string().max(200).optional(),
 });
 
+/**
+ * Renewing a loan.
+ *
+ * Deliberately the same shape as a restructure — the paperwork of a new
+ * loan is the same paperwork — but a different endpoint, because the
+ * two mean opposite things about the borrower. Restructure rescues a
+ * loan going wrong; renewal rewards one that went right.
+ *
+ * No `payoffAmount` field. The settlement figure is computed from the
+ * old loan's schedule server-side and never accepted from the caller:
+ * it decides how much cash leaves the till, and a client that could
+ * name it could name the wrong one.
+ */
+export const renewSchema = z.object({
+  productCode: z.string().min(1).max(40),
+  principal: z.number().positive(),
+  termMonths: z.number().int().positive().max(360),
+  annualInterestRate: z.number().min(0).max(1),
+  purpose: z.string().max(200).optional(),
+});
+
 /** Officer waiver of late-fee / penalty. */
 export const waivePenaltySchema = z.object({
   waivedAmount: z.number().positive(),
@@ -266,6 +287,7 @@ export type PaymentInput = z.infer<typeof paymentSchema>;
 export type BulkPaymentInput = z.infer<typeof bulkPaymentSchema>;
 export type CloseEarlyInput = z.infer<typeof closeEarlySchema>;
 export type RestructureInput = z.infer<typeof restructureSchema>;
+export type RenewInput = z.infer<typeof renewSchema>;
 export type WaivePenaltyInput = z.infer<typeof waivePenaltySchema>;
 export type WriteOffInput = z.infer<typeof writeOffSchema>;
 export type SignInput = z.infer<typeof signSchema>;

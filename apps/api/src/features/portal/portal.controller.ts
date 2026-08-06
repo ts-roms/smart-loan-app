@@ -111,6 +111,15 @@ export class PortalController {
       input: parsed.data,
     });
     if (!result.ok) {
+      if (result.kind === "HasLiveLoan") {
+        // 409, not 400: the request is well-formed and the refusal is
+        // about the borrower's position, not their payload.
+        return reply.code(409).send({
+          error: "HasLiveLoan",
+          message: result.message,
+          liveLoans: result.liveLoans,
+        });
+      }
       return reply.code(400).send({
         error: "BadRequest",
         message: result.message,
