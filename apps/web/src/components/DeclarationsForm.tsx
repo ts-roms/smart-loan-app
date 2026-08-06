@@ -108,7 +108,7 @@ export function DeclarationsForm({
                   value={(answers[q.id] as string) ?? ""}
                   onChange={(e) => set(q.id, e.target.value || null)}
                   disabled={disabled}
-                  className="w-full rounded-md border border-default bg-surface-2 px-2 py-2 text-sm"
+                  className="w-full field-chrome rounded-md px-2 py-2 text-sm"
                 >
                   <option value="">— Select —</option>
                   {(q.options ?? []).map((o) => (

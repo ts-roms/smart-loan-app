@@ -234,7 +234,7 @@ function ApprovalRow({
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Optional notes — context, conditions, follow-ups…"
             rows={4}
-            className="w-full rounded-md border border-default bg-surface-2 px-3 py-2 text-sm placeholder:text-fg-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="w-full field-chrome rounded-md px-3 py-2 text-sm placeholder:text-fg-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <DialogFooter>
             <Button variant="ghost" onClick={() => setApproveOpen(false)}>
@@ -275,7 +275,7 @@ function ApprovalRow({
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Reason for rejection (required)…"
             rows={4}
-            className="w-full rounded-md border border-default bg-surface-2 px-3 py-2 text-sm placeholder:text-fg-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="w-full field-chrome rounded-md px-3 py-2 text-sm placeholder:text-fg-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <DialogFooter>
             <Button variant="ghost" onClick={() => setRejectOpen(false)}>

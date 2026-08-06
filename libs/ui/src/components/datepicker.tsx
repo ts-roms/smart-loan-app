@@ -70,7 +70,7 @@ export function DatePicker({
           type="button"
           disabled={disabled}
           className={cn(
-            "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-default bg-surface-2 px-3 py-2 text-sm text-left",
+            "field-chrome flex h-10 w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-sm text-left",
             "hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             "disabled:cursor-not-allowed disabled:opacity-50",
             selected ? "text-fg" : "text-fg-subtle",

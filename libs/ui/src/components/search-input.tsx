@@ -263,7 +263,7 @@ export function SearchInput<T>({
           role="listbox"
           className={cn(
             "absolute z-30 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-md border shadow-xl",
-            "border-default bg-surface-3 backdrop-blur-md",
+            "field-chrome",
           )}
         >
           {filtered.map((item, i) => {
@@ -303,7 +303,7 @@ export function SearchInput<T>({
         <div
           className={cn(
             "absolute z-30 left-0 right-0 mt-1 rounded-md border shadow-xl",
-            "border-default bg-surface-3 backdrop-blur-md px-3 py-2 text-xs text-fg-muted",
+            "border-default bg-surface-3 overlay-elevated px-3 py-2 text-xs text-fg-muted",
           )}
         >
           {emptyMessage

@@ -177,7 +177,7 @@ export function KycQuestionnaireBuilder({
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as KycQuestionType)}
-                className="w-full rounded-md border border-default bg-surface-2 px-2 py-2 text-sm"
+                className="w-full field-chrome rounded-md px-2 py-2 text-sm"
               >
                 <option value="YES_NO">Yes / No</option>
                 <option value="TEXT">Text</option>

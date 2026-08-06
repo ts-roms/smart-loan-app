@@ -21,8 +21,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       ref={ref}
       className={cn(
         "rounded-xl border transition-colors",
-        variant === "default" &&
-          "bg-surface-2 border-default shadow-[inset_0_1px_0_0_rgb(255_255_255/0.03)]",
+        variant === "default" && "bg-surface-2 border-default card-resting",
         variant === "elevated" && "card-elevated",
         variant === "ghost" && "border-transparent bg-transparent",
         className,

@@ -33,7 +33,7 @@ export const SelectTrigger = forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-default bg-surface-2 px-3 py-2 text-sm text-left text-fg",
+      "field-chrome flex h-10 w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-sm text-left text-fg",
       "placeholder:text-fg-subtle hover:bg-hover",
       "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
       "disabled:cursor-not-allowed disabled:opacity-50",
@@ -61,7 +61,7 @@ export const SelectContent = forwardRef<
       position={position}
       sideOffset={position === "popper" ? 4 : undefined}
       className={cn(
-        "relative z-50 min-w-[8rem] max-h-[20rem] overflow-hidden rounded-md border border-default bg-surface-3 backdrop-blur-xl text-fg shadow-2xl",
+        "relative z-50 min-w-[8rem] max-h-[20rem] overflow-hidden rounded-md border border-default bg-surface-3 backdrop-blur-xl text-fg overlay-elevated",
         // Popper-anchored animation: opacity + scale only, no translate
         // (Radix owns the position transform — overriding it causes a
         // first-frame flicker). The transform-origin variable Radix
