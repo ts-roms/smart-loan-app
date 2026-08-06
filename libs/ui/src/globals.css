@@ -236,13 +236,35 @@
     --sidebar-fg-subtle: 226 22% 65%;
 
     --foreground: 213 18% 92%;
-    --foreground-muted: 215 14% 65%;
-    /* Was 48%, which measured 3.64:1 on surface-2 — under AA. 56% still
-     * left 4.43:1 on the lighter dashboard cards, so 59%. Pre-existing
-     * shortfall, found by the contrast sweep while adding light. */
-    --foreground-subtle: 215 12% 59%;
+    /*
+     * The two lower tiers move together, and they have to.
+     *
+     * `subtle` was 59%, which measured 4.33:1 on surface-3 — under AA
+     * for normal-size text, and it's used at 11px on the KPI tiles, so
+     * the large-text exemption doesn't apply. Only surface-3 failed;
+     * every other dark surface is darker and cleared it.
+     *
+     * 61% is the least that fixes it (4.62:1), but `muted` sits at 65%
+     * and 61-vs-65 leaves the two tiers 1.13:1 apart — close enough to
+     * stop reading as two tiers at all. A fix that repairs contrast by
+     * dissolving the hierarchy isn't a fix.
+     *
+     * So 62/69. Subtle clears everywhere at 4.77:1 worst case, and the
+     * gap between the tiers comes out at 1.238:1 — slightly WIDER than
+     * the 1.207:1 it had before, so the ladder reads better than it did
+     * rather than worse.
+     *
+     * The rejected alternative was darkening surface-3 instead. It
+     * reaches 4.5:1 only at 18%, where the card's separation from the
+     * surface-2 tier below falls from 1.148 to 1.108 — paying for
+     * legible text with the elevation the whole theme is built on.
+     */
+    --foreground-muted: 215 14% 69%;
+    --foreground-subtle: 215 12% 62%;
     --muted: 220 12% 18%;
-    --muted-foreground: 215 14% 65%;
+    /* Tracks --foreground-muted; they're the same tier under two names
+     * (the shadcn-shaped components reach for this one). */
+    --muted-foreground: 215 14% 69%;
 
     /* Same reasoning as light: an input outranks a card edge. 20% was
      * near-invisible against surface-2 at 13%. */
@@ -587,13 +609,13 @@
    * the plate and the only question is how much contrast that costs.
    * On dark the accents are LIGHTER than the card, so the same glyph
    * would lift a near-black plate toward the text sitting on it —
-   * contrast moving the wrong way, and expensively: measured on this
-   * palette, the dark accents cost 0.17 at 2% opacity and 0.51 at 6%,
-   * from a `text-fg-subtle` baseline of only 4.33:1.
+   * contrast moving the wrong way. From a `text-fg-subtle` baseline of
+   * 4.77:1 on surface-3, the dark accents land at 4.58:1 at 2% and
+   * 4.21:1 at 6%, i.e. the light theme's own opacity would fail here.
    *
    * Black instead. It darkens the plate, which moves contrast for light
-   * text the right way — 4.33:1 → 4.81:1 under the resting glyph, and
-   * 4.99:1 under the hover one. The watermark pays for itself on dark
+   * text the right way — 4.77:1 → 5.31:1 under the resting glyph, and
+   * 5.51:1 under the hover one. The watermark pays for itself on dark
    * rather than costing something.
    *
    * The `*` is there because the caller puts `text-<accent>` directly
