@@ -57,14 +57,24 @@ export function parseInviteToken(
   return { tenantSlug, token };
 }
 
+type Invite = NonNullable<
+  Awaited<ReturnType<CoMakerRepository["findByInviteToken"]>>
+>;
+
 export type ConsentLookup =
-  | {
-      ok: true;
-      invite: NonNullable<
-        Awaited<ReturnType<CoMakerRepository["findByInviteToken"]>>
-      >;
-    }
-  | { ok: false; reason: "NotFound" | "Expired" };
+  | { ok: true; invite: Invite }
+  /**
+   * The token resolved to a real co-maker but the link has run out.
+   *
+   * The row comes back anyway, which is the point: someone clicking a
+   * day late is still evidence the link reached them, and that is
+   * exactly what an officer chasing a silent co-maker needs to know.
+   * Without it, "expired" and "never delivered" look identical from
+   * the outside — the same two situations `linkOpenedAt` exists to
+   * separate.
+   */
+  | { ok: false; reason: "Expired"; invite: Invite }
+  | { ok: false; reason: "NotFound" };
 
 export class CoMakerConsentService {
   constructor(private readonly coMakers: CoMakerRepository) {}
@@ -78,7 +88,9 @@ export class CoMakerConsentService {
     const invite = await this.coMakers.findByInviteToken(token);
     if (!invite) return { ok: false, reason: "NotFound" };
     if (invite.inviteExpiresAt && invite.inviteExpiresAt <= now) {
-      return { ok: false, reason: "Expired" };
+      // Carries the row. A late click is still a delivery, and the
+      // caller stamps `linkOpenedAt` from it — see the GET route.
+      return { ok: false, reason: "Expired", invite };
     }
     return { ok: true, invite };
   }
