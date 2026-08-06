@@ -18,13 +18,18 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   SkeletonCard,
   useToast,
 } from "@loan/ui";
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
 import { FileUpload } from "../../../components/FileUpload";
 import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
-import { FileUp, Gauge, Pencil, ShieldCheck } from "lucide-react";
+import { FileUp, Gauge, Pencil, ShieldCheck, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
@@ -306,8 +311,8 @@ function SubmitKycForm({
   const submit = useSubmitKyc();
   const toast = useToast();
 
-  // Block doc types that already have an active submission — the
-  // operator can still resubmit once a previous attempt is rejected.
+  // Types with an active submission are out — the operator can still
+  // resubmit once a previous attempt is rejected.
   const taken = useMemo(() => {
     const set = new Set<KycDocumentType>();
     for (const d of existing) {
@@ -317,72 +322,66 @@ function SubmitKycForm({
     return set;
   }, [existing]);
 
-  const available = useMemo(
-    () => DOC_TYPES.filter((t) => !taken.has(t.value)),
-    [taken],
-  );
-
   /**
-   * One staged file per document type, keyed by type.
+   * Attached but not yet submitted, in the order they were added.
    *
-   * A borrower arrives with their whole folder — ID, payslip, utility
-   * bill — and the form used to take one, submit, reset, and start
-   * over. Staging them all and submitting once matches how the
-   * documents actually turn up.
+   * A borrower arrives with their whole folder, so the form takes
+   * several — but one at a time, through a single picker. Rendering a
+   * capture control per document type put nine buttons on screen for
+   * a job that is usually three files.
    */
   const [staged, setStaged] = useState<
-    Partial<Record<KycDocumentType, string>>
-  >({});
+    Array<{ type: KycDocumentType; url: string }>
+  >([]);
   const [busy, setBusy] = useState(false);
 
-  const stagedTypes = available
-    .map((t) => t.value)
-    .filter((t): t is KycDocumentType => Boolean(staged[t]));
+  const remaining = useMemo(
+    () =>
+      DOC_TYPES.filter(
+        (t) => !taken.has(t.value) && !staged.some((x) => x.type === t.value),
+      ),
+    [taken, staged],
+  );
 
-  // A type that gets submitted (or resubmitted elsewhere) leaves
-  // `available`; drop anything staged against it so the count can't
-  // include a slot that's no longer on screen.
+  const [documentType, setDocumentType] = useState<KycDocumentType>(
+    DOC_TYPES[0]!.value,
+  );
+
+  // Keep the picker on something actually offerable: the selected type
+  // leaves `remaining` the moment it's attached, and would otherwise
+  // sit there as a value that can't be chosen again.
   useEffect(() => {
-    setStaged((prev) => {
-      const next: Partial<Record<KycDocumentType, string>> = {};
-      for (const t of available) {
-        if (prev[t.value]) next[t.value] = prev[t.value];
-      }
-      return next;
-    });
-  }, [available]);
+    if (remaining.length === 0) return;
+    if (!remaining.some((t) => t.value === documentType)) {
+      setDocumentType(remaining[0]!.value);
+    }
+  }, [remaining, documentType]);
 
   const onSubmit = async () => {
-    if (stagedTypes.length === 0) return;
+    if (staged.length === 0) return;
     setBusy(true);
-    // Sequential rather than parallel: the API takes one document per
-    // call, and a failure has to name the type it belongs to. Nine is
-    // the ceiling, so there's nothing to gain from racing them.
-    const failed: Array<{ type: KycDocumentType; message: string }> = [];
+    // Sequential: the API takes one document per call, and a failure
+    // has to name the type it belongs to.
+    const failed: string[] = [];
     let sent = 0;
-    for (const documentType of stagedTypes) {
+    for (const item of staged) {
       try {
         await submit.mutateAsync({
           customerId,
-          documentType,
-          documentUrl: staged[documentType]!,
+          documentType: item.type,
+          documentUrl: item.url,
         });
         sent += 1;
-        // Clear as we go, so a mid-way failure leaves exactly the
-        // unsent ones staged and the operator can retry just those.
-        setStaged((prev) => {
-          const next = { ...prev };
-          delete next[documentType];
-          return next;
-        });
+        // Dropped as they land, so a mid-way failure leaves exactly
+        // the unsent ones attached.
+        setStaged((prev) => prev.filter((x) => x.type !== item.type));
       } catch (err) {
         const msg = (err as Error).message ?? "";
-        failed.push({
-          type: documentType,
-          message: /already exists/i.test(msg)
-            ? "already on file"
-            : msg || "failed",
-        });
+        failed.push(
+          `${DOC_TYPE_LABELS[item.type] ?? item.type} ${
+            /already exists/i.test(msg) ? "already on file" : "failed"
+          }`,
+        );
       }
     }
     setBusy(false);
@@ -392,21 +391,13 @@ function SubmitKycForm({
         sent === 1 ? "Document submitted" : `${sent} documents submitted`,
       );
     } else if (sent > 0) {
-      toast.error(
-        `${sent} submitted · ${failed
-          .map((f) => `${DOC_TYPE_LABELS[f.type] ?? f.type} ${f.message}`)
-          .join(", ")}`,
-      );
+      toast.error(`${sent} submitted · ${failed.join(", ")}`);
     } else {
-      toast.error(
-        failed
-          .map((f) => `${DOC_TYPE_LABELS[f.type] ?? f.type}: ${f.message}`)
-          .join(" · "),
-      );
+      toast.error(failed.join(" · "));
     }
   };
 
-  if (available.length === 0) {
+  if (taken.size === DOC_TYPES.length && staged.length === 0) {
     return (
       <div className="border-t border-default pt-3 text-xs text-fg-subtle">
         <FileUp className="inline h-3 w-3 mr-1" />
@@ -416,86 +407,99 @@ function SubmitKycForm({
     );
   }
 
+  const captureMode = CAMERA_MODE[documentType];
+
   return (
     <div className="space-y-3 border-t border-default pt-3">
       <div className="text-xs text-fg-subtle flex items-center gap-1">
         <FileUp className="h-3 w-3" />
         Submit documents
       </div>
-      <p className="text-[10px] text-fg-subtle">
-        Attach as many as you have — they go in together.
-      </p>
 
-      <ul className="space-y-2">
-        {available.map((t) => (
-          <KycSlot
-            key={t.value}
-            type={t.value}
-            label={t.label}
-            value={staged[t.value] ?? ""}
-            onChange={(url) =>
-              setStaged((prev) => {
-                const next = { ...prev };
-                if (url) next[t.value] = url;
-                else delete next[t.value];
-                return next;
-              })
+      {/* Attached, waiting to go. */}
+      {staged.length > 0 && (
+        <ul className="space-y-1">
+          {staged.map((item) => (
+            <li
+              key={item.type}
+              className="flex items-center gap-2 rounded border border-default bg-surface-2 px-2 py-1.5"
+            >
+              <DocumentThumbnail
+                url={item.url}
+                label={DOC_TYPE_LABELS[item.type] ?? item.type}
+                className="h-8 w-8"
+              />
+              <span className="flex-1 min-w-0 truncate text-xs">
+                {DOC_TYPE_LABELS[item.type] ?? item.type}
+              </span>
+              <button
+                type="button"
+                aria-label={`Remove ${DOC_TYPE_LABELS[item.type] ?? item.type}`}
+                onClick={() =>
+                  setStaged((prev) => prev.filter((x) => x.type !== item.type))
+                }
+                className="text-fg-subtle hover:text-danger"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {remaining.length > 0 ? (
+        <div className="space-y-2">
+          <Select
+            value={documentType}
+            onValueChange={(v) => setDocumentType(v as KycDocumentType)}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {remaining.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Keyed on the type so the widget resets between documents
+              rather than carrying the previous one's preview. `value`
+              stays null: an attached file moves to the list above, so
+              this control is only ever the capture button. */}
+          <FileUpload
+            key={documentType}
+            subdir="kyc"
+            value={null}
+            onUploaded={(url) =>
+              setStaged((prev) => [...prev, { type: documentType, url }])
             }
+            capture={captureMode}
+            label="Choose file"
           />
-        ))}
-      </ul>
+        </div>
+      ) : (
+        <p className="text-[10px] text-fg-subtle">
+          Everything else already has an active submission.
+        </p>
+      )}
 
       <Button
         type="button"
         size="sm"
         className="w-full"
         onClick={() => void onSubmit()}
-        disabled={busy || stagedTypes.length === 0}
+        disabled={busy || staged.length === 0}
       >
         {busy
           ? "Submitting…"
-          : stagedTypes.length <= 1
+          : staged.length <= 1
             ? "Submit document"
-            : `Submit ${stagedTypes.length} documents`}
+            : `Submit ${staged.length} documents`}
       </Button>
     </div>
-  );
-}
-
-/** One document type's upload slot. */
-function KycSlot({
-  type,
-  label,
-  value,
-  onChange,
-}: {
-  type: KycDocumentType;
-  label: string;
-  value: string;
-  onChange: (url: string) => void;
-}) {
-  const captureMode = CAMERA_MODE[type];
-  return (
-    <li className="flex items-center gap-2 rounded border border-default bg-surface-2 px-2 py-1.5">
-      <div className="min-w-0 flex-1">
-        <div className="text-xs truncate">{label}</div>
-        <div className="text-[10px] text-fg-subtle">
-          {captureMode === "user"
-            ? "Selfie — camera or file"
-            : captureMode === "environment"
-              ? "Photo or file"
-              : "PDF or image"}
-        </div>
-      </div>
-      <FileUpload
-        subdir="kyc"
-        value={value || null}
-        onUploaded={onChange}
-        onClear={() => onChange("")}
-        capture={captureMode}
-        label="Choose file"
-      />
-    </li>
   );
 }
 

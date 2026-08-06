@@ -8,12 +8,17 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   SkeletonCard,
   useToast,
 } from "@loan/ui";
 import { formatDate } from "@loan/shared-utils";
-import { FileUp } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { FileUp, X } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
 
 // Direct import — see customers/constants.ts for why.
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
@@ -56,16 +61,29 @@ export function PortalKyc() {
    * time meant three round trips through the same form.
    */
   const [staged, setStaged] = useState<
-    Partial<Record<KycDocumentType, string>>
-  >({});
+    Array<{ type: KycDocumentType; url: string }>
+  >([]);
+  const [documentType, setDocumentType] = useState<KycDocumentType>(
+    DOC_OPTIONS[0]!,
+  );
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const stagedTypes = DOC_OPTIONS.filter((t) => staged[t]);
+  const remaining = DOC_OPTIONS.filter(
+    (d) => !staged.some((x) => x.type === d),
+  );
+
+  // Keep the picker on something still offerable — the selected type
+  // leaves `remaining` as soon as it's attached.
+  useEffect(() => {
+    if (remaining.length > 0 && !remaining.includes(documentType)) {
+      setDocumentType(remaining[0]!);
+    }
+  }, [remaining, documentType]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (stagedTypes.length === 0) {
+    if (staged.length === 0) {
       toast.error("Attach a photo or file first");
       return;
     }
@@ -74,23 +92,19 @@ export function PortalKyc() {
     // has to name which one so the borrower knows what to retry.
     const failed: string[] = [];
     let sent = 0;
-    for (const documentType of stagedTypes) {
+    for (const item of staged) {
       try {
         await submit.mutateAsync({
-          documentType,
-          documentUrl: staged[documentType]!,
+          documentType: item.type,
+          documentUrl: item.url,
           notes: notes || undefined,
         });
         sent += 1;
-        // Cleared as they land, so a mid-way failure leaves exactly
+        // Dropped as they land, so a mid-way failure leaves exactly
         // the unsent ones attached.
-        setStaged((prev) => {
-          const next = { ...prev };
-          delete next[documentType];
-          return next;
-        });
+        setStaged((prev) => prev.filter((x) => x.type !== item.type));
       } catch {
-        failed.push(DOC_TYPE_LABELS[documentType] ?? documentType);
+        failed.push(DOC_TYPE_LABELS[item.type] ?? item.type);
       }
     }
     setBusy(false);
@@ -190,41 +204,74 @@ export function PortalKyc() {
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-3">
             <p className="text-xs text-fg-muted">
-              Attach whichever you have — they&apos;re sent together.
+              Add one at a time — they&apos;re sent together.
             </p>
-            <ul className="space-y-2">
-              {DOC_OPTIONS.map((d) => (
-                <li
-                  key={d}
-                  className="flex items-center gap-2 rounded border border-default bg-surface-2 px-2 py-1.5"
+
+            {staged.length > 0 && (
+              <ul className="space-y-1">
+                {staged.map((item) => (
+                  <li
+                    key={item.type}
+                    className="flex items-center gap-2 rounded border border-default bg-surface-2 px-2 py-1.5"
+                  >
+                    <DocumentThumbnail
+                      url={item.url}
+                      label={DOC_TYPE_LABELS[item.type] ?? item.type}
+                      className="h-8 w-8"
+                    />
+                    <span className="flex-1 min-w-0 truncate text-xs">
+                      {DOC_TYPE_LABELS[item.type] ?? item.type}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${DOC_TYPE_LABELS[item.type] ?? item.type}`}
+                      onClick={() =>
+                        setStaged((prev) =>
+                          prev.filter((x) => x.type !== item.type),
+                        )
+                      }
+                      className="text-fg-subtle hover:text-danger"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {remaining.length > 0 && (
+              <div className="space-y-2">
+                <Select
+                  value={documentType}
+                  onValueChange={(v) => setDocumentType(v as KycDocumentType)}
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs truncate">
-                      {DOC_TYPE_LABELS[d] ?? d}
-                    </div>
-                    <div className="text-[10px] text-fg-subtle">
-                      {CAMERA_MODE[d] ? "Photo or file" : "PDF or image"}
-                    </div>
-                  </div>
-                  <FileUpload
-                    subdir="kyc"
-                    value={staged[d] ?? null}
-                    onUploaded={(url) =>
-                      setStaged((prev) => ({ ...prev, [d]: url }))
-                    }
-                    onClear={() =>
-                      setStaged((prev) => {
-                        const next = { ...prev };
-                        delete next[d];
-                        return next;
-                      })
-                    }
-                    capture={CAMERA_MODE[d]}
-                    label="Choose a file"
-                  />
-                </li>
-              ))}
-            </ul>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {remaining.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {DOC_TYPE_LABELS[d] ?? d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Keyed so the widget resets between documents; an
+                    attached file moves to the list above, so this is
+                    only ever the capture button. */}
+                <FileUpload
+                  key={documentType}
+                  subdir="kyc"
+                  value={null}
+                  onUploaded={(url) =>
+                    setStaged((prev) => [...prev, { type: documentType, url }])
+                  }
+                  capture={CAMERA_MODE[documentType]}
+                  label="Choose a file"
+                />
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className="text-xs text-fg-muted">Notes (optional)</label>
               <Input
@@ -233,12 +280,12 @@ export function PortalKyc() {
                 placeholder="Anything an officer should know"
               />
             </div>
-            <Button type="submit" disabled={busy || stagedTypes.length === 0}>
+            <Button type="submit" disabled={busy || staged.length === 0}>
               {busy
                 ? "Submitting…"
-                : stagedTypes.length <= 1
+                : staged.length <= 1
                   ? "Submit for review"
-                  : `Submit ${stagedTypes.length} for review`}
+                  : `Submit ${staged.length} for review`}
             </Button>
           </form>
         </CardContent>
