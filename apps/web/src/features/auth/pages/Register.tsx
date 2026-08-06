@@ -1,17 +1,9 @@
 import { ApiError, useRegister } from "@loan/api-client";
-import {
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Input,
-  PasswordInput,
-  useToast,
-} from "@loan/ui";
-import { Wallet } from "lucide-react";
+import { Button, Input, PasswordInput, useToast } from "@loan/ui";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+
+import { AuthShell } from "../components/AuthShell";
 
 import { useAuth } from "../../../providers/auth";
 
@@ -75,91 +67,82 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <Wallet className="h-6 w-6 text-info" />
-            <span className="text-xl font-semibold">SmartLoan</span>
-          </div>
-          <CardTitle>Create your account</CardTitle>
-          <p className="text-xs text-fg-muted mt-1">
-            Takes a minute. We&apos;ll ask for your details next.
-          </p>
-          {tenantSlug && (
-            <p className="text-xs text-fg-muted mt-1">
-              Cooperative: <code className="text-info">{tenantSlug}</code>
+    <AuthShell
+      title="Create your account"
+      subtitle={
+        tenantSlug ? (
+          <>
+            Joining <code className="text-primary">{tenantSlug}</code>. Takes a
+            minute — we&apos;ll ask for your details next.
+          </>
+        ) : (
+          "Takes a minute. We'll ask for your details next."
+        )
+      }
+    >
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div className="space-y-1">
+          <label className="text-sm">Full name</label>
+          <Input
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm">Email</label>
+          <Input
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm">Password</label>
+          <PasswordInput
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          {tooShort && (
+            <p className="text-[11px] text-warning">At least 8 characters.</p>
+          )}
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm">Confirm password</label>
+          <PasswordInput
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            required
+          />
+          {mismatch && (
+            <p className="text-[11px] text-warning">
+              Passwords don&apos;t match.
             </p>
           )}
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-sm">Full name</label>
-              <Input
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm">Email</label>
-              <Input
-                type="email"
-                autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm">Password</label>
-              <PasswordInput
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              {tooShort && (
-                <p className="text-[11px] text-warning">
-                  At least 8 characters.
-                </p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm">Confirm password</label>
-              <PasswordInput
-                autoComplete="new-password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                required
-              />
-              {mismatch && (
-                <p className="text-[11px] text-warning">
-                  Passwords don&apos;t match.
-                </p>
-              )}
-            </div>
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={register.isPending || tooShort || mismatch}
-            >
-              {register.isPending ? "Creating account…" : "Create account"}
-            </Button>
-            <p className="text-xs text-fg-subtle text-center pt-2">
-              Already a member?{" "}
-              <Link
-                to={tenantSlug ? `/login?tenant=${tenantSlug}` : "/login"}
-                className="text-info underline"
-              >
-                Sign in
-              </Link>
-            </p>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={register.isPending || tooShort || mismatch}
+        >
+          {register.isPending ? "Creating account…" : "Create account"}
+        </Button>
+        <p className="text-xs text-fg-subtle text-center pt-2">
+          Already a member?{" "}
+          <Link
+            to={tenantSlug ? `/login?tenant=${tenantSlug}` : "/login"}
+            className="font-medium text-primary underline underline-offset-4"
+          >
+            Sign in
+          </Link>
+        </p>
+      </form>
+    </AuthShell>
   );
 }

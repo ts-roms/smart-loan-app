@@ -488,6 +488,38 @@
       0 32px 64px -24px hsl(var(--elev-shadow));
   }
 
+  /*
+   * Sign-in / register backdrop.
+   *
+   * Teal to navy, edge to edge — the two brand colours at full
+   * strength. These are the only screens with no nav, no data and no
+   * chrome, so they can carry the brand in a way the console never
+   * should.
+   *
+   * The dot lattice keeps a large flat gradient from banding on wide
+   * displays; it's below the threshold you'd consciously notice. Fixed
+   * hues rather than theme tokens because this panel IS the brand — it
+   * shouldn't invert when someone flips to dark.
+   */
+  .auth-backdrop {
+    background:
+      radial-gradient(
+        circle at 1px 1px,
+        hsl(0 0% 100% / 0.07) 1px,
+        transparent 0
+      ),
+      linear-gradient(115deg, hsl(172 88% 34%) 0%, hsl(210 45% 34%) 45%, hsl(226 36% 39%) 100%);
+    background-size:
+      22px 22px,
+      100% 100%;
+  }
+
+  /* Brand half of the auth card — the same ramp, darker, so the card
+   * reads as one object rather than a panel glued to a form. */
+  .auth-brand-panel {
+    background: linear-gradient(160deg, hsl(226 36% 39%) 0%, hsl(226 40% 28%) 100%);
+  }
+
   /* Section header divider used between dashboard groups. The label sits
    * on top of a hairline that fades to nothing at both ends. */
   .section-rule {

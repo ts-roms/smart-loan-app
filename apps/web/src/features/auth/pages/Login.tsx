@@ -1,16 +1,10 @@
 import { ApiError, useLogin } from "@loan/api-client";
-import {
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Input,
-  PasswordInput,
-} from "@loan/ui";
-import { AlertCircle, Check, Lock, Wallet } from "lucide-react";
+import { Button, Input, PasswordInput } from "@loan/ui";
+import { AlertCircle, Lock } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+
+import { AuthShell } from "../components/AuthShell";
 import { useAuth } from "../../../providers/auth";
 
 /**
@@ -91,212 +85,130 @@ export function LoginPage() {
   };
 
   return (
-    /*
-     * Two panes: brand on the left, form on the right.
-     *
-     * `lg:` rather than `md:` — the brand pane needs enough width for
-     * the copy to breathe, and at 768px the two columns squeeze the
-     * form narrower than the single-column layout it replaces. Below
-     * that the pane is dropped entirely and a compact lockup sits above
-     * the form, so a phone gets one focused column rather than a
-     * shrunken version of the desktop design.
-     */
-    <div className="min-h-screen lg:grid lg:grid-cols-2">
-      <BrandPane />
-
-      <div className="flex min-h-screen items-center justify-center p-4 lg:min-h-0">
-        <Card className="w-full max-w-sm border-0 bg-transparent shadow-none lg:border lg:bg-surface-2 lg:shadow-sm">
-          <CardHeader className="text-center">
-            {/* The lockup the brand pane would otherwise carry. */}
-            <div className="mb-2 flex items-center justify-center gap-2 lg:hidden">
-              <Wallet className="h-6 w-6 text-primary" />
-              <span className="text-xl font-semibold">SmartLoan</span>
-            </div>
-            <CardTitle>Sign in</CardTitle>
-            {tenantSlug && (
-              <p className="text-xs text-fg-muted mt-1">
-                Tenant: <code className="text-info">{tenantSlug}</code>
-              </p>
-            )}
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={onSubmit} className="space-y-3">
-              {error && (
-                <div
-                  role="alert"
-                  className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
-                >
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
-              <div className="space-y-1">
-                <label className="text-sm">Email</label>
-                <Input
-                  type="email"
-                  autoComplete="username"
-                  placeholder="E-mail"
-                  value={email}
-                  // Clearing on edit: the message describes the attempt
-                  // you just made, and it stops describing it the
-                  // moment you start changing the inputs.
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError(null);
-                  }}
-                  required
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm">Password</label>
-                <PasswordInput
-                  autoComplete="current-password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError(null);
-                  }}
-                  required
-                />
-              </div>
-              {requires2fa && !useRecovery && (
-                <div className="space-y-1">
-                  <label className="text-sm flex items-center gap-1">
-                    <Lock className="h-3 w-3" /> 6-digit code
-                  </label>
-                  <Input
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    placeholder="000000"
-                    value={totpCode}
-                    onChange={(e) =>
-                      setTotpCode(e.target.value.replace(/\D/g, ""))
-                    }
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setUseRecovery(true)}
-                    className="text-[10px] text-fg-muted underline mt-1"
-                  >
-                    Lost your device? Use a recovery code instead
-                  </button>
-                </div>
-              )}
-              {requires2fa && useRecovery && (
-                <div className="space-y-1">
-                  <label className="text-sm flex items-center gap-1">
-                    <Lock className="h-3 w-3" /> Recovery code
-                  </label>
-                  <Input
-                    placeholder="XXXX-XXXX"
-                    value={recoveryCode}
-                    onChange={(e) =>
-                      setRecoveryCode(e.target.value.toUpperCase())
-                    }
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setUseRecovery(false)}
-                    className="text-[10px] text-fg-muted underline mt-1"
-                  >
-                    Back to TOTP code
-                  </button>
-                </div>
-              )}
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={login.isPending}
-              >
-                {login.isPending
-                  ? "Signing in…"
-                  : requires2fa
-                    ? "Verify and sign in"
-                    : "Sign in"}
-              </Button>
-              <p className="text-xs text-fg-subtle text-center pt-2">
-                New member?{" "}
-                <Link
-                  to={
-                    tenantSlug ? `/register?tenant=${tenantSlug}` : "/register"
-                  }
-                  className="text-info underline"
-                >
-                  Create an account
-                </Link>
-              </p>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-/**
- * The left pane. Purely decorative — it carries no form control, so it
- * is `aria-hidden` and hidden outright below lg rather than reflowed:
- * a screen-reader user gets the lockup above the form instead of the
- * same words twice.
- *
- * Uses the static brand, not useBranding(). /system/branding sits
- * behind app.authenticate and 401s here, which is correct — per-tenant
- * branding can't be shown before we know which tenant is asking.
- */
-function BrandPane() {
-  return (
-    <div
-      aria-hidden="true"
-      className="relative hidden overflow-hidden bg-surface-2 p-12 lg:flex lg:flex-col lg:justify-between"
+    <AuthShell
+      title="Welcome back"
+      subtitle={
+        tenantSlug ? (
+          <>
+            Sign in to <code className="text-primary">{tenantSlug}</code>.
+          </>
+        ) : (
+          "Sign in to continue."
+        )
+      }
     >
-      {/*
-        Two soft primary washes. Opacity comes from --glow-a/--glow-b,
-        which differ per theme, so the effect stays subtle on the light
-        plate instead of turning into a visible blue smear.
-      */}
-      <div
-        className="pointer-events-none absolute -left-24 -top-24 h-96 w-96 rounded-full bg-primary blur-3xl"
-        style={{ opacity: "var(--glow-a)" }}
-      />
-      <div
-        className="pointer-events-none absolute -bottom-32 -right-16 h-[28rem] w-[28rem] rounded-full bg-primary blur-3xl"
-        style={{ opacity: "var(--glow-b)" }}
-      />
+      <form onSubmit={onSubmit} className="space-y-4">
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
-      <div className="relative flex items-center gap-2.5">
-        <Wallet className="h-7 w-7 text-primary" />
-        <span className="text-xl font-semibold tracking-tight">SmartLoan</span>
-      </div>
+        <div className="space-y-1.5">
+          <label htmlFor="email" className="text-sm font-medium">
+            Email
+          </label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="username"
+            placeholder="you@example.com"
+            value={email}
+            // Clearing on edit: the message describes the attempt you
+            // just made, and stops describing it the moment you start
+            // changing the inputs.
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError(null);
+            }}
+            required
+          />
+        </div>
 
-      <div className="relative max-w-md space-y-4">
-        <h1 className="text-3xl font-semibold leading-tight tracking-tight">
-          Lending operations for Philippine cooperatives.
-        </h1>
-        <p className="text-sm leading-relaxed text-fg-muted">
-          Origination, KYC, decisioning, collections and the general ledger —
-          one system, on your own hardware.
+        <div className="space-y-1.5">
+          <label htmlFor="password" className="text-sm font-medium">
+            Password
+          </label>
+          <PasswordInput
+            id="password"
+            autoComplete="current-password"
+            placeholder="Enter password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError(null);
+            }}
+            required
+          />
+        </div>
+
+        {requires2fa && !useRecovery && (
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1 text-sm font-medium">
+              <Lock className="h-3 w-3" /> 6-digit code
+            </label>
+            <Input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              placeholder="000000"
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setUseRecovery(true)}
+              className="mt-1 text-[11px] text-fg-muted underline"
+            >
+              Lost your device? Use a recovery code instead
+            </button>
+          </div>
+        )}
+
+        {requires2fa && useRecovery && (
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1 text-sm font-medium">
+              <Lock className="h-3 w-3" /> Recovery code
+            </label>
+            <Input
+              placeholder="XXXX-XXXX"
+              value={recoveryCode}
+              onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setUseRecovery(false)}
+              className="mt-1 text-[11px] text-fg-muted underline"
+            >
+              Back to TOTP code
+            </button>
+          </div>
+        )}
+
+        <Button type="submit" className="w-full" disabled={login.isPending}>
+          {login.isPending
+            ? "Signing in…"
+            : requires2fa
+              ? "Verify and sign in"
+              : "Sign in"}
+        </Button>
+
+        <p className="pt-1 text-center text-sm text-fg-muted">
+          New member?{" "}
+          <Link
+            to={tenantSlug ? `/register?tenant=${tenantSlug}` : "/register"}
+            className="font-medium text-primary underline underline-offset-4"
+          >
+            Create an account
+          </Link>
         </p>
-        <ul className="space-y-2 pt-2">
-          {[
-            "Applications scored and decided against your own rules",
-            "Every payment posted to a double-entry ledger",
-            "Collections queues, promises to pay, demand letters",
-          ].map((line) => (
-            <li key={line} className="flex items-start gap-2 text-sm">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <span className="text-fg-muted">{line}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <p className="relative text-xs text-fg-subtle">
-        © {new Date().getFullYear()} SmartLoan
-      </p>
-    </div>
+      </form>
+    </AuthShell>
   );
 }

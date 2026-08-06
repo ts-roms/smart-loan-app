@@ -8,10 +8,17 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-sky-500 text-slate-950 hover:bg-sky-400",
+        // Theme tokens, not `sky-500` / `rose-500`. Hard-coding the
+        // palette here meant the primary action colour was whatever
+        // Tailwind's default blue is, no matter what the theme said —
+        // so re-theming the app never actually reached its buttons.
+        // `text-slate-950` was a dark-theme choice that read as muddy
+        // on light; --primary-foreground already flips per theme.
+        default:
+          "bg-primary text-primary-foreground shadow-sm hover:opacity-90",
         outline: "border border-default bg-surface-2 hover:bg-hover",
         ghost: "hover:bg-hover",
-        destructive: "bg-rose-500 text-white hover:bg-rose-400",
+        destructive: "bg-danger text-white shadow-sm hover:opacity-90",
         secondary: "bg-surface-3 hover:bg-hover",
       },
       size: {
