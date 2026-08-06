@@ -108,6 +108,86 @@ describe("ledgerPositions", () => {
     expect(last(out).heldAfter).toBe(3_000);
   });
 
+  /**
+   * From the fixtures: PICKER-011 has a DEFAULTED loan he never paid a
+   * peso on, and a second loan he closed and then overpaid by ₱279,360.
+   *
+   * On one running total floored at zero, the overpayment absorbed the
+   * default and his statement read "You owe ₱0.00". Overpaying one loan
+   * does not settle another — the coop can still pursue the default —
+   * and the excess is cash it is holding, not debt relief.
+   */
+  it("does not let an overpaid loan cancel a defaulted one", () => {
+    const out = ledgerPositions(
+      [
+        { kind: "LOAN_DISBURSEMENT", amount: 50_000, loanNumber: "DEFAULTED" },
+        { kind: "LOAN_DISBURSEMENT", amount: 50_000, loanNumber: "CLOSED" },
+        // Nothing on DEFAULTED, ever. Everything on CLOSED, and more.
+        { kind: "LOAN_PAYMENT", amount: 336_096, loanNumber: "CLOSED" },
+      ],
+      { DEFAULTED: 56_735.76, CLOSED: 56_735.76 },
+    );
+    expect(last(out).owedAfter).toBe(56_735.76);
+    expect(last(out).heldAfter).toBe(279_360.24);
+  });
+
+  it("holds the excess when a loan is overpaid", () => {
+    // The coop books this to Customer Advance Payments — a liability,
+    // money it owes back. Reporting it as nothing held told the member
+    // their ₱279,360 had evaporated.
+    const out = ledgerPositions(
+      [
+        { kind: "LOAN_DISBURSEMENT", amount: 10_000, loanNumber: "L1" },
+        { kind: "LOAN_PAYMENT", amount: 15_000, loanNumber: "L1" },
+      ],
+      { L1: 11_000 },
+    );
+    expect(last(out)).toEqual({ owedAfter: 0, heldAfter: 4_000 });
+  });
+
+  /**
+   * The guard that keeps the advance rule from re-introducing the
+   * original bug. A loan with no schedule falls back to its principal,
+   * so every peso of interest ever paid looks like excess cash.
+   */
+  it("claims no advance on a loan whose obligation is unknown", () => {
+    const out = ledgerPositions(
+      [
+        { kind: "LOAN_DISBURSEMENT", amount: 50_000, loanNumber: "LEGACY" },
+        { kind: "LOAN_PAYMENT", amount: 56_735.76, loanNumber: "LEGACY" },
+      ],
+      {}, // no schedule for LEGACY
+    );
+    expect(last(out)).toEqual({ owedAfter: 0, heldAfter: 0 });
+  });
+
+  /**
+   * A date- or scope-filtered statement can show payments whose
+   * disbursement falls outside the window. Those are repayments seen
+   * half-way through, not gifts.
+   */
+  it("claims no advance on payments with no disbursement in view", () => {
+    const out = ledgerPositions(
+      [{ kind: "LOAN_PAYMENT", amount: 20_000, loanNumber: "L1" }],
+      { L1: 56_735.76 },
+    );
+    expect(last(out)).toEqual({ owedAfter: 0, heldAfter: 0 });
+  });
+
+  it("counts a waiver as forgiveness, never as cash held", () => {
+    // Forgiving more than is owed must not conjure money the coop would
+    // have to refund. No cash moves on a waiver, so it is tracked apart
+    // from payments and can never produce an advance on its own.
+    const out = ledgerPositions(
+      [
+        { kind: "LOAN_DISBURSEMENT", amount: 10_000, loanNumber: "L1" },
+        { kind: "PENALTY_WAIVER", amount: 20_000, loanNumber: "L1" },
+      ],
+      { L1: 11_000 },
+    );
+    expect(last(out)).toEqual({ owedAfter: 0, heldAfter: 0 });
+  });
+
   it("never reports a negative position", () => {
     // Overpayment, and a withdrawal beyond the balance. Neither should
     // print as a negative — "you owe −₱200" reads as the lender owing

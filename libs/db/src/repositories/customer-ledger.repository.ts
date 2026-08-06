@@ -24,7 +24,7 @@
  * crossed-out totals.
  */
 
-import { ledgerPositions } from "@loan/loans";
+import { ledgerPositions, type PositionResult } from "@loan/loans";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -54,25 +54,19 @@ export interface LedgerEntry {
   /** Free-form notes captured at booking time, when any. */
   notes?: string | null;
   /**
-   * Net customer position AFTER this entry was applied. Same sign
-   * convention as `LedgerSummary.netCustomerPosition`:
-   *   • positive → customer is a net depositor (coop owes them, or holds
-   *     their savings/contributions in excess of any borrowed)
-   *   • negative → customer is a net borrower (they've received more
-   *     than they've paid back)
-   * Accumulates oldest → newest; the returned `entries` array is in
-   * newest-first order so the latest row carries the current balance.
-   */
-  /**
    * What the member owed after this entry — principal plus scheduled
    * interest on every live loan, less everything repaid or waived.
+   *
+   * Both columns accumulate oldest → newest; `entries` is returned
+   * newest-first, so the FIRST row carries the current position.
    */
   owedAfter: number;
   /**
-   * What the coop held for the member after this entry — savings plus
-   * capital build-up. Deliberately NOT netted against `owedAfter`: the
-   * two are different claims, and adding them told a borrower his
-   * interest payments were a deposit.
+   * What the coop held for the member after this entry — savings,
+   * capital build-up, and any cash paid beyond what a loan could
+   * absorb. Deliberately NOT netted against `owedAfter`: the two are
+   * different claims, and adding them told a borrower his interest
+   * payments were a deposit.
    */
   heldAfter: number;
   /**
@@ -98,12 +92,17 @@ export interface LedgerSummary {
   /**
    * What the member owes the coop right now — principal plus scheduled
    * interest on live loans, less repayments and waivers.
+   *
+   * Summed across loans, each floored at zero. Overpaying one loan does
+   * not settle another: a member with a defaulted loan and an overpaid
+   * one still owes the default.
    */
   amountOwed: number;
   /**
-   * What the coop holds for the member — savings plus capital
-   * build-up. Excludes the mortuary and emergency funds, which are
-   * pooled and spent on claims rather than returned.
+   * What the coop holds for the member — savings, capital build-up, and
+   * cash paid beyond what a loan could absorb (which the books carry in
+   * 2100 Customer Advance Payments). Excludes the mortuary and emergency
+   * funds, which are pooled and spent on claims rather than returned.
    *
    * NEVER add this to `amountOwed`. Their sum replaced a figure that
    * called a borrower's interest a deposit; a member with ₱10,000 saved
@@ -143,6 +142,22 @@ export interface LedgerOptions {
   /** Inclusive upper bound (ISO date). */
   to?: Date;
   scope?: LedgerScope;
+}
+
+/**
+ * The two headline figures, taken off the final entry rather than
+ * recomputed. Anything derived a second way drifts from the column it
+ * is supposed to summarize.
+ */
+function positionTotals(positions: readonly PositionResult[]): {
+  amountOwed: number;
+  amountHeld: number;
+} {
+  const last = positions.length ? positions[positions.length - 1]! : null;
+  return {
+    amountOwed: round2(last?.owedAfter ?? 0),
+    amountHeld: round2(last?.heldAfter ?? 0),
+  };
 }
 
 export class CustomerLedgerRepository {
@@ -443,15 +458,17 @@ export class CustomerLedgerRepository {
        * and borrowed ₱10,000 is not square with the coop: they owe and
        * are owed, and either can be called without the other.
        */
-      amountOwed: round2(
-        Math.max(
-          0,
-          positions.length ? positions[positions.length - 1]!.owedAfter : 0,
-        ),
-      ),
-      amountHeld: round2(
-        Math.max(0, savingsDeposits - savingsWithdrawals + capitalBuildUp),
-      ),
+      /*
+       * BOTH read off the last position, so the cards can never
+       * disagree with the final row of the table beneath them.
+       *
+       * `amountHeld` was briefly recomputed here as savings + CBU. That
+       * looked equivalent and wasn't: it missed cash paid beyond what a
+       * loan could absorb, which the books carry in 2100 Customer
+       * Advance Payments as a liability. One member sat on ₱279,360 of
+       * advances while his statement said the coop held nothing.
+       */
+      ...positionTotals(positions),
     };
 
     return {

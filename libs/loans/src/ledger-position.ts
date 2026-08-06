@@ -11,9 +11,11 @@
  *
  *   OWED — what the member owes the coop. Grows by the loan's whole
  *          obligation when it is disbursed, shrinks with every payment.
- *   HELD — what the coop holds on the member's behalf. Their savings
- *          and their capital build-up, both of which are theirs to get
- *          back.
+ *          Tracked per loan and summed, never as one running total —
+ *          see `LoanState`.
+ *   HELD — what the coop holds on the member's behalf. Their savings,
+ *          their capital build-up, and any cash paid beyond what a loan
+ *          could absorb, all of which are theirs to get back.
  *
  * Adding them would say a member with ₱10,000 saved and ₱10,000
  * borrowed is square with the coop. They are not: they owe ₱10,000 and
@@ -66,6 +68,53 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const atLeastZero = (n: number) => Math.max(0, n);
 
 /**
+ * Per-loan state. The debt is tracked LOAN BY LOAN and only summed at
+ * the end, because a single running total floored at zero silently
+ * writes off real debt.
+ *
+ * Seen in the fixtures: a member with a DEFAULTED loan he never paid a
+ * peso on, and a second loan he closed and then overpaid by ₱279,360.
+ * On one aggregate the overpayment cancelled the default and his
+ * statement read "You owe ₱0.00" — the ₱56,735.76 he is actually in
+ * default for had been absorbed by the floor.
+ *
+ * Overpaying one loan does not settle another. The excess is cash the
+ * coop is holding, which is where it goes.
+ */
+interface LoanState {
+  /** Total obligation: principal plus all scheduled interest. */
+  obligation: number;
+  /** Cash actually received against this loan. */
+  paid: number;
+  /** Debt forgiven — reduces the obligation, but no money moved. */
+  waived: number;
+  /**
+   * Whether the disbursement itself is in this stream. A date-filtered
+   * or scope-filtered view can show payments whose disbursement falls
+   * outside the window; without this those payments would look like
+   * pure overpayment and be reported as money held.
+   */
+  disbursed: boolean;
+  /**
+   * Whether the obligation is the real scheduled total or the cash
+   * fallback for a loan with no schedule. Only a KNOWN obligation can
+   * tell an overpayment from ordinary interest: on a legacy loan the
+   * fallback is the principal, so every peso of interest ever paid
+   * would read as excess cash and land in "we hold for you" — the very
+   * mistake this module exists to correct.
+   */
+  obligationKnown: boolean;
+}
+
+const blankLoan = (): LoanState => ({
+  obligation: 0,
+  paid: 0,
+  waived: 0,
+  disbursed: false,
+  obligationKnown: true,
+});
+
+/**
  * Walk entries oldest-first, tracking both positions.
  *
  * `loanObligations` maps a loan number to what the member owes for it
@@ -83,37 +132,67 @@ export function ledgerPositions(
   entries: readonly PositionEntryInput[],
   loanObligations: Readonly<Record<string, number>> = {},
 ): PositionResult[] {
-  let owed = 0;
-  let held = 0;
+  // Entries with no loan number share one bucket. They can't be told
+  // apart, so netting them together is the only available answer.
+  const loans = new Map<string, LoanState>();
+  const loanState = (n: string | null | undefined): LoanState => {
+    const key = n ?? "";
+    let s = loans.get(key);
+    if (!s) loans.set(key, (s = blankLoan()));
+    return s;
+  };
+
+  let savings = 0;
+
   return entries.map((e) => {
     switch (e.kind) {
-      case "LOAN_DISBURSEMENT":
-        owed += e.loanNumber
-          ? (loanObligations[e.loanNumber] ?? e.amount)
-          : e.amount;
+      case "LOAN_DISBURSEMENT": {
+        const s = loanState(e.loanNumber);
+        const scheduled = e.loanNumber
+          ? loanObligations[e.loanNumber]
+          : undefined;
+        s.obligation += scheduled ?? e.amount;
+        s.disbursed = true;
+        if (scheduled === undefined) s.obligationKnown = false;
         break;
+      }
       case "LOAN_PAYMENT":
-        owed -= e.amount;
+        loanState(e.loanNumber).paid += e.amount;
         break;
       case "PENALTY_WAIVER":
         // A waiver forgives part of the debt, so it reduces what is
-        // owed without any money changing hands.
-        owed -= e.amount;
+        // owed without any money changing hands. Tracked apart from
+        // `paid` so it can never be mistaken for cash the coop holds.
+        loanState(e.loanNumber).waived += e.amount;
         break;
       case "SAVINGS_DEPOSIT":
-        held += e.amount;
+        savings += e.amount;
         break;
       case "SAVINGS_WITHDRAWAL":
-        held -= e.amount;
+        savings -= e.amount;
         break;
       case "CONTRIBUTION":
         // Only the refundable portion. See `refundableAmount`.
-        held += e.refundableAmount ?? 0;
+        savings += e.refundableAmount ?? 0;
         break;
     }
+
+    let owed = 0;
+    let advances = 0;
+    for (const s of loans.values()) {
+      const due = atLeastZero(s.obligation - s.waived);
+      owed += atLeastZero(due - s.paid);
+      // Cash beyond what this loan could absorb. The coop books it to
+      // Customer Advance Payments — a liability, money it owes back —
+      // so the member's statement has to show it as held.
+      if (s.disbursed && s.obligationKnown) {
+        advances += atLeastZero(s.paid - due);
+      }
+    }
+
     return {
-      owedAfter: round2(atLeastZero(owed)),
-      heldAfter: round2(atLeastZero(held)),
+      owedAfter: round2(owed),
+      heldAfter: round2(atLeastZero(savings) + advances),
     };
   });
 }

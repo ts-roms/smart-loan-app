@@ -87,6 +87,43 @@ async function main() {
   });
   const fixtureCustomerIds = fixtureCustomers.map((c) => c.id);
   if (fixtureCustomerIds.length > 0) {
+    /*
+     * The books first, and by hand.
+     *
+     * JournalEntry links back through `sourceRefId` — a plain string,
+     * no foreign key, because a general ledger is meant to be immutable:
+     * you reverse an entry, you never delete it. Which is right in
+     * production, where nothing deletes a loan, and wrong here, where
+     * this script deletes them on every run. The entries survived their
+     * loans and left balances with no source behind them: six orphaned
+     * payment entries were sitting on ₱600 of Customer Advance Payments,
+     * a liability the coop was carrying to nobody.
+     *
+     * Collected before the cascade takes the ids away.
+     */
+    const doomed = await prisma.loanApplication.findMany({
+      where: { customerId: { in: fixtureCustomerIds } },
+      select: { id: true, payments: { select: { id: true } } },
+    });
+    const refIds = doomed.flatMap((l) => [
+      l.id,
+      ...l.payments.map((p) => p.id),
+    ]);
+    if (refIds.length > 0) {
+      const entries = await prisma.journalEntry.findMany({
+        where: { sourceRefId: { in: refIds } },
+        select: { id: true },
+      });
+      const entryIds = entries.map((e) => e.id);
+      if (entryIds.length > 0) {
+        await prisma.journalLine.deleteMany({
+          where: { entryId: { in: entryIds } },
+        });
+        await prisma.journalEntry.deleteMany({
+          where: { id: { in: entryIds } },
+        });
+      }
+    }
     await prisma.loanApplication.deleteMany({
       where: { customerId: { in: fixtureCustomerIds } },
     });
