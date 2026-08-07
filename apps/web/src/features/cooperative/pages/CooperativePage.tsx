@@ -39,7 +39,7 @@ import {
   cn,
   useToast,
 } from "@loan/ui";
-import { formatDate, formatMoney } from "@loan/shared-utils";
+import { formatDate, formatMoney, todayLocalISO } from "@loan/shared-utils";
 import {
   Banknote,
   Building2,
@@ -1110,13 +1110,11 @@ function BigBrotherTab() {
   const [name, setName] = useState("");
   const [account, setAccount] = useState("");
   const [capital, setCapital] = useState(0);
-  const [periodFrom, setPeriodFrom] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [periodFrom, setPeriodFrom] = useState(() => todayLocalISO());
   const [periodTo, setPeriodTo] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 12);
-    return d.toISOString().slice(0, 10);
+    return todayLocalISO(d);
   });
   const [notes, setNotes] = useState("");
 

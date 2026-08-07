@@ -1,6 +1,6 @@
 import { useAgentPayable, useCreateAgentPayout } from "@loan/api-client";
 import type { Agent } from "@loan/shared-types";
-import { formatDate, formatMoney } from "@loan/shared-utils";
+import { formatDate, formatMoney, todayLocalISO } from "@loan/shared-utils";
 import {
   Button,
   Dialog,
@@ -40,9 +40,7 @@ export function PayoutDialog({
   const toast = useToast();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [paidOn, setPaidOn] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [paidOn, setPaidOn] = useState(() => todayLocalISO());
   const [method, setMethod] = useState("CASH");
   const [reference, setReference] = useState("");
 

@@ -29,7 +29,12 @@ import {
   SkeletonLine,
   useToast,
 } from "@loan/ui";
-import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
+import {
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  todayLocalISO,
+} from "@loan/shared-utils";
 import {
   ArrowUpRight,
   Calendar,
@@ -105,9 +110,7 @@ function CollectionsCaseInspector({ id }: { id: string }) {
   const [noteBody, setNoteBody] = useState("");
 
   const [ptpAmount, setPtpAmount] = useState(0);
-  const [ptpDate, setPtpDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [ptpDate, setPtpDate] = useState(() => todayLocalISO());
   const [ptpNote, setPtpNote] = useState("");
 
   if (loan.isLoading) {

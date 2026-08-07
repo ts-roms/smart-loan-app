@@ -30,7 +30,7 @@ import {
   SkeletonCard,
   useToast,
 } from "@loan/ui";
-import { Banknote, Search, UserPlus, X } from "lucide-react";
+import { Banknote, Search, UserPlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { usePermission } from "../../../hooks/use-permission";
@@ -491,13 +491,12 @@ function AgentBookDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between gap-3">
-            <span>
-              {agent.name} · {agent.number}
-            </span>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
+          {/*
+            No close button here. `DialogContent` already renders one at
+            top-right, so adding a second put two ✕ next to each other.
+          */}
+          <DialogTitle>
+            {agent.name} · {agent.number}
           </DialogTitle>
         </DialogHeader>
         {book.isLoading ? (

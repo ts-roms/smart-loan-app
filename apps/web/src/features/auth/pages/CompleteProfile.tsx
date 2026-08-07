@@ -21,6 +21,7 @@ import { Briefcase, IdCard, LogOut, MapPin, User } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { useAuth } from "../../../providers/auth";
+import { todayLocalISO } from "@loan/shared-utils";
 
 /**
  * Profile completion — the screen a self-registered borrower cannot
@@ -152,7 +153,7 @@ export function CompleteProfilePage() {
                   type="date"
                   // Guards the obvious mistake client-side; the server
                   // rejects future dates regardless.
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={todayLocalISO()}
                   value={form.dateOfBirth}
                   onChange={(e) => set("dateOfBirth", e.target.value)}
                   required

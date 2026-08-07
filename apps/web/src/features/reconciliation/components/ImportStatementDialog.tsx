@@ -12,6 +12,7 @@ import {
   useToast,
 } from "@loan/ui";
 import { useMemo, useState } from "react";
+import { todayLocalISO } from "@loan/shared-utils";
 
 /**
  * Import-bank-statement modal. Accepts a tiny inline CSV format:
@@ -190,8 +191,10 @@ function thirtyDaysAgo(): Date {
   return d;
 }
 
+// Only ever called with `new Date()` or `thirtyDaysAgo()`, both
+// anchored on now, so the local calendar date is the right answer.
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return todayLocalISO(d);
 }
 
 interface ParsedRow {

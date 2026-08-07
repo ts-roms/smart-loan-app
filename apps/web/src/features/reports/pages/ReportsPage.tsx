@@ -24,6 +24,7 @@ import {
 import { useState } from "react";
 
 import { findArticle, TourButton } from "../../help";
+import { todayLocalISO } from "@loan/shared-utils";
 
 /**
  * Compliance Reports — audit requirements across modules.
@@ -148,11 +149,11 @@ export function ReportsPage() {
 
 function ReportCard({ report }: { report: ReportDef }) {
   const toast = useToast();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const monthAgo = (() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
-    return d.toISOString().slice(0, 10);
+    return todayLocalISO(d);
   })();
 
   const [from, setFrom] = useState(monthAgo);

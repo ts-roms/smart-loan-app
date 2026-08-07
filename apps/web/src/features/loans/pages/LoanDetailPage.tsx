@@ -31,7 +31,7 @@ import {
   usePrompt,
   useToast,
 } from "@loan/ui";
-import { formatDate, formatMoney } from "@loan/shared-utils";
+import { formatDate, formatMoney, todayLocalISO } from "@loan/shared-utils";
 import {
   AlertTriangle,
   Copy,
@@ -1127,7 +1127,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
   const [ptpDate, setPtpDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
-    return d.toISOString().slice(0, 10);
+    return todayLocalISO(d);
   });
   const [ptpNote, setPtpNote] = useState("");
 
@@ -1252,7 +1252,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
               <DatePicker
                 value={ptpDate}
                 onChange={setPtpDate}
-                min={new Date().toISOString().slice(0, 10)}
+                min={todayLocalISO()}
                 placeholder="Promise date"
               />
             </div>
