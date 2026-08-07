@@ -31,6 +31,7 @@ import { FileSpreadsheet, Plus, Search, UserPlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { usePermission } from "../../../hooks/use-permission";
 import { useDebouncedValue } from "../../../lib/use-debounced-value";
 import { CustomerProfileForm } from "../components/CustomerProfileForm";
 import { CustomerSummaryLink } from "../components/CustomerSummaryDrawer";
@@ -51,6 +52,15 @@ import { findArticle, TourButton } from "../../help";
 const PAGE_SIZE = 25;
 
 export function CustomersPage() {
+  /*
+   * `customers.read` gets you this list; creating one needs
+   * `customers.write`, which ACCOUNTANT and COLLECTOR do not hold. Both
+   * controls were rendered unconditionally, so those roles saw "New
+   * customer" and "Bulk import" and got a 403 on click — the server was
+   * never at risk, but the screen was promising something it could not
+   * deliver.
+   */
+  const canWrite = usePermission("customers.write");
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
   const [kycStatus, setKycStatus] = useState<KycStatus | "ALL">("ALL");
@@ -92,17 +102,21 @@ export function CustomersPage() {
             tourId="customers"
             steps={findArticle("customers")?.tour ?? []}
           />
-          <Link
-            to="/customers/bulk"
-            className="inline-flex items-center gap-1 rounded-md border border-default bg-surface-3 px-3 py-1.5 text-sm hover:bg-hover"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-            Bulk import
-          </Link>
-          <Button onClick={() => setAdding(true)} data-tour="customers-new">
-            <Plus className="h-4 w-4" />
-            New customer
-          </Button>
+          {canWrite && (
+            <>
+              <Link
+                to="/customers/bulk"
+                className="inline-flex items-center gap-1 rounded-md border border-default bg-surface-3 px-3 py-1.5 text-sm hover:bg-hover"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Bulk import
+              </Link>
+              <Button onClick={() => setAdding(true)} data-tour="customers-new">
+                <Plus className="h-4 w-4" />
+                New customer
+              </Button>
+            </>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -155,7 +169,10 @@ export function CustomersPage() {
           <p className="text-sm text-fg-muted">
             {filtered
               ? "No customers match those filters."
-              : "No customers yet. Add one to get started."}
+              : canWrite
+                ? "No customers yet. Add one to get started."
+                : /* Don't tell a reader to do something they can't. */
+                  "No customers yet."}
           </p>
         ) : (
           <table className="w-full text-sm" data-tour="customers-table">
