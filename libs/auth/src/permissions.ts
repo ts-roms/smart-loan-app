@@ -594,7 +594,7 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
     key: "AGENT",
     name: "Field Agent",
     description:
-      "Originates loans on commission. Sees their own book and nothing else.",
+      "Paid commission on loans credited to them. Sees their own book and nothing else.",
     system: true,
     permissions: [
       /*
@@ -608,11 +608,29 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
        * assigned to the signed-in agent, so the scope is enforced by the
        * endpoint rather than trusted to the UI.
        *
-       * `loans.apply` is here because bringing applications in is the
-       * job. They cannot decide, disburse or price anything.
+       * `loans.apply` was here on the reasoning that bringing
+       * applications in is the job. Removed on inspection: it was
+       * simultaneously unusable and too broad.
+       *
+       * Unusable, because origination runs through the new-loan wizard
+       * and its borrower picker calls GET /customers, which needs
+       * `customers.read`. An agent opening the wizard got a picker that
+       * 403s and no way to choose anyone.
+       *
+       * Too broad, because POST /loans/apply is the officer-mediated
+       * path and takes ANY customerId in the body — there is no
+       * scoping to borrowers this agent introduced. Granting it meant
+       * anyone holding a customer uuid could originate against a
+       * borrower they have no relationship with.
+       *
+       * Giving them `customers.read` to make the wizard work would hand
+       * a commissioned salesperson the coop's entire borrower list,
+       * which is the thing this role is narrow to avoid. So the flow
+       * stays as the rest of the module already assumes: an officer
+       * takes the application and credits the agent with
+       * `agents.assign`. The agent is attributed, not the operator.
        */
       "agents.self",
-      "loans.apply",
       "notifications.read",
     ],
   },
