@@ -157,6 +157,12 @@ export class ScoringCatalogRepository {
     });
   }
 
+  /** One row by id — the update path reads it to validate the merged
+   *  kind/config pair before writing. Null when the id is unknown. */
+  findQuestion(id: string): Promise<SurveyQuestionDef | null> {
+    return this.prisma.surveyQuestionDef.findUnique({ where: { id } });
+  }
+
   updateQuestion(
     id: string,
     input: Partial<Omit<SurveyQuestionInput, "key">>,

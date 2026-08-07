@@ -1,6 +1,6 @@
 import { groupByCategory } from "@loan/kyc";
 import type { KycQuestion, KycQuestionType } from "@loan/shared-types";
-import { Badge, Button, Input } from "@loan/ui";
+import { Badge, Button, Input, useToast } from "@loan/ui";
 import { ArrowDown, ArrowUp, Plus, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 
@@ -29,6 +29,7 @@ export function KycQuestionnaireBuilder({
   readOnly?: boolean;
   saving?: boolean;
 }) {
+  const toast = useToast();
   const [draft, setDraft] = useState<KycQuestion[]>(questions);
   const [label, setLabel] = useState("");
   const [type, setType] = useState<KycQuestionType>("YES_NO");
@@ -55,7 +56,12 @@ export function KycQuestionnaireBuilder({
       .split(",")
       .map((o) => o.trim())
       .filter(Boolean);
-    if (type === "SELECT" && parsedOptions.length < 2) return;
+    if (type === "SELECT" && parsedOptions.length < 2) {
+      // Was a bare return — the Add button just did nothing, which
+      // reads as "the page is broken", not "you're missing options".
+      toast.error("A Select question needs at least two options");
+      return;
+    }
 
     setDraft([
       ...draft,

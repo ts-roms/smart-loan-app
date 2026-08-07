@@ -4,6 +4,7 @@ import {
   useDeleteSurveyFactor,
   useDeleteSurveyQuestion,
   useLoanProducts,
+  useReorderSurveyQuestions,
   useScoringCatalog,
   useUpdateLoanProduct,
   useUpdateSurveyFactor,
@@ -30,7 +31,16 @@ import {
   useConfirm,
   useToast,
 } from "@loan/ui";
-import { ClipboardList, Gauge, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ClipboardList,
+  Gauge,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 
 import { usePermission } from "../../../hooks/use-permission";
@@ -228,8 +238,24 @@ function FactorCard({
 }) {
   const update = useUpdateSurveyFactor();
   const remove = useDeleteSurveyFactor();
+  const reorder = useReorderSurveyQuestions();
   const toast = useToast();
   const confirm = useConfirm();
+
+  // Order is what the borrower sees. The endpoint sets order = array
+  // index, so sending just this factor's ids renumbers them 0..n-1
+  // within the factor without touching any other factor's questions.
+  const moveQuestion = async (index: number, dir: -1 | 1) => {
+    const ids = factor.questions.map((q) => q.id);
+    const target = index + dir;
+    if (target < 0 || target >= ids.length) return;
+    [ids[index], ids[target]] = [ids[target]!, ids[index]!];
+    try {
+      await reorder.mutateAsync(ids);
+    } catch (err) {
+      toast.error((err as Error).message ?? "Could not reorder");
+    }
+  };
   const [weight, setWeight] = useState(String(factor.weight));
   const [label, setLabel] = useState(factor.label);
 
@@ -373,8 +399,15 @@ function FactorCard({
           </p>
         ) : (
           <ul className="space-y-1">
-            {factor.questions.map((q) => (
-              <QuestionRow key={q.id} question={q} canEdit={canEdit} />
+            {factor.questions.map((q, i) => (
+              <QuestionRow
+                key={q.id}
+                question={q}
+                canEdit={canEdit}
+                onMove={(dir) => void moveQuestion(i, dir)}
+                first={i === 0}
+                last={i === factor.questions.length - 1}
+              />
             ))}
           </ul>
         )}
@@ -403,20 +436,37 @@ function parseSpec(
   spec: string,
 ): { config: unknown } | { error: string } {
   if (kind === "CHOICE") {
-    const options = spec
+    const parts = spec
       .split(",")
       .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const [lbl, w] = part.split("=");
-        const label = (lbl ?? "").trim();
-        return {
-          label,
-          value: label.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
-          weight: Math.max(0, Math.min(1, Number(w ?? 0))),
-        };
-      })
-      .filter((o) => o.label);
+      .filter(Boolean);
+    const options: { label: string; value: string; weight: number }[] = [];
+    const seen = new Map<string, number>();
+    for (const part of parts) {
+      const [lbl, w] = part.split("=");
+      const label = (lbl ?? "").trim();
+      if (!label) continue;
+      // A missing or malformed weight is an error, not a silent zero —
+      // "Owned, Renting=0.4" scoring Owned as worthless is exactly the
+      // mistake nobody notices until borrowers complain.
+      if (w === undefined) {
+        return { error: `"${label}" has no weight — write ${label}=1` };
+      }
+      const weight = Number(w);
+      if (!Number.isFinite(weight) || weight < 0 || weight > 1) {
+        return { error: `"${label}" needs a weight between 0 and 1` };
+      }
+      // Values derive from labels; labels differing only in punctuation
+      // would collide, making the later option unselectable. Suffix.
+      const base = label.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "option";
+      const n = seen.get(base) ?? 0;
+      seen.set(base, n + 1);
+      options.push({
+        label,
+        value: n === 0 ? base : `${base}_${n + 1}`,
+        weight,
+      });
+    }
     if (options.length < 2) {
       return { error: "Give at least two options, e.g. Owned=1, Renting=0.4" };
     }
@@ -496,9 +546,15 @@ function slugify(label: string, fallback: string): string {
 function QuestionRow({
   question,
   canEdit,
+  onMove,
+  first,
+  last,
 }: {
   question: CatalogQuestion;
   canEdit: boolean;
+  onMove: (dir: -1 | 1) => void;
+  first: boolean;
+  last: boolean;
 }) {
   const update = useUpdateSurveyQuestion();
   const remove = useDeleteSurveyQuestion();
@@ -626,6 +682,24 @@ function QuestionRow({
       {!question.active && <Badge variant="warning">inactive</Badge>}
       {canEdit && (
         <>
+          <button
+            type="button"
+            aria-label={'Move "' + question.label + '" up'}
+            onClick={() => onMove(-1)}
+            disabled={first}
+            className="text-fg-subtle hover:text-fg disabled:opacity-30"
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label={'Move "' + question.label + '" down'}
+            onClick={() => onMove(1)}
+            disabled={last}
+            className="text-fg-subtle hover:text-fg disabled:opacity-30"
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+          </button>
           <Button type="button" size="sm" variant="ghost" onClick={open}>
             <Pencil className="h-3.5 w-3.5" />
             Edit
@@ -778,11 +852,18 @@ function AddFactorCard() {
   const add = async () => {
     const trimmed = label.trim();
     if (!trimmed) return;
+    // Refuse rather than repair: `Number(x) || 10` silently turned a
+    // typo — or a deliberate "0" — into weight 10.
+    const parsedWeight = Number(weight);
+    if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
+      toast.error("Weight must be a positive number");
+      return;
+    }
     try {
       await create.mutateAsync({
         key: slugify(trimmed, "factor"),
         label: trimmed,
-        weight: Number(weight) || 10,
+        weight: parsedWeight,
       });
       toast.success(`Added ${trimmed} — points redistributed`);
       setLabel("");

@@ -52,7 +52,12 @@ const choiceConfig = z.object({
       }),
     )
     .min(2)
-    .max(12),
+    .max(12)
+    // Answers are stored by VALUE. Two options sharing one make the
+    // second unselectable — every stored answer resolves to the first.
+    .refine((opts) => new Set(opts.map((o) => o.value)).size === opts.length, {
+      message: "option values must be distinct",
+    }),
 });
 
 const numberConfig = z
@@ -90,18 +95,37 @@ const questionBase = {
  * inference intact, where a `<T extends ZodTypeAny>` wrapper resolves
  * against the constraint and flattens every inferred type to `any`.
  */
+const configSchemaFor = (kind: string) =>
+  kind === "CHOICE"
+    ? choiceConfig
+    : kind === "NUMBER"
+      ? numberConfig
+      : booleanConfig;
+
+/**
+ * Validate a kind/config pair OUTSIDE a schema — for the update path,
+ * where the effective pair is half request and half stored row, so the
+ * request schema alone can never see both. Returns zod-shaped issues
+ * anchored at `config`, or null when the pair is valid.
+ */
+export function validateKindConfig(
+  kind: string,
+  config: unknown,
+): Array<{ path: (string | number)[]; message: string }> | null {
+  const result = configSchemaFor(kind).safeParse(config);
+  if (result.success) return null;
+  return result.error.issues.map((issue) => ({
+    path: ["config", ...issue.path],
+    message: issue.message,
+  }));
+}
+
 const checkConfig = (
   val: { kind?: string; config?: unknown },
   ctx: z.RefinementCtx,
 ): void => {
   if (!val.kind || val.config === undefined) return;
-  const sub =
-    val.kind === "CHOICE"
-      ? choiceConfig
-      : val.kind === "NUMBER"
-        ? numberConfig
-        : booleanConfig;
-  const result = sub.safeParse(val.config);
+  const result = configSchemaFor(val.kind).safeParse(val.config);
   if (result.success) return;
   for (const issue of result.error.issues) {
     ctx.addIssue({
