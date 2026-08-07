@@ -107,6 +107,41 @@ function UtilizationCard() {
   if (u.isLoading) return <SkeletonCard />;
   if (!u.data) return null;
 
+  /*
+   * Unconfigured is not 0% utilized — it is the absence of a cap to
+   * utilize. Before this branch, a fresh deployment showed a green
+   * gauge at 0% while `checkLoan` (now) demands board approval for
+   * every DORSI loan; the two surfaces would have contradicted each
+   * other on the page an examiner reads first.
+   */
+  if (!u.data.configured) {
+    return (
+      <Card data-tour="dorsi-utilization">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <ShieldCheck className="h-4 w-4" />
+            Utilization
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning flex items-center gap-2">
+            <AlertTriangle className="h-3 w-3" />
+            DORSI caps are unconfigured — company total equity is ₱0.00, so
+            there is no lending headroom to measure against. Every DORSI loan
+            requires board approval until it is set
+            {" "}(System config below, for admins).
+          </div>
+          {u.data.aggregateOutstanding > 0 && (
+            <p className="mt-2 text-xs text-danger">
+              {formatMoney(u.data.aggregateOutstanding)} is already outstanding
+              to DORSI parties against that zero cap.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   const aggPct = u.data.aggregateUtilizationPct;
   const alert =
     aggPct >= 1

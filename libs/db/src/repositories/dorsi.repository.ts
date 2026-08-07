@@ -29,6 +29,9 @@ import {
 } from "../lib/dorsi-helpers";
 
 export interface DorsiUtilization {
+  /// False when equity is zero — caps are 0 and the pct fields are
+  /// meaningless. See the shared-types doc comment.
+  configured: boolean;
   /// Company total equity (the base).
   companyTotalEquity: number;
   /// Aggregate cap = 15% of equity.
@@ -330,6 +333,7 @@ export class DorsiRepository {
     );
 
     return {
+      configured: totalEquity > 0,
       companyTotalEquity: totalEquity,
       aggregateCap,
       aggregateOutstanding,
@@ -364,6 +368,37 @@ export class DorsiRepository {
     const u = await this.utilization();
     const me = u.perBorrower.find((b) => b.customerId === input.customerId);
     const individualOutstanding = me?.outstanding ?? 0;
+
+    /*
+     * Fail CLOSED on an unconfigured cap base.
+     *
+     * computeCaps documents that zero equity means "no DORSI loans
+     * allowed downstream" — but the `cap > 0 ? x / cap : 0` guards
+     * below read a zero cap as 0% utilized, so on a system where the
+     * equity had never been set, every DORSI loan of any size came back
+     * "OK — Within DORSI caps." An unconfigured cap disabled the entire
+     * control it was the base of, silently, on the exact answer the
+     * regulator asks about.
+     *
+     * Board approval is the correct degraded mode: it is the same path
+     * a genuine breach takes, so nothing new to build, and it puts a
+     * human in front of precisely the loans the automated check cannot
+     * vouch for.
+     */
+    if (!u.configured) {
+      return {
+        status: "BOARD_REQUIRED",
+        aggregateOutstanding: u.aggregateOutstanding,
+        aggregateCap: 0,
+        individualOutstanding,
+        individualCap: 0,
+        projectedAggregateUtilization: 0,
+        projectedIndividualUtilization: 0,
+        message:
+          "DORSI caps are unconfigured — company total equity is 0, so no lending headroom exists to check against. Set the equity on the DORSI page, or take this loan through board approval.",
+      };
+    }
+
     const projectedAggregate =
       u.aggregateCap > 0
         ? (u.aggregateOutstanding + input.principal) / u.aggregateCap

@@ -1594,6 +1594,14 @@ export interface DorsiRecordWithCustomer extends DorsiRecord {
 }
 
 export interface DorsiUtilization {
+  /**
+   * False when `companyTotalEquity` is zero — the caps are 0 and every
+   * percentage below is meaningless. The UI must render "unconfigured"
+   * rather than the 0% the numbers would otherwise show: a zero cap
+   * means NO DORSI lending headroom exists, which is the opposite of
+   * all-clear.
+   */
+  configured: boolean;
   companyTotalEquity: number;
   aggregateCap: number;
   aggregateOutstanding: number;
