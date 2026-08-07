@@ -7,11 +7,7 @@
  */
 
 export type AccountTypeCode =
-  | "ASSET"
-  | "LIABILITY"
-  | "EQUITY"
-  | "INCOME"
-  | "EXPENSE";
+  "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
 export type NormalBalanceCode = "DEBIT" | "CREDIT";
 
 export interface ChartAccount {
@@ -61,6 +57,15 @@ export const ACCOUNT_CODES = {
   BIG_BROTHER_CAPITAL: "2400",
   /** Non-loan income (dividends, donations, fees other than processing). */
   OTHER_INCOME: "4200",
+  /**
+   * Commission owed to a field agent for a loan they originated. A
+   * liability from the moment the loan is disbursed until the agent is
+   * actually paid — the expense is recognized at disbursement, the cash
+   * leaves later, and those are two different events.
+   */
+  AGENT_COMMISSION_PAYABLE: "2500",
+  /** Commission expense — the cost of originating through agents. */
+  AGENT_COMMISSION_EXPENSE: "5150",
 } as const;
 
 export const DEFAULT_CHART_OF_ACCOUNTS: ChartAccount[] = [
@@ -103,6 +108,24 @@ export const DEFAULT_CHART_OF_ACCOUNTS: ChartAccount[] = [
     normalBalance: "CREDIT",
     description:
       "Payments received in excess of everything a loan still owes. Refundable to the borrower or applied to a future obligation.",
+    system: true,
+  },
+  {
+    code: ACCOUNT_CODES.AGENT_COMMISSION_PAYABLE,
+    name: "Agent Commission Payable",
+    type: "LIABILITY",
+    normalBalance: "CREDIT",
+    description:
+      "Commission earned by field agents on disbursed loans and not yet paid out to them.",
+    system: true,
+  },
+  {
+    code: ACCOUNT_CODES.AGENT_COMMISSION_EXPENSE,
+    name: "Agent Commission Expense",
+    type: "EXPENSE",
+    normalBalance: "DEBIT",
+    description:
+      "Cost of originating loans through field agents. Recognized in full at disbursement.",
     system: true,
   },
   {

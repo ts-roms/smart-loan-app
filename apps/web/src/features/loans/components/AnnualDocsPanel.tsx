@@ -30,7 +30,7 @@ import {
   useConfirm,
   useToast,
 } from "@loan/ui";
-import { formatDate } from "@loan/shared-utils";
+import { formatDate, todayLocalISO } from "@loan/shared-utils";
 import {
   CalendarClock,
   FileWarning,
@@ -207,11 +207,11 @@ function NewDocDialog({
 }) {
   const create = useCreateAnnualDoc();
   const toast = useToast();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const oneYearFromNow = (() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() + 1);
-    return d.toISOString().slice(0, 10);
+    return todayLocalISO(d);
   })();
 
   const [type, setType] = useState<AnnualDocumentType>("CAR_INSURANCE");

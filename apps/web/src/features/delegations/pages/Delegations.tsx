@@ -39,7 +39,7 @@ import {
   usePrompt,
   useToast,
 } from "@loan/ui";
-import { formatDate, formatDateTime } from "@loan/shared-utils";
+import { formatDate, formatDateTime, todayLocalISO } from "@loan/shared-utils";
 import {
   AlertTriangle,
   CalendarClock,
@@ -993,8 +993,10 @@ function CreateDialog({
   );
 }
 
+// Only ever called with `new Date()` or a fixed offset from it — see
+// its two call sites — so the local calendar date is the right answer.
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return todayLocalISO(d);
 }
 
 // The cross-app `ActiveDelegationBanner` lives in its own file under

@@ -26,13 +26,33 @@ import { ChevronRight, Mail, Send } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
+import { usePermission } from "../../../hooks/use-permission";
 import { notificationLink } from "../links";
 
-import { useAuth } from "../../../providers/auth";
+/** Mirrors NotificationRepository.list's default `take`. */
+const NOTIFICATION_PAGE_CAP = 100;
 
+/**
+ * The notification log — every message the system has sent.
+ *
+ * Read as an ops log rather than an inbox: the column people come here
+ * for is Status, because a FAILED row means a borrower never got told
+ * something the system believes it told them.
+ */
 export function NotificationsPage() {
   const notifs = useNotifications();
-  const { user } = useAuth();
+  /*
+   * The permission, not `user.role === "ADMIN"`.
+   *
+   * The endpoint gates on `notifications.test`, and RBAC resolves
+   * permissions from role ASSIGNMENTS — `User.role` is the legacy enum
+   * kept for back-compat. Checking it got the right answer only because
+   * the four seeded roles happen to line up: a custom role granting
+   * `notifications.test` to someone whose enum says ACCOUNTANT hid the
+   * button, and an enum still reading ADMIN after the assignment was
+   * revoked showed a button that 403s.
+   */
+  const canTest = usePermission("notifications.test");
   const [testing, setTesting] = useState(false);
 
   return (
@@ -42,7 +62,7 @@ export function NotificationsPage() {
           <Mail className="h-4 w-4" />
           Notifications
         </CardTitle>
-        {user?.role === "ADMIN" && (
+        {canTest && (
           <Button variant="outline" onClick={() => setTesting(true)}>
             <Send className="h-3 w-3" />
             Send test
@@ -121,6 +141,19 @@ export function NotificationsPage() {
               ))}
             </tbody>
           </table>
+        )}
+        {(notifs.data ?? []).length >= NOTIFICATION_PAGE_CAP && (
+          /*
+             The endpoint caps at 100 and says nothing about it. A log
+             that stops silently reads as "this is everything", which is
+             the one thing it must not say — the row you came looking
+             for is the oldest FAILED one, and it is exactly the row a
+             silent cap drops.
+          */
+          <p className="mt-3 text-[11px] text-fg-subtle">
+            Showing the most recent {NOTIFICATION_PAGE_CAP}. Older notifications
+            are not listed.
+          </p>
         )}
       </CardContent>
       {testing && <TestDialog onClose={() => setTesting(false)} />}

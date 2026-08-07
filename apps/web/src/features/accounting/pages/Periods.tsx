@@ -20,7 +20,7 @@ import { formatDate } from "@loan/shared-utils";
 import { CalendarCheck, Lock, LockOpen, RotateCw } from "lucide-react";
 import { useMemo } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * Accounting periods. Each month is a row; once CLOSED no postings can
@@ -37,9 +37,16 @@ export function PeriodsPage() {
   const accrue = useAccrueInterest();
   const toast = useToast();
   const confirm = useConfirm();
-  const { user } = useAuth();
-  const canClose = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
-  const canReopen = user?.role === "ADMIN";
+  /*
+   * One permission for both, because the server has one:
+   * `/periods/:y/:m/close` and `/periods/:y/:m/reopen` both gate on
+   * `accounting.close_period`. The old rule let ACCOUNTANT close but
+   * not reopen, a distinction the API never enforced — an accountant
+   * could reopen a closed period by calling it directly, whatever the
+   * button showed. Hiding a control is not a control.
+   */
+  const canClose = usePermission("accounting.close_period");
+  const canReopen = canClose;
 
   const sorted = useMemo(() => {
     return [...(periods.data ?? [])].sort(

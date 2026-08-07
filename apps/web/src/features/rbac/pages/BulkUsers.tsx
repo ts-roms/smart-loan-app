@@ -18,8 +18,9 @@ import { FileSpreadsheet, Trash2, UploadCloud, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { useAuth } from "../../../providers/auth";
 import { findArticle, TourButton } from "../../help";
+
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * Bulk staff onboarding. CSV-driven: each row spawns one User row plus
@@ -43,7 +44,6 @@ import { findArticle, TourButton } from "../../help";
  * don't want loan officers handing out roles.
  */
 export function BulkUsersPage() {
-  const { user } = useAuth();
   const toast = useToast();
   const bulk = useBulkImportUsers();
   const [raw, setRaw] = useState(TEMPLATE);
@@ -56,7 +56,7 @@ export function BulkUsersPage() {
   // when the operator includes long comment headers.
   const MAX_CSV_BYTES = 2 * 1024 * 1024;
 
-  const canSubmit = user?.role === "ADMIN";
+  const canSubmit = usePermission("admin.users");
 
   const parsed = useMemo(() => parseCsv(raw), [raw]);
 

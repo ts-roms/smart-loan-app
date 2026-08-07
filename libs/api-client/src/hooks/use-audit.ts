@@ -3,7 +3,11 @@
  * privileged route via AuditLogRepository.record().
  */
 
-import type { AuditEventFilter, AuditEventRow } from "@loan/shared-types";
+import type {
+  AuditEventFilter,
+  AuditEventRow,
+  Paginated,
+} from "@loan/shared-types";
 import { useQuery } from "@tanstack/react-query";
 
 import { getApiClient } from "../client";
@@ -22,14 +26,19 @@ export function useAuditEvents(
     queryFn: () => {
       const params = new URLSearchParams();
       if (filter.actorId) params.set("actorId", filter.actorId);
+      if (filter.actor) params.set("actor", filter.actor);
       if (filter.action) params.set("action", filter.action);
       if (filter.targetType) params.set("targetType", filter.targetType);
       if (filter.targetId) params.set("targetId", filter.targetId);
       if (filter.from) params.set("from", filter.from);
       if (filter.to) params.set("to", filter.to);
       if (filter.take) params.set("take", String(filter.take));
+      if (filter.page) params.set("page", String(filter.page));
+      if (filter.pageSize) params.set("pageSize", String(filter.pageSize));
       const qs = params.toString();
-      return getApiClient().get<AuditEventRow[]>(`/audit${qs ? `?${qs}` : ""}`);
+      return getApiClient().get<Paginated<AuditEventRow>>(
+        `/audit${qs ? `?${qs}` : ""}`,
+      );
     },
     enabled: options?.enabled ?? true,
     staleTime: 15_000,

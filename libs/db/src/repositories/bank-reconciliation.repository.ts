@@ -35,6 +35,24 @@ export interface BankStatementLineInput {
   runningBalance?: number | null;
 }
 
+/**
+ * One record, one bank line. Thrown when a match would give a second
+ * line the same payment or disbursement.
+ */
+export class BankLineAlreadyMatchedError extends Error {
+  readonly code = "ALREADY_MATCHED" as const;
+  constructor(
+    readonly lineId: string,
+    description: string,
+    txnDate: Date,
+  ) {
+    super(
+      `That record is already reconciled against another line — "${description}" on ${txnDate.toISOString().slice(0, 10)}. Unmatch that one first, or this statement has a duplicate the bank sent twice.`,
+    );
+    this.name = "BankLineAlreadyMatchedError";
+  }
+}
+
 export interface AutoMatchResult {
   matchedLines: number;
   matchedAmount: number;
@@ -96,6 +114,40 @@ export class BankReconciliationRepository {
    * +/- 2 days AND no other candidate) line up. Anything ambiguous goes
    * to manual.
    */
+  /**
+   * Reference ids already claimed by some other bank line.
+   *
+   * Reconciliation is a one-to-one correspondence, and nothing enforced
+   * it: the candidate queries look up payments by amount and date and
+   * never asked whether a payment was already matched. Two identical
+   * credits on a statement against one recorded payment therefore both
+   * matched it, and the statement reported itself fully reconciled
+   * while a real deposit was unaccounted for.
+   *
+   * That is the exact discrepancy this feature exists to surface — a
+   * duplicated bank credit, or a receipt someone forgot to key — so
+   * silently absorbing it is worse than leaving the line unmatched.
+   *
+   * Scoped by type as well as id: a LoanPayment id and a
+   * LoanApplication id can never collide today, but the pair is what
+   * `matchedType`/`matchedRefId` means and matching on the id alone
+   * would be a trap for whoever adds the third kind.
+   */
+  private async claimedRefIds(
+    type: string,
+    exceptLineId?: string,
+  ): Promise<Set<string>> {
+    const rows = await this.prisma.bankStatementLine.findMany({
+      where: {
+        matchedType: type,
+        matchedRefId: { not: null },
+        ...(exceptLineId ? { id: { not: exceptLineId } } : {}),
+      },
+      select: { matchedRefId: true },
+    });
+    return new Set(rows.map((r) => r.matchedRefId!));
+  }
+
   async autoMatch(statementId: string): Promise<AutoMatchResult> {
     const lines = await this.prisma.bankStatementLine.findMany({
       where: { statementId, matchedAt: null },
@@ -115,13 +167,16 @@ export class BankReconciliationRepository {
       if (isCredit) {
         // Credit (money in) → most likely a customer payment.
         // Prefer reference equality, fall back to amount + date proximity.
-        const candidates = await this.prisma.loanPayment.findMany({
-          where: {
-            amount: amount as unknown as Prisma.Decimal,
-            paidOn: { gte: windowStart, lte: windowEnd },
-          },
-          take: 5,
-        });
+        const claimed = await this.claimedRefIds("LoanPayment");
+        const candidates = (
+          await this.prisma.loanPayment.findMany({
+            where: {
+              amount: amount as unknown as Prisma.Decimal,
+              paidOn: { gte: windowStart, lte: windowEnd },
+            },
+            take: 5,
+          })
+        ).filter((p) => !claimed.has(p.id));
         let match: (typeof candidates)[number] | undefined;
         if (line.reference) {
           match = candidates.find((p) => p.reference === line.reference);
@@ -148,13 +203,16 @@ export class BankReconciliationRepository {
       } else {
         // Debit (money out) → likely a disbursement. Compare against
         // loans disbursed in the window, by principal amount.
-        const candidates = await this.prisma.loanApplication.findMany({
-          where: {
-            principal: Math.abs(amount) as unknown as Prisma.Decimal,
-            disbursedAt: { gte: windowStart, lte: windowEnd },
-          },
-          take: 5,
-        });
+        const claimedLoans = await this.claimedRefIds("LoanDisbursement");
+        const candidates = (
+          await this.prisma.loanApplication.findMany({
+            where: {
+              principal: Math.abs(amount) as unknown as Prisma.Decimal,
+              disbursedAt: { gte: windowStart, lte: windowEnd },
+            },
+            take: 5,
+          })
+        ).filter((l) => !claimedLoans.has(l.id));
         if (candidates.length === 1) {
           await this.prisma.bankStatementLine.update({
             where: { id: line.id },
@@ -183,6 +241,37 @@ export class BankReconciliationRepository {
     lineId: string,
     input: { type: string; refId?: string; note?: string; userId: string },
   ): Promise<BankStatementLine> {
+    /*
+     * The last word, not the candidate list's.
+     *
+     * The drawer hides claimed rows, but a stale page or a direct API
+     * call can still ask for one — and reconciling two bank lines to a
+     * single payment is precisely the discrepancy this feature is meant
+     * to reveal. Refused with the offending line named so the operator
+     * can go look at it.
+     *
+     * `MANUAL` and other free-text types carry no refId and are exempt:
+     * they mean "explained, not tied to a record" (a bank fee, an
+     * interest credit), and several lines may legitimately be explained
+     * the same way.
+     */
+    if (input.refId) {
+      const claimedBy = await this.prisma.bankStatementLine.findFirst({
+        where: {
+          matchedType: input.type,
+          matchedRefId: input.refId,
+          id: { not: lineId },
+        },
+        select: { id: true, txnDate: true, description: true },
+      });
+      if (claimedBy) {
+        throw new BankLineAlreadyMatchedError(
+          claimedBy.id,
+          claimedBy.description,
+          claimedBy.txnDate,
+        );
+      }
+    }
     return this.prisma.bankStatementLine.update({
       where: { id: lineId },
       data: {
@@ -228,14 +317,19 @@ export class BankReconciliationRepository {
     windowEnd.setDate(windowEnd.getDate() + 2);
 
     if (isCredit) {
-      const candidates = await this.prisma.loanPayment.findMany({
-        where: {
-          amount: amount as unknown as Prisma.Decimal,
-          paidOn: { gte: windowStart, lte: windowEnd },
-        },
-        include: { loan: { select: { number: true, customerId: true } } },
-        take,
-      });
+      // Exclude what another line already claims — offering a candidate
+      // the write path will refuse is worse than offering none.
+      const claimed = await this.claimedRefIds("LoanPayment", lineId);
+      const candidates = (
+        await this.prisma.loanPayment.findMany({
+          where: {
+            amount: amount as unknown as Prisma.Decimal,
+            paidOn: { gte: windowStart, lte: windowEnd },
+          },
+          include: { loan: { select: { number: true, customerId: true } } },
+          take,
+        })
+      ).filter((p) => !claimed.has(p.id));
       return candidates.map((p) => {
         const exactRef = line.reference && p.reference === line.reference;
         const sole = candidates.length === 1;
@@ -250,13 +344,16 @@ export class BankReconciliationRepository {
       });
     } else {
       const absAmount = Math.abs(amount);
-      const candidates = await this.prisma.loanApplication.findMany({
-        where: {
-          principal: absAmount as unknown as Prisma.Decimal,
-          disbursedAt: { gte: windowStart, lte: windowEnd },
-        },
-        take,
-      });
+      const claimedLoans = await this.claimedRefIds("LoanDisbursement", lineId);
+      const candidates = (
+        await this.prisma.loanApplication.findMany({
+          where: {
+            principal: absAmount as unknown as Prisma.Decimal,
+            disbursedAt: { gte: windowStart, lte: windowEnd },
+          },
+          take,
+        })
+      ).filter((l) => !claimedLoans.has(l.id));
       return candidates.map((l) => {
         const sole = candidates.length === 1;
         const score = sole ? 0.85 : 0.7;

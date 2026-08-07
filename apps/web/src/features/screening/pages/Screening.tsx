@@ -22,7 +22,7 @@ import {
 import { ShieldAlert, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * AML watchlist admin. Each entry is consulted by the screening provider
@@ -35,8 +35,7 @@ export function ScreeningPage() {
   const add = useAddWatchlistEntry();
   const remove = useDeleteWatchlistEntry();
   const toast = useToast();
-  const { user } = useAuth();
-  const canEdit = user?.role === "ADMIN";
+  const canEdit = usePermission("screening.watchlist");
   const [draft, setDraft] = useState({
     list: "INTERNAL",
     fullName: "",

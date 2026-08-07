@@ -7,15 +7,15 @@ import {
   DatePicker,
   SkeletonCard,
 } from "@loan/ui";
-import { formatMoney } from "@loan/shared-utils";
+import { formatMoney, todayLocalISO } from "@loan/shared-utils";
 import { useState } from "react";
 
 export function IncomeStatementPage() {
   const today = new Date();
   const [from, setFrom] = useState(() =>
-    new Date(today.getFullYear(), 0, 1).toISOString().slice(0, 10),
+    todayLocalISO(new Date(today.getFullYear(), 0, 1)),
   );
-  const [to, setTo] = useState(() => today.toISOString().slice(0, 10));
+  const [to, setTo] = useState(() => todayLocalISO(today));
   const report = useIncomeStatement(from, to);
 
   return (

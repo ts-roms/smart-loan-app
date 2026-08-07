@@ -55,7 +55,7 @@ export function UsersPage() {
   const confirm = useConfirm();
   const prompt = usePrompt();
   const { user: me } = useAuth();
-  const canManage = me?.role === "ADMIN";
+  const canManage = usePermission("admin.users");
   // Its own permission rather than `canManage`: ending a session is
   // meant to be grantable to someone who can't edit users at all.
   const canForceLogout = usePermission("admin.force_logout");

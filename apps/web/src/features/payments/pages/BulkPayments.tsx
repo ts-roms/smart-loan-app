@@ -14,7 +14,7 @@ import { formatMoney } from "@loan/shared-utils";
 import { FileSpreadsheet, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * Bulk payment recording. The CSV format is the same shape the API expects:
@@ -31,7 +31,6 @@ import { useAuth } from "../../../providers/auth";
  * doesn't block the rest. Failed rows are shown with their error.
  */
 export function BulkPaymentsPage() {
-  const { user } = useAuth();
   const toast = useToast();
   const bulk = useRecordPaymentsBulk();
   const [raw, setRaw] = useState("loanNumber,amount,paidOn,reference\n");
@@ -39,7 +38,7 @@ export function BulkPaymentsPage() {
   const [results, setResults] = useState<BulkPaymentRowResult[] | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
 
-  const canSubmit = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canSubmit = usePermission("payments.bulk");
 
   const parsed = useMemo(() => parseCsv(raw), [raw]);
 

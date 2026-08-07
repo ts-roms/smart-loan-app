@@ -1,0 +1,13 @@
+-- The human reference a notification's text already quotes.
+--
+-- The body says "Loan disbursed · LN-2026-000006" while the link went to
+-- /loans/<uuid>, so one notification named the same loan two different
+-- ways and the loan page's breadcrumb read "9f31f4ef-cd6…". Loan routes
+-- resolve an id OR a number, so storing the number the message already
+-- uses makes the text, the URL and the breadcrumb agree.
+--
+-- Nullable: notifications about things with no human reference (a user,
+-- a delegation) legitimately have none, and back-filling the existing
+-- rows would mean inventing references for entities some of which no
+-- longer exist.
+ALTER TABLE "Notification" ADD COLUMN "refNumber" TEXT;

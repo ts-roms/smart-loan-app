@@ -31,7 +31,6 @@ import { formatMoney } from "@loan/shared-utils";
 import { MapPin, PhoneCall, RotateCw, UserCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { useAuth } from "../../../providers/auth";
 // Direct import (not via ../../customers barrel) to avoid Rollup's
 // cross-chunk circular-dep warning: each feature lazy-loads into its
 // own chunk, and the customers barrel re-exporting a component that
@@ -39,6 +38,8 @@ import { useAuth } from "../../../providers/auth";
 import { CustomerSummaryLink } from "../../customers/components/CustomerSummaryDrawer";
 import { CollectionsCaseLink } from "../components/CollectionsCaseDrawer";
 import { findArticle, TourButton } from "../../help";
+
+import { usePermission } from "../../../hooks/use-permission";
 
 const TYPE_LABELS: Record<string, string> = {
   SALARY: "Salary",
@@ -73,8 +74,7 @@ export function CollectionsPage() {
   const queue = useOverdueQueue(scope);
   const accrue = useAccrueLateFees();
   const toast = useToast();
-  const { user } = useAuth();
-  const canAccrue = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canAccrue = usePermission("collections.accrue");
 
   // Assignment is gated on the real permission, not the role enum — a
   // custom supervisor role built at /roles gets the checkboxes too.
@@ -487,10 +487,23 @@ function severityLabel(days: number): string {
   return "90+ days";
 }
 
+/**
+ * Three tiers, matching the three the label already names.
+ *
+ * The first branch used to be dead — `<= 7` and `<= 60` both returned
+ * "warning" — so "New" was labelled distinctly and rendered
+ * identically to an account sixty days down. A week late and two months
+ * late are not the same call to make, and the badge is what a
+ * supervisor scans before deciding where to spend the morning.
+ *
+ * "New" reads muted rather than warning: a payment a few days late is
+ * ordinary, and colouring it the same as a real arrear is how a queue
+ * stops meaning anything.
+ */
 function severityVariant(
   days: number,
 ): "success" | "danger" | "muted" | "warning" {
-  if (days <= 7) return "warning";
+  if (days <= 7) return "muted";
   if (days <= 60) return "warning";
   return "danger";
 }

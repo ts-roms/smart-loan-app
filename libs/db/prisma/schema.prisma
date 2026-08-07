@@ -16,6 +16,7 @@ enum UserRole {
   LOAN_OFFICER // approves/rejects loans, runs KYC
   ACCOUNTANT // records payments, reconciles
   COLLECTOR // works assigned delinquent accounts
+  AGENT // field originator, paid commission on what they bring in
   CUSTOMER // self-serve borrower
 }
 
@@ -83,7 +84,7 @@ model User {
   /// column on User — an index would be paid on every heartbeat to
   /// serve a filtered query that does not exist yet. Add one with the
   /// query that needs it.
-  lastSeenAt        DateTime?
+  lastSeenAt DateTime?
 
   // What this user did across the system (auditable trail)
   kycSubmissions            KycSubmission[]        @relation("KycSubmittedBy")
@@ -136,6 +137,149 @@ model User {
   // A customer may have a linked self-serve User account
   customer   Customer? @relation("CustomerLogin", fields: [customerId], references: [id], onDelete: SetNull)
   customerId String?   @unique
+
+  /// The agent profile for this login, when the user is a field agent.
+  agent               Agent?            @relation("AgentLogin")
+  agentsCreated       Agent[]           @relation("AgentCreatedBy")
+  loansAgentAssigned  LoanApplication[] @relation("LoanAgentAssignedBy")
+  agentPayoutsCreated AgentPayout[]     @relation("AgentPayoutCreatedBy")
+  agentPayoutsVoided  AgentPayout[]     @relation("AgentPayoutVoidedBy")
+}
+
+// ─── Field agents (loan originators paid on commission) ─────────────────────
+//
+// An agent brings borrowers to the coop and is paid a commission on what
+// they help originate. They are staff — every agent has a login, and the
+// Agent row is that user's profile rather than a separate directory.
+//
+// Modelled apart from `User` rather than as more columns on it because
+// the two answer different questions. `User` is "can this person sign in
+// and what may they do"; `Agent` is "what has this person originated and
+// what are we paying them for it". A deactivated agent still has a book
+// of past loans and unpaid commission, and that history has to survive
+// the login being revoked.
+
+model Agent {
+  id     String @id @default(uuid())
+  /// Human-readable: "AGT-2026-0007". Used in the operator UI and on
+  /// commission reports in place of the uuid.
+  number String @unique
+
+  /// The login. Required and unique — one agent, one account, so an
+  /// agent's book is unambiguous when they sign in.
+  ///
+  /// Restrict, not Cascade: deleting a user must not silently take a
+  /// commission ledger with it. Deactivate the agent instead.
+  userId String @unique
+  user   User   @relation("AgentLogin", fields: [userId], references: [id], onDelete: Restrict)
+
+  /// Per-agent commission rate as a decimal fraction of principal
+  /// (0.02 = 2%). NULL means "use the product's rate" — the common case.
+  /// Set only to override for a particular agent.
+  ///
+  /// Nullable rather than defaulted to zero: zero is a real, meaningful
+  /// rate ("this agent earns nothing on this"), and a default of zero
+  /// would silently pay nobody the moment the column was added.
+  commissionRate Decimal? @db.Decimal(5, 4)
+
+  /// Free-form: territory, branch, agency they came through.
+  territory String?
+  notes     String?
+
+  active        Boolean   @default(true)
+  /// Set when `active` goes false. An inactive agent cannot be assigned
+  /// to new applications but keeps every loan already assigned.
+  deactivatedAt DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  createdBy   User?    @relation("AgentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  loans   LoanApplication[] @relation("LoanAgent")
+  payouts AgentPayout[]
+
+  @@index([active])
+}
+
+// ─── Paying the agents ──────────────────────────────────────────────────────
+//
+// Disbursing a loan books the commission as an EXPENSE and a PAYABLE — the
+// agent has earned it, and the coop now owes it. A payout is the other
+// half: the cash actually leaving, and the payable coming down.
+//
+// One payout covers one agent and names exactly which loans it settled,
+// because "we paid you ₱14,000 last month" is not an answer to "which of
+// my loans was that for". The line items are the answer, and they are also
+// what stops a commission being paid twice.
+
+model AgentPayout {
+  id     String @id @default(uuid())
+  /// Human-readable: "APO-2026-000012".
+  number String @unique
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Restrict)
+
+  /// Sum of the line items. Stored rather than derived so a payout
+  /// reconciles against the cash that left even if a line is later
+  /// disputed — and validated against the items when it is created, so
+  /// the two can never disagree in the first place.
+  amount Decimal @db.Decimal(14, 2)
+
+  paidOn    DateTime
+  /// "CASH", "BANK_TRANSFER", "GCASH" — free text; the coop's own
+  /// vocabulary, not an enum this codebase should be legislating.
+  method    String?
+  reference String?
+  notes     String?
+
+  createdAt   DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation("AgentPayoutCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// Voided rather than deleted. A payout that left the ledger is
+  /// reversed with a mirror entry, never erased — the original and its
+  /// reversal both stand, which is what an audit expects to find.
+  voidedAt   DateTime?
+  voidReason String?
+  voidedById String?
+  voidedBy   User?     @relation("AgentPayoutVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+
+  items AgentPayoutItem[]
+
+  @@index([agentId, paidOn])
+}
+
+model AgentPayoutItem {
+  id       String      @id @default(uuid())
+  payoutId String
+  payout   AgentPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+
+  /// The loan whose commission this line settles.
+  loanId String
+  loan   LoanApplication @relation("LoanCommissionPayout", fields: [loanId], references: [id], onDelete: Restrict)
+
+  /// Copied from the loan at payout time. The loan's own
+  /// `agentCommissionAmount` is already frozen, so this is belt and
+  /// braces — but a payout line has to say what was paid for it even if
+  /// the loan row is later corrected by hand.
+  amount Decimal @db.Decimal(14, 2)
+
+  /**
+   * The constraint that makes double payment impossible.
+   * Not merely an index: without UNIQUE, two payout runs started at the
+   * same moment both read "unpaid" and both insert, and the agent is
+   * paid twice for one loan while account 2500 goes negative. A
+   * transaction alone would not catch it — they touch no common row
+   * until this one.
+   * Scoped to the loan and not to (payout, loan), because the point is
+   * one payment per loan ACROSS all payouts, not per payout. Voiding
+   * cascades the items away, which is what frees the loan to be paid
+   * again on a corrected run.
+   */
+  @@unique([loanId])
+  @@index([payoutId])
 }
 
 // ─── Customers (borrowers) — full KYC profile ────────────────────────────────
@@ -673,6 +817,16 @@ model LoanProduct {
   /// Months between maintenance reminders (every 6 months).
   maintenanceReminderMonths Int      @default(6)
 
+  // ── Agent commission ───────────────────────────────────────────────
+  /// Default commission an assisting agent earns on this product, as a
+  /// fraction of principal (0.02 = 2%). An individual Agent may carry an
+  /// override; see `Agent.commissionRate`.
+  ///
+  /// Zero by default, so adding an agent to a loan under a product
+  /// nobody has configured pays nothing rather than quietly paying a
+  /// made-up rate.
+  agentCommissionRate Decimal @default(0) @db.Decimal(5, 4)
+
   loans         LoanApplication[]
   /// Approval-chain steps for this product, ordered by `order`. Empty = no
   /// chain configured; the legacy single-decide flow applies.
@@ -881,8 +1035,8 @@ model LoanApplication {
   /// in cash, and reconstructing it later from a schedule that has
   /// since been marked paid is guesswork. The amount handed over is
   /// `principal - renewalPayoffAmount`.
-  renewalPayoffAmount Decimal? @db.Decimal(14, 2)
-  restructuredBy     LoanApplication? @relation("Restructure")
+  renewalPayoffAmount Decimal?         @db.Decimal(14, 2)
+  restructuredBy      LoanApplication? @relation("Restructure")
 
   /// True if the customer had a prior fully-paid loan when this application
   /// was submitted ("Repeat Loan"). Set automatically at apply
@@ -969,6 +1123,39 @@ model LoanApplication {
   vehicle    Vehicle?  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
+  // ── Assisting agent + their commission ──────────────────────────────
+  /// The field agent who brought this application in, when any. Walk-ins
+  /// and officer-originated loans have none.
+  ///
+  /// SetNull rather than Restrict: an agent record that has to be removed
+  /// should not take the loan with it, and a loan with no agent is a
+  /// perfectly ordinary loan. The frozen rate and amount below survive
+  /// so the commission already paid stays auditable.
+  agentId String?
+  agent   Agent?  @relation("LoanAgent", fields: [agentId], references: [id], onDelete: SetNull)
+
+  agentAssignedAt   DateTime?
+  agentAssignedById String?
+  agentAssignedBy   User?     @relation("LoanAgentAssignedBy", fields: [agentAssignedById], references: [id], onDelete: SetNull)
+
+  /// The commission rate resolved at ASSIGNMENT time and frozen here —
+  /// agent override if they have one, otherwise the product's default.
+  ///
+  /// Frozen rather than looked up on read for the same reason
+  /// `kycDeclarations` is a snapshot: an admin retuning the product rate
+  /// tomorrow must not silently restate what an agent earned on a loan
+  /// funded last quarter, in either direction.
+  agentCommissionRate     Decimal?         @db.Decimal(5, 4)
+  /// Principal × rate, computed and frozen at assignment. Payable in
+  /// full at disbursement.
+  agentCommissionAmount   Decimal?         @db.Decimal(14, 2)
+  /// When the commission was booked to the ledger. Set once, at
+  /// disbursement; its presence is what stops a second posting.
+  agentCommissionPostedAt DateTime?
+  /// The payout line that settled this loan's commission, if any. At
+  /// most one — see the unique on AgentPayoutItem.loanId.
+  agentCommissionPayout   AgentPayoutItem? @relation("LoanCommissionPayout")
+
   customer    Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
   submittedBy User     @relation("LoanSubmittedBy", fields: [submittedById], references: [id])
   decidedBy   User?    @relation("LoanDecidedBy", fields: [decidedById], references: [id])
@@ -995,6 +1182,9 @@ model LoanApplication {
   @@index([customerId, status])
   @@index([status, submittedAt])
   @@index([productCode])
+  /// An agent's own book: "my loans, newest first". Composite because
+  /// the page is always scoped to one agent and always time-ordered.
+  @@index([agentId, submittedAt])
 }
 
 // ─── Amortization schedule + actual payments ────────────────────────────────
@@ -1507,6 +1697,18 @@ model Notification {
   /// Optional pointer to the entity the notification refers to.
   refType     String?
   refId       String?
+  /// The HUMAN reference the rendered message quotes — "LN-2026-000006".
+  ///
+  /// The body says "Loan disbursed · LN-2026-000006" and the link used
+  /// to go to /loans/<uuid>, so one notification named the same loan two
+  /// different ways and the breadcrumb read "9f31f4ef-cd6…". Routes
+  /// accept either form, so storing what the message already says makes
+  /// the text, the URL and the crumb agree.
+  ///
+  /// For a row ABOUT a loan but keyed on something else — an instalment,
+  /// a lease, an annual document — this is the LOAN's number, because
+  /// that is what the message names and where the reader wants to land.
+  refNumber   String?
   /// Optional customer link for filtering.
   customerId  String?
 

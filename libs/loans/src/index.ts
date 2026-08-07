@@ -243,3 +243,28 @@ export {
   type PositionEntryInput,
   type PositionResult,
 } from "./ledger-position";
+
+export {
+  agentBookTotals,
+  assertValidCommissionRate,
+  quoteCommission,
+  COMMISSION_EARNED_STATUSES,
+  InvalidCommissionRateError,
+  MAX_COMMISSION_RATE,
+  type AgentBookRow,
+  type AgentBookTotals,
+  type CommissionInput,
+  type CommissionQuote,
+  type CommissionRateSource,
+} from "./agent-commission";
+
+export {
+  assertPayoutBalances,
+  buildPayout,
+  selectPayable,
+  NothingPayableError,
+  PayoutMismatchError,
+  type PayableLoan,
+  type PayableSelection,
+  type PayoutDraft,
+} from "./agent-payout";

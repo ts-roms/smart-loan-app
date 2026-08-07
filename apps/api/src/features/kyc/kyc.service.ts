@@ -18,6 +18,11 @@ export class KycService {
     return this.kyc.listForCustomer(customerId);
   }
 
+  /** The review queue — documents waiting on a decision, oldest first. */
+  listPending(params: { page?: number; pageSize?: number }) {
+    return this.kyc.listPending(params);
+  }
+
   submit(
     input: SubmitKycInput & { submittedById: string },
   ): Promise<KycSubmission> {

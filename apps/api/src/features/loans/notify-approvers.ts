@@ -92,6 +92,7 @@ export async function notifyApproversForStep(
         data,
         refType: "LoanApplication",
         refId: loan.id,
+        refNumber: loan.number,
       });
       // EMAIL — only when the user has an address on file (all staff
       // should, but defensive).
@@ -103,6 +104,7 @@ export async function notifyApproversForStep(
           data,
           refType: "LoanApplication",
           refId: loan.id,
+          refNumber: loan.number,
         });
       }
     }

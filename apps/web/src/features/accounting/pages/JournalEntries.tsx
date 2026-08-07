@@ -30,13 +30,13 @@ import {
   usePrompt,
   useToast,
 } from "@loan/ui";
-import { formatDate, formatMoney } from "@loan/shared-utils";
+import { formatDate, formatMoney, todayLocalISO } from "@loan/shared-utils";
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { JournalEntryLink } from "../components/JournalEntryDrawer";
 import { useState, type FormEvent } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 interface LineDraft {
   accountCode: string;
@@ -57,8 +57,7 @@ export function JournalEntriesPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const askPrompt = usePrompt();
-  const { user } = useAuth();
-  const canPost = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canPost = usePermission("accounting.post_journal");
   const [posting, setPosting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -302,9 +301,7 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
   const accounts = useAccounts();
   const post = usePostJournalEntry();
   const toast = useToast();
-  const [entryDate, setEntryDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [entryDate, setEntryDate] = useState(() => todayLocalISO());
   const [memo, setMemo] = useState("");
   const [lines, setLines] = useState<LineDraft[]>([
     { accountCode: "", debit: 0, credit: 0, memo: "" },

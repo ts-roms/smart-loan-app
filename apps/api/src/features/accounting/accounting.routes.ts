@@ -1,3 +1,4 @@
+import { endOfDay, startOfDay } from "@loan/accounting";
 import { AccountingRepository, AuditLogRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
@@ -6,13 +7,28 @@ import { JournalService } from "./journal.service";
 import { accountSchema } from "./schemas";
 
 /**
- * Helper for the report endpoints — defaults to "now" when `asOf` is
- * absent, rejects garbage dates with a thrown Error (the routes catch
- * it via the validate-on-call pattern).
+ * Upper bound for a report — `asOf` or `to`. Defaults to "now" when
+ * absent, rejects garbage with a thrown Error (the routes catch it via
+ * the validate-on-call pattern).
+ *
+ * `endOfDay`, not `new Date`. A bare "2026-08-07" parses as UTC
+ * midnight, which is 8am in Manila, so every report asked for as-of
+ * today silently dropped the working day that produced it — ₱15,668.78
+ * of entries on this repo's own fixtures. A caller sending a full
+ * timestamp still gets exactly that instant; only the ambiguous
+ * date-only shape is widened. See `endOfDay` in @loan/accounting.
  */
 function parseAsOf(value: string | undefined): Date {
   if (!value) return new Date();
-  const d = new Date(value);
+  const d = endOfDay(value);
+  if (Number.isNaN(d.getTime())) throw new Error("Invalid date");
+  return d;
+}
+
+/** Lower bound — the same treatment, anchored at the other end. */
+function parseFrom(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const d = startOfDay(value);
   if (Number.isNaN(d.getTime())) throw new Error("Invalid date");
   return d;
 }
@@ -107,8 +123,8 @@ export async function accountingRoutes(app: FastifyInstance) {
     read,
     async (req) =>
       req.accountingCtx!.accounting.listEntries({
-        from: req.query.from ? new Date(req.query.from) : undefined,
-        to: req.query.to ? new Date(req.query.to) : undefined,
+        from: parseFrom(req.query.from),
+        to: req.query.to ? parseAsOf(req.query.to) : undefined,
         source: req.query.source,
       }),
   );
@@ -151,8 +167,8 @@ export async function accountingRoutes(app: FastifyInstance) {
   }>("/ledger/:accountId", read, async (req) =>
     req.accountingCtx!.accounting.ledgerFor(
       req.params.accountId,
-      req.query.from ? new Date(req.query.from) : undefined,
-      req.query.to ? new Date(req.query.to) : undefined,
+      parseFrom(req.query.from),
+      req.query.to ? parseAsOf(req.query.to) : undefined,
     ),
   );
 
@@ -170,9 +186,8 @@ export async function accountingRoutes(app: FastifyInstance) {
     read,
     async (req, reply) => {
       const to = parseAsOf(req.query.to);
-      const from = req.query.from
-        ? new Date(req.query.from)
-        : new Date(to.getFullYear(), 0, 1);
+      const from =
+        parseFrom(req.query.from) ?? new Date(to.getFullYear(), 0, 1);
       if (Number.isNaN(from.getTime())) {
         return reply
           .code(400)
@@ -210,9 +225,9 @@ export async function accountingRoutes(app: FastifyInstance) {
     read,
     async (req) => {
       const to = parseAsOf(req.query.to);
-      const from = req.query.from
-        ? new Date(req.query.from)
-        : new Date(to.getFullYear(), to.getMonth() - 11, 1);
+      const from =
+        parseFrom(req.query.from) ??
+        new Date(to.getFullYear(), to.getMonth() - 11, 1);
       return req.accountingCtx!.accounting.originationsByMonth(from, to);
     },
   );

@@ -1,4 +1,5 @@
 export * from "./client";
+export * from "./download";
 export { toQueryString } from "./query-string";
 export * from "./hooks/use-auth";
 export * from "./hooks/use-customers";
@@ -10,6 +11,7 @@ export * from "./hooks/use-accounting";
 export * from "./hooks/use-collections";
 export * from "./hooks/use-payments";
 export * from "./hooks/use-portal";
+export * from "./hooks/use-agents";
 export * from "./hooks/use-pre-assessment";
 export * from "./hooks/use-co-maker-consent";
 export * from "./hooks/use-upload";

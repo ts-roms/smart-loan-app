@@ -14,7 +14,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DatePicker,
   Input,
+  Label,
   Pagination,
   Select,
   SelectContent,
@@ -25,7 +27,7 @@ import {
   useToast,
 } from "@loan/ui";
 import { useLoansPage, useRecordPayment } from "@loan/api-client";
-import { formatMoney } from "@loan/shared-utils";
+import { formatDate, formatMoney, todayLocalISO } from "@loan/shared-utils";
 import { HandCoins, Search, Wallet, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
@@ -259,6 +261,20 @@ function RecordPaymentDialog({
   const toast = useToast();
   const [amount, setAmount] = useState(0);
   const [reference, setReference] = useState("");
+  /*
+   * When the money was RECEIVED, not when it was keyed.
+   *
+   * `paidOn` flows through to `loanPaymentEntry`'s entryDate, so it
+   * decides which accounting period the receipt lands in. Without it
+   * every payment was stamped "now": cash taken at a branch on the 31st
+   * and entered on the 1st booked into the following month, so the
+   * accountant closed a period with that receipt missing from it.
+   *
+   * The endpoint and the bulk importer have accepted `paidOn` all
+   * along — the CSV format documents it — and only this dialog, the one
+   * a cashier actually uses, never sent it.
+   */
+  const [paidOn, setPaidOn] = useState(() => todayLocalISO());
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -267,6 +283,7 @@ function RecordPaymentDialog({
       await record.mutateAsync({
         loanId: loan.id,
         amount,
+        paidOn,
         reference: reference.trim() || undefined,
       });
       toast.success(`${formatMoney(amount)} recorded on ${loan.number}`);
@@ -315,11 +332,37 @@ function RecordPaymentDialog({
               required
               autoFocus
             />
-            <Input
-              placeholder="Reference / OR # (optional)"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label>Received on</Label>
+                <DatePicker
+                  value={paidOn}
+                  onChange={setPaidOn}
+                  // No future receipts — money cannot arrive tomorrow.
+                  max={todayLocalISO()}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="pay-ref">Reference / OR #</Label>
+                <Input
+                  id="pay-ref"
+                  placeholder="Optional"
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                />
+              </div>
+            </div>
+            {paidOn !== todayLocalISO() && (
+              /*
+                Named, because a backdated receipt can land in a period
+                that is already closed or about to be, and the person
+                keying it is the only one who knows it was deliberate.
+              */
+              <p className="text-xs text-fg-muted">
+                Backdated — this books into the accounting period covering{" "}
+                {formatDate(paidOn)}.
+              </p>
+            )}
             {loan.balance && amount > loan.balance.outstanding && (
               <p className="text-xs text-warning">
                 Amount exceeds the outstanding balance — the excess is booked as

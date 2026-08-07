@@ -27,6 +27,14 @@ export interface DispatchInput {
   data: TemplateData;
   refType?: string;
   refId?: string;
+  /**
+   * The human reference the rendered message quotes — "LN-2026-000006".
+   * For a notification ABOUT a loan but keyed on something else (an
+   * instalment, a lease, an annual document) this is the LOAN's number,
+   * because that is what the message names and where the reader expects
+   * to land.
+   */
+  refNumber?: string;
   customerId?: string;
 }
 
@@ -68,6 +76,7 @@ export class NotificationRepository {
         subject: rendered.subject,
         body: rendered.body,
         refType: input.refType,
+        refNumber: input.refNumber,
         refId: input.refId,
         customerId: input.customerId,
         status: "QUEUED",

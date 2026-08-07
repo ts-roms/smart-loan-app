@@ -48,7 +48,29 @@ export class ApiClient {
   /** In-flight refresh promise so concurrent 401s share one /auth/refresh call. */
   private refreshing: Promise<string | null> | null = null;
 
-  constructor(private readonly opts: ApiClientOptions) {}
+  constructor(private opts: ApiClientOptions) {}
+
+  /**
+   * Point the client at new options WITHOUT replacing the instance.
+   *
+   * The single-flight guard above is per-instance, so it only holds if
+   * there is exactly one instance. `configureApiClient` used to build a
+   * fresh `ApiClient` on every call and it is called more than once —
+   * eagerly during the provider's first render, then again from its
+   * mount effect, which React StrictMode runs twice in development.
+   *
+   * Each new instance arrived with an empty `refreshing` slot while the
+   * previous one still had a refresh in flight, so two `/auth/refresh`
+   * calls went out carrying the SAME refresh token. The first rotated
+   * it; the second presented a token already revoked, which is the
+   * server's definition of theft. It logged
+   * REFRESH_TOKEN_REUSE_DETECTED and revoked every token the user had —
+   * on a brand-new account, 2.4 seconds after signup, for no reason
+   * beyond the client having two of itself.
+   */
+  reconfigure(opts: ApiClientOptions): void {
+    this.opts = opts;
+  }
 
   async request<T>(
     path: string,
@@ -143,6 +165,44 @@ export class ApiClient {
   get<T>(path: string): Promise<T> {
     return this.request<T>(path, { method: "GET" });
   }
+
+  /**
+   * Fetch a file (CSV, PDF) with the same auth and refresh-on-401 that
+   * every other request gets.
+   *
+   * Its own method because `request` parses JSON, and a download must
+   * not. The two download call sites in this app each hand-rolled a
+   * `fetch` with `localStorage.getItem("loan.auth.token")` — which
+   * works until the access token expires, at which point the download
+   * reports "Server returned 401" instead of quietly refreshing and
+   * retrying like everything else on the page. It also duplicated the
+   * storage key, so renaming it in the auth provider would have broken
+   * both silently.
+   */
+  async fetchBlob(path: string, retry = true): Promise<Blob> {
+    const token = this.opts.getToken?.();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`${this.opts.baseUrl}${path}`, { headers });
+
+    if (res.status === 401 && retry) {
+      const nextToken = await this.tryRefresh();
+      if (nextToken) return this.fetchBlob(path, false);
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      const parsed = safeParse(text);
+      const message =
+        parsed &&
+        typeof parsed === "object" &&
+        "message" in parsed &&
+        typeof parsed.message === "string"
+          ? (parsed as { message: string }).message
+          : `API ${res.status}`;
+      throw new ApiError(res.status, message, parsed);
+    }
+    return res.blob();
+  }
   post<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>(path, {
       method: "POST",
@@ -162,6 +222,13 @@ function safeParse(text: string): unknown {
 let singleton: ApiClient | null = null;
 
 export function configureApiClient(opts: ApiClientOptions): ApiClient {
+  // Reuse, never replace. See `ApiClient.reconfigure` — a second
+  // instance means a second single-flight slot, which means two
+  // concurrent refreshes with one token and a false theft alarm.
+  if (singleton) {
+    singleton.reconfigure(opts);
+    return singleton;
+  }
   singleton = new ApiClient(opts);
   return singleton;
 }

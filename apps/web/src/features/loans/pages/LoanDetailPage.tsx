@@ -31,13 +31,14 @@ import {
   usePrompt,
   useToast,
 } from "@loan/ui";
-import { formatDate, formatMoney } from "@loan/shared-utils";
+import { formatDate, formatMoney, todayLocalISO } from "@loan/shared-utils";
 import {
   AlertTriangle,
   Copy,
   CreditCard,
   Download,
   ExternalLink,
+  FileQuestion,
   FileText,
   Link2,
   MessageSquare,
@@ -57,6 +58,7 @@ import { LoanStatusBadge } from "../components/StatusBadge";
 import { PenaltyPanel } from "../components/PenaltyPanel";
 import { AnnualDocsPanel } from "../components/AnnualDocsPanel";
 import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
+import { LoanAgentCard } from "../../agents";
 import { CoMakersPanel } from "../components/CoMakersPanel";
 import { RenewLoanDialog } from "../components/RenewLoanDialog";
 import { FaceMatchPanel } from "../components/FaceMatchPanel";
@@ -149,8 +151,30 @@ export function LoanDetailPage() {
   useCrumbTitle(loan.data?.number ?? null);
 
   if (loan.isLoading) return <SkeletonCard />;
-  if (!loan.data)
-    return <p className="text-sm text-fg-muted">Loan not found.</p>;
+  if (!loan.data) {
+    /*
+     * A dead end, and it is reachable from a link the app sent itself:
+     * notifications store the loan's id, and nothing stops the loan
+     * being removed afterwards. A bare "Loan not found." left the
+     * officer on a blank page with a truncated uuid in the breadcrumb
+     * and no way onward but the back button.
+     */
+    return (
+      <Card>
+        <CardContent className="py-10 text-center">
+          <FileQuestion className="mx-auto h-8 w-8 text-fg-subtle" />
+          <p className="mt-3 text-sm font-medium">This loan no longer exists</p>
+          <p className="mt-1 text-xs text-fg-muted">
+            It may have been removed since the link was created.
+          </p>
+          <p className="mt-2 font-mono text-[11px] text-fg-subtle">{id}</p>
+          <Button asChild variant="outline" size="sm" className="mt-4">
+            <Link to="/loans">Back to all loans</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
   const l = loan.data;
 
   const canDecide = canDecidePerm;
@@ -330,6 +354,22 @@ export function LoanDetailPage() {
 
         {/* Consent gate on disburse — see CoMakersPanel. */}
         <CoMakersPanel loanId={l.id} borrowerId={l.customerId} />
+
+        {/*
+          Who brought this loan in, and what it pays them. Read-only
+          without `agents.assign`, and frozen entirely once the
+          commission has been booked at disbursement.
+        */}
+        <LoanAgentCard
+          loanNumber={l.number}
+          agentId={l.agentId ?? null}
+          agentName={l.agent?.user.name ?? null}
+          agentNumber={l.agent?.number ?? null}
+          commissionRate={l.agentCommissionRate ?? null}
+          commissionAmount={l.agentCommissionAmount ?? null}
+          commissionPostedAt={l.agentCommissionPostedAt ?? null}
+          assignedAt={l.agentAssignedAt ?? null}
+        />
         {/*
           AI assistant — explain the loan's decisioning verdict in plain
           language. Local LLM only; never sends data off-server. Officer
@@ -1110,7 +1150,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
   const [ptpDate, setPtpDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
-    return d.toISOString().slice(0, 10);
+    return todayLocalISO(d);
   });
   const [ptpNote, setPtpNote] = useState("");
 
@@ -1235,7 +1275,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
               <DatePicker
                 value={ptpDate}
                 onChange={setPtpDate}
-                min={new Date().toISOString().slice(0, 10)}
+                min={todayLocalISO()}
                 placeholder="Promise date"
               />
             </div>

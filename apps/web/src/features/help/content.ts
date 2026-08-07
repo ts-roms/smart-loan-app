@@ -70,11 +70,6 @@ export const HELP_ARTICLES: HelpArticle[] = [
         "right",
       ),
       t(
-        '[data-tour="navbar-audit"]',
-        "Audit log",
-        "Every privileged action lands here — useful when investigating a change.",
-      ),
-      t(
         '[data-tour="navbar-notifications"]',
         "Notifications",
         "Inbox for system notifications. Unread count appears as a badge.",

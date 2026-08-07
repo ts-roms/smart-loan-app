@@ -65,6 +65,12 @@ const PreAssessmentsPage = lazyNamed(
   () => import("./features/pre-assessment"),
   "PreAssessmentsPage",
 );
+const AgentsPage = lazyNamed(() => import("./features/agents"), "AgentsPage");
+const AuditLogPage = lazyNamed(
+  () => import("./features/audit"),
+  "AuditLogPage",
+);
+const MyBookPage = lazyNamed(() => import("./features/agents"), "MyBookPage");
 const LoanDraftsPage = lazyNamed(
   () => import("./features/loans"),
   "LoanDraftsPage",
@@ -390,6 +396,15 @@ export function App() {
         <Route path="/loans/new/:draftId" element={<NewLoanPage />} />
         <Route path="/loans/:id" element={<LoanDetailPage />} />
         <Route path="/pre-assessments" element={<PreAssessmentsPage />} />
+        <Route path="/agents" element={<AgentsPage />} />
+        <Route path="/audit" element={<AuditLogPage />} />
+        {/*
+          An agent's own book. Its own route rather than /agents/:id
+          because it takes no id at all — the server resolves the agent
+          from the token, which is what stops one agent reading another's
+          earnings by editing the address bar.
+        */}
+        <Route path="/my-book" element={<MyBookPage />} />
         <Route path="/loan-products" element={<LoanProductsPage />} />
         <Route path="/collections" element={<CollectionsPage />} />
         <Route path="/collections/my-accounts" element={<MyAccountsPage />} />

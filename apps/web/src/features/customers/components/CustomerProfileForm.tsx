@@ -9,6 +9,7 @@ import {
   citiesFor,
   provincesForRegion,
   regionHasProvinces,
+  todayLocalISO,
   type PsgcRegion,
 } from "@loan/shared-utils";
 import {
@@ -145,7 +146,7 @@ export function CustomerProfileForm({
               <DatePicker
                 value={form.dateOfBirth}
                 onChange={(v) => set("dateOfBirth", v)}
-                max={new Date().toISOString().slice(0, 10)}
+                max={todayLocalISO()}
                 placeholder="Date of birth"
               />
             </Field>
@@ -208,7 +209,7 @@ export function CustomerProfileForm({
                 <DatePicker
                   value={form.spouseDateOfBirth ?? ""}
                   onChange={(v) => set("spouseDateOfBirth", v)}
-                  max={new Date().toISOString().slice(0, 10)}
+                  max={todayLocalISO()}
                 />
               </Field>
               <Field label="Spouse contact">
@@ -354,14 +355,14 @@ export function CustomerProfileForm({
                   <DatePicker
                     value={form.hireDate ?? ""}
                     onChange={(v) => set("hireDate", v)}
-                    max={new Date().toISOString().slice(0, 10)}
+                    max={todayLocalISO()}
                   />
                 </Field>
                 <Field label="Regularization date">
                   <DatePicker
                     value={form.regularizationDate ?? ""}
                     onChange={(v) => set("regularizationDate", v)}
-                    max={new Date().toISOString().slice(0, 10)}
+                    max={todayLocalISO()}
                   />
                 </Field>
                 <Field label="Years at current job">

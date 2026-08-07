@@ -1,4 +1,11 @@
-import { type PrismaClient } from "@loan/db";
+import { endOfDay, startOfDay } from "@loan/accounting";
+import {
+  resolvePaging,
+  toPage,
+  tokenizedWhere,
+  contains,
+  type PrismaClient,
+} from "@loan/db";
 
 import type { AuditListQuery } from "./schemas";
 
@@ -11,26 +18,81 @@ import type { AuditListQuery } from "./schemas";
  * User for display, then re-shapes the row to flatten the actor join.
  * That mapping doesn't belong in the route handler.
  */
+/**
+ * 25 fits the drawer without scrolling past the filters; 200 is the
+ * ceiling for a script pulling a period in bulk.
+ */
+const AUDIT_PAGING = { defaultPageSize: 25, maxPageSize: 200 };
+
 export class AuditService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async list(query: AuditListQuery) {
-    const rows = await this.prisma.auditEvent.findMany({
-      where: {
-        actorId: query.actorId,
-        action: query.action,
-        targetType: query.targetType,
-        targetId: query.targetId,
-        createdAt: {
-          gte: query.from ? new Date(query.from) : undefined,
-          lte: query.to ? new Date(query.to) : undefined,
-        },
+    /*
+     * The actor search runs HERE, not in the browser.
+     *
+     * It used to filter the loaded page client-side, which meant a name
+     * only turned up if it happened to appear in the 25 rows already on
+     * screen — so "what did Maria do last quarter" answered "nothing"
+     * whenever Maria was on page 9. On an audit log that is not a
+     * cosmetic limitation; it is a wrong answer to the question the
+     * screen exists to ask.
+     *
+     * Tokenized for the same reason the customer and loan lists are:
+     * people type "maria cruz" and "cruz maria", and neither is a
+     * substring of `name` or of `email`. Every token has to match
+     * somewhere on the actor, so both orders find her and neither
+     * returns every other Maria.
+     */
+    const actorMatch = tokenizedWhere(query.actor, (token) => [
+      { name: contains(token) },
+      { email: contains(token) },
+    ]);
+
+    const where = {
+      actorId: query.actorId,
+      action: query.action,
+      targetType: query.targetType,
+      targetId: query.targetId,
+      // Undefined when no search was typed, which Prisma drops.
+      actor: actorMatch,
+      /*
+       * `endOfDay`, not `new Date`. A bare "2026-08-07" parses as UTC
+       * midnight — the FIRST instant of the day — so "everything up to
+       * the 7th" dropped the whole working day of the 7th. Third place
+       * in this codebase with the same bug; same fix as the accounting
+       * and compliance reports.
+       */
+      createdAt: {
+        gte: query.from ? startOfDay(query.from) : undefined,
+        lte: query.to ? endOfDay(query.to) : undefined,
       },
-      orderBy: { createdAt: "desc" },
-      take: query.take ?? 100,
-      include: { actor: { select: { id: true, name: true, email: true } } },
-    });
-    return rows.map((r) => ({
+    };
+    /*
+     * `take` still wins when no page is asked for, so existing callers
+     * keep working. A paged caller has already stated its size.
+     */
+    const paging = resolvePaging(
+      { page: query.page, pageSize: query.pageSize ?? query.take },
+      AUDIT_PAGING,
+    );
+    const [rows, total] = await Promise.all([
+      this.prisma.auditEvent.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: paging.skip,
+        take: paging.take,
+        include: { actor: { select: { id: true, name: true, email: true } } },
+      }),
+      /*
+       * Counted, not inferred from the page. An audit log is the one
+       * table where "how many are there" is itself the answer to a
+       * question — "how many times was this done, and by whom" — and a
+       * page length cannot say.
+       */
+      this.prisma.auditEvent.count({ where }),
+    ]);
+    const mapped = rows.map((r) => ({
       id: r.id,
       action: r.action,
       actorId: r.actorId,
@@ -41,15 +103,25 @@ export class AuditService {
       payload: r.payload,
       createdAt: r.createdAt,
     }));
+    return toPage(mapped, total, paging);
   }
 
-  /** Distinct action labels — powers the UI's filter dropdown. */
+  /**
+   * Distinct action labels — powers the UI's filter dropdown.
+   *
+   * Raw SQL, not `findMany({ distinct })`. Prisma does not push that
+   * down: it emits `SELECT id, action FROM "AuditEvent" ORDER BY
+   * action` and dedupes in the query engine, so opening the audit page
+   * loaded EVERY row of the one table in this system that only ever
+   * grows, to populate a dropdown of maybe thirty labels.
+   *
+   * `SELECT DISTINCT` lets Postgres answer it from the `action` index
+   * instead.
+   */
   async listDistinctActions(): Promise<string[]> {
-    const rows = await this.prisma.auditEvent.findMany({
-      distinct: ["action"],
-      select: { action: true },
-      orderBy: { action: "asc" },
-    });
+    const rows = await this.prisma.$queryRaw<Array<{ action: string }>>`
+      SELECT DISTINCT "action" FROM "AuditEvent" ORDER BY "action" ASC
+    `;
     return rows.map((r) => r.action);
   }
 }

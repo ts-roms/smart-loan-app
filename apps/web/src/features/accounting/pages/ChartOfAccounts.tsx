@@ -24,7 +24,7 @@ import {
 import { Plus, Sparkles } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * The chart of accounts. ADMIN/ACCOUNTANT can add new accounts; everyone
@@ -36,8 +36,7 @@ export function ChartOfAccountsPage() {
   const accounts = useAccounts();
   const seed = useSeedChart();
   const toast = useToast();
-  const { user } = useAuth();
-  const canEdit = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canEdit = usePermission("accounting.accounts");
   const [creating, setCreating] = useState(false);
 
   return (
@@ -45,7 +44,7 @@ export function ChartOfAccountsPage() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Chart of accounts</CardTitle>
         <div className="flex items-center gap-2">
-          {user?.role === "ADMIN" && (
+          {canEdit && (
             <Button
               variant="outline"
               onClick={async () => {
