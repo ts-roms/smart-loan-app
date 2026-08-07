@@ -63,9 +63,15 @@ function log(line, level = "info") {
  * Which table each `sourceRefType` points at.
  *
  * Every value the codebase writes has to appear here. A type that is
- * missing is reported and SKIPPED rather than assumed orphaned: an
- * unmapped type means this script does not know where to look, and
- * "I couldn't find the owner" must never be read as "the owner is gone".
+ * missing is reported and the sweep REFUSES rather than assuming
+ * orphaned: an unmapped type means this script does not know where to
+ * look, and "I couldn't find the owner" must never be read as "the
+ * owner is gone".
+ *
+ * `null` is a third answer, distinct from missing: this type has no
+ * owning domain row BY DESIGN and can never be orphaned. Opening
+ * capital is the case — it funds the book rather than recording
+ * something that happened to a loan.
  */
 const OWNER_TABLE = {
   LoanApplication: "LoanApplication",
@@ -87,6 +93,8 @@ const OWNER_TABLE = {
   BigBrotherAccount: "BigBrotherAccount",
   LeaseAgreement: "LeaseAgreement",
   EclRun: "EclRun",
+  /** No owner by design — see the note above. */
+  FixtureOpeningCapital: null,
   /*
    * A reversal points at the entry it reverses, which lives in the same
    * table. Included so reversals are checked too — a reversal whose
@@ -104,7 +112,10 @@ async function sweepSchema(prisma, label) {
      WHERE "sourceRefType" IS NOT NULL AND "sourceRefId" IS NOT NULL`,
   );
 
-  const unmapped = types.map((r) => r.t).filter((t) => !OWNER_TABLE[t]);
+  // `in`, not a truthiness check: a mapping of `null` is an answer
+  // ("never orphaned"), and treating it as missing would make the
+  // sweep refuse to run on a perfectly healthy database.
+  const unmapped = types.map((r) => r.t).filter((t) => !(t in OWNER_TABLE));
   if (unmapped.length > 0) {
     log(
       `Unknown sourceRefType(s): ${unmapped.join(", ")}. Add them to OWNER_TABLE before sweeping — this script will not guess whether they are orphaned.`,
@@ -115,6 +126,7 @@ async function sweepSchema(prisma, label) {
 
   const orphans = [];
   for (const { t } of types) {
+    if (OWNER_TABLE[t] === null) continue;
     const rows = await prisma.$queryRawUnsafe(
       `SELECT e.id, e."entryDate", e.memo, e."reversedById",
               COALESCE(SUM(l.debit), 0) AS total

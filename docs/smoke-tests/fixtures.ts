@@ -13,13 +13,21 @@
  * `LoanRepository.disburse`), a disbursement date placed so the status
  * makes sense (an ACTIVE loan is three months in and current; a DEFAULTED
  * one is eight months in with nothing paid), and matching LoanPayment
- * rows for whatever the schedule shows as settled. Without this the
- * fixtures sat in a state production can't produce — released loans with
- * no schedule — so the amortization ledger self-hid and list balances
- * were null on exactly the loans meant to exercise them. Journal entries
- * are deliberately NOT posted: fixtures are rows, not workflow runs, and
+ * rows for whatever the schedule shows as settled, and the journal
+ * entries release would have posted. Without this the fixtures sat in a
+ * state production can't produce — released loans with no schedule — so
+ * the amortization ledger self-hid and list balances were null on
+ * exactly the loans meant to exercise them.
+ *
+ * Journal entries were once deliberately omitted, on the grounds that
  * accumulating disbursement entries on every reseed would pollute the
- * accounting reports.
+ * accounting reports. That was true when the sweep below left the old
+ * entries behind; it isn't now that it clears them first. What the
+ * omission cost was worse: payments credited Loans Receivable while
+ * nothing had ever debited it, so the dev ledger carried the asset at a
+ * CREDIT balance of ₱59,906.94 and every accounting page rendered
+ * nonsense. A released loan with no entry is exactly the contradiction
+ * this section exists to prevent.
  *
  * Re-runnable: every PICKER-* row is deleted and recreated (schedules and
  * payments cascade with the loan), so the smoke test starts from a known
@@ -41,11 +49,49 @@ import {
 // "@loan/loans" alias doesn't resolve from here. tsx follows the source
 // import fine, and it's the exact function the real disburse path uses.
 import {
+  ACCOUNT_CODES,
+  buildEntry,
+  loanDisbursementEntry,
+  loanPaymentEntry,
+} from "../../libs/accounting/src/index";
+import { AccountingRepository } from "../../libs/db/src/repositories/accounting.repository";
+import {
   computeAmortizationFor,
+  computeFees,
   daysBetweenInstallments,
 } from "../../libs/loans/src/index";
 
 const prisma = new PrismaClient();
+/*
+ * The same repository the real disburse path posts through, so the
+ * entries are built by the same code and validated by the same
+ * `buildEntry` balance check. `postIfAbsent` keys on the source ref, so
+ * a half-finished run can be repeated without doubling anything.
+ */
+const accounting = new AccountingRepository(prisma);
+
+/** Fixture loans are all ₱50,000 over 12 months at 24%. */
+const PRINCIPAL = 50_000;
+
+/**
+ * The money the coop lends has to come from somewhere.
+ *
+ * Without this the fixtures disburse ₱338,625 the books never received,
+ * and Cash sits at a net CREDIT — an asset on the wrong side, on every
+ * accounting page. Not a rounding artefact: a lender with no funding
+ * entry is describing a business that lent money it did not have.
+ *
+ * Dated before the earliest disbursement (the CLOSED loan is fourteen
+ * months back) so no loan is funded out of capital that had not arrived.
+ */
+const OPENING_CAPITAL = 1_000_000;
+const OPENING_CAPITAL_REF = "fixture-opening-capital";
+/**
+ * Exported so `sweep-orphaned-entries` can recognise it. This entry has
+ * no owning domain row by design, which is exactly what that script
+ * treats as an orphan unless told otherwise.
+ */
+export const FIXTURE_CAPITAL_REF_TYPE = "FixtureOpeningCapital";
 
 /** name, loan statuses to attach */
 const PEOPLE: Array<[string, LoanStatus[]]> = [
@@ -136,6 +182,30 @@ async function main() {
     where: { number: { startsWith: "PICKER-" } },
   });
 
+  /*
+   * Fund the book before lending from it. `postIfAbsent` keyed on a
+   * fixed ref makes this idempotent, so reseeding does not stack
+   * capital injections on top of each other.
+   */
+  await accounting.postIfAbsent(
+    buildEntry({
+      entryDate: addMonths(new Date(), -15),
+      source: "MANUAL",
+      sourceRefType: FIXTURE_CAPITAL_REF_TYPE,
+      sourceRefId: OPENING_CAPITAL_REF,
+      memo: "Fixture: opening capital",
+      lines: [
+        { accountCode: ACCOUNT_CODES.CASH, debit: OPENING_CAPITAL, credit: 0 },
+        {
+          accountCode: ACCOUNT_CODES.OWNERS_EQUITY,
+          debit: 0,
+          credit: OPENING_CAPITAL,
+        },
+      ],
+    }),
+    { postedById: officer.id },
+  );
+
   let n = 0;
   for (const [fullName, statuses] of PEOPLE) {
     const [firstName, lastName] = fullName.split(" ");
@@ -224,7 +294,7 @@ async function seedPostReleaseState(
 
   // Same math and the same due-date walk as LoanRepository.disburse,
   // just anchored at the backdated release instead of today.
-  const rows = computeAmortizationFor(50000, 0.24, 12, {
+  const rows = computeAmortizationFor(PRINCIPAL, 0.24, 12, {
     method: product.interestMethod,
     frequency: product.paymentFrequency,
   });
@@ -260,20 +330,102 @@ async function seedPostReleaseState(
   });
   await prisma.loanSchedule.createMany({ data: schedule });
 
+  /*
+   * The disbursement entry, before any payment can credit the
+   * receivable it creates. Fees come from the same `computeFees` the
+   * real path uses, so Fee Income lands here too rather than being
+   * quietly folded into cash.
+   */
+  const loan = await prisma.loanApplication.findUniqueOrThrow({
+    where: { id: loanId },
+    select: { number: true },
+  });
+  const fees = computeFees(PRINCIPAL, {
+    processingFeeRate: Number(product.processingFeeRate),
+    processingFeeFlat: Number(product.processingFeeFlat),
+    documentaryStampRate: Number(product.documentaryStampRate),
+  });
+  await accounting.postIfAbsent(
+    loanDisbursementEntry({
+      loanId,
+      loanNumber: loan.number,
+      principal: PRINCIPAL,
+      feeTotal: fees.total,
+      disbursedAt,
+    }),
+    { postedById: officerId },
+  );
+
   // One payment per settled installment, on its due date, so the
   // statement PDF's payment history agrees with the schedule instead of
   // reading "No payments recorded" against paid rows.
+  //
+  // Created one at a time rather than with createMany, because each
+  // needs its own journal entry and `createMany` does not hand back the
+  // ids those entries key on.
   const paidRows = schedule.filter((s) => s.paidInFullAt);
-  if (paidRows.length > 0) {
-    await prisma.loanPayment.createMany({
-      data: paidRows.map((s) => ({
+  for (const row of paidRows) {
+    const payment = await prisma.loanPayment.create({
+      data: {
         loanId,
-        amount: s.totalDue,
-        paidOn: s.dueDate,
-        reference: `FIXTURE-${s.installmentNo}`,
+        amount: row.totalDue,
+        paidOn: row.dueDate,
+        reference: `FIXTURE-${row.installmentNo}`,
         recordedById: officerId,
-      })),
+      },
     });
+    /*
+     * The split is taken from the schedule row rather than recomputed.
+     * These installments are settled exactly, so principal and interest
+     * are already known — and running them back through
+     * `allocatePayment` would re-derive the same numbers from state this
+     * function has just written, which is a longer way to be wrong.
+     */
+    await accounting.postIfAbsent(
+      loanPaymentEntry({
+        loanId,
+        loanNumber: loan.number,
+        paymentId: payment.id,
+        amount: row.totalDue,
+        interestPortion: row.interestDue,
+        principalPortion: row.principalDue,
+        paidOn: row.dueDate,
+      }),
+      { postedById: officerId },
+    );
+  }
+
+  /*
+   * Bad Debt on the written-off loan. Nothing was ever paid on it, so
+   * the whole principal goes — mirroring `LoanRepository.writeOff`.
+   * Without this the receivable stays on the books for a loan the
+   * lender has given up on, which is the single figure a write-off
+   * exists to correct.
+   */
+  if (status === "WRITTEN_OFF") {
+    const writtenOffAt = addMonths(now, -1);
+    await accounting.postIfAbsent(
+      buildEntry({
+        entryDate: writtenOffAt,
+        source: "MANUAL",
+        sourceRefType: "LoanWriteOff",
+        sourceRefId: loanId,
+        memo: `Write-off ${loan.number}: Fixture: uncollectible after default`,
+        lines: [
+          {
+            accountCode: ACCOUNT_CODES.BAD_DEBT_EXPENSE,
+            debit: PRINCIPAL,
+            credit: 0,
+          },
+          {
+            accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
+            debit: 0,
+            credit: PRINCIPAL,
+          },
+        ],
+      }),
+      { postedById: officerId },
+    );
   }
 
   const lastDue = dueDateOf(rows.length);
@@ -288,8 +440,8 @@ async function seedPostReleaseState(
       ...(status === "WRITTEN_OFF"
         ? {
             // Nothing was ever paid on this one, so the whole principal
-            // went to Bad Debt.
-            writeOffAmount: 50000,
+            // went to Bad Debt — posted above.
+            writeOffAmount: PRINCIPAL,
             writeOffReason: "Fixture: uncollectible after default",
             writtenOffAt: addMonths(now, -1),
             writtenOffById: officerId,
