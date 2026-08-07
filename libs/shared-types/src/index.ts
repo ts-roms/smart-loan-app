@@ -185,6 +185,13 @@ export interface Customer {
   yearsAtCurrentJob: string | number | null;
 
   kycStatus: KycStatus;
+  /**
+   * Set when the customer's PII was redacted under a Data Privacy Act
+   * erasure request. The identifying fields then hold "[ERASED]"
+   * placeholders — the UI shows a badge so blank-looking records read
+   * as "erased on purpose", not "data loss".
+   */
+  erasedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
