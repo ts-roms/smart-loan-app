@@ -1,4 +1,5 @@
 export * from "./client";
+export * from "./download";
 export { toQueryString } from "./query-string";
 export * from "./hooks/use-auth";
 export * from "./hooks/use-customers";

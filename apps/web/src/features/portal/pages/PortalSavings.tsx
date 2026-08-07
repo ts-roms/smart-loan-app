@@ -24,7 +24,7 @@ export function PortalSavings() {
   const ledger = usePortalMemberLedger();
 
   const onDownload = () =>
-    downloadAuthedCsv("/api/v1/portal/savings?format=csv", "my-savings.csv");
+    downloadAuthedCsv("/portal/savings?format=csv", "my-savings.csv");
 
   return (
     <div className="space-y-4">

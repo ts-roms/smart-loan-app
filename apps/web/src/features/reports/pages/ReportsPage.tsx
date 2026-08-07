@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
+import { downloadFile } from "@loan/api-client";
 import { useState } from "react";
 
 import { findArticle, TourButton } from "../../help";
@@ -168,8 +169,18 @@ function ReportCard({ report }: { report: ReportDef }) {
     try {
       const params = new URLSearchParams({ format: "csv" });
       if (report.needsDateRange) {
-        params.set("from", new Date(from).toISOString());
-        params.set("to", new Date(to).toISOString());
+        /*
+         * The picker's own "YYYY-MM-DD", verbatim.
+         *
+         * This used to send `new Date(to).toISOString()`, which turns a
+         * calendar day into UTC midnight — the first instant of it — so
+         * a report run "to the 7th" excluded everything that happened
+         * on the 7th. The server widens a date-only bound to the end of
+         * that day; handing it an instant instead took that decision
+         * away from it and got the range wrong.
+         */
+        params.set("from", from);
+        params.set("to", to);
       }
       // Blank means "everywhere" — the server treats absence as no
       // narrowing, so empty inputs are simply not sent.
@@ -177,24 +188,10 @@ function ReportCard({ report }: { report: ReportDef }) {
         if (province.trim()) params.set("province", province.trim());
         if (city.trim()) params.set("city", city.trim());
       }
-      const token = localStorage.getItem("loan.auth.token");
-      const url = `/api/v1/reports/${report.type}?${params.toString()}`;
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
-      }
-      const blob = await res.blob();
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      // Disposition header dictates filename — browser uses our value as
-      // a fallback if disposition is missing.
-      link.download = `${report.type}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
+      await downloadFile(
+        `/reports/${report.type}?${params.toString()}`,
+        `${report.type}.csv`,
+      );
       toast.success(`${report.title} downloaded`);
     } catch (err) {
       toast.error((err as Error).message ?? "Download failed");

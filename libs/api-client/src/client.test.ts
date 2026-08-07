@@ -124,3 +124,78 @@ describe("refresh single-flight", () => {
     expect(refreshCalls).toBe(2);
   });
 });
+
+describe("fetchBlob", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  /**
+   * The reason downloads moved off a hand-rolled `fetch`. Both call
+   * sites read `localStorage` directly and had no 401 handling, so an
+   * expired access token turned a Download button into "Server returned
+   * 401" — on a page where the user had just filled in a date range.
+   */
+  it("refreshes and retries once when the token has expired", async () => {
+    const client = new ApiClient(opts());
+    const calls: string[] = [];
+    let served = 0;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calls.push(String(url));
+        if (String(url).endsWith("/auth/refresh")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              accessToken: "fresh",
+              refreshToken: "rotated",
+              refreshTokenExpiresAt: new Date().toISOString(),
+            }),
+          };
+        }
+        served += 1;
+        if (served === 1)
+          return { ok: false, status: 401, text: async () => "{}" };
+        return { ok: true, status: 200, blob: async () => "csv-bytes" };
+      }),
+    );
+
+    const blob = await client.fetchBlob("/reports/ecl-movement?format=csv");
+    expect(blob).toBe("csv-bytes");
+    expect(calls.filter((c) => c.includes("/auth/refresh"))).toHaveLength(1);
+    // Original, refresh, retry — and no second refresh.
+    expect(calls).toHaveLength(3);
+  });
+
+  it("gives up rather than looping when the refresh fails", async () => {
+    const client = new ApiClient(opts());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url).endsWith("/auth/refresh")
+          ? { ok: false, status: 401, text: async () => "{}" }
+          : { ok: false, status: 401, text: async () => "{}" },
+      ),
+    );
+    await expect(
+      client.fetchBlob("/reports/ecl-movement?format=csv"),
+    ).rejects.toMatchObject({ status: 401 });
+  });
+
+  it("surfaces the server's message, not just the status", async () => {
+    // A 403 on a report the user cannot run should say so.
+    const client = new ApiClient(opts());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 403,
+        text: async () => JSON.stringify({ message: "Missing reports.read" }),
+      })),
+    );
+    await expect(client.fetchBlob("/reports/x")).rejects.toThrow(
+      "Missing reports.read",
+    );
+  });
+});

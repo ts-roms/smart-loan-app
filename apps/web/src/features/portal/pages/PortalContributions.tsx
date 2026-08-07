@@ -27,7 +27,7 @@ export function PortalContributions() {
 
   const onDownload = () =>
     downloadAuthedCsv(
-      "/api/v1/portal/contributions?format=csv",
+      "/portal/contributions?format=csv",
       "my-contributions.csv",
     );
 

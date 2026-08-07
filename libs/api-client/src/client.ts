@@ -165,6 +165,44 @@ export class ApiClient {
   get<T>(path: string): Promise<T> {
     return this.request<T>(path, { method: "GET" });
   }
+
+  /**
+   * Fetch a file (CSV, PDF) with the same auth and refresh-on-401 that
+   * every other request gets.
+   *
+   * Its own method because `request` parses JSON, and a download must
+   * not. The two download call sites in this app each hand-rolled a
+   * `fetch` with `localStorage.getItem("loan.auth.token")` — which
+   * works until the access token expires, at which point the download
+   * reports "Server returned 401" instead of quietly refreshing and
+   * retrying like everything else on the page. It also duplicated the
+   * storage key, so renaming it in the auth provider would have broken
+   * both silently.
+   */
+  async fetchBlob(path: string, retry = true): Promise<Blob> {
+    const token = this.opts.getToken?.();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`${this.opts.baseUrl}${path}`, { headers });
+
+    if (res.status === 401 && retry) {
+      const nextToken = await this.tryRefresh();
+      if (nextToken) return this.fetchBlob(path, false);
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      const parsed = safeParse(text);
+      const message =
+        parsed &&
+        typeof parsed === "object" &&
+        "message" in parsed &&
+        typeof parsed.message === "string"
+          ? (parsed as { message: string }).message
+          : `API ${res.status}`;
+      throw new ApiError(res.status, message, parsed);
+    }
+    return res.blob();
+  }
   post<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>(path, {
       method: "POST",
