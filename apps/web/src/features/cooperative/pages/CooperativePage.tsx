@@ -59,6 +59,8 @@ import { MemberLedgerLink } from "../components/MemberLedgerDrawer";
 import { JournalEntryLink } from "../../accounting";
 import { findArticle, TourButton } from "../../help";
 
+import { usePermission } from "../../../hooks/use-permission";
+
 /**
  * Single-page cooperative module. Horizontal tabs for each entity;
  * each tab renders a list + "New" button that opens a record-specific
@@ -169,6 +171,7 @@ function useCustomerName() {
 
 function ContributionsTab() {
   const list = useContributions();
+  const canCreate = usePermission("coop.contribute");
   const create = useCreateContribution();
   const nameOf = useCustomerName();
   const toast = useToast();
@@ -216,6 +219,7 @@ function ContributionsTab() {
 
   return (
     <ListCard
+      canCreate={canCreate}
       title="Contributions"
       onNew={() => setOpen(true)}
       isLoading={list.isLoading}
@@ -348,6 +352,7 @@ function ContributionsTab() {
 
 function SavingsTab() {
   const list = useSavingsTxns();
+  const canCreate = usePermission("coop.savings");
   const create = useCreateSavings();
   const nameOf = useCustomerName();
   const toast = useToast();
@@ -386,6 +391,7 @@ function SavingsTab() {
 
   return (
     <ListCard
+      canCreate={canCreate}
       title="Savings"
       onNew={() => setOpen(true)}
       isLoading={list.isLoading}
@@ -506,6 +512,7 @@ function SavingsTab() {
 
 function FundsTab() {
   const list = useFundTxns();
+  const canCreate = usePermission("coop.funds");
   const create = useCreateFundTxn();
   const nameOf = useCustomerName();
   const toast = useToast();
@@ -547,6 +554,7 @@ function FundsTab() {
 
   return (
     <ListCard
+      canCreate={canCreate}
       title="Fund transactions (inflows)"
       onNew={() => setOpen(true)}
       isLoading={list.isLoading}
@@ -660,6 +668,7 @@ function FundsTab() {
 
 function WithdrawalsTab() {
   const list = useFundWithdrawals();
+  const canCreate = usePermission("coop.funds");
   const create = useCreateFundWithdrawal();
   const nameOf = useCustomerName();
   const toast = useToast();
@@ -698,6 +707,7 @@ function WithdrawalsTab() {
 
   return (
     <ListCard
+      canCreate={canCreate}
       title="Withdrawals (outflows)"
       onNew={() => setOpen(true)}
       isLoading={list.isLoading}
@@ -802,6 +812,7 @@ function WithdrawalsTab() {
 
 function ExpensesTab() {
   const list = useExpenses();
+  const canCreate = usePermission("coop.expense");
   const create = useCreateExpense();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -842,6 +853,7 @@ function ExpensesTab() {
 
   return (
     <ListCard
+      canCreate={canCreate}
       title="Expenses"
       onNew={() => setOpen(true)}
       isLoading={list.isLoading}
@@ -967,6 +979,7 @@ function ExpensesTab() {
 
 function OtherIncomeTab() {
   const list = useOtherIncome();
+  const canCreate = usePermission("coop.income");
   const create = useCreateOtherIncome();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -1004,6 +1017,7 @@ function OtherIncomeTab() {
 
   return (
     <ListCard
+      canCreate={canCreate}
       title="Other income"
       onNew={() => setOpen(true)}
       isLoading={list.isLoading}
@@ -1104,6 +1118,7 @@ function OtherIncomeTab() {
 
 function BigBrotherTab() {
   const list = useBigBrother();
+  const canCreate = usePermission("coop.big_brother");
   const create = useCreateBigBrother();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -1149,6 +1164,7 @@ function BigBrotherTab() {
 
   return (
     <ListCard
+      canCreate={canCreate}
       title="Big Brother (external capital)"
       onNew={() => setOpen(true)}
       isLoading={list.isLoading}
@@ -1276,12 +1292,21 @@ function BigBrotherTab() {
 function ListCard({
   title,
   onNew,
+  canCreate,
   children,
   isLoading,
   empty,
 }: {
   title: string;
   onNew: () => void;
+  /**
+   * Whether the viewer may add a row. Each tab writes to a DIFFERENT
+   * permission — contributions to `coop.contribute`, expenses to
+   * `coop.expense`, and so on — so this is passed in rather than
+   * checked here; `coop.read` alone opens the page and grants none of
+   * them.
+   */
+  canCreate: boolean;
   children: ReactNode;
   isLoading: boolean;
   empty: boolean;
@@ -1299,10 +1324,12 @@ function ListCard({
           <Banknote className="h-4 w-4" />
           {title}
         </CardTitle>
-        <Button onClick={onNew}>
-          <Plus className="h-3 w-3" />
-          New
-        </Button>
+        {canCreate && (
+          <Button onClick={onNew}>
+            <Plus className="h-3 w-3" />
+            New
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -1311,8 +1338,16 @@ function ListCard({
           <>
             {empty && (
               <p className="text-sm text-fg-muted mb-3">
-                Nothing yet — click <strong>New</strong> to record the first
-                row.
+                {canCreate ? (
+                  <>
+                    Nothing yet — click <strong>New</strong> to record the first
+                    row.
+                  </>
+                ) : (
+                  // Don't point a read-only viewer at a button they
+                  // cannot see.
+                  "Nothing recorded yet."
+                )}
               </p>
             )}
             {children}

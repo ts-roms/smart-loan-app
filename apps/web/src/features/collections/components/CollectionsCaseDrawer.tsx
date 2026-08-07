@@ -51,6 +51,8 @@ import { Link } from "react-router-dom";
 
 import { LoanStatusBadge } from "../../loans";
 
+import { usePermission } from "../../../hooks/use-permission";
+
 const NOTE_TYPES: Array<{
   value: CollectionNoteType;
   label: string;
@@ -100,6 +102,17 @@ export function CollectionsCaseLink({
 function CollectionsCaseInspector({ id }: { id: string }) {
   const loan = useLoan(id);
   const notes = useLoanNotes(id);
+  /*
+   * `collections.read` opens this drawer; noting a call, recording a
+   * promise and resolving one all need `collections.note`. ACCOUNTANT
+   * holds the first and not the second — so an accountant reviewing a
+   * delinquent account saw three write controls that answer 403.
+   *
+   * One key for all three because the server uses one: the note, the
+   * promise and the honored/broken buttons are the same `note`
+   * preHandler in collections.routes.
+   */
+  const canNote = usePermission("collections.note");
   const promises = useLoanPromises(id);
   const addNote = useAddNote();
   const createPromise = useCreatePromise();
@@ -265,22 +278,24 @@ function CollectionsCaseInspector({ id }: { id: string }) {
                         by {formatDate(p.promisedDate)}
                       </div>
                     </div>
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onResolve(p.id, "HONORED")}
-                      >
-                        Honored
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onResolve(p.id, "BROKEN")}
-                      >
-                        Broken
-                      </Button>
-                    </div>
+                    {canNote && (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onResolve(p.id, "HONORED")}
+                        >
+                          Honored
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onResolve(p.id, "BROKEN")}
+                        >
+                          Broken
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   {p.note && <div className="mt-1 text-fg-muted">{p.note}</div>}
                 </div>
@@ -290,46 +305,48 @@ function CollectionsCaseInspector({ id }: { id: string }) {
         )}
 
         {/* New PTP */}
-        <div className="rounded-md border border-default bg-surface-2 p-2.5">
-          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2 flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            Record new promise
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label>Amount</Label>
+        {canNote && (
+          <div className="rounded-md border border-default bg-surface-2 p-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2 flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              Record new promise
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Amount</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  value={ptpAmount || ""}
+                  onChange={(e) => setPtpAmount(Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <Label>By date</Label>
+                <DatePicker value={ptpDate} onChange={setPtpDate} />
+              </div>
+            </div>
+            <div className="mt-2">
+              <Label>Note (optional)</Label>
               <Input
-                type="number"
-                step="0.01"
-                min={0}
-                value={ptpAmount || ""}
-                onChange={(e) => setPtpAmount(Number(e.target.value))}
+                value={ptpNote}
+                onChange={(e) => setPtpNote(e.target.value)}
+                placeholder="Context, channel, …"
               />
             </div>
-            <div>
-              <Label>By date</Label>
-              <DatePicker value={ptpDate} onChange={setPtpDate} />
+            <div className="mt-2 flex justify-end">
+              <Button
+                size="sm"
+                onClick={onCreatePromise}
+                loading={createPromise.isPending}
+                disabled={ptpAmount <= 0}
+              >
+                Record promise
+              </Button>
             </div>
           </div>
-          <div className="mt-2">
-            <Label>Note (optional)</Label>
-            <Input
-              value={ptpNote}
-              onChange={(e) => setPtpNote(e.target.value)}
-              placeholder="Context, channel, …"
-            />
-          </div>
-          <div className="mt-2 flex justify-end">
-            <Button
-              size="sm"
-              onClick={onCreatePromise}
-              loading={createPromise.isPending}
-              disabled={ptpAmount <= 0}
-            >
-              Record promise
-            </Button>
-          </div>
-        </div>
+        )}
 
         {/* Recent payments */}
         {lastPayments.length > 0 && (
@@ -389,50 +406,52 @@ function CollectionsCaseInspector({ id }: { id: string }) {
         </div>
 
         {/* New note */}
-        <div className="rounded-md border border-default bg-surface-2 p-2.5">
-          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2 flex items-center gap-1">
-            <StickyNote className="h-3 w-3" />
-            Add note
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <Label>Channel</Label>
-              <Select
-                value={noteType}
-                onValueChange={(v) => setNoteType(v as CollectionNoteType)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {NOTE_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2">
-              <Label>Body</Label>
-              <Input
-                value={noteBody}
-                onChange={(e) => setNoteBody(e.target.value)}
-                placeholder="Customer answered, will pay Friday…"
-              />
-            </div>
-          </div>
-          <div className="mt-2 flex justify-end">
-            <Button
-              size="sm"
-              onClick={onAddNote}
-              loading={addNote.isPending}
-              disabled={!noteBody.trim()}
-            >
+        {canNote && (
+          <div className="rounded-md border border-default bg-surface-2 p-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2 flex items-center gap-1">
+              <StickyNote className="h-3 w-3" />
               Add note
-            </Button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label>Channel</Label>
+                <Select
+                  value={noteType}
+                  onValueChange={(v) => setNoteType(v as CollectionNoteType)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {NOTE_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2">
+                <Label>Body</Label>
+                <Input
+                  value={noteBody}
+                  onChange={(e) => setNoteBody(e.target.value)}
+                  placeholder="Customer answered, will pay Friday…"
+                />
+              </div>
+            </div>
+            <div className="mt-2 flex justify-end">
+              <Button
+                size="sm"
+                onClick={onAddNote}
+                loading={addNote.isPending}
+                disabled={!noteBody.trim()}
+              >
+                Add note
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </DrawerBody>
 
       <DrawerFooter>
