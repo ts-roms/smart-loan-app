@@ -15,7 +15,7 @@ import {
 import { ListChecks, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * Permission catalog admin. Lists every permission grouped by
@@ -38,8 +38,7 @@ export function PermissionCatalogPanel() {
   const setStatus = useSetPermissionStatus();
   const toast = useToast();
   const confirm = useConfirm();
-  const { user } = useAuth();
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = usePermission("admin.roles");
 
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | PermissionStatus>("all");

@@ -21,6 +21,8 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../../providers/auth";
 import { findArticle, TourButton } from "../../help";
 
+import { usePermission } from "../../../hooks/use-permission";
+
 /**
  * Bulk staff onboarding. CSV-driven: each row spawns one User row plus
  * optional secondary role assignments. Mirrors the bulk customer page's
@@ -56,7 +58,7 @@ export function BulkUsersPage() {
   // when the operator includes long comment headers.
   const MAX_CSV_BYTES = 2 * 1024 * 1024;
 
-  const canSubmit = user?.role === "ADMIN";
+  const canSubmit = usePermission("admin.users");
 
   const parsed = useMemo(() => parseCsv(raw), [raw]);
 

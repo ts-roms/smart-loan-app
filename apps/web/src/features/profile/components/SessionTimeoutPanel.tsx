@@ -19,6 +19,8 @@ import { Clock, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../providers/auth";
 
+import { usePermission } from "../../../hooks/use-permission";
+
 /**
  * Settings panel for the idle-then-logout policy.
  *
@@ -38,7 +40,7 @@ import { useAuth } from "../../../providers/auth";
  */
 export function SessionTimeoutPanel() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = usePermission("admin.system_config");
   const effective = useEffectiveIdlePolicy();
 
   return (

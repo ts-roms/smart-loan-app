@@ -36,6 +36,8 @@ import { findArticle, TourButton } from "../../help";
 import { PermissionCatalogPanel } from "../components/PermissionCatalogPanel";
 import { PermissionHoldersPanel } from "../components/PermissionHoldersPanel";
 
+import { usePermission } from "../../../hooks/use-permission";
+
 /**
  * Roles + permission matrix admin. Each role is a named collection of
  * permission keys; the matrix is grouped by category for legibility.
@@ -49,7 +51,7 @@ export function RolesPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { user } = useAuth();
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = usePermission("admin.roles");
   const [editing, setEditing] = useState<RoleWithPermissions | null>(null);
   const [creating, setCreating] = useState(false);
 

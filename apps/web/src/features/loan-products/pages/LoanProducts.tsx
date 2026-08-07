@@ -43,7 +43,7 @@ import { ApprovalChainDialog } from "../components/ApprovalChainDialog";
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 const TIERS: CreditTier[] = ["A", "B", "C", "D", "F"];
 
@@ -217,8 +217,7 @@ export function LoanProductsPage() {
   const remove = useDeleteLoanProduct();
   const toast = useToast();
   const confirm = useConfirm();
-  const { user } = useAuth();
-  const canEdit = user?.role === "ADMIN";
+  const canEdit = usePermission("products.write");
 
   const [editing, setEditing] = useState<LoanProduct | null>(null);
   const [creating, setCreating] = useState(false);

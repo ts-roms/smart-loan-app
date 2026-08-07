@@ -36,7 +36,7 @@ import {
 import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 const FIELDS = [
   "productCode",
@@ -69,8 +69,7 @@ export function DecisionRulesPage() {
   const remove = useDeleteDecisionRule();
   const toast = useToast();
   const confirm = useConfirm();
-  const { user } = useAuth();
-  const canEdit = user?.role === "ADMIN";
+  const canEdit = usePermission("admin.decision_rules");
   const [editing, setEditing] = useState<DecisionRule | null>(null);
   const [creating, setCreating] = useState(false);
 

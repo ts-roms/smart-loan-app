@@ -17,7 +17,7 @@ import { FileSpreadsheet, Trash2, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * Bulk customer import. The CSV format matches the JSON the API
@@ -36,7 +36,6 @@ import { useAuth } from "../../../providers/auth";
  * and resubmit.
  */
 export function BulkCustomersPage() {
-  const { user } = useAuth();
   const toast = useToast();
   const bulk = useBulkImportCustomers();
   const [raw, setRaw] = useState(TEMPLATE);
@@ -51,7 +50,7 @@ export function BulkCustomersPage() {
   // mass-uploads of unrelated spreadsheets.
   const MAX_CSV_BYTES = 5 * 1024 * 1024;
 
-  const canSubmit = user?.role === "ADMIN" || user?.role === "LOAN_OFFICER";
+  const canSubmit = usePermission("customers.write");
 
   const parsed = useMemo(() => parseCsv(raw), [raw]);
 

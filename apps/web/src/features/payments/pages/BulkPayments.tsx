@@ -16,6 +16,8 @@ import { useMemo, useState } from "react";
 
 import { useAuth } from "../../../providers/auth";
 
+import { usePermission } from "../../../hooks/use-permission";
+
 /**
  * Bulk payment recording. The CSV format is the same shape the API expects:
  *
@@ -39,7 +41,7 @@ export function BulkPaymentsPage() {
   const [results, setResults] = useState<BulkPaymentRowResult[] | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
 
-  const canSubmit = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canSubmit = usePermission("payments.bulk");
 
   const parsed = useMemo(() => parseCsv(raw), [raw]);
 

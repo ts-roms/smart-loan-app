@@ -13,9 +13,10 @@ import { Banknote, FileSpreadsheet, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { useAuth } from "../../../providers/auth";
 import { ImportStatementDialog } from "../components/ImportStatementDialog";
 import { findArticle, TourButton } from "../../help";
+
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * Bank reconciliation landing — list of imported statements and an
@@ -24,8 +25,7 @@ import { findArticle, TourButton } from "../../help";
  */
 export function BankStatementsPage() {
   const list = useBankStatements();
-  const { user } = useAuth();
-  const canImport = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canImport = usePermission("accounting.post_journal");
   const [importing, setImporting] = useState(false);
 
   return (

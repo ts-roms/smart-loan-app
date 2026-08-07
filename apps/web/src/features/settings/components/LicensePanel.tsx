@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * License activation + status panel. Admin-only by design — the
@@ -43,8 +43,7 @@ export function LicensePanel() {
   const deactivate = useDeactivateLicense();
   const toast = useToast();
   const confirm = useConfirm();
-  const { user } = useAuth();
-  const canManage = user?.role === "ADMIN";
+  const canManage = usePermission("admin.roles");
 
   const [tokenInput, setTokenInput] = useState("");
 

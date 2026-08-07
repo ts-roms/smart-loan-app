@@ -31,7 +31,6 @@ import { formatMoney } from "@loan/shared-utils";
 import { MapPin, PhoneCall, RotateCw, UserCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { useAuth } from "../../../providers/auth";
 // Direct import (not via ../../customers barrel) to avoid Rollup's
 // cross-chunk circular-dep warning: each feature lazy-loads into its
 // own chunk, and the customers barrel re-exporting a component that
@@ -39,6 +38,8 @@ import { useAuth } from "../../../providers/auth";
 import { CustomerSummaryLink } from "../../customers/components/CustomerSummaryDrawer";
 import { CollectionsCaseLink } from "../components/CollectionsCaseDrawer";
 import { findArticle, TourButton } from "../../help";
+
+import { usePermission } from "../../../hooks/use-permission";
 
 const TYPE_LABELS: Record<string, string> = {
   SALARY: "Salary",
@@ -73,8 +74,7 @@ export function CollectionsPage() {
   const queue = useOverdueQueue(scope);
   const accrue = useAccrueLateFees();
   const toast = useToast();
-  const { user } = useAuth();
-  const canAccrue = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canAccrue = usePermission("collections.accrue");
 
   // Assignment is gated on the real permission, not the role enum — a
   // custom supervisor role built at /roles gets the checkboxes too.

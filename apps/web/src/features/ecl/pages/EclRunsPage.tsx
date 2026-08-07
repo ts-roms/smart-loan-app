@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * IFRS 9 / PFRS 9 ECL provisioning.
@@ -38,8 +38,7 @@ export function EclRunsPage() {
   const runEcl = useRunEcl();
   const toast = useToast();
   const confirm = useConfirm();
-  const { user } = useAuth();
-  const canRun = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canRun = usePermission("accounting.accrue");
   const [lastResult, setLastResult] = useState<EclRunResult | null>(null);
 
   const onRun = async () => {

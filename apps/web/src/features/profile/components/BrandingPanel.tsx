@@ -21,6 +21,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../providers/auth";
 
+import { usePermission } from "../../../hooks/use-permission";
+
 /**
  * Branding settings — company name, logo, contact details. Admin-only.
  *
@@ -34,7 +36,7 @@ import { useAuth } from "../../../providers/auth";
  */
 export function BrandingPanel() {
   const { user } = useAuth();
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = usePermission("admin.system_config");
   const branding = useBranding();
   const update = useUpdateBranding();
   const upload = useUpload();

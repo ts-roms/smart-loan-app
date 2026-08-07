@@ -20,7 +20,7 @@ import { formatDateTime } from "@loan/shared-utils";
 import { Play, Settings } from "lucide-react";
 import { useState } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 /**
  * Scheduled jobs admin. Lists every registered job with its cron, enabled
@@ -33,13 +33,14 @@ export function JobsPage() {
   const setEnabled = useSetJobEnabled();
   const updateCron = useUpdateJobCron();
   const toast = useToast();
-  const { user } = useAuth();
   const [selected, setSelected] = useState<string | null>(null);
   const [editingCron, setEditingCron] = useState<string | null>(null);
   const [cronDraft, setCronDraft] = useState("");
 
-  const canAdmin = user?.role === "ADMIN";
-  const canRun = canAdmin || user?.role === "ACCOUNTANT";
+  // Two keys, because the server has two: editing a job's cron needs
+  // `jobs.configure`, firing one needs `jobs.run`.
+  const canAdmin = usePermission("jobs.configure");
+  const canRun = usePermission("jobs.run");
 
   return (
     <div className="space-y-4">

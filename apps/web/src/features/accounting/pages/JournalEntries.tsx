@@ -36,7 +36,7 @@ import { Plus, RotateCcw, Trash2 } from "lucide-react";
 import { JournalEntryLink } from "../components/JournalEntryDrawer";
 import { useState, type FormEvent } from "react";
 
-import { useAuth } from "../../../providers/auth";
+import { usePermission } from "../../../hooks/use-permission";
 
 interface LineDraft {
   accountCode: string;
@@ -57,8 +57,7 @@ export function JournalEntriesPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const askPrompt = usePrompt();
-  const { user } = useAuth();
-  const canPost = user?.role === "ADMIN" || user?.role === "ACCOUNTANT";
+  const canPost = usePermission("accounting.post_journal");
   const [posting, setPosting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
