@@ -1,4 +1,10 @@
-import { resolvePaging, toPage, type PrismaClient } from "@loan/db";
+import {
+  resolvePaging,
+  toPage,
+  tokenizedWhere,
+  contains,
+  type PrismaClient,
+} from "@loan/db";
 
 import type { AuditListQuery } from "./schemas";
 
@@ -21,11 +27,34 @@ export class AuditService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async list(query: AuditListQuery) {
+    /*
+     * The actor search runs HERE, not in the browser.
+     *
+     * It used to filter the loaded page client-side, which meant a name
+     * only turned up if it happened to appear in the 25 rows already on
+     * screen — so "what did Maria do last quarter" answered "nothing"
+     * whenever Maria was on page 9. On an audit log that is not a
+     * cosmetic limitation; it is a wrong answer to the question the
+     * screen exists to ask.
+     *
+     * Tokenized for the same reason the customer and loan lists are:
+     * people type "maria cruz" and "cruz maria", and neither is a
+     * substring of `name` or of `email`. Every token has to match
+     * somewhere on the actor, so both orders find her and neither
+     * returns every other Maria.
+     */
+    const actorMatch = tokenizedWhere(query.actor, (token) => [
+      { name: contains(token) },
+      { email: contains(token) },
+    ]);
+
     const where = {
       actorId: query.actorId,
       action: query.action,
       targetType: query.targetType,
       targetId: query.targetId,
+      // Undefined when no search was typed, which Prisma drops.
+      actor: actorMatch,
       createdAt: {
         gte: query.from ? new Date(query.from) : undefined,
         lte: query.to ? new Date(query.to) : undefined,

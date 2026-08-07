@@ -26,6 +26,7 @@ export function useAuditEvents(
     queryFn: () => {
       const params = new URLSearchParams();
       if (filter.actorId) params.set("actorId", filter.actorId);
+      if (filter.actor) params.set("actor", filter.actor);
       if (filter.action) params.set("action", filter.action);
       if (filter.targetType) params.set("targetType", filter.targetType);
       if (filter.targetId) params.set("targetId", filter.targetId);

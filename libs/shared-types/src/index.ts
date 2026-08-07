@@ -2184,6 +2184,8 @@ export interface AuditEventRow {
 
 export interface AuditEventFilter extends PageQuery {
   actorId?: string;
+  /** Free text over the actor's name and email. Tokenized server-side. */
+  actor?: string;
   action?: string;
   targetType?: string;
   targetId?: string;

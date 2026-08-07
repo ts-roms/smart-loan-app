@@ -21,6 +21,8 @@ import {
 import { ScrollText, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useDebouncedValue } from "../../../lib/use-debounced-value";
+
 /**
  * The audit log, as a page.
  *
@@ -33,6 +35,11 @@ import { useEffect, useState } from "react";
  *
  * Append-only and read-only. Entries are written by the routes that
  * perform the privileged actions, via `AuditLogRepository.record()`.
+ *
+ * Both filters run on the server. The actor search briefly did not, and
+ * filtering the loaded page in the browser meant a name only turned up
+ * if it happened to sit in the 25 rows on screen — so "what did Maria
+ * do last quarter" answered "nothing" whenever Maria was on page 9.
  */
 
 /** Kept in step with the server's `AUDIT_PAGING.defaultPageSize`. */
@@ -43,39 +50,31 @@ export function AuditLogPage() {
   const [actorSearch, setActorSearch] = useState("");
   const [page, setPage] = useState(1);
 
+  /*
+   * Debounced, because every keystroke is a query against a table that
+   * only grows. The other list pages in this app search the same way.
+   */
+  const actor = useDebouncedValue(actorSearch.trim()) || undefined;
+
   const actions = useAuditActions();
   const events = useAuditEvents({
     action: actionFilter === "ALL" ? undefined : actionFilter,
+    actor,
     page,
     pageSize: PAGE_SIZE,
   });
 
   /*
-   * Narrowing the filter has to send you back to page 1. Staying on
+   * Narrowing either filter has to send you back to page 1. Staying on
    * page 7 of a result that now has two pages shows an empty table over
    * a real total, which reads as "nothing matched" when the truth is
    * "you are past the end".
    */
-  useEffect(() => setPage(1), [actionFilter]);
+  useEffect(() => setPage(1), [actionFilter, actor]);
 
   const data = events.data;
   const rows = data?.rows ?? [];
-
-  /*
-   * The actor search stays client-side, over the current page only, and
-   * the readout below says so. Filtering a page in the browser and
-   * captioning it with the server's total would claim a search of the
-   * whole log — the one thing this screen must not get wrong. Give it a
-   * server-side `actorId` filter when it needs to search properly.
-   */
-  const needle = actorSearch.trim().toLowerCase();
-  const visible = needle
-    ? rows.filter(
-        (e) =>
-          e.actorName?.toLowerCase().includes(needle) ||
-          e.actorEmail?.toLowerCase().includes(needle),
-      )
-    : rows;
+  const filtered = Boolean(actor) || actionFilter !== "ALL";
 
   return (
     <Card>
@@ -108,7 +107,7 @@ export function AuditLogPage() {
             </Select>
           </div>
           <div>
-            <Label>Actor on this page</Label>
+            <Label>Actor</Label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-fg-subtle" />
               <Input
@@ -123,11 +122,11 @@ export function AuditLogPage() {
 
         {events.isLoading ? (
           <SkeletonCard />
-        ) : visible.length === 0 ? (
+        ) : rows.length === 0 ? (
           <p className="py-8 text-center text-sm text-fg-muted">
-            {needle
-              ? "Nobody on this page matches that name. Clear it to see the page, or move through the pages."
-              : "No events match the current filter."}
+            {filtered
+              ? "No events match these filters."
+              : "Nothing has been recorded yet."}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -142,7 +141,7 @@ export function AuditLogPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-default">
-                {visible.map((e) => (
+                {rows.map((e) => (
                   <AuditRow key={e.id} event={e} />
                 ))}
               </tbody>
@@ -151,23 +150,20 @@ export function AuditLogPage() {
         )}
 
         {data && (
-          <>
-            <Pagination
-              page={data.page}
-              totalPages={data.totalPages}
-              total={data.total}
-              pageSize={data.pageSize}
-              onPageChange={setPage}
-              noun="event"
-            />
-            {needle && (
-              <p className="text-[11px] text-fg-subtle">
-                Showing {visible.length} of {rows.length} on this page that
-                match “{actorSearch.trim()}”. The count above is the whole log,
-                unfiltered by name.
-              </p>
-            )}
-          </>
+          /*
+           * `total` is now the count of everything MATCHING, across all
+           * pages — the search runs server-side, so the readout and the
+           * table finally describe the same set. It used to caption a
+           * browser-filtered page with the unfiltered total.
+           */
+          <Pagination
+            page={data.page}
+            totalPages={data.totalPages}
+            total={data.total}
+            pageSize={data.pageSize}
+            onPageChange={setPage}
+            noun="event"
+          />
         )}
       </CardContent>
     </Card>

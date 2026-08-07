@@ -7,6 +7,12 @@ import { z } from "zod";
  */
 export const listQuerySchema = z.object({
   actorId: z.string().uuid().optional(),
+  /**
+   * Free text over the actor's name and email. Separate from `actorId`,
+   * which pins an exact person: an investigator usually knows the name
+   * they are looking for, not the uuid behind it.
+   */
+  actor: z.string().trim().min(1).max(120).optional(),
   action: z.string().min(1).max(120).optional(),
   targetType: z.string().min(1).max(60).optional(),
   targetId: z.string().min(1).max(120).optional(),
