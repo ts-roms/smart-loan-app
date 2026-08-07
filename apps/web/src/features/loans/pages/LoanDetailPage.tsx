@@ -38,6 +38,7 @@ import {
   CreditCard,
   Download,
   ExternalLink,
+  FileQuestion,
   FileText,
   Link2,
   MessageSquare,
@@ -150,8 +151,30 @@ export function LoanDetailPage() {
   useCrumbTitle(loan.data?.number ?? null);
 
   if (loan.isLoading) return <SkeletonCard />;
-  if (!loan.data)
-    return <p className="text-sm text-fg-muted">Loan not found.</p>;
+  if (!loan.data) {
+    /*
+     * A dead end, and it is reachable from a link the app sent itself:
+     * notifications store the loan's id, and nothing stops the loan
+     * being removed afterwards. A bare "Loan not found." left the
+     * officer on a blank page with a truncated uuid in the breadcrumb
+     * and no way onward but the back button.
+     */
+    return (
+      <Card>
+        <CardContent className="py-10 text-center">
+          <FileQuestion className="mx-auto h-8 w-8 text-fg-subtle" />
+          <p className="mt-3 text-sm font-medium">This loan no longer exists</p>
+          <p className="mt-1 text-xs text-fg-muted">
+            It may have been removed since the link was created.
+          </p>
+          <p className="mt-2 font-mono text-[11px] text-fg-subtle">{id}</p>
+          <Button asChild variant="outline" size="sm" className="mt-4">
+            <Link to="/loans">Back to all loans</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
   const l = loan.data;
 
   const canDecide = canDecidePerm;

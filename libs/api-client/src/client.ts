@@ -48,7 +48,29 @@ export class ApiClient {
   /** In-flight refresh promise so concurrent 401s share one /auth/refresh call. */
   private refreshing: Promise<string | null> | null = null;
 
-  constructor(private readonly opts: ApiClientOptions) {}
+  constructor(private opts: ApiClientOptions) {}
+
+  /**
+   * Point the client at new options WITHOUT replacing the instance.
+   *
+   * The single-flight guard above is per-instance, so it only holds if
+   * there is exactly one instance. `configureApiClient` used to build a
+   * fresh `ApiClient` on every call and it is called more than once —
+   * eagerly during the provider's first render, then again from its
+   * mount effect, which React StrictMode runs twice in development.
+   *
+   * Each new instance arrived with an empty `refreshing` slot while the
+   * previous one still had a refresh in flight, so two `/auth/refresh`
+   * calls went out carrying the SAME refresh token. The first rotated
+   * it; the second presented a token already revoked, which is the
+   * server's definition of theft. It logged
+   * REFRESH_TOKEN_REUSE_DETECTED and revoked every token the user had —
+   * on a brand-new account, 2.4 seconds after signup, for no reason
+   * beyond the client having two of itself.
+   */
+  reconfigure(opts: ApiClientOptions): void {
+    this.opts = opts;
+  }
 
   async request<T>(
     path: string,
@@ -162,6 +184,13 @@ function safeParse(text: string): unknown {
 let singleton: ApiClient | null = null;
 
 export function configureApiClient(opts: ApiClientOptions): ApiClient {
+  // Reuse, never replace. See `ApiClient.reconfigure` — a second
+  // instance means a second single-flight slot, which means two
+  // concurrent refreshes with one token and a false theft alarm.
+  if (singleton) {
+    singleton.reconfigure(opts);
+    return singleton;
+  }
   singleton = new ApiClient(opts);
   return singleton;
 }

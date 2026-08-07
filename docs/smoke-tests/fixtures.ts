@@ -169,6 +169,20 @@ async function main() {
           where: { id: { in: entryIds } },
         });
       }
+
+      /*
+       * And the notifications, for the same reason and with the same
+       * root cause: `Notification.refId` is another plain string with no
+       * foreign key, so a notification outlives the loan it was raised
+       * about and its link leads to "this loan no longer exists".
+       *
+       * Every loan notification in this repo's dev database — all
+       * sixteen of them — pointed at a loan a previous reseed had
+       * deleted. Clicking the bell was guaranteed to dead-end.
+       */
+      await prisma.notification.deleteMany({
+        where: { refType: "LoanApplication", refId: { in: refIds } },
+      });
     }
     await prisma.loanApplication.deleteMany({
       where: { customerId: { in: fixtureCustomerIds } },
