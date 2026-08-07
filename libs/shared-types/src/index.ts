@@ -812,6 +812,13 @@ export interface Notification {
   error: string | null;
   refType: string | null;
   refId: string | null;
+  /**
+   * The human reference the message text quotes — "LN-2026-000006".
+   * Null on rows written before this existed, and on notifications
+   * about things with no human reference. See `notificationLink`, which
+   * prefers it over `refId` so the link says what the message says.
+   */
+  refNumber: string | null;
   customerId: string | null;
   createdAt: string;
   sentAt: string | null;

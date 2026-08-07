@@ -1699,6 +1699,18 @@ model Notification {
   /// Optional pointer to the entity the notification refers to.
   refType     String?
   refId       String?
+  /// The HUMAN reference the rendered message quotes — "LN-2026-000006".
+  ///
+  /// The body says "Loan disbursed · LN-2026-000006" and the link used
+  /// to go to /loans/<uuid>, so one notification named the same loan two
+  /// different ways and the breadcrumb read "9f31f4ef-cd6…". Routes
+  /// accept either form, so storing what the message already says makes
+  /// the text, the URL and the crumb agree.
+  ///
+  /// For a row ABOUT a loan but keyed on something else — an instalment,
+  /// a lease, an annual document — this is the LOAN's number, because
+  /// that is what the message names and where the reader wants to land.
+  refNumber   String?
   /// Optional customer link for filtering.
   customerId  String?
 

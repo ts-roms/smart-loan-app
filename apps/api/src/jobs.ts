@@ -169,6 +169,7 @@ async function sendDueSoonReminders(
         },
         refType: "LoanSchedule",
         refId: inst.id,
+        refNumber: inst.loan.number,
         customerId: c.id,
       });
       sent += 1;
@@ -186,6 +187,7 @@ async function sendDueSoonReminders(
         },
         refType: "LoanSchedule",
         refId: inst.id,
+        refNumber: inst.loan.number,
         customerId: c.id,
       });
       sent += 1;
@@ -232,6 +234,7 @@ async function sendOverdueReminders(
         },
         refType: "LoanSchedule",
         refId: inst.id,
+        refNumber: inst.loan.number,
         customerId: c.id,
       });
       sent += 1;
@@ -249,6 +252,7 @@ async function sendOverdueReminders(
         },
         refType: "LoanSchedule",
         refId: inst.id,
+        refNumber: inst.loan.number,
         customerId: c.id,
       });
       sent += 1;
@@ -346,6 +350,7 @@ async function sendAnnualDocReminders(
         data,
         refType: "AnnualDocument",
         refId: doc.id,
+        refNumber: doc.loan.number,
         customerId: customer.id,
       });
       sent += 1;
@@ -358,6 +363,7 @@ async function sendAnnualDocReminders(
         data,
         refType: "AnnualDocument",
         refId: doc.id,
+        refNumber: doc.loan.number,
         customerId: customer.id,
       });
       sent += 1;
@@ -435,6 +441,7 @@ async function sendLeaseEndOfTermNotices(
         data,
         refType: "LeaseAgreement",
         refId: l.id,
+        refNumber: l.loan.number,
         customerId: c.id,
       });
       sent += 1;
@@ -447,6 +454,7 @@ async function sendLeaseEndOfTermNotices(
         data,
         refType: "LeaseAgreement",
         refId: l.id,
+        refNumber: l.loan.number,
         customerId: c.id,
       });
       sent += 1;
@@ -510,6 +518,7 @@ async function sendLeaseMaintenanceReminders(
         data,
         refType: "LeaseAgreement",
         refId: l.id,
+        refNumber: l.loan.number,
         customerId: c.id,
       });
       sent += 1;
@@ -522,6 +531,7 @@ async function sendLeaseMaintenanceReminders(
         data,
         refType: "LeaseAgreement",
         refId: l.id,
+        refNumber: l.loan.number,
         customerId: c.id,
       });
       sent += 1;
@@ -591,6 +601,7 @@ async function sendLeasePullOutWarnings(
         data,
         refType: "LeaseAgreement",
         refId: l.id,
+        refNumber: l.loan.number,
         customerId: c.id,
       });
       sent += 1;
@@ -603,6 +614,7 @@ async function sendLeasePullOutWarnings(
         data,
         refType: "LeaseAgreement",
         refId: l.id,
+        refNumber: l.loan.number,
         customerId: c.id,
       });
       sent += 1;

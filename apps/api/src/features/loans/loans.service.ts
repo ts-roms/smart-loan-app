@@ -694,6 +694,7 @@ export class LoanWorkflowService {
           },
           refType: "LoanApplication",
           refId: loan.id,
+          refNumber: loan.number,
           customerId: c.id,
         });
       }

@@ -52,6 +52,9 @@ export async function sendCoMakerInvite(args: {
   const loan = await prisma.loanApplication.findUnique({
     where: { id: coMaker.loanId },
     select: {
+      // The number, so the invite links to the loan it is about rather
+      // than to the borrower's profile. See `notificationLink`.
+      number: true,
       principal: true,
       customer: { select: { id: true, firstName: true, lastName: true } },
     },
@@ -82,6 +85,7 @@ export async function sendCoMakerInvite(args: {
       },
       refType: "CoMaker",
       refId: coMaker.id,
+      refNumber: loan?.number,
       // Linked to the BORROWER's customer record, not the co-maker —
       // a co-maker isn't a customer, and this belongs on the timeline
       // of the loan it concerns.

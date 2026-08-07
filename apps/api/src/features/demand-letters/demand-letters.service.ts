@@ -274,6 +274,7 @@ export class DemandLetterService {
         data,
         refType: "DemandLetter",
         refId: full.id,
+        refNumber: full.loan.number,
         customerId: c.id,
       });
     }
