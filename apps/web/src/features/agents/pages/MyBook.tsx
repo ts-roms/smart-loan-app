@@ -41,9 +41,7 @@ export function MyBookPage() {
     return (
       <Card>
         <CardContent className="py-8 text-center">
-          <p className="text-sm text-fg-muted">
-            {(book.error as Error).message}
-          </p>
+          <p className="text-sm text-fg-muted">{book.error.message}</p>
         </CardContent>
       </Card>
     );

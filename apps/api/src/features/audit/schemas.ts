@@ -12,6 +12,14 @@ export const listQuerySchema = z.object({
   targetId: z.string().min(1).max(120).optional(),
   from: z.string().optional(),
   to: z.string().optional(),
+  /**
+   * Retained for callers that just want "the newest N" — the actions
+   * dropdown and any script hitting this endpoint directly. Ignored
+   * when `page` is present, because a caller asking for a page has
+   * already said how many rows it wants.
+   */
   take: z.coerce.number().int().positive().max(500).optional(),
+  page: z.coerce.number().int().positive().optional(),
+  pageSize: z.coerce.number().int().positive().max(200).optional(),
 });
 export type AuditListQuery = z.infer<typeof listQuerySchema>;

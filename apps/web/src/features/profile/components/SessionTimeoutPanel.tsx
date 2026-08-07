@@ -17,8 +17,6 @@ import {
 } from "@loan/ui";
 import { Clock, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAuth } from "../../../providers/auth";
-
 import { usePermission } from "../../../hooks/use-permission";
 
 /**
@@ -39,7 +37,6 @@ import { usePermission } from "../../../hooks/use-permission";
  * to the saved value is unambiguous.
  */
 export function SessionTimeoutPanel() {
-  const { user } = useAuth();
   const isAdmin = usePermission("admin.system_config");
   const effective = useEffectiveIdlePolicy();
 

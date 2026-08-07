@@ -84,7 +84,7 @@ model User {
   /// column on User — an index would be paid on every heartbeat to
   /// serve a filtered query that does not exist yet. Add one with the
   /// query that needs it.
-  lastSeenAt        DateTime?
+  lastSeenAt DateTime?
 
   // What this user did across the system (auditable trail)
   kycSubmissions            KycSubmission[]        @relation("KycSubmittedBy")
@@ -139,11 +139,11 @@ model User {
   customerId String?   @unique
 
   /// The agent profile for this login, when the user is a field agent.
-  agent            Agent?  @relation("AgentLogin")
-  agentsCreated    Agent[] @relation("AgentCreatedBy")
-  loansAgentAssigned LoanApplication[] @relation("LoanAgentAssignedBy")
-  agentPayoutsCreated AgentPayout[]    @relation("AgentPayoutCreatedBy")
-  agentPayoutsVoided  AgentPayout[]    @relation("AgentPayoutVoidedBy")
+  agent               Agent?            @relation("AgentLogin")
+  agentsCreated       Agent[]           @relation("AgentCreatedBy")
+  loansAgentAssigned  LoanApplication[] @relation("LoanAgentAssignedBy")
+  agentPayoutsCreated AgentPayout[]     @relation("AgentPayoutCreatedBy")
+  agentPayoutsVoided  AgentPayout[]     @relation("AgentPayoutVoidedBy")
 }
 
 // ─── Field agents (loan originators paid on commission) ─────────────────────
@@ -186,7 +186,7 @@ model Agent {
   territory String?
   notes     String?
 
-  active      Boolean   @default(true)
+  active        Boolean   @default(true)
   /// Set when `active` goes false. An inactive agent cannot be assigned
   /// to new applications but keeps every loan already assigned.
   deactivatedAt DateTime?
@@ -241,10 +241,10 @@ model AgentPayout {
   /// Voided rather than deleted. A payout that left the ledger is
   /// reversed with a mirror entry, never erased — the original and its
   /// reversal both stand, which is what an audit expects to find.
-  voidedAt     DateTime?
-  voidReason   String?
-  voidedById   String?
-  voidedBy     User?     @relation("AgentPayoutVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  voidedAt   DateTime?
+  voidReason String?
+  voidedById String?
+  voidedBy   User?     @relation("AgentPayoutVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
 
   items AgentPayoutItem[]
 
@@ -252,7 +252,7 @@ model AgentPayout {
 }
 
 model AgentPayoutItem {
-  id       String @id @default(uuid())
+  id       String      @id @default(uuid())
   payoutId String
   payout   AgentPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
 
@@ -266,15 +266,13 @@ model AgentPayoutItem {
   /// the loan row is later corrected by hand.
   amount Decimal @db.Decimal(14, 2)
 
-  /*
+  /**
    * The constraint that makes double payment impossible.
-   *
    * Not merely an index: without UNIQUE, two payout runs started at the
    * same moment both read "unpaid" and both insert, and the agent is
    * paid twice for one loan while account 2500 goes negative. A
    * transaction alone would not catch it — they touch no common row
    * until this one.
-   *
    * Scoped to the loan and not to (payout, loan), because the point is
    * one payment per loan ACROSS all payouts, not per payout. Voiding
    * cascades the items away, which is what frees the loan to be paid
@@ -1037,8 +1035,8 @@ model LoanApplication {
   /// in cash, and reconstructing it later from a schedule that has
   /// since been marked paid is guesswork. The amount handed over is
   /// `principal - renewalPayoffAmount`.
-  renewalPayoffAmount Decimal? @db.Decimal(14, 2)
-  restructuredBy     LoanApplication? @relation("Restructure")
+  renewalPayoffAmount Decimal?         @db.Decimal(14, 2)
+  restructuredBy      LoanApplication? @relation("Restructure")
 
   /// True if the customer had a prior fully-paid loan when this application
   /// was submitted ("Repeat Loan"). Set automatically at apply
@@ -1147,10 +1145,10 @@ model LoanApplication {
   /// `kycDeclarations` is a snapshot: an admin retuning the product rate
   /// tomorrow must not silently restate what an agent earned on a loan
   /// funded last quarter, in either direction.
-  agentCommissionRate   Decimal? @db.Decimal(5, 4)
+  agentCommissionRate     Decimal?         @db.Decimal(5, 4)
   /// Principal × rate, computed and frozen at assignment. Payable in
   /// full at disbursement.
-  agentCommissionAmount Decimal? @db.Decimal(14, 2)
+  agentCommissionAmount   Decimal?         @db.Decimal(14, 2)
   /// When the commission was booked to the ledger. Set once, at
   /// disbursement; its presence is what stops a second posting.
   agentCommissionPostedAt DateTime?

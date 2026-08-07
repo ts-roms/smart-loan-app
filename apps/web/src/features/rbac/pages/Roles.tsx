@@ -31,7 +31,6 @@ import {
 import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useMemo, useState, type FormEvent } from "react";
 
-import { useAuth } from "../../../providers/auth";
 import { findArticle, TourButton } from "../../help";
 import { PermissionCatalogPanel } from "../components/PermissionCatalogPanel";
 import { PermissionHoldersPanel } from "../components/PermissionHoldersPanel";
@@ -50,7 +49,6 @@ export function RolesPage() {
   const remove = useDeleteRole();
   const toast = useToast();
   const confirm = useConfirm();
-  const { user } = useAuth();
   const isAdmin = usePermission("admin.roles");
   const [editing, setEditing] = useState<RoleWithPermissions | null>(null);
   const [creating, setCreating] = useState(false);

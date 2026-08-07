@@ -55,6 +55,40 @@ export class ReportsController {
       },
     );
 
+    /*
+     * Record the run.
+     *
+     * These are compliance reports, and a regulator asking "when did you
+     * last review DORSI utilization, and who ran it" had nothing to
+     * point at — every other privileged action in this system writes an
+     * AuditEvent and report generation did not.
+     *
+     * The PARAMETERS go in the payload, not just the type. Two people
+     * running "penalty-waivers" over different months have not done the
+     * same thing, and a row that cannot tell them apart cannot answer
+     * the question it exists for. `rowCount` records what the run
+     * actually returned, so a later re-run producing a different number
+     * is visible rather than silent.
+     *
+     * `record` never throws — a downed audit write must not turn a
+     * successful export into a failed download.
+     */
+    await req.reportsServices!.audit.record({
+      action: "REPORT_GENERATED",
+      actorId: req.user.sub,
+      targetType: "Report",
+      targetId: parsedType.data,
+      payload: {
+        reportType: parsedType.data,
+        format: parsedQuery.data.format ?? "json",
+        from: from?.toISOString() ?? null,
+        to: to?.toISOString() ?? null,
+        province: parsedQuery.data.province ?? null,
+        city: parsedQuery.data.city ?? null,
+        rowCount: bundle.rows.length,
+      },
+    });
+
     if (parsedQuery.data.format === "csv") {
       reply.header("Content-Type", "text/csv; charset=utf-8");
       reply.header(

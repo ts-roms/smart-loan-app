@@ -19,8 +19,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useAuth } from "../../../providers/auth";
-
 import { usePermission } from "../../../hooks/use-permission";
 
 /**
@@ -35,7 +33,6 @@ import { usePermission } from "../../../hooks/use-permission";
  * preferred for crisp rendering at every size.
  */
 export function BrandingPanel() {
-  const { user } = useAuth();
   const isAdmin = usePermission("admin.system_config");
   const branding = useBranding();
   const update = useUpdateBranding();

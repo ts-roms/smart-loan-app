@@ -2182,13 +2182,18 @@ export interface AuditEventRow {
   createdAt: string;
 }
 
-export interface AuditEventFilter {
+export interface AuditEventFilter extends PageQuery {
   actorId?: string;
   action?: string;
   targetType?: string;
   targetId?: string;
   from?: string;
   to?: string;
+  /**
+   * "The newest N", for callers that want a slice rather than a page.
+   * Ignored when `page` is set — a paged caller has already said how
+   * many rows it wants.
+   */
   take?: number;
 }
 

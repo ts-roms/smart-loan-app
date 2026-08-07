@@ -3,25 +3,24 @@ import { describe, expect, it } from "vitest";
 import { notificationLink } from "./links";
 import type { Notification } from "@loan/shared-types";
 
-const n = (over: Partial<Notification>): Notification =>
-  ({
-    id: "n1",
-    event: "LOAN_DISBURSED",
-    channel: "EMAIL",
-    recipient: "a@b.test",
-    subject: null,
-    body: "",
-    status: "SENT",
-    providerRef: null,
-    error: null,
-    refType: null,
-    refId: null,
-    refNumber: null,
-    customerId: null,
-    createdAt: "2026-08-07T00:00:00.000Z",
-    sentAt: null,
-    ...over,
-  }) as Notification;
+const n = (over: Partial<Notification>): Notification => ({
+  id: "n1",
+  event: "LOAN_DISBURSED",
+  channel: "EMAIL",
+  recipient: "a@b.test",
+  subject: null,
+  body: "",
+  status: "SENT",
+  providerRef: null,
+  error: null,
+  refType: null,
+  refId: null,
+  refNumber: null,
+  customerId: null,
+  createdAt: "2026-08-07T00:00:00.000Z",
+  sentAt: null,
+  ...over,
+});
 
 describe("notificationLink", () => {
   /**

@@ -48,13 +48,13 @@ import {
   Wallet,
   Briefcase,
   Handshake,
+  ScrollText,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../providers/auth";
 import { ActiveDelegationBanner } from "../features/delegations";
 import { LicenseBanner } from "../features/settings";
-import { AuditLogTrigger } from "../features/audit";
 import { HelpTrigger } from "../features/help";
 import { NotificationBell } from "../features/notifications";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -325,6 +325,12 @@ const NAV_SECTIONS: NavSection[] = [
         label: "Jobs",
         icon: Clock,
         permission: "jobs.read",
+      },
+      {
+        to: "/audit",
+        label: "Audit log",
+        icon: ScrollText,
+        permission: "admin.audit_log",
       },
     ],
   },
@@ -728,9 +734,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           <ThemeToggle />
           <span data-tour="navbar-help">
             <HelpTrigger />
-          </span>
-          <span data-tour="navbar-audit">
-            <AuditLogTrigger />
           </span>
           <span data-tour="navbar-notifications">
             <NotificationBell />

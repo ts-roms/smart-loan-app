@@ -18,7 +18,6 @@ import { FileSpreadsheet, Trash2, UploadCloud, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { useAuth } from "../../../providers/auth";
 import { findArticle, TourButton } from "../../help";
 
 import { usePermission } from "../../../hooks/use-permission";
@@ -45,7 +44,6 @@ import { usePermission } from "../../../hooks/use-permission";
  * don't want loan officers handing out roles.
  */
 export function BulkUsersPage() {
-  const { user } = useAuth();
   const toast = useToast();
   const bulk = useBulkImportUsers();
   const [raw, setRaw] = useState(TEMPLATE);

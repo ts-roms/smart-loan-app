@@ -6,7 +6,11 @@
  * Phase 2: per-request service wiring via `req.reportsServices`.
  */
 
-import { CollectionsRepository, DorsiRepository } from "@loan/db";
+import {
+  AuditLogRepository,
+  CollectionsRepository,
+  DorsiRepository,
+} from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { ReportsController } from "./reports.controller";
@@ -14,7 +18,7 @@ import { ReportsService } from "./reports.service";
 
 declare module "fastify" {
   interface FastifyRequest {
-    reportsServices?: { reports: ReportsService };
+    reportsServices?: { reports: ReportsService; audit: AuditLogRepository };
   }
 }
 
@@ -29,6 +33,9 @@ export async function reportRoutes(app: FastifyInstance) {
         new DorsiRepository(prisma),
         new CollectionsRepository(prisma),
       ),
+      // Built with the caller so an impersonated session stamps the
+      // platform operator behind it — see AuditLogRepository.
+      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
     };
   });
 

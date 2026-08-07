@@ -14,8 +14,6 @@ import { formatMoney } from "@loan/shared-utils";
 import { FileSpreadsheet, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { useAuth } from "../../../providers/auth";
-
 import { usePermission } from "../../../hooks/use-permission";
 
 /**
@@ -33,7 +31,6 @@ import { usePermission } from "../../../hooks/use-permission";
  * doesn't block the rest. Failed rows are shown with their error.
  */
 export function BulkPaymentsPage() {
-  const { user } = useAuth();
   const toast = useToast();
   const bulk = useRecordPaymentsBulk();
   const [raw, setRaw] = useState("loanNumber,amount,paidOn,reference\n");
