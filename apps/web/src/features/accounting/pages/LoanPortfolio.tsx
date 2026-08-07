@@ -9,7 +9,7 @@ import {
   DatePicker,
   SkeletonCard,
 } from "@loan/ui";
-import { formatMoney } from "@loan/shared-utils";
+import { formatMoney, todayLocalISO } from "@loan/shared-utils";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -30,7 +30,7 @@ const BUCKET_LABELS: Record<AgingBucket, string> = {
 };
 
 export function LoanPortfolioPage() {
-  const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const [asOf, setAsOf] = useState(() => todayLocalISO());
   const report = useLoanPortfolio(asOf);
 
   return (

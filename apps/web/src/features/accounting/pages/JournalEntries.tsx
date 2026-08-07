@@ -30,7 +30,7 @@ import {
   usePrompt,
   useToast,
 } from "@loan/ui";
-import { formatDate, formatMoney } from "@loan/shared-utils";
+import { formatDate, formatMoney, todayLocalISO } from "@loan/shared-utils";
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { JournalEntryLink } from "../components/JournalEntryDrawer";
@@ -302,9 +302,7 @@ function NewEntryDialog({ onClose }: { onClose: () => void }) {
   const accounts = useAccounts();
   const post = usePostJournalEntry();
   const toast = useToast();
-  const [entryDate, setEntryDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [entryDate, setEntryDate] = useState(() => todayLocalISO());
   const [memo, setMemo] = useState("");
   const [lines, setLines] = useState<LineDraft[]>([
     { accountCode: "", debit: 0, credit: 0, memo: "" },

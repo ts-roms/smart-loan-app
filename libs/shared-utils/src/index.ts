@@ -12,6 +12,23 @@ export function formatMoney(value: number | string | null | undefined): string {
   return PHP.format(n);
 }
 
+/**
+ * Today as "YYYY-MM-DD" in LOCAL time — what a date input should
+ * default to.
+ *
+ * `new Date().toISOString().slice(0, 10)` is the UTC date, and gets this
+ * wrong for the first eight hours of every day in Manila: at 7am local
+ * on the 8th, UTC is still the 7th, so a report screen opened before
+ * breakfast pre-filled YESTERDAY and quietly answered a different
+ * question than the one asked.
+ */
+export function todayLocalISO(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function formatPercent(value: number, fractionDigits = 1): string {
   if (!Number.isFinite(value)) return "0%";
   return `${value.toFixed(fractionDigits)}%`;
