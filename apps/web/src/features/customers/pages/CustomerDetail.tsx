@@ -103,6 +103,19 @@ export function CustomerDetailPage() {
   return (
     <div className="space-y-4">
       <DorsiScreenBanner customerId={c.id} customerName={fullName} />
+      {/*
+        Erased customers keep their financial history but every
+        identifying field holds an "[ERASED]" placeholder. Without this
+        banner a record full of placeholders reads as data loss, and
+        staff file bug reports about it.
+      */}
+      {c.erasedAt && (
+        <div className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+          Personal data erased {formatDateTime(c.erasedAt)} under a data privacy
+          request. Loans, payments and the ledger are retained as required by
+          law; the identifying fields are permanently redacted.
+        </div>
+      )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
@@ -111,23 +124,35 @@ export function CustomerDetailPage() {
             <div className="font-mono text-[11px] uppercase tracking-wider text-fg-subtle mb-1">
               {c.number}
             </div>
-            <CardTitle>
-              {c.firstName} {c.middleName ? `${c.middleName} ` : ""}
-              {c.lastName}
+            <CardTitle className="flex items-center gap-2">
+              <span>
+                {c.firstName} {c.middleName ? `${c.middleName} ` : ""}
+                {c.lastName}
+              </span>
+              {c.erasedAt && <Badge variant="danger">Erased</Badge>}
             </CardTitle>
             <div className="text-xs text-fg-muted mt-1">
               {c.phone} · {c.email ?? "—"} · DOB {formatDate(c.dateOfBirth)}
             </div>
           </div>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="inline-flex items-center gap-1 rounded-md border border-default bg-surface-3 px-3 py-1.5 text-sm hover:bg-hover"
-            >
-              <Pencil className="h-4 w-4" />
-              Edit profile
-            </button>
+            {/*
+              No profile edits and no new loans once the customer is
+              erased: editing would write fresh PII into a record the
+              org just certified as redacted, and an application needs
+              an identity to underwrite. The survey link stays — it is
+              harmless and read-only from the profile's point of view.
+            */}
+            {!c.erasedAt && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex items-center gap-1 rounded-md border border-default bg-surface-3 px-3 py-1.5 text-sm hover:bg-hover"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit profile
+              </button>
+            )}
             <Link
               to={`/customers/${id}/survey`}
               className="inline-flex items-center gap-1 rounded-md border border-default bg-surface-3 px-3 py-1.5 text-sm hover:bg-hover"
@@ -144,7 +169,7 @@ export function CustomerDetailPage() {
               Gated on `loans.apply` — the same key the API requires, so
               a collector doesn't see a button that will 403.
             */}
-            {canApply && (
+            {canApply && !c.erasedAt && (
               <Link
                 to={`/loans/new?customerId=${id}`}
                 className="inline-flex items-center gap-1 rounded-md border border-transparent bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-sm transition hover:opacity-90"

@@ -94,10 +94,52 @@ export class LeaseRepository {
       if (a.status !== "ACTIVE" && a.status !== "EXTENDED") {
         throw new Error(`Cannot buy out from status ${a.status}`);
       }
+
+      /*
+       * Rentals must be current before the residual can be exercised.
+       *
+       * The buyout entry is Dr Cash / Cr Other Income — the residual is
+       * an option-exercise fee, and the entry deliberately never
+       * touches Loans Receivable. That is only sound when nothing is
+       * left ON the receivable: this method closes the loan, and a
+       * buyout taken with instalments still open left those rows unpaid
+       * on a CLOSED loan, stranded the remainder as a Loans Receivable
+       * debit nothing would ever clear, and kept the borrower's own
+       * statement showing debt on a unit they now hold title to.
+       *
+       * An earlier comment here waved the arrears case through — "the
+       * borrower also tops up missing rentals at the same time" — but a
+       * top-up folded into the buyout amount books as INCOME and
+       * settles nothing. The top-up path is a payment: record it
+       * through the payments console, which allocates to the schedule
+       * and the ledger correctly, then buy out.
+       */
+      const openInstallments = await tx.loanSchedule.findMany({
+        where: { loanId: a.loanId, paidInFullAt: null },
+        select: { totalDue: true, principalPaid: true, interestPaid: true },
+      });
+      if (openInstallments.length > 0) {
+        const outstanding = round2(
+          openInstallments.reduce(
+            (sum, s) =>
+              sum +
+              Number(s.totalDue) -
+              Number(s.principalPaid) -
+              Number(s.interestPaid),
+            0,
+          ),
+        );
+        throw new Error(
+          `Cannot buy out with ${openInstallments.length} unpaid installment(s) — ${outstanding.toFixed(2)} is still owed on the rentals. Record the payment first (which settles the schedule and the receivable), then complete the buyout at the residual.`,
+        );
+      }
+
       const residual = Number(a.residualValue);
-      // Allow paying ≥ residual; over-payment is captured as-is so the
-      // ledger reflects what changed hands (rare but possible if the
-      // borrower also tops up missing rentals at the same time).
+      // Over-payment above the residual is still accepted and captured
+      // as-is. With the rentals-current guard above there is nothing
+      // left for the excess to settle, so it books as income — which is
+      // what a borrower rounding ₱49,850 up to ₱50,000 at the cashier
+      // actually did.
       //
       // The lower bound is enforced here rather than in the zod schema
       // because `residual` is per-agreement — the request schema can only

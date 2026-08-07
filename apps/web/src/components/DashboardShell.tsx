@@ -177,10 +177,19 @@ const NAV_SECTIONS: NavSection[] = [
         permission: "collections.demand_letter",
       },
       {
+        /*
+         * `loans.read`, matching the list endpoint the page calls — NOT
+         * `repossession.identify`. The step permissions exist so RBAC
+         * can route the chain to separate roles (BM / Credit Head /
+         * Legal), and gating the nav on `identify` locked every one of
+         * those approvers out of the page their step lives on: a
+         * Legal-only role had a pending approval and no way to reach
+         * it. Each action still gates on its own step key inside.
+         */
         to: "/repossession",
         label: "Repossession",
         icon: ShieldAlert,
-        permission: "repossession.identify",
+        permission: "loans.read",
       },
       {
         to: "/lease",
@@ -275,6 +284,12 @@ const NAV_SECTIONS: NavSection[] = [
         label: "DORSI compliance",
         icon: Layers,
         permission: "dorsi.read",
+      },
+      {
+        to: "/compliance/privacy",
+        label: "Data privacy",
+        icon: ShieldCheck,
+        permission: "admin.compliance",
       },
       {
         to: "/reports",

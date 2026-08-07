@@ -185,6 +185,13 @@ export interface Customer {
   yearsAtCurrentJob: string | number | null;
 
   kycStatus: KycStatus;
+  /**
+   * Set when the customer's PII was redacted under a Data Privacy Act
+   * erasure request. The identifying fields then hold "[ERASED]"
+   * placeholders — the UI shows a badge so blank-looking records read
+   * as "erased on purpose", not "data loss".
+   */
+  erasedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1594,6 +1601,14 @@ export interface DorsiRecordWithCustomer extends DorsiRecord {
 }
 
 export interface DorsiUtilization {
+  /**
+   * False when `companyTotalEquity` is zero — the caps are 0 and every
+   * percentage below is meaningless. The UI must render "unconfigured"
+   * rather than the 0% the numbers would otherwise show: a zero cap
+   * means NO DORSI lending headroom exists, which is the opposite of
+   * all-clear.
+   */
+  configured: boolean;
   companyTotalEquity: number;
   aggregateCap: number;
   aggregateOutstanding: number;
@@ -2056,6 +2071,55 @@ export interface PendingKycRow {
   documentUrl: string;
   status: KycSubmissionStatus;
   submittedAt: string;
+}
+
+// ─── Data privacy (DSAR + retention) ─────────────────────────────────────
+
+export interface RetentionPolicyView {
+  auditRetentionDays: number;
+  notificationRetentionDays: number;
+  jobRunRetentionDays: number;
+  /**
+   * True when the audit window is under the AMLA §9 five-year floor.
+   * The server computes it; the UI's job is to make it unmissable, not
+   * to re-derive it.
+   */
+  auditBelowAmlaFloor: boolean;
+}
+
+export interface RetentionPurgeResult {
+  startedAt: string;
+  finishedAt: string;
+  policy: {
+    auditRetentionDays: number;
+    notificationRetentionDays: number;
+    jobRunRetentionDays: number;
+  };
+  /** Null when a window is 0 ("never purge") — nothing was cut off. */
+  cutoffs: {
+    audit: string | null;
+    notification: string | null;
+    jobRun: string | null;
+  };
+  deleted: {
+    auditEvents: number;
+    notifications: number;
+    jobRuns: number;
+  };
+}
+
+/**
+ * What an erasure actually did. Surfaced verbatim in the UI, because
+ * "erased" without the two lists invites both wrong readings — that
+ * everything is gone (the financial records are not), and that nothing
+ * important was (the PII is).
+ */
+export interface EraseCustomerResult {
+  ok: true;
+  customerId: string;
+  erasedAt: string;
+  fieldsCleared: string[];
+  retainedTables: string[];
 }
 
 export interface PreAssessment {

@@ -179,15 +179,27 @@ export class ApiClient {
    * storage key, so renaming it in the auth provider would have broken
    * both silently.
    */
-  async fetchBlob(path: string, retry = true): Promise<Blob> {
+  async fetchBlob(
+    path: string,
+    init: RequestInit = {},
+    retry = true,
+  ): Promise<Blob> {
     const token = this.opts.getToken?.();
-    const headers = new Headers();
+    const headers = new Headers(init.headers);
     if (token) headers.set("Authorization", `Bearer ${token}`);
-    const res = await fetch(`${this.opts.baseUrl}${path}`, { headers });
+    // A body implies JSON here, same as `request` — the one caller
+    // that posts (the DSAR export) sends a reason object.
+    if (init.body != null && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    const res = await fetch(`${this.opts.baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
 
     if (res.status === 401 && retry) {
       const nextToken = await this.tryRefresh();
-      if (nextToken) return this.fetchBlob(path, false);
+      if (nextToken) return this.fetchBlob(path, init, false);
     }
     if (!res.ok) {
       const text = await res.text();

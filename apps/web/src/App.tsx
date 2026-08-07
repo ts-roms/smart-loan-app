@@ -188,6 +188,10 @@ const AnnualDocsDashboardPage = lazyNamed(
   () => import("./features/compliance"),
   "AnnualDocsDashboard",
 );
+const DataPrivacyPage = lazyNamed(
+  () => import("./features/compliance"),
+  "DataPrivacyPage",
+);
 const ScreeningPage = lazyNamed(
   () => import("./features/screening"),
   "ScreeningPage",
@@ -458,6 +462,7 @@ export function App() {
           path="/compliance/annual-docs"
           element={<AnnualDocsDashboardPage />}
         />
+        <Route path="/compliance/privacy" element={<DataPrivacyPage />} />
       </Route>
 
       {/* Outside the layout — full page, no rail, no header. */}

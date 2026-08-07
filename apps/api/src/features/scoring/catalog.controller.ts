@@ -7,6 +7,7 @@ import {
   questionCreateSchema,
   questionUpdateSchema,
   reorderSchema,
+  validateKindConfig,
 } from "./catalog.schemas";
 
 /**
@@ -155,6 +156,31 @@ export class ScoringCatalogController {
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
     const patch = parsed.data;
+
+    /*
+     * The schema's kind/config cross-check can only see the fields it
+     * was sent, so a patch carrying just one of the pair used to slip
+     * through unvalidated: `{ config: <garbage> }` stored arbitrary
+     * config, and `{ kind }` alone left the old kind's config behind.
+     * Either way the row then fails toLibQuestion's shape check and the
+     * question silently vanishes from the survey — borrowers just stop
+     * being asked it. Validate the EFFECTIVE pair (request merged over
+     * the stored row) whenever either half changes.
+     */
+    if (patch.kind !== undefined || patch.config !== undefined) {
+      const existing = await req.scoringServices!.catalog.findQuestion(
+        req.params.id,
+      );
+      if (!existing) return reply.code(404).send({ error: "NotFound" });
+      const issues = validateKindConfig(
+        patch.kind ?? existing.kind,
+        patch.config !== undefined ? patch.config : existing.config,
+      );
+      if (issues) {
+        return reply.code(400).send({ error: "ValidationError", issues });
+      }
+    }
+
     try {
       return await req.scoringServices!.catalog.updateQuestion(
         req.params.id,

@@ -207,6 +207,11 @@ export function CustomersPage() {
                         {c.firstName} {c.lastName}
                       </span>
                     </CustomerSummaryLink>
+                    {c.erasedAt && (
+                      <Badge variant="danger" className="ml-2">
+                        Erased
+                      </Badge>
+                    )}
                   </td>
                   <td className="py-2 px-2 font-mono text-xs">{c.phone}</td>
                   <td className="py-2 px-2">

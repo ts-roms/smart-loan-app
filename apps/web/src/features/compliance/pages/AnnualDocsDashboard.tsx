@@ -57,8 +57,25 @@ export function AnnualDocsDashboard() {
   };
 
   const rows = expiring.data ?? [];
-  const expired = rows.filter((r) => r.status === "EXPIRED");
-  const expiringSoon = rows.filter((r) => r.status === "EXPIRING_SOON");
+  /*
+   * Bucketed by expiresAt — the field the query selected on — NOT the
+   * persisted `status`, which is a cache the nightly job (or the
+   * Refresh button) maintains and which only ever knows about the
+   * 30-day window.
+   *
+   * Splitting on the cache dropped documents. A doc 45 days out
+   * carries status VALID, so on the 60- and 90-day views the server
+   * returned it and the page filtered it into neither card: both
+   * showed "good standing" while a renewal sat weeks from lapsing.
+   * The wider window options showed exactly what the 30-day one did.
+   * Verified: three docs (expired / 20 days / 45 days), 90-day view —
+   * the old split rendered two and lost the third.
+   */
+  const now = Date.now();
+  const expired = rows.filter((r) => new Date(r.expiresAt).getTime() <= now);
+  const expiringSoon = rows.filter(
+    (r) => new Date(r.expiresAt).getTime() > now,
+  );
 
   return (
     <div className="space-y-4">
@@ -190,8 +207,10 @@ function DocsCard({
                     {formatDate(r.expiresAt)}
                   </td>
                   <td className="py-2 px-2">
+                    {/* Derived from the card, which derived from the
+                        date — the persisted status can lag a day. */}
                     <Badge variant={accent === "rose" ? "danger" : "warning"}>
-                      {r.status === "EXPIRED" ? "Expired" : "Expiring soon"}
+                      {accent === "rose" ? "Expired" : "Expiring soon"}
                     </Badge>
                   </td>
                   <td className="py-2 px-2 text-xs text-fg-muted">

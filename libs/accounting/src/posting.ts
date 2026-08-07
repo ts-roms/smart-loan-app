@@ -508,14 +508,25 @@ export function repossessionAuctionEntry(args: {
   }
 
   if (surplus > 0) {
-    // Surplus goes to other income (refund to borrower handled separately
-    // by manual journal entry / payment; we don't have a Refund Payable
-    // account in the seed chart of accounts yet).
+    /*
+     * The surplus is the BORROWER'S money, held as a liability — not
+     * income. Auction proceeds beyond the debt belong to the mortgagor;
+     * 2100 Customer Advance Payments is this chart's account for
+     * exactly that ("payments received in excess of everything a loan
+     * still owes — refundable to the borrower").
+     *
+     * An earlier version credited Other Income on the grounds that no
+     * refundable-liability account existed in the chart. It did; the
+     * comment was stale. The cost was double-sided: income overstated
+     * by money that was never the coop's, and the amount owed back to
+     * the borrower recorded nowhere at all — a refund nobody would be
+     * reminded to pay.
+     */
     lines.push({
-      accountCode: ACCOUNT_CODES.OTHER_INCOME,
+      accountCode: ACCOUNT_CODES.CUSTOMER_ADVANCES,
       debit: 0,
       credit: surplus,
-      memo: `Auction surplus on ${args.loanNumber}`,
+      memo: `Auction surplus on ${args.loanNumber} — refundable to borrower`,
     });
   }
 
