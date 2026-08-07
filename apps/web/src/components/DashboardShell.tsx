@@ -286,6 +286,12 @@ const NAV_SECTIONS: NavSection[] = [
         permission: "dorsi.read",
       },
       {
+        to: "/compliance/privacy",
+        label: "Data privacy",
+        icon: ShieldCheck,
+        permission: "admin.compliance",
+      },
+      {
         to: "/reports",
         label: "Reports",
         icon: BookOpenCheck,

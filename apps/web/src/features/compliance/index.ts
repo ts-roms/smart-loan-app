@@ -2,3 +2,4 @@
 // Cross-loan reporting surfaces: annual-doc tracker, DORSI dashboard (later
 // phase), regulatory exports.
 export { AnnualDocsDashboard } from "./pages/AnnualDocsDashboard";
+export { DataPrivacyPage } from "./pages/DataPrivacyPage";

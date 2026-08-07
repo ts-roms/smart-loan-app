@@ -2066,6 +2066,55 @@ export interface PendingKycRow {
   submittedAt: string;
 }
 
+// ─── Data privacy (DSAR + retention) ─────────────────────────────────────
+
+export interface RetentionPolicyView {
+  auditRetentionDays: number;
+  notificationRetentionDays: number;
+  jobRunRetentionDays: number;
+  /**
+   * True when the audit window is under the AMLA §9 five-year floor.
+   * The server computes it; the UI's job is to make it unmissable, not
+   * to re-derive it.
+   */
+  auditBelowAmlaFloor: boolean;
+}
+
+export interface RetentionPurgeResult {
+  startedAt: string;
+  finishedAt: string;
+  policy: {
+    auditRetentionDays: number;
+    notificationRetentionDays: number;
+    jobRunRetentionDays: number;
+  };
+  /** Null when a window is 0 ("never purge") — nothing was cut off. */
+  cutoffs: {
+    audit: string | null;
+    notification: string | null;
+    jobRun: string | null;
+  };
+  deleted: {
+    auditEvents: number;
+    notifications: number;
+    jobRuns: number;
+  };
+}
+
+/**
+ * What an erasure actually did. Surfaced verbatim in the UI, because
+ * "erased" without the two lists invites both wrong readings — that
+ * everything is gone (the financial records are not), and that nothing
+ * important was (the PII is).
+ */
+export interface EraseCustomerResult {
+  ok: true;
+  customerId: string;
+  erasedAt: string;
+  fieldsCleared: string[];
+  retainedTables: string[];
+}
+
 export interface PreAssessment {
   id: string;
   /** "PA-2026-000123". */

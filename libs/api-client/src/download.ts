@@ -17,8 +17,9 @@ import { getApiClient } from "./client";
 export async function downloadFile(
   path: string,
   filename: string,
+  init: RequestInit = {},
 ): Promise<void> {
-  const blob = await getApiClient().fetchBlob(path);
+  const blob = await getApiClient().fetchBlob(path, init);
   const href = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = href;
