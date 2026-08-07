@@ -20,6 +20,7 @@ import { CreditCard, FileEdit, Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { usePermission } from "../../../hooks/use-permission";
 import { useDebouncedValue } from "../../../lib/use-debounced-value";
 import { LoanStatusBadge } from "../components/StatusBadge";
 import { QuickLoanLink } from "../components/QuickLoanDrawer";
@@ -67,6 +68,17 @@ export function LoansListPage() {
   }, [q, status, productCode]);
 
   const loans = useLoansPage(filter);
+  /*
+   * `loans.read` gets you this list; originating one needs
+   * `loans.apply`, which ACCOUNTANT and COLLECTOR do not hold. The
+   * button was rendered unconditionally, so both roles could walk into
+   * a six-step wizard and only find out at submit.
+   *
+   * Drafts are deliberately NOT gated on it — the draft endpoints
+   * require `loans.read`, so anyone who can see this page can see their
+   * own saved work.
+   */
+  const canApply = usePermission("loans.apply");
   const products = useLoanProducts();
   const drafts = useLoanDrafts();
   const navigate = useNavigate();
@@ -101,10 +113,15 @@ export function LoansListPage() {
               Drafts ({draftCount})
             </Button>
           )}
-          <Button onClick={() => navigate("/loans/new")} data-tour="loans-new">
-            <Plus className="h-4 w-4" />
-            New application
-          </Button>
+          {canApply && (
+            <Button
+              onClick={() => navigate("/loans/new")}
+              data-tour="loans-new"
+            >
+              <Plus className="h-4 w-4" />
+              New application
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

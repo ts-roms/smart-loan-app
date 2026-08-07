@@ -41,7 +41,12 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
 import { CustomerPicker } from "../../../components/CustomerPicker";
 
@@ -67,6 +72,8 @@ import {
   useQuote,
   useUpdateLoanDraft,
 } from "../hooks";
+
+import { usePermission } from "../../../hooks/use-permission";
 
 // ─── Step definitions ─────────────────────────────────────────────────
 
@@ -147,6 +154,7 @@ const initialForm: FormState = {
  * to resume. The drafts list at `/loans/drafts` links here.
  */
 export function NewLoanPage() {
+  const canApply = usePermission("loans.apply");
   const navigate = useNavigate();
   const toast = useToast();
   const params = useParams<{ draftId?: string }>();
@@ -394,6 +402,34 @@ export function NewLoanPage() {
   };
 
   // ─── Render ───────────────────────────────────────────────────────
+
+  /*
+   * The entry button is gated, but a bookmark or a pasted URL is not.
+   * Refuse here too rather than let someone fill in six steps of
+   * borrower detail and collateral and discover at submit that they
+   * were never allowed to.
+   *
+   * After the hooks, deliberately — an early return above them would
+   * change the hook order between renders.
+   */
+  if (!canApply) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center">
+          <p className="text-sm font-medium">
+            You do not have permission to originate loans
+          </p>
+          <p className="mt-1 text-xs text-fg-muted">
+            Taking an application needs <code>loans.apply</code>. Ask an
+            administrator if you need it.
+          </p>
+          <Button asChild variant="outline" size="sm" className="mt-4">
+            <Link to="/loans">Back to loans</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-4 max-w-5xl mx-auto">
