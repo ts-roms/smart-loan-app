@@ -487,10 +487,23 @@ function severityLabel(days: number): string {
   return "90+ days";
 }
 
+/**
+ * Three tiers, matching the three the label already names.
+ *
+ * The first branch used to be dead — `<= 7` and `<= 60` both returned
+ * "warning" — so "New" was labelled distinctly and rendered
+ * identically to an account sixty days down. A week late and two months
+ * late are not the same call to make, and the badge is what a
+ * supervisor scans before deciding where to spend the morning.
+ *
+ * "New" reads muted rather than warning: a payment a few days late is
+ * ordinary, and colouring it the same as a real arrear is how a queue
+ * stops meaning anything.
+ */
 function severityVariant(
   days: number,
 ): "success" | "danger" | "muted" | "warning" {
-  if (days <= 7) return "warning";
+  if (days <= 7) return "muted";
   if (days <= 60) return "warning";
   return "danger";
 }
