@@ -67,3 +67,41 @@ export const assignAgentSchema = z.object({
 
 export type CreateAgentInput = z.infer<typeof createAgentSchema>;
 export type UpdateAgentInput = z.infer<typeof updateAgentSchema>;
+
+// ─── Payouts ────────────────────────────────────────────────────────────
+
+export const createPayoutSchema = z.object({
+  agentId: z.string().uuid(),
+  /**
+   * The loans this payment settles. Explicit rather than "pay
+   * everything outstanding": a cashier paying ₱40,000 of a ₱52,000
+   * balance needs to say which loans that covers, and the agent needs
+   * to be able to read it back.
+   */
+  loanIds: z.array(z.string().uuid()).min(1, "Select at least one loan."),
+  /**
+   * What is actually being handed over. Checked against the selected
+   * commissions server-side and refused if they disagree — a payout
+   * that settles for less than it claims leaves a remainder in account
+   * 2500 that nobody goes looking for.
+   */
+  amount: z.number().positive(),
+  paidOn: z.coerce.date(),
+  method: z.string().trim().max(40).nullable().optional(),
+  reference: z.string().trim().max(120).nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const voidPayoutSchema = z.object({
+  /**
+   * Required, and not trivially satisfiable. A voided payout is money
+   * that left and came back; six months later the only account of why
+   * will be this sentence.
+   */
+  reason: z.string().trim().min(10, "Say why this payout is being voided."),
+});
+
+export const payoutListQuerySchema = z.object({
+  agentId: z.string().uuid().optional(),
+  take: z.coerce.number().int().min(1).max(200).optional(),
+});

@@ -142,6 +142,8 @@ model User {
   agent            Agent?  @relation("AgentLogin")
   agentsCreated    Agent[] @relation("AgentCreatedBy")
   loansAgentAssigned LoanApplication[] @relation("LoanAgentAssignedBy")
+  agentPayoutsCreated AgentPayout[]    @relation("AgentPayoutCreatedBy")
+  agentPayoutsVoided  AgentPayout[]    @relation("AgentPayoutVoidedBy")
 }
 
 // ─── Field agents (loan originators paid on commission) ─────────────────────
@@ -194,9 +196,92 @@ model Agent {
   createdById String?
   createdBy   User?    @relation("AgentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
-  loans LoanApplication[] @relation("LoanAgent")
+  loans   LoanApplication[] @relation("LoanAgent")
+  payouts AgentPayout[]
 
   @@index([active])
+}
+
+// ─── Paying the agents ──────────────────────────────────────────────────────
+//
+// Disbursing a loan books the commission as an EXPENSE and a PAYABLE — the
+// agent has earned it, and the coop now owes it. A payout is the other
+// half: the cash actually leaving, and the payable coming down.
+//
+// One payout covers one agent and names exactly which loans it settled,
+// because "we paid you ₱14,000 last month" is not an answer to "which of
+// my loans was that for". The line items are the answer, and they are also
+// what stops a commission being paid twice.
+
+model AgentPayout {
+  id     String @id @default(uuid())
+  /// Human-readable: "APO-2026-000012".
+  number String @unique
+
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Restrict)
+
+  /// Sum of the line items. Stored rather than derived so a payout
+  /// reconciles against the cash that left even if a line is later
+  /// disputed — and validated against the items when it is created, so
+  /// the two can never disagree in the first place.
+  amount Decimal @db.Decimal(14, 2)
+
+  paidOn    DateTime
+  /// "CASH", "BANK_TRANSFER", "GCASH" — free text; the coop's own
+  /// vocabulary, not an enum this codebase should be legislating.
+  method    String?
+  reference String?
+  notes     String?
+
+  createdAt   DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation("AgentPayoutCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// Voided rather than deleted. A payout that left the ledger is
+  /// reversed with a mirror entry, never erased — the original and its
+  /// reversal both stand, which is what an audit expects to find.
+  voidedAt     DateTime?
+  voidReason   String?
+  voidedById   String?
+  voidedBy     User?     @relation("AgentPayoutVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+
+  items AgentPayoutItem[]
+
+  @@index([agentId, paidOn])
+}
+
+model AgentPayoutItem {
+  id       String @id @default(uuid())
+  payoutId String
+  payout   AgentPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+
+  /// The loan whose commission this line settles.
+  loanId String
+  loan   LoanApplication @relation("LoanCommissionPayout", fields: [loanId], references: [id], onDelete: Restrict)
+
+  /// Copied from the loan at payout time. The loan's own
+  /// `agentCommissionAmount` is already frozen, so this is belt and
+  /// braces — but a payout line has to say what was paid for it even if
+  /// the loan row is later corrected by hand.
+  amount Decimal @db.Decimal(14, 2)
+
+  /*
+   * The constraint that makes double payment impossible.
+   *
+   * Not merely an index: without UNIQUE, two payout runs started at the
+   * same moment both read "unpaid" and both insert, and the agent is
+   * paid twice for one loan while account 2500 goes negative. A
+   * transaction alone would not catch it — they touch no common row
+   * until this one.
+   *
+   * Scoped to the loan and not to (payout, loan), because the point is
+   * one payment per loan ACROSS all payouts, not per payout. Voiding
+   * cascades the items away, which is what frees the loan to be paid
+   * again on a corrected run.
+   */
+  @@unique([loanId])
+  @@index([payoutId])
 }
 
 // ─── Customers (borrowers) — full KYC profile ────────────────────────────────
@@ -1069,6 +1154,9 @@ model LoanApplication {
   /// When the commission was booked to the ledger. Set once, at
   /// disbursement; its presence is what stops a second posting.
   agentCommissionPostedAt DateTime?
+  /// The payout line that settled this loan's commission, if any. At
+  /// most one — see the unique on AgentPayoutItem.loanId.
+  agentCommissionPayout   AgentPayoutItem? @relation("LoanCommissionPayout")
 
   customer    Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
   submittedBy User     @relation("LoanSubmittedBy", fields: [submittedById], references: [id])

@@ -1,5 +1,6 @@
 import {
   useAgentBook,
+  useAgentPayable,
   useAgents,
   useCreateAgent,
   useUpdateAgent,
@@ -29,12 +30,14 @@ import {
   SkeletonCard,
   useToast,
 } from "@loan/ui";
-import { Search, UserPlus, X } from "lucide-react";
+import { Banknote, Search, UserPlus, X } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { usePermission } from "../../../hooks/use-permission";
 import { AgentBookTable } from "../components/AgentBookTable";
 import { AgentStats } from "../components/AgentStats";
+import { PayoutDialog } from "../components/PayoutDialog";
+import { PayoutHistory } from "../components/PayoutHistory";
 
 /**
  * The agent directory, and a drill-down into any one agent's book.
@@ -47,11 +50,13 @@ import { AgentStats } from "../components/AgentStats";
  */
 export function AgentsPage() {
   const canManage = usePermission("agents.manage");
+  const canPayout = usePermission("agents.payout");
   const [q, setQ] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [openBook, setOpenBook] = useState<Agent | null>(null);
+  const [paying, setPaying] = useState<Agent | null>(null);
 
   const agents = useAgents({
     q: q.trim() || undefined,
@@ -114,6 +119,7 @@ export function AgentsPage() {
                   <th className="py-2 px-2 font-medium text-right">Rate</th>
                   <th className="py-2 px-2 font-medium text-right">Funded</th>
                   <th className="py-2 px-2 font-medium text-right">Earned</th>
+                  <th className="py-2 px-2 font-medium text-right">Owed now</th>
                   <th className="py-2 px-2 font-medium text-right">Pipeline</th>
                   <th className="py-2 px-2 font-medium" />
                 </tr>
@@ -160,12 +166,31 @@ export function AgentsPage() {
                     <td className="py-2 px-2 text-right tabular text-success">
                       {formatMoney(a.totals.earned)}
                     </td>
+                    {/*
+                      Earned is a career total — paid AND unpaid. Owed is
+                      this agent's slice of account 2500 right now, and
+                      it is the only one of the two a cashier should be
+                      reading. Kept in its own column rather than folded
+                      in, because handing over "earned" would pay every
+                      commission the agent has ever made all over again.
+                    */}
+                    <OwedCell agentId={a.id} />
                     <td className="py-2 px-2 text-right tabular text-xs text-fg-muted">
                       {formatMoney(a.totals.pipeline)}
                     </td>
                     <td className="py-2 px-2 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {!a.active && <Badge variant="muted">Inactive</Badge>}
+                        {canPayout && a.totals.earned > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPaying(a)}
+                          >
+                            <Banknote className="mr-1 h-3.5 w-3.5" />
+                            Pay
+                          </Button>
+                        )}
                         {canManage && (
                           <Button
                             variant="ghost"
@@ -192,7 +217,36 @@ export function AgentsPage() {
       {openBook && (
         <AgentBookDialog agent={openBook} onClose={() => setOpenBook(null)} />
       )}
+      {paying && (
+        <PayoutDialog agent={paying} onClose={() => setPaying(null)} />
+      )}
+
+      <PayoutHistory />
     </div>
+  );
+}
+
+/**
+ * One agent's outstanding balance, fetched per row.
+ *
+ * Deliberately a separate request rather than a field on the directory
+ * payload: the payable figure has to be computed from the payout line
+ * items, and loading those for every agent would make the list pay for
+ * a number most rows are only glanced at.
+ */
+function OwedCell({ agentId }: { agentId: string }) {
+  const payable = useAgentPayable(agentId);
+  const owed = payable.data?.payableTotal;
+  return (
+    <td className="py-2 px-2 text-right tabular text-xs">
+      {owed === undefined ? (
+        <span className="text-fg-subtle">…</span>
+      ) : owed > 0 ? (
+        <span className="font-medium text-warning">{formatMoney(owed)}</span>
+      ) : (
+        <span className="text-fg-subtle">—</span>
+      )}
+    </td>
   );
 }
 

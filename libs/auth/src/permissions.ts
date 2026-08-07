@@ -166,6 +166,13 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
       "Credit an application to an agent, or move it to a different one. Held apart from agents.manage so an officer can attribute a loan without being able to set what anyone is paid for it.",
   },
   {
+    key: "agents.payout",
+    category: "Agents",
+    label: "Pay commissions",
+    description:
+      "Run and void agent payouts. Cash leaving the till, so it sits with the accountant rather than with whoever set the rate or credited the loan — the person who decides what an agent earns should not also be the one who pays it.",
+  },
+  {
     key: "agents.self",
     label: "View own book",
     category: "Agents",
@@ -525,6 +532,12 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
       "payments.bulk",
       "payments.intents",
       "loans.waive_penalty",
+      // Paying the agents is cash going out, which is the cashier's
+      // desk. Read, to know who is being paid; payout, to pay them.
+      // Deliberately NOT agents.manage — an accountant who could set
+      // the rate could also set what they hand over.
+      "agents.read",
+      "agents.payout",
       "accounting.read",
       "accounting.post_journal",
       "accounting.reverse",

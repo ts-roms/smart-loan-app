@@ -1,4 +1,10 @@
-import type { Agent, AgentBook, LoanApplication } from "@loan/shared-types";
+import type {
+  Agent,
+  AgentBook,
+  AgentPayable,
+  AgentPayout,
+  LoanApplication,
+} from "@loan/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiClient } from "../client";
@@ -23,6 +29,10 @@ export const agentKeys = {
     [...agentKeys.all, "book", id, filter ?? {}] as const,
   myBook: (filter?: AgentBookFilter) =>
     [...agentKeys.all, "me", filter ?? {}] as const,
+  payable: (id: string) => [...agentKeys.all, "payable", id] as const,
+  myPayable: ["agents", "me", "payable"] as const,
+  payouts: (agentId?: string) =>
+    [...agentKeys.all, "payouts", agentId ?? "all"] as const,
 };
 
 export interface AgentFilter {
@@ -158,5 +168,75 @@ export function useAssignLoanAgent() {
         queryKey: ["loans", "detail", vars.loanIdOrNumber],
       });
     },
+  });
+}
+
+// ─── payouts ──────────────────────────────────────────────────────
+
+/**
+ * What an agent is owed right now — the loans backing their slice of
+ * account 2500 Agent Commission Payable.
+ *
+ * Not the same as `totals.earned` on their book, which is what they
+ * have made over their whole career, paid and unpaid together.
+ */
+export function useAgentPayable(agentId: string | null) {
+  return useQuery({
+    queryKey: agentKeys.payable(agentId ?? ""),
+    queryFn: () =>
+      getApiClient().get<AgentPayable>(`/agents/${agentId}/payable`),
+    enabled: Boolean(agentId),
+  });
+}
+
+/** The signed-in agent's own view. Takes no id — the server knows. */
+export function useMyPayable() {
+  return useQuery({
+    queryKey: agentKeys.myPayable,
+    queryFn: () => getApiClient().get<AgentPayable>("/agents/me/payable"),
+  });
+}
+
+export function useAgentPayouts(agentId?: string) {
+  return useQuery({
+    queryKey: agentKeys.payouts(agentId),
+    queryFn: () =>
+      getApiClient().get<AgentPayout[]>(
+        `/agents/payouts${toQueryString(agentId ? { agentId } : undefined)}`,
+      ),
+  });
+}
+
+export interface CreatePayoutInput {
+  agentId: string;
+  /** The commissions this payment settles. */
+  loanIds: string[];
+  /** Must equal the sum of those commissions; the server checks. */
+  amount: number;
+  paidOn: string;
+  method?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+}
+
+export function useCreateAgentPayout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreatePayoutInput) =>
+      getApiClient().post<AgentPayout>("/agents/payouts", input),
+    // Everything: the payout moves loans out of payable, changes the
+    // agent's outstanding figure, and adds a row to the history.
+    onSuccess: () => qc.invalidateQueries({ queryKey: agentKeys.all }),
+  });
+}
+
+export function useVoidAgentPayout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      getApiClient().post<AgentPayout>(`/agents/payouts/${id}/void`, {
+        reason,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: agentKeys.all }),
   });
 }

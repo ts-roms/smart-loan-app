@@ -12,14 +12,23 @@
  * LoanRepository, next to the loan lifecycle they belong to.
  */
 
+import { agentPayoutEntry } from "@loan/accounting";
 import {
   agentBookTotals,
+  assertPayoutBalances,
   assertValidCommissionRate,
+  buildPayout,
+  selectPayable,
   type AgentBookTotals,
+  type PayableLoan,
 } from "@loan/loans";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
-import { nextAgentNumber } from "../lib/reference-numbers";
+import { AccountingRepository } from "./accounting.repository";
+import {
+  nextAgentNumber,
+  nextAgentPayoutNumber,
+} from "../lib/reference-numbers";
 
 export interface AgentCreateInput {
   /** Must already exist, must not already be an agent. */
@@ -150,8 +159,44 @@ function toSummary(a: AgentRow): AgentSummary {
   };
 }
 
+export class AgentPayoutNotFoundError extends Error {
+  constructor(idOrNumber: string) {
+    super(`No payout matches "${idOrNumber}".`);
+    this.name = "AgentPayoutNotFoundError";
+  }
+}
+
+export class PayoutAlreadyVoidedError extends Error {
+  readonly code = "PAYOUT_VOIDED" as const;
+  constructor(readonly number: string) {
+    super(
+      `Payout ${number} has already been voided. Voiding it again would post a second reversal against a payable that has already been restored.`,
+    );
+    this.name = "PayoutAlreadyVoidedError";
+  }
+}
+
+export interface AgentPayable {
+  loans: Array<{
+    loanId: string;
+    loanNumber: string;
+    customerName: string;
+    principal: number;
+    commissionAmount: number;
+    postedAt: string;
+  }>;
+  /** Owed right now — booked, unpaid. This is the agent's slice of 2500. */
+  payableTotal: number;
+  /** Settled by earlier payouts. */
+  paidTotal: number;
+}
+
 export class AgentRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly accounting: AccountingRepository;
+
+  constructor(private readonly prisma: PrismaClient) {
+    this.accounting = new AccountingRepository(prisma);
+  }
 
   async create(input: AgentCreateInput) {
     // Validated here as well as in the API schema. A rate above 1 is
@@ -349,4 +394,234 @@ export class AgentRepository {
       ),
     };
   }
+
+  // ─── Paying them ──────────────────────────────────────────────────
+
+  /** The loans backing this agent's slice of Agent Commission Payable. */
+  async payable(agentId: string): Promise<AgentPayable> {
+    const rows = await this.loadPayableRows(agentId);
+    const { payable, payableTotal, paidTotal } = selectPayable(
+      rows.map(toPayableLoan),
+    );
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return {
+      loans: payable.map((p) => {
+        const r = byId.get(p.loanId)!;
+        return {
+          loanId: r.id,
+          loanNumber: r.number,
+          customerName: `${r.customer.firstName} ${r.customer.lastName}`,
+          principal: Number(r.principal),
+          commissionAmount: Number(r.agentCommissionAmount ?? 0),
+          postedAt: r.agentCommissionPostedAt!.toISOString(),
+        };
+      }),
+      payableTotal,
+      paidTotal,
+    };
+  }
+
+  /**
+   * Pay an agent for a chosen set of loans.
+   *
+   * `amount` is what the cashier is actually handing over, and it is
+   * checked against the lines rather than trusted. If they disagree the
+   * run is refused — a payout that settles for less than it claims leaves
+   * a remainder in account 2500 that nobody goes looking for.
+   *
+   * All of it in one transaction: the payout, its lines, and the journal
+   * entry that takes the payable down. A payout row without its entry
+   * would show an agent as paid while the books still owed them.
+   */
+  async createPayout(input: {
+    agentId: string;
+    loanIds: string[];
+    /** Must equal the sum of the selected commissions. */
+    amount: number;
+    paidOn: Date;
+    method?: string | null;
+    reference?: string | null;
+    notes?: string | null;
+    createdById: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const agent = await tx.agent.findUnique({
+        where: { id: input.agentId },
+        select: { id: true, number: true },
+      });
+      if (!agent) throw new AgentNotFoundError(input.agentId);
+
+      /*
+       * Re-read inside the transaction. The list the operator was
+       * looking at may be minutes old, and a loan paid on another run
+       * since then must be caught here rather than paid twice.
+       *
+       * The unique on AgentPayoutItem.loanId is the backstop for the
+       * case this read cannot cover: two runs racing, neither yet
+       * committed, so neither can see the other's rows.
+       */
+      const rows = await this.loadPayableRows(input.agentId, tx);
+      const draft = buildPayout(rows.map(toPayableLoan), input.loanIds);
+      assertPayoutBalances(input.amount, draft);
+
+      const payout = await tx.agentPayout.create({
+        data: {
+          number: await nextAgentPayoutNumber(tx as unknown as PrismaClient),
+          agentId: agent.id,
+          amount: draft.total,
+          paidOn: input.paidOn,
+          method: input.method ?? null,
+          reference: input.reference ?? null,
+          notes: input.notes ?? null,
+          createdById: input.createdById,
+          items: { create: draft.items },
+        },
+        include: { items: true },
+      });
+
+      await this.accounting.postIfAbsent(
+        agentPayoutEntry({
+          payoutId: payout.id,
+          payoutNumber: payout.number,
+          agentNumber: agent.number,
+          amount: draft.total,
+          paidOn: input.paidOn,
+        }),
+        { postedById: input.createdById, tx },
+      );
+
+      return payout;
+    });
+  }
+
+  async listPayouts(filter: { agentId?: string; take?: number } = {}) {
+    const payouts = await this.prisma.agentPayout.findMany({
+      where: filter.agentId ? { agentId: filter.agentId } : {},
+      orderBy: { paidOn: "desc" },
+      take: filter.take ?? 50,
+      include: {
+        agent: {
+          select: {
+            id: true,
+            number: true,
+            user: { select: { name: true } },
+          },
+        },
+        items: {
+          include: {
+            loan: { select: { id: true, number: true } },
+          },
+        },
+      },
+    });
+    return payouts.map((p) => ({
+      id: p.id,
+      number: p.number,
+      agentId: p.agentId,
+      agentNumber: p.agent.number,
+      agentName: p.agent.user.name,
+      amount: Number(p.amount),
+      paidOn: p.paidOn.toISOString(),
+      method: p.method,
+      reference: p.reference,
+      notes: p.notes,
+      voidedAt: p.voidedAt?.toISOString() ?? null,
+      voidReason: p.voidReason,
+      items: p.items.map((i) => ({
+        loanId: i.loanId,
+        loanNumber: i.loan.number,
+        amount: Number(i.amount),
+      })),
+    }));
+  }
+
+  /**
+   * Void a payout: reverse the ledger entry and free its loans.
+   *
+   * The payout row STAYS, marked voided, and the reversal stands beside
+   * the original. Deleting either would erase the fact that money left
+   * and came back, which is precisely what an audit is looking for.
+   *
+   * The line items are removed, and that is deliberate: they are the
+   * uniqueness constraint that says "this commission is paid", so
+   * clearing them is what makes the loans payable again on a corrected
+   * run. What was paid is still legible — the reversed journal entry
+   * names the payout, and the payout names its amount.
+   */
+  async voidPayout(
+    idOrNumber: string,
+    input: { reason: string; voidedById: string },
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const payout = await tx.agentPayout.findFirst({
+        where: idOrNumber.startsWith("APO-")
+          ? { number: idOrNumber }
+          : { id: idOrNumber },
+      });
+      if (!payout) throw new AgentPayoutNotFoundError(idOrNumber);
+      if (payout.voidedAt) throw new PayoutAlreadyVoidedError(payout.number);
+
+      const entries = await tx.journalEntry.findMany({
+        where: { sourceRefType: "AgentPayout", sourceRefId: payout.id },
+        select: { id: true },
+      });
+      for (const e of entries) {
+        await this.accounting.reverseEntry(e.id, {
+          postedById: input.voidedById,
+          tx,
+          memo: `Void of agent payout ${payout.number}: ${input.reason}`,
+        });
+      }
+
+      await tx.agentPayoutItem.deleteMany({ where: { payoutId: payout.id } });
+      return tx.agentPayout.update({
+        where: { id: payout.id },
+        data: {
+          voidedAt: new Date(),
+          voidReason: input.reason,
+          voidedById: input.voidedById,
+        },
+      });
+    });
+  }
+
+  /**
+   * Every loan of this agent's that carries a commission, with whether a
+   * payout line has already settled it. The filtering is
+   * `selectPayable`'s job — this only fetches.
+   */
+  private async loadPayableRows(
+    agentId: string,
+    tx: Prisma.TransactionClient = this.prisma,
+  ) {
+    return tx.loanApplication.findMany({
+      where: { agentId, agentCommissionAmount: { gt: 0 } },
+      orderBy: { agentCommissionPostedAt: "asc" },
+      select: {
+        id: true,
+        number: true,
+        principal: true,
+        agentCommissionAmount: true,
+        agentCommissionPostedAt: true,
+        agentCommissionPayout: { select: { payoutId: true } },
+        customer: { select: { firstName: true, lastName: true } },
+      },
+    });
+  }
 }
+
+type PayableRow = {
+  id: string;
+  number: string;
+  agentCommissionAmount: Prisma.Decimal | null;
+  agentCommissionPostedAt: Date | null;
+  agentCommissionPayout: { payoutId: string } | null;
+};
+
+const toPayableLoan = (r: PayableRow): PayableLoan => ({
+  loanId: r.id,
+  loanNumber: r.number,
+  commissionAmount: num(r.agentCommissionAmount),
+  commissionPostedAt: r.agentCommissionPostedAt,
+  paidByPayoutId: r.agentCommissionPayout?.payoutId ?? null,
+});

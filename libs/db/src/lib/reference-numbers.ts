@@ -37,7 +37,8 @@ async function nextSeq(
     | "loanApplication"
     | "journalEntry"
     | "preAssessment"
-    | "agent",
+    | "agent"
+    | "agentPayout",
   prefix: string,
   year: number,
 ): Promise<number> {
@@ -74,6 +75,15 @@ export async function nextAgentNumber(prisma: PrismaClient): Promise<string> {
   const y = YEAR();
   const seq = await nextSeq(prisma, "agent", "AGT", y);
   return `AGT-${y}-${pad6(seq)}`;
+}
+
+/** "APO-2026-000123" — per-year reset. */
+export async function nextAgentPayoutNumber(
+  prisma: PrismaClient,
+): Promise<string> {
+  const y = YEAR();
+  const seq = await nextSeq(prisma, "agentPayout", "APO", y);
+  return `APO-${y}-${pad6(seq)}`;
 }
 
 /** "KYC-2026-000123" — per-year reset. */

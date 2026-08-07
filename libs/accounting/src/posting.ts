@@ -222,6 +222,46 @@ export function agentCommissionEntry(args: {
 }
 
 /**
+ * Paying an agent what they are owed.
+ *
+ *   Dr Agent Commission Payable    amount
+ *     Cr Cash                      amount
+ *
+ * The exact mirror of `agentCommissionEntry`, and the reason that one
+ * credits a payable rather than cash: booking the expense and paying it
+ * are two events on two days, and only this one moves money.
+ *
+ * No expense line here. The cost was recognized at disbursement; debiting
+ * it again would double the commission on the income statement while the
+ * cash only left once.
+ *
+ * `sourceRefId` is the payout, so a re-submitted run settles once.
+ */
+export function agentPayoutEntry(args: {
+  payoutId: string;
+  payoutNumber: string;
+  agentNumber: string;
+  amount: number;
+  paidOn: Date;
+}): JournalEntryInput {
+  return buildEntry({
+    entryDate: args.paidOn,
+    source: "MANUAL",
+    sourceRefType: "AgentPayout",
+    sourceRefId: args.payoutId,
+    memo: `Agent payout ${args.payoutNumber} — ${args.agentNumber}`,
+    lines: [
+      {
+        accountCode: ACCOUNT_CODES.AGENT_COMMISSION_PAYABLE,
+        debit: args.amount,
+        credit: 0,
+      },
+      { accountCode: ACCOUNT_CODES.CASH, debit: 0, credit: args.amount },
+    ],
+  });
+}
+
+/**
  * Loan payment. Allocation arrives split into interest + principal portions
  * (the loan repository computes this from the schedule).
  *   Dr Cash                    total

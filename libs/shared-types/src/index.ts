@@ -1988,6 +1988,49 @@ export interface AgentBook {
   totals: AgentBookTotals;
 }
 
+/**
+ * What the coop owes an agent right now, and the loans behind it.
+ *
+ * Distinct from `AgentBookTotals.earned`, which is PAYABLE + PAID over
+ * a whole career. Handing that figure to a cashier would pay every
+ * commission the agent has ever made, all over again.
+ */
+export interface AgentPayable {
+  agent?: Agent;
+  loans: Array<{
+    loanId: string;
+    loanNumber: string;
+    customerName: string;
+    principal: number;
+    commissionAmount: number;
+    /** When the commission hit the ledger — i.e. when it became owed. */
+    postedAt: string;
+  }>;
+  payableTotal: number;
+  paidTotal: number;
+  /** Present on the agent's own view (/agents/me/payable). */
+  payouts?: AgentPayout[];
+}
+
+export interface AgentPayout {
+  id: string;
+  /** "APO-2026-000012". */
+  number: string;
+  agentId: string;
+  agentNumber: string;
+  agentName: string;
+  amount: number;
+  paidOn: string;
+  method: string | null;
+  reference: string | null;
+  notes: string | null;
+  /** Voided, never deleted — the reversal stands beside the original. */
+  voidedAt: string | null;
+  voidReason: string | null;
+  /** Exactly which commissions this payment settled. */
+  items: Array<{ loanId: string; loanNumber: string; amount: number }>;
+}
+
 export interface PreAssessment {
   id: string;
   /** "PA-2026-000123". */
