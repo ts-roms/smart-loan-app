@@ -23,6 +23,8 @@ import { formatDate, formatMoney } from "@loan/shared-utils";
 import { Banknote, CheckCircle2, CircleHelp, Link2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { usePermission } from "../../../hooks/use-permission";
+
 /**
  * Inspector drawer for a bank statement line. The trigger sits on the
  * `Unmatched` status cell — clicking opens a drawer with the suggested
@@ -76,6 +78,14 @@ function BankLineInspector({
   onClose: () => void;
 }) {
   const candidates = useBankLineCandidates(line.id);
+  /*
+   * Same split as the statement page: opening a line to inspect its
+   * candidates is `accounting.read`, applying one posts to the ledger
+   * and is `accounting.post_journal`. Without this, a viewer who can
+   * legitimately look at the candidates also saw the button that
+   * commits one.
+   */
+  const canMatch = usePermission("accounting.post_journal");
   const matchLine = useMatchLine();
   const toast = useToast();
 
@@ -201,14 +211,16 @@ function BankLineInspector({
                     >
                       {(c.score * 100).toFixed(0)}%
                     </Badge>
-                    <Button
-                      size="sm"
-                      onClick={() => onApplyCandidate(c)}
-                      disabled={matchLine.isPending}
-                    >
-                      <Link2 className="h-3 w-3" />
-                      Match
-                    </Button>
+                    {canMatch && (
+                      <Button
+                        size="sm"
+                        onClick={() => onApplyCandidate(c)}
+                        disabled={matchLine.isPending}
+                      >
+                        <Link2 className="h-3 w-3" />
+                        Match
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -216,49 +228,51 @@ function BankLineInspector({
           )}
         </div>
 
-        {/* Manual fallback */}
-        <div className="rounded-md border border-default bg-surface-2 p-2.5">
-          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2">
-            Manual match
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label>Type</Label>
+        {/* Manual fallback — same gate; it posts the same entry. */}
+        {canMatch && (
+          <div className="rounded-md border border-default bg-surface-2 p-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2">
+              Manual match
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>Type</Label>
+                <Input
+                  value={manualType}
+                  onChange={(e) => setManualType(e.target.value)}
+                  placeholder="MANUAL / LoanPayment / LoanDisbursement"
+                />
+              </div>
+              <div>
+                <Label>Reference id (optional)</Label>
+                <Input
+                  value={manualRefId}
+                  onChange={(e) => setManualRefId(e.target.value)}
+                  placeholder="uuid"
+                />
+              </div>
+            </div>
+            <div className="mt-2">
+              <Label>Note (optional)</Label>
               <Input
-                value={manualType}
-                onChange={(e) => setManualType(e.target.value)}
-                placeholder="MANUAL / LoanPayment / LoanDisbursement"
+                value={manualNote}
+                onChange={(e) => setManualNote(e.target.value)}
+                placeholder="e.g. monthly bank fee"
               />
             </div>
-            <div>
-              <Label>Reference id (optional)</Label>
-              <Input
-                value={manualRefId}
-                onChange={(e) => setManualRefId(e.target.value)}
-                placeholder="uuid"
-              />
+            <div className="mt-2 flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onApplyManual}
+                loading={matchLine.isPending}
+                disabled={!manualType.trim()}
+              >
+                Match manually
+              </Button>
             </div>
           </div>
-          <div className="mt-2">
-            <Label>Note (optional)</Label>
-            <Input
-              value={manualNote}
-              onChange={(e) => setManualNote(e.target.value)}
-              placeholder="e.g. monthly bank fee"
-            />
-          </div>
-          <div className="mt-2 flex justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onApplyManual}
-              loading={matchLine.isPending}
-              disabled={!manualType.trim()}
-            >
-              Match manually
-            </Button>
-          </div>
-        </div>
+        )}
       </DrawerBody>
 
       <DrawerFooter>

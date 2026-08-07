@@ -31,6 +31,8 @@ import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { BankLineLink } from "../components/BankLineDrawer";
 
+import { usePermission } from "../../../hooks/use-permission";
+
 /**
  * One bank statement = list of lines + summary + auto/manual match actions.
  * The matcher is conservative — anything ambiguous lands here for human
@@ -40,6 +42,15 @@ export function StatementDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const statement = useBankStatement(id);
   const summary = useBankStatementSummary(id);
+  /*
+   * Reading a statement needs `accounting.read`; matching a line to a
+   * payment posts to the ledger and needs `accounting.post_journal`.
+   * LOAN_OFFICER holds the first and not the second, and reaches this
+   * page from the nav — so Auto-match, Match and Unmatch were three
+   * controls that answered 403 on a screen they can legitimately open
+   * to look at.
+   */
+  const canMatch = usePermission("accounting.post_journal");
   const autoMatch = useAutoMatchStatement();
   const matchLine = useMatchLine();
   const unmatchLine = useUnmatchLine();
@@ -146,10 +157,12 @@ export function StatementDetailPage() {
                 All statements
               </RouterLink>
             </Button>
-            <Button onClick={onAutoMatch} loading={autoMatch.isPending}>
-              {!autoMatch.isPending && <Sparkles className="h-3 w-3" />}
-              Auto-match
-            </Button>
+            {canMatch && (
+              <Button onClick={onAutoMatch} loading={autoMatch.isPending}>
+                {!autoMatch.isPending && <Sparkles className="h-3 w-3" />}
+                Auto-match
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -247,25 +260,26 @@ export function StatementDetailPage() {
                       )}
                     </td>
                     <td className="py-2 px-2 text-right">
-                      {matched ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onUnmatch(l.id)}
-                        >
-                          <Unlink className="h-3 w-3" />
-                          Unmatch
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onManualMatch(l.id)}
-                        >
-                          <Link2 className="h-3 w-3" />
-                          Match
-                        </Button>
-                      )}
+                      {canMatch &&
+                        (matched ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onUnmatch(l.id)}
+                          >
+                            <Unlink className="h-3 w-3" />
+                            Unmatch
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onManualMatch(l.id)}
+                          >
+                            <Link2 className="h-3 w-3" />
+                            Match
+                          </Button>
+                        ))}
                     </td>
                   </tr>
                 );

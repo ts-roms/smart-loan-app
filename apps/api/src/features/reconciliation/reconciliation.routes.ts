@@ -7,7 +7,11 @@
  * Phase 2: per-request repo wiring against `req.tenantCtx.prisma`.
  */
 
-import { AuditLogRepository, BankReconciliationRepository } from "@loan/db";
+import {
+  AuditLogRepository,
+  BankLineAlreadyMatchedError,
+  BankReconciliationRepository,
+} from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { manualMatchSchema, statementSchema } from "./schemas";
@@ -127,10 +131,21 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      return req.reconciliationCtx!.repo.manualMatch(req.params.id, {
-        ...parsed.data,
-        userId: req.user.sub,
-      });
+      try {
+        return await req.reconciliationCtx!.repo.manualMatch(req.params.id, {
+          ...parsed.data,
+          userId: req.user.sub,
+        });
+      } catch (e) {
+        // 409: the request is well-formed, the record is just already
+        // spoken for — and the message names the line that has it.
+        if (e instanceof BankLineAlreadyMatchedError) {
+          return reply
+            .code(409)
+            .send({ error: e.code, message: e.message, lineId: e.lineId });
+        }
+        throw e;
+      }
     },
   );
 
