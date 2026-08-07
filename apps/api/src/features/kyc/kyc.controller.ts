@@ -31,6 +31,14 @@ export class KycController {
     return req.kycServices!.kyc.listForCustomer(req.query.customerId);
   };
 
+  listPending = async (
+    req: FastifyRequest<{ Querystring: { page?: string; pageSize?: string } }>,
+  ) =>
+    req.kycServices!.kyc.listPending({
+      page: req.query.page ? Number(req.query.page) : undefined,
+      pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+    });
+
   submit = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = submitSchema.safeParse(req.body);
     if (!parsed.success) {

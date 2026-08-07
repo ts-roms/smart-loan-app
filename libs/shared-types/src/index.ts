@@ -2038,6 +2038,26 @@ export interface AgentPayout {
   items: Array<{ loanId: string; loanNumber: string; amount: number }>;
 }
 
+/**
+ * A row of the KYC review queue: the document, plus who it belongs to.
+ *
+ * Joined server-side on purpose. The queue used to be assembled in the
+ * browser from the customer pool plus one request per customer, which
+ * both asked the wrong question and asked it two hundred times.
+ */
+export interface PendingKycRow {
+  id: string;
+  number: string;
+  customerId: string;
+  customerNumber: string;
+  customerName: string;
+  customerPhone: string;
+  documentType: KycDocumentType;
+  documentUrl: string;
+  status: KycSubmissionStatus;
+  submittedAt: string;
+}
+
 export interface PreAssessment {
   id: string;
   /** "PA-2026-000123". */

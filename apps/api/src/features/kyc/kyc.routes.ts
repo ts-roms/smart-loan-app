@@ -28,6 +28,17 @@ export function registerKycHttp(
     { preHandler: app.requirePermission("kyc.read") },
     controller.list,
   );
+  /*
+   * The review queue. Declared before "/:id/decide" and separate from
+   * "/" because "/" demands a customerId — which is precisely why the
+   * console used to fetch every customer and then ask about each one
+   * individually.
+   */
+  app.get<{ Querystring: { page?: string; pageSize?: string } }>(
+    "/pending",
+    { preHandler: app.requirePermission("kyc.read") },
+    controller.listPending,
+  );
   app.post(
     "/",
     { preHandler: app.requirePermission("kyc.submit") },

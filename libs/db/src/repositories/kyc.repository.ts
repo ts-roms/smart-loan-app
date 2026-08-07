@@ -4,6 +4,12 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 import { idOrNumberWhere, nextKycNumber } from "../lib/reference-numbers";
+import {
+  resolvePaging,
+  toPage,
+  type Page,
+  type PageParams,
+} from "../lib/pagination";
 
 export interface KycSubmitInput {
   customerId: string;
@@ -41,6 +47,23 @@ export class KycDuplicateError extends Error {
  * `kycStatus` so other parts of the system (loan apply) can short-circuit
  * on "incomplete KYC" without re-aggregating every time.
  */
+/** A row of the review queue — the document plus who it belongs to. */
+export interface PendingKycRow {
+  id: string;
+  number: string;
+  customerId: string;
+  customerNumber: string;
+  customerName: string;
+  customerPhone: string;
+  documentType: string;
+  documentUrl: string;
+  status: string;
+  submittedAt: string;
+}
+
+/** 20 documents is a sitting worth of review without scrolling. */
+const KYC_QUEUE_PAGING = { defaultPageSize: 20, maxPageSize: 100 };
+
 export class KycRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -49,6 +72,66 @@ export class KycRepository {
       where: { customerId },
       orderBy: { submittedAt: "desc" },
     });
+  }
+
+  /**
+   * The review queue: documents actually waiting on a decision.
+   *
+   * Asked for directly, because the officer console had no way to. The
+   * only listing endpoint required a `customerId`, so the page fetched
+   * the customer pool, filtered it in the browser, and then issued one
+   * request PER customer to find out whether they had anything pending
+   * — up to two hundred requests to render a queue that is usually
+   * three rows.
+   *
+   * It also asked the wrong question. That filter kept customers whose
+   * rollup was NONE, meaning they had submitted nothing at all, so the
+   * queue was padded with people who had no documents to review and a
+   * wasted round trip each to prove it.
+   *
+   * Oldest first, deliberately: a review queue is worked front to back,
+   * and the document that has been waiting longest is the one that
+   * should be looked at next.
+   */
+  async listPending(params: PageParams = {}): Promise<Page<PendingKycRow>> {
+    const paging = resolvePaging(params, KYC_QUEUE_PAGING);
+    const where = { status: "PENDING" as const };
+    const [rows, total] = await Promise.all([
+      this.prisma.kycSubmission.findMany({
+        where,
+        orderBy: { submittedAt: "asc" },
+        skip: paging.skip,
+        take: paging.take,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              number: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
+          },
+        },
+      }),
+      this.prisma.kycSubmission.count({ where }),
+    ]);
+    return toPage(
+      rows.map((r) => ({
+        id: r.id,
+        number: r.number,
+        customerId: r.customerId,
+        customerNumber: r.customer.number,
+        customerName: `${r.customer.firstName} ${r.customer.lastName}`,
+        customerPhone: r.customer.phone,
+        documentType: r.documentType,
+        documentUrl: r.documentUrl,
+        status: r.status,
+        submittedAt: r.submittedAt.toISOString(),
+      })),
+      total,
+      paging,
+    );
   }
 
   /**
