@@ -4,10 +4,12 @@ import { formatDateTime } from "@loan/shared-utils";
 import {
   Avatar,
   Badge,
+  Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  DatePicker,
   Input,
   Label,
   Pagination,
@@ -48,6 +50,16 @@ const PAGE_SIZE = 25;
 export function AuditLogPage() {
   const [actionFilter, setActionFilter] = useState("ALL");
   const [actorSearch, setActorSearch] = useState("");
+  /*
+   * Blank by default, not "the last 30 days".
+   *
+   * A pre-filled range is a filter nobody chose, and on this screen the
+   * cost of not noticing one is concluding an action never happened
+   * when it happened five weeks ago. Empty means everything, and the
+   * date pickers are visibly empty.
+   */
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
 
   /*
@@ -60,6 +72,9 @@ export function AuditLogPage() {
   const events = useAuditEvents({
     action: actionFilter === "ALL" ? undefined : actionFilter,
     actor,
+    // Date-only strings; the server widens `to` to the end of that day.
+    from: from || undefined,
+    to: to || undefined,
     page,
     pageSize: PAGE_SIZE,
   });
@@ -70,11 +85,12 @@ export function AuditLogPage() {
    * a real total, which reads as "nothing matched" when the truth is
    * "you are past the end".
    */
-  useEffect(() => setPage(1), [actionFilter, actor]);
+  useEffect(() => setPage(1), [actionFilter, actor, from, to]);
 
   const data = events.data;
   const rows = data?.rows ?? [];
-  const filtered = Boolean(actor) || actionFilter !== "ALL";
+  const filtered =
+    Boolean(actor) || actionFilter !== "ALL" || Boolean(from) || Boolean(to);
 
   return (
     <Card>
@@ -89,7 +105,7 @@ export function AuditLogPage() {
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:max-w-xl">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <Label>Action</Label>
             <Select value={actionFilter} onValueChange={setActionFilter}>
@@ -118,7 +134,36 @@ export function AuditLogPage() {
               />
             </div>
           </div>
+          {/*
+            The range this page was moved out of a drawer to provide.
+            "What happened on the 14th" is the question an audit log
+            exists for, and paging back to it through a log that only
+            grows is not an answer.
+          */}
+          <div>
+            <Label>From</Label>
+            <DatePicker value={from} onChange={setFrom} max={to || undefined} />
+          </div>
+          <div>
+            <Label>To</Label>
+            <DatePicker value={to} onChange={setTo} min={from || undefined} />
+          </div>
         </div>
+
+        {filtered && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setActionFilter("ALL");
+              setActorSearch("");
+              setFrom("");
+              setTo("");
+            }}
+          >
+            Clear filters
+          </Button>
+        )}
 
         {events.isLoading ? (
           <SkeletonCard />

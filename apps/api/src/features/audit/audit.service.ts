@@ -1,3 +1,4 @@
+import { endOfDay, startOfDay } from "@loan/accounting";
 import {
   resolvePaging,
   toPage,
@@ -55,9 +56,16 @@ export class AuditService {
       targetId: query.targetId,
       // Undefined when no search was typed, which Prisma drops.
       actor: actorMatch,
+      /*
+       * `endOfDay`, not `new Date`. A bare "2026-08-07" parses as UTC
+       * midnight — the FIRST instant of the day — so "everything up to
+       * the 7th" dropped the whole working day of the 7th. Third place
+       * in this codebase with the same bug; same fix as the accounting
+       * and compliance reports.
+       */
       createdAt: {
-        gte: query.from ? new Date(query.from) : undefined,
-        lte: query.to ? new Date(query.to) : undefined,
+        gte: query.from ? startOfDay(query.from) : undefined,
+        lte: query.to ? endOfDay(query.to) : undefined,
       },
     };
     /*
@@ -98,13 +106,22 @@ export class AuditService {
     return toPage(mapped, total, paging);
   }
 
-  /** Distinct action labels — powers the UI's filter dropdown. */
+  /**
+   * Distinct action labels — powers the UI's filter dropdown.
+   *
+   * Raw SQL, not `findMany({ distinct })`. Prisma does not push that
+   * down: it emits `SELECT id, action FROM "AuditEvent" ORDER BY
+   * action` and dedupes in the query engine, so opening the audit page
+   * loaded EVERY row of the one table in this system that only ever
+   * grows, to populate a dropdown of maybe thirty labels.
+   *
+   * `SELECT DISTINCT` lets Postgres answer it from the `action` index
+   * instead.
+   */
   async listDistinctActions(): Promise<string[]> {
-    const rows = await this.prisma.auditEvent.findMany({
-      distinct: ["action"],
-      select: { action: true },
-      orderBy: { action: "asc" },
-    });
+    const rows = await this.prisma.$queryRaw<Array<{ action: string }>>`
+      SELECT DISTINCT "action" FROM "AuditEvent" ORDER BY "action" ASC
+    `;
     return rows.map((r) => r.action);
   }
 }
