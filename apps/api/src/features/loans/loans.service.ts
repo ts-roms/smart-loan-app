@@ -72,6 +72,7 @@ export type ApplyResult =
       screeningId: string;
     }
   | { ok: false; kind: "BadRequest"; message: string; issues?: unknown }
+  | { ok: false; kind: "CustomerErased"; message: string }
   | {
       ok: false;
       kind: "HasLiveLoan";
@@ -232,6 +233,22 @@ export class LoanWorkflowService {
    * outcome to its specific HTTP code without throwing for control flow.
    */
   async apply(input: ApplyInput, actorId: string): Promise<ApplyResult> {
+    // A privacy-erased customer cannot take a new loan: underwriting
+    // needs an identity, and the record no longer has one. The UI hides
+    // the apply button, but the endpoint is the actual guarantee.
+    const applicant = await this.prisma.customer.findUnique({
+      where: { id: input.customerId },
+      select: { erasedAt: true },
+    });
+    if (applicant?.erasedAt) {
+      return {
+        ok: false,
+        kind: "CustomerErased",
+        message:
+          "This customer's personal data was erased under a data privacy request; new loan applications are not possible.",
+      };
+    }
+
     // AML gate. ADMIN can override via /screening/customers/:id/override,
     // which posts an OVERRIDDEN row that supersedes the MATCH.
     const latestScreen = await this.screening.latestForCustomer(

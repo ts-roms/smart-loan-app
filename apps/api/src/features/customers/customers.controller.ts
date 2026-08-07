@@ -90,11 +90,17 @@ export class CustomerController {
       // Phone rules need the stored record to know what changed, so
       // they run in the service rather than the schema — the failure
       // shape still matches every other validated endpoint.
-      return result.reason === "NotFound"
-        ? reply.code(404).send({ error: "NotFound" })
-        : reply
-            .code(400)
-            .send({ error: "ValidationError", issues: result.issues });
+      if (result.reason === "NotFound")
+        return reply.code(404).send({ error: "NotFound" });
+      if (result.reason === "Erased")
+        return reply.code(409).send({
+          error: "Erased",
+          message:
+            "This customer's personal data was erased under a data privacy request; the record can no longer be edited.",
+        });
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: result.issues });
     }
     return result.customer;
   };

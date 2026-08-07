@@ -35,6 +35,7 @@ interface PhoneIssue {
 export type UpdateResult =
   | { ok: true; customer: Customer }
   | { ok: false; reason: "NotFound" }
+  | { ok: false; reason: "Erased" }
   | { ok: false; reason: "Invalid"; issues: PhoneIssue[] };
 
 /**
@@ -105,6 +106,12 @@ export class CustomerService {
   ): Promise<UpdateResult> {
     const existing = await this.customers.findByIdOrNumber(idOrNumber);
     if (!existing) return { ok: false, reason: "NotFound" };
+
+    // A privacy-erased record is closed to edits: any write here would
+    // put fresh PII back into a row the org certified as redacted,
+    // undoing the erasure one field at a time. The UI hides the edit
+    // button, but the endpoint is the actual guarantee.
+    if (existing.erasedAt) return { ok: false, reason: "Erased" };
 
     // Phone numbers are validated on CHANGE, not on presence. The form
     // resubmits every field it rendered, so checking the value alone

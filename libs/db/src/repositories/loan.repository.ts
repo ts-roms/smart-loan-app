@@ -557,6 +557,23 @@ export class LoanRepository {
 
   async apply(input: LoanApplyInput): Promise<LoanApplication> {
     return this.prisma.$transaction(async (tx) => {
+      // The workflow service refuses erased customers with a clean 409
+      // before it gets here, but the portal path calls this repository
+      // directly — so the check that actually guarantees "no new loans
+      // after erasure" lives inside the transaction, not in a caller.
+      const applicant = await tx.customer.findUnique({
+        where: { id: input.customerId },
+        select: { erasedAt: true },
+      });
+      if (!applicant) {
+        throw new Error(`Customer ${input.customerId} not found.`);
+      }
+      if (applicant.erasedAt) {
+        throw new Error(
+          "This customer's personal data was erased under a data privacy request; new loan applications are not possible.",
+        );
+      }
+
       const product = await tx.loanProduct.findUnique({
         where: { code: input.productCode },
       });

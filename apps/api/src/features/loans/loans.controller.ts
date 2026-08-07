@@ -40,6 +40,12 @@ export class LoanWorkflowController {
         screeningId: result.screeningId,
       });
     }
+    if (result.kind === "CustomerErased") {
+      return reply.code(409).send({
+        error: "CustomerErased",
+        message: result.message,
+      });
+    }
     if (result.kind === "HasLiveLoan") {
       // 409, same family as AmlBlocked: the request is well-formed and
       // the refusal is about the customer's state, not the payload.
