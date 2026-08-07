@@ -20,6 +20,7 @@ export interface PermissionDefinition {
 
 export type PermissionCategory =
   | "Loans"
+  | "Agents"
   | "KYC"
   | "Customers"
   | "Accounting"
@@ -139,6 +140,38 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
   },
   { key: "loans.close_early", label: "Close early", category: "Loans" },
   { key: "loans.sign_officer", label: "Sign as lender", category: "Loans" },
+
+  // Agents
+  //
+  // Four keys rather than the usual read/write pair, because the money
+  // and the directory are different privileges.
+  {
+    key: "agents.read",
+    label: "View agents",
+    category: "Agents",
+    description: "See the agent directory and any agent's book of loans.",
+  },
+  {
+    key: "agents.manage",
+    label: "Create / edit agents",
+    category: "Agents",
+    description:
+      "Add agents, deactivate them, and set a per-agent commission rate that overrides the product default.",
+  },
+  {
+    key: "agents.assign",
+    label: "Assign to loans",
+    category: "Agents",
+    description:
+      "Credit an application to an agent, or move it to a different one. Held apart from agents.manage so an officer can attribute a loan without being able to set what anyone is paid for it.",
+  },
+  {
+    key: "agents.self",
+    label: "View own book",
+    category: "Agents",
+    description:
+      "An agent's view of their own assisted loans and commission. Scoped to the signed-in agent by the endpoint, not by this key — it grants nothing about anyone else.",
+  },
 
   // KYC
   { key: "kyc.read", label: "View KYC", category: "KYC" },
@@ -434,6 +467,12 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
       // Loan Officers can act on the first (Officer) step of any chain.
       // BM / Committee steps require their own role assignments.
       "loans.approve.officer",
+      // An officer takes the application, so they are the one who knows
+      // which agent brought it in. Read + assign only: setting what an
+      // agent is paid stays with the admin, so the person crediting the
+      // loan cannot also price it.
+      "agents.read",
+      "agents.assign",
       "repossession.identify",
       "repossession.assign_agent",
       "repossession.recover",
@@ -536,6 +575,32 @@ export const DEFAULT_ROLES: ReadonlyArray<RoleDefinition> = [
       // to pay and the cashier records the receipt.
       "notifications.read",
       "documents.download",
+    ],
+  },
+  {
+    key: "AGENT",
+    name: "Field Agent",
+    description:
+      "Originates loans on commission. Sees their own book and nothing else.",
+    system: true,
+    permissions: [
+      /*
+       * Deliberately tiny.
+       *
+       * An agent is paid per loan they land, which is exactly the
+       * incentive that makes a broad grant dangerous: `loans.read` would
+       * let them page through every borrower in the book, and
+       * `customers.read` would hand them the coop's entire contact list
+       * to take to a competitor. `agents.self` returns only rows already
+       * assigned to the signed-in agent, so the scope is enforced by the
+       * endpoint rather than trusted to the UI.
+       *
+       * `loans.apply` is here because bringing applications in is the
+       * job. They cannot decide, disburse or price anything.
+       */
+      "agents.self",
+      "loans.apply",
+      "notifications.read",
     ],
   },
   {

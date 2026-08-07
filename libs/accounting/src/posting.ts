@@ -176,6 +176,52 @@ export function preTerminationFeeEntry(args: {
 }
 
 /**
+ * Agent commission, recognized at disbursement.
+ *
+ *   Dr Agent Commission Expense    amount
+ *     Cr Agent Commission Payable  amount
+ *
+ * Expense and PAYABLE, not expense and cash. The agent has earned the
+ * money the moment the loan is funded, but paying them is a separate
+ * event on a separate day — usually a batch at month end. Crediting cash
+ * here would report money as having left the building when it hasn't,
+ * and leave nothing on the books saying who is owed what.
+ *
+ * `sourceRefId` is the loan, so `postIfAbsent` makes a re-run of a
+ * disbursement idempotent rather than paying the agent twice.
+ */
+export function agentCommissionEntry(args: {
+  loanId: string;
+  loanNumber: string;
+  agentNumber: string;
+  amount: number;
+  disbursedAt: Date;
+}): JournalEntryInput | null {
+  // Nothing to post at a zero rate — and buildEntry would reject the
+  // entry anyway, since it filters zero lines and then demands two.
+  if (round2(args.amount) <= 0) return null;
+  return buildEntry({
+    entryDate: args.disbursedAt,
+    source: "MANUAL",
+    sourceRefType: "AgentCommission",
+    sourceRefId: args.loanId,
+    memo: `Agent commission ${args.agentNumber} — loan ${args.loanNumber}`,
+    lines: [
+      {
+        accountCode: ACCOUNT_CODES.AGENT_COMMISSION_EXPENSE,
+        debit: args.amount,
+        credit: 0,
+      },
+      {
+        accountCode: ACCOUNT_CODES.AGENT_COMMISSION_PAYABLE,
+        debit: 0,
+        credit: args.amount,
+      },
+    ],
+  });
+}
+
+/**
  * Loan payment. Allocation arrives split into interest + principal portions
  * (the loan repository computes this from the schedule).
  *   Dr Cash                    total

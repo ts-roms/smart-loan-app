@@ -6,8 +6,10 @@ import {
   periodsPerYear,
 } from "@loan/loans";
 import {
+  AgentInactiveError,
   AuditLogRepository,
   CoMakerRepository,
+  CommissionAlreadyPostedError,
   CreditScoreRepository,
   DecisionRuleRepository,
   DelegationRepository,
@@ -21,6 +23,8 @@ import {
 } from "@loan/db";
 import { validateKyc } from "@loan/kyc";
 import { checkRenewal, renewalNetProceeds } from "@loan/loans";
+
+import { assignAgentSchema } from "../agents/index";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { config } from "../../config";
@@ -449,6 +453,49 @@ export async function loanRoutes(app: FastifyInstance) {
     "/:id/disburse",
     { preHandler: app.requirePermission("loans.disburse") },
     workflow.disburse,
+  );
+
+  /**
+   * Credit this application to a field agent, move it to another, or
+   * clear it (`agentId: null`).
+   *
+   * `agents.assign`, deliberately not `agents.manage`: the officer
+   * taking the application is the one who knows who brought it in, but
+   * they should not also be able to set what that person is paid.
+   * Attribution and pricing are different privileges.
+   *
+   * PUT, not POST — assigning is idempotent. Sending the same agent
+   * twice leaves the loan in the same state rather than crediting
+   * anyone twice.
+   */
+  app.put<{ Params: { id: string } }>(
+    "/:id/agent",
+    { preHandler: app.requirePermission("agents.assign") },
+    async (req, reply) => {
+      const parsed = assignAgentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
+      }
+      try {
+        return await req.loanCtx!.loans.assignAgent(req.params.id, {
+          agentId: parsed.data.agentId,
+          assignedById: req.user.sub,
+        });
+      } catch (e) {
+        // 409 for both: the request is well-formed and the caller can
+        // act on the answer — reactivate the agent, or reverse the
+        // posted commission first.
+        if (
+          e instanceof AgentInactiveError ||
+          e instanceof CommissionAlreadyPostedError
+        ) {
+          return reply.code(409).send({ error: e.code, message: e.message });
+        }
+        throw e;
+      }
+    },
   );
 
   /**

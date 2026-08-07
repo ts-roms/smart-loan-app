@@ -5,7 +5,7 @@
  * too. Three places, and the typechecker catches two of them.
  */
 export type UserRole =
-  "ADMIN" | "LOAN_OFFICER" | "ACCOUNTANT" | "COLLECTOR" | "CUSTOMER";
+  "ADMIN" | "LOAN_OFFICER" | "ACCOUNTANT" | "COLLECTOR" | "AGENT" | "CUSTOMER";
 
 export interface JwtPayload {
   sub: string;

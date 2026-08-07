@@ -1,4 +1,5 @@
 import {
+  agentCommissionEntry,
   allocatePayment,
   loanDisbursementEntry,
   loanPaymentEntry,
@@ -13,6 +14,7 @@ import {
   daysBetweenInstallments,
   effectiveMaxLtv,
   installmentCount,
+  quoteCommission,
   rateForTier,
   validateLoanApplication,
 } from "@loan/loans";
@@ -140,6 +142,15 @@ export interface LoanApplyInput {
    * knows whether partial answers are acceptable for the flow at hand.
    */
   kycDeclarations?: unknown;
+  /**
+   * The field agent who brought this application in, if any. Optional
+   * everywhere — walk-ins and officer-originated loans have none.
+   *
+   * The commission rate and amount are resolved and FROZEN onto the loan
+   * here, at apply, so a later change to the product or agent rate can
+   * never restate what was earned on a loan already in flight.
+   */
+  agentId?: string | null;
   /** Override initial status (used by decisioning engine). */
   initialStatus?: "SUBMITTED" | "APPROVED" | "REJECTED";
   /** Reason recorded with the decision when not SUBMITTED. */
@@ -264,6 +275,65 @@ const PAYABLE_STATUSES: ReadonlySet<LoanStatus> = new Set<LoanStatus>([
  * Carries the offending loans so the HTTP layer can name them instead
  * of just refusing.
  */
+export class AgentInactiveError extends Error {
+  readonly code = "AGENT_INACTIVE" as const;
+  constructor(readonly agentNumber: string) {
+    super(
+      `Agent ${agentNumber} is deactivated and cannot be credited with new applications. Reactivate them first, or pick a different agent.`,
+    );
+    this.name = "AgentInactiveError";
+  }
+}
+
+export class CommissionAlreadyPostedError extends Error {
+  readonly code = "COMMISSION_POSTED" as const;
+  constructor(readonly loanNumber: string) {
+    super(
+      `Loan ${loanNumber} has already had its agent commission booked. Reassigning now would change who is credited without moving the money that was already posted to the old agent.`,
+    );
+    this.name = "CommissionAlreadyPostedError";
+  }
+}
+
+/**
+ * Resolve and freeze an agent's commission for a loan.
+ *
+ * Returns null when there is no agent, which is the ordinary case: most
+ * loans are walk-ins or officer-originated and owe nobody a commission.
+ *
+ * The rate is read here and stored on the loan, never looked up again.
+ * See the field comments on `LoanApplication.agentCommissionRate` — an
+ * admin retuning a product rate must not restate what was earned on a
+ * loan already in flight, and that holds whichever way the rate moved.
+ */
+async function resolveCommission(
+  tx: Prisma.TransactionClient,
+  args: { agentId: string | null; principal: number; productRate: number },
+): Promise<{ agentId: string; rate: number; amount: number } | null> {
+  if (!args.agentId) return null;
+
+  const agent = await tx.agent.findUnique({
+    where: { id: args.agentId },
+    select: { id: true, number: true, active: true, commissionRate: true },
+  });
+  if (!agent) throw new Error(`No agent matches "${args.agentId}".`);
+  /*
+   * A deactivated agent keeps every loan already assigned to them —
+   * that history and the commission behind it must survive — but takes
+   * no new ones. Refused rather than silently dropped: an officer who
+   * picked an agent deserves to be told why the credit didn't stick.
+   */
+  if (!agent.active) throw new AgentInactiveError(agent.number);
+
+  const quote = quoteCommission({
+    principal: args.principal,
+    agentRate:
+      agent.commissionRate === null ? null : Number(agent.commissionRate),
+    productRate: args.productRate,
+  });
+  return { agentId: agent.id, rate: quote.rate, amount: quote.amount };
+}
+
 export class CustomerHasLiveLoanError extends Error {
   readonly code = "HAS_LIVE_LOAN" as const;
   constructor(
@@ -434,6 +504,20 @@ export class LoanRepository {
         vehicle: true,
         property: true,
         product: true,
+        /*
+         * Slim projection — the detail page shows who to credit, not the
+         * agent's whole record. Their CURRENT rate in particular is
+         * deliberately absent: the figure that matters here is the one
+         * frozen on this loan, and showing both would invite reading
+         * them as the same number when they need not be.
+         */
+        agent: {
+          select: {
+            id: true,
+            number: true,
+            user: { select: { name: true } },
+          },
+        },
       },
     });
   }
@@ -453,6 +537,20 @@ export class LoanRepository {
         vehicle: true,
         property: true,
         product: true,
+        /*
+         * Slim projection — the detail page shows who to credit, not the
+         * agent's whole record. Their CURRENT rate in particular is
+         * deliberately absent: the figure that matters here is the one
+         * frozen on this loan, and showing both would invite reading
+         * them as the same number when they need not be.
+         */
+        agent: {
+          select: {
+            id: true,
+            number: true,
+            user: { select: { name: true } },
+          },
+        },
       },
     });
   }
@@ -620,6 +718,12 @@ export class LoanRepository {
       const willUseChain =
         initialStatus === "SUBMITTED" && approvalSteps.length > 0;
 
+      const commission = await resolveCommission(tx, {
+        agentId: input.agentId ?? null,
+        principal: input.principal,
+        productRate: Number(product.agentCommissionRate),
+      });
+
       const created = await tx.loanApplication.create({
         data: {
           number,
@@ -645,6 +749,11 @@ export class LoanRepository {
           renewedFromId: input.renewedFromId,
           isRepeat,
           currentApprovalStep: willUseChain ? 1 : null,
+          agentId: commission?.agentId ?? null,
+          agentAssignedAt: commission ? new Date() : null,
+          agentAssignedById: commission ? input.submittedById : null,
+          agentCommissionRate: commission?.rate ?? null,
+          agentCommissionAmount: commission?.amount ?? null,
         },
       });
 
@@ -663,6 +772,65 @@ export class LoanRepository {
       }
 
       return created;
+    });
+  }
+
+  /**
+   * Credit a loan to an agent, move it to a different one, or clear it.
+   *
+   * Recomputes the commission from scratch against the CURRENT product
+   * and agent rates — this is a fresh assignment, so it gets a fresh
+   * quote, and the frozen figures are replaced rather than carried over
+   * from whoever held it before.
+   *
+   * Refused once the commission has been posted. After that the ledger
+   * carries a payable to a named agent, and quietly repointing the loan
+   * would credit the book to someone the money was never promised to
+   * while leaving the old agent's payable standing. Reversing a posted
+   * commission is an accounting action, not an attribution edit.
+   */
+  async assignAgent(
+    idOrNumber: string,
+    input: { agentId: string | null; assignedById: string },
+  ): Promise<LoanApplication> {
+    return this.prisma.$transaction(async (tx) => {
+      const loan = await tx.loanApplication.findFirst({
+        where: idOrNumberWhere(idOrNumber),
+        select: {
+          id: true,
+          number: true,
+          principal: true,
+          productCode: true,
+          agentCommissionPostedAt: true,
+        },
+      });
+      if (!loan) throw new Error("Loan not found");
+      if (loan.agentCommissionPostedAt) {
+        throw new CommissionAlreadyPostedError(loan.number);
+      }
+
+      const product = await tx.loanProduct.findUnique({
+        where: { code: loan.productCode },
+        select: { agentCommissionRate: true },
+      });
+      const commission = await resolveCommission(tx, {
+        agentId: input.agentId,
+        principal: Number(loan.principal),
+        productRate: Number(product?.agentCommissionRate ?? 0),
+      });
+
+      return tx.loanApplication.update({
+        where: { id: loan.id },
+        data: {
+          agentId: commission?.agentId ?? null,
+          // Cleared together with the agent. A stamp saying the loan was
+          // assigned, next to no agent, reads as data loss.
+          agentAssignedAt: commission ? new Date() : null,
+          agentAssignedById: commission ? input.assignedById : null,
+          agentCommissionRate: commission?.rate ?? null,
+          agentCommissionAmount: commission?.amount ?? null,
+        },
+      });
     });
   }
 
@@ -789,6 +957,47 @@ export class LoanRepository {
         }),
         { postedById: input.disbursedById, tx },
       );
+
+      /*
+       * Agent commission — earned the moment the money goes out.
+       *
+       * Here rather than at approval because an approved loan is not a
+       * funded one: paying on approval would make an agent's earnings
+       * FALL when a loan they had been credited for fell over before
+       * release. Inside this transaction so the commission and the
+       * disbursement it is owed against can never exist apart.
+       *
+       * `agentCommissionPostedAt` is what stops a second posting, and
+       * `postIfAbsent` keyed on the loan id backs it up at the ledger.
+       * Two guards for one payment because the failure is paying an
+       * agent twice for one loan, which nobody notices from the outside.
+       */
+      const commissionEntry =
+        loan.agentId && !loan.agentCommissionPostedAt
+          ? agentCommissionEntry({
+              loanId: loan.id,
+              loanNumber: loan.number,
+              agentNumber:
+                (
+                  await tx.agent.findUnique({
+                    where: { id: loan.agentId },
+                    select: { number: true },
+                  })
+                )?.number ?? "unknown",
+              amount: Number(loan.agentCommissionAmount ?? 0),
+              disbursedAt: today,
+            })
+          : null;
+      if (commissionEntry) {
+        await this.accounting.postIfAbsent(commissionEntry, {
+          postedById: input.disbursedById,
+          tx,
+        });
+        await tx.loanApplication.update({
+          where: { id },
+          data: { agentCommissionPostedAt: today },
+        });
+      }
 
       /*
        * Renewal settlement — the moment the netting actually happens.

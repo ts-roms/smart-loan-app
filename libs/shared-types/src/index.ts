@@ -97,15 +97,23 @@ export const USER_ROLES = [
   "LOAN_OFFICER",
   "ACCOUNTANT",
   "COLLECTOR",
+  "AGENT",
   "CUSTOMER",
 ] as const;
 export type UserRole = (typeof USER_ROLES)[number];
-/** Staff (non-customer) — the console personas combined. */
+/**
+ * Staff (non-customer) — the console personas combined.
+ *
+ * AGENT is staff and belongs here: agents sign into the console, not
+ * the borrower portal. They see one page, because their role grants one
+ * permission — the shell renders from permissions, not from this list.
+ */
 export const STAFF_ROLES = [
   "ADMIN",
   "LOAN_OFFICER",
   "ACCOUNTANT",
   "COLLECTOR",
+  "AGENT",
 ] as const satisfies ReadonlyArray<UserRole>;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
@@ -674,6 +682,27 @@ export interface LoanApplication {
   kycDeclarations?: KycDeclarations | null;
   /** true when submitted by a customer with prior CLOSED loans. */
   isRepeat?: boolean;
+
+  // ── Assisting agent ──────────────────────────────────────────────
+  /** The field agent who brought this in. Null on direct applications. */
+  agentId?: string | null;
+  /**
+   * Nested to match what the endpoint actually sends: the agent's name
+   * lives on their User row, and the detail query joins it rather than
+   * flattening. Kept honest to the wire instead of inventing a shape
+   * the server never produces.
+   */
+  agent?: { id: string; number: string; user: { name: string } } | null;
+  agentAssignedAt?: string | null;
+  /**
+   * Rate and amount FROZEN at assignment, not looked up live. A later
+   * change to the agent's or the product's rate does not move them —
+   * see the field comments in schema.prisma.
+   */
+  agentCommissionRate?: number | null;
+  agentCommissionAmount?: number | null;
+  /** Set when the commission was booked to the ledger, at disbursement. */
+  agentCommissionPostedAt?: string | null;
   // Face-match (selfie ↔ ID) outputs. All four are null until an
   // officer runs the match on the loan detail page.
   selfieMatchScore?: number | null;
@@ -1903,6 +1932,61 @@ export type PortalPreAssessmentInput = Pick<
   PreAssessmentInput,
   "productCode" | "principal" | "termMonths" | "annualInterestRate"
 >;
+
+// ─── Field agents ────────────────────────────────────────────────────────
+
+/** Whether a loan's commission rate came from the agent or the product. */
+export type CommissionRateSource = "AGENT_OVERRIDE" | "PRODUCT_DEFAULT";
+
+export interface AgentBookTotals {
+  loanCount: number;
+  fundedCount: number;
+  /** Commission on loans that reached disbursement — what they were paid. */
+  earned: number;
+  /** Commission riding on applications still in flight. Not banked. */
+  pipeline: number;
+}
+
+export interface Agent {
+  id: string;
+  /** "AGT-2026-000007". */
+  number: string;
+  userId: string;
+  name: string;
+  email: string;
+  /** Null means "inherit the product's rate", which is the usual case. */
+  commissionRate: number | null;
+  territory: string | null;
+  notes: string | null;
+  active: boolean;
+  deactivatedAt: string | null;
+  createdAt: string;
+  totals: AgentBookTotals;
+}
+
+export interface AgentBookLoan {
+  id: string;
+  number: string;
+  status: LoanStatus;
+  productCode: string;
+  principal: number;
+  submittedAt: string;
+  disbursedAt: string | null;
+  customerName: string;
+  customerNumber: string;
+  /** Frozen on the loan at assignment, not looked up live. */
+  commissionRate: number | null;
+  commissionAmount: number | null;
+  /** Set when the commission was booked to the ledger, at disbursement. */
+  commissionPostedAt: string | null;
+}
+
+export interface AgentBook {
+  agent: Agent;
+  loans: AgentBookLoan[];
+  /** Over the whole book, never the visible page. */
+  totals: AgentBookTotals;
+}
 
 export interface PreAssessment {
   id: string;

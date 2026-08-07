@@ -57,6 +57,7 @@ import { LoanStatusBadge } from "../components/StatusBadge";
 import { PenaltyPanel } from "../components/PenaltyPanel";
 import { AnnualDocsPanel } from "../components/AnnualDocsPanel";
 import { ApprovalChainPanel } from "../components/ApprovalChainPanel";
+import { LoanAgentCard } from "../../agents";
 import { CoMakersPanel } from "../components/CoMakersPanel";
 import { RenewLoanDialog } from "../components/RenewLoanDialog";
 import { FaceMatchPanel } from "../components/FaceMatchPanel";
@@ -330,6 +331,22 @@ export function LoanDetailPage() {
 
         {/* Consent gate on disburse — see CoMakersPanel. */}
         <CoMakersPanel loanId={l.id} borrowerId={l.customerId} />
+
+        {/*
+          Who brought this loan in, and what it pays them. Read-only
+          without `agents.assign`, and frozen entirely once the
+          commission has been booked at disbursement.
+        */}
+        <LoanAgentCard
+          loanNumber={l.number}
+          agentId={l.agentId ?? null}
+          agentName={l.agent?.user.name ?? null}
+          agentNumber={l.agent?.number ?? null}
+          commissionRate={l.agentCommissionRate ?? null}
+          commissionAmount={l.agentCommissionAmount ?? null}
+          commissionPostedAt={l.agentCommissionPostedAt ?? null}
+          assignedAt={l.agentAssignedAt ?? null}
+        />
         {/*
           AI assistant — explain the loan's decisioning verdict in plain
           language. Local LLM only; never sends data off-server. Officer
