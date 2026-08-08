@@ -622,6 +622,24 @@ export class RbacService {
           active: true,
           createdAt: true,
           lastSeenAt: true,
+          sessionsRevokedAt: true,
+          /*
+           * Does this person hold a session at all?
+           *
+           * Distinct from presence: someone idle since this morning is
+           * OFFLINE but still signed in, and signing them out is a
+           * meaningful act. Someone who has never signed in, or was
+           * already signed out, has nothing to end — offering the
+           * action there is offering a no-op.
+           *
+           * A bounded `take: 1` rather than a count: we only need to
+           * know whether one exists.
+           */
+          refreshTokens: {
+            where: { revokedAt: null, expiresAt: { gt: new Date() } },
+            select: { id: true },
+            take: 1,
+          },
           roleAssignments: {
             select: {
               expiresAt: true,
@@ -665,7 +683,11 @@ export class RbacService {
       active: u.active,
       createdAt: u.createdAt,
       lastSeenAt: u.lastSeenAt,
-      presence: presenceOf(u.lastSeenAt, now, windowMs),
+      presence: presenceOf(u.lastSeenAt, now, windowMs, {
+        sessionsRevokedAt: u.sessionsRevokedAt,
+        active: u.active,
+      }),
+      hasActiveSession: u.refreshTokens.length > 0,
       // Flatten + carry expiry. Note expired assignments are still
       // returned — the resolver filters them out at permission-check
       // time, but the UI wants to show "expired 3 days ago" for

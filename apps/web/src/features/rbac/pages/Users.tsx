@@ -43,6 +43,7 @@ import {
   LogOut,
   MoreHorizontal,
   Plus,
+  Search,
   UserCheck,
   UserCog,
   UserPlus,
@@ -77,6 +78,29 @@ export function UsersPage() {
   const canForceLogout = usePermission("admin.force_logout");
   const [assigning, setAssigning] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState("");
+
+  /*
+   * Filtered in the browser, not on the server. The endpoint returns
+   * the whole staff list in one shot (capped at 500) and there is no
+   * pagination to coordinate with, so a server round-trip per keystroke
+   * would add latency and a loading state to something that can be
+   * instant. If this list ever outgrows that cap, the filter moves
+   * server-side with the pagination it would need anyway.
+   *
+   * Roles are searchable too — "who are the accountants" is the
+   * question people actually bring to this page.
+   */
+  const allUsers = users.data ?? [];
+  const needle = query.trim().toLowerCase();
+  const rows = needle
+    ? allUsers.filter((u) =>
+        [u.name, u.email, u.primaryRole, ...u.roles.map((r) => r.name)]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle),
+      )
+    : allUsers;
 
   const onAssign = async (
     userId: string,
@@ -235,18 +259,32 @@ export function UsersPage() {
           <UserCog className="h-4 w-4" />
           Users
         </CardTitle>
-        {canManage && (
-          <Button onClick={() => setCreating(true)}>
-            <UserPlus className="h-4 w-4" />
-            New user
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-subtle" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name, email or role"
+              aria-label="Search users"
+              className="w-64 pl-7"
+            />
+          </div>
+          {canManage && (
+            <Button onClick={() => setCreating(true)}>
+              <UserPlus className="h-4 w-4" />
+              New user
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {users.isLoading ? (
           <SkeletonCard />
-        ) : (users.data ?? []).length === 0 ? (
-          <p className="text-sm text-fg-muted">No users.</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-fg-muted">
+            {needle ? `No user matches "${query.trim()}".` : "No users."}
+          </p>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
@@ -266,7 +304,7 @@ export function UsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-default">
-              {(users.data ?? []).map((u) => (
+              {rows.map((u) => (
                 <tr key={u.id} className="hover:bg-hover align-top">
                   <td className="py-2 px-2">
                     <div>{u.name}</div>
@@ -371,7 +409,8 @@ export function UsersPage() {
                       dangerous item is separated and colour-coded.
                     */}
                     <div className="flex items-center justify-end">
-                      {(canManage || canForceLogout) && (
+                      {(canManage ||
+                        (canForceLogout && u.hasActiveSession)) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
@@ -400,16 +439,26 @@ export function UsersPage() {
                               refuses them, and a greyed item only
                               raises the question of why.
                             */}
-                            {canForceLogout && u.id !== me?.id && (
-                              <DropdownMenuItem
-                                onSelect={() =>
-                                  void onForceLogout(u.id, u.name, u.email)
-                                }
-                              >
-                                <LogOut className="h-4 w-4" />
-                                Sign out everywhere
-                              </DropdownMenuItem>
-                            )}
+                            {/*
+                              Only when there is a session to end.
+                              Offering it to someone who has never
+                              signed in — or who was signed out a
+                              minute ago — is offering a no-op, and the
+                              admin reasonably reads the item's
+                              presence as evidence they are logged in.
+                            */}
+                            {canForceLogout &&
+                              u.id !== me?.id &&
+                              u.hasActiveSession && (
+                                <DropdownMenuItem
+                                  onSelect={() =>
+                                    void onForceLogout(u.id, u.name, u.email)
+                                  }
+                                >
+                                  <LogOut className="h-4 w-4" />
+                                  Sign out everywhere
+                                </DropdownMenuItem>
+                              )}
                             {canManage && u.id !== me?.id && (
                               <>
                                 <DropdownMenuSeparator />

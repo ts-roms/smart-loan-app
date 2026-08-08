@@ -123,4 +123,48 @@ describe("presenceOf", () => {
     expect(presenceOf(seen, NOW, W)).toBe("ONLINE");
     expect(presenceOf(seen, NOW + W + 1, W)).toBe("OFFLINE");
   });
+
+  /*
+   * The heartbeat can say "we heard from them 10 seconds ago". It
+   * cannot say "and then we hung up". These are the cases where the
+   * badge used to keep claiming Online right after an admin had cut
+   * the account off — the one moment anyone is watching it closely.
+   */
+  describe("sessions that were ended, not merely idle", () => {
+    it("reads offline once sessions are revoked after the last beat", () => {
+      const seen = ago(10_000);
+      expect(presenceOf(seen, NOW, W)).toBe("ONLINE");
+      expect(presenceOf(seen, NOW, W, { sessionsRevokedAt: ago(5_000) })).toBe(
+        "OFFLINE",
+      );
+    });
+
+    it("lets a fresh sign-in beat an earlier revocation", () => {
+      // Signed out at T-60s, signed back in and beating since T-5s.
+      expect(
+        presenceOf(ago(5_000), NOW, W, { sessionsRevokedAt: ago(60_000) }),
+      ).toBe("ONLINE");
+    });
+
+    it("treats a revocation at the same instant as ending the session", () => {
+      const t = ago(1_000);
+      expect(presenceOf(t, NOW, W, { sessionsRevokedAt: t })).toBe("OFFLINE");
+    });
+
+    it("reads a deactivated account as offline however recent the beat", () => {
+      expect(presenceOf(ago(0), NOW, W, { active: false })).toBe("OFFLINE");
+    });
+
+    it("still says NEVER for someone who never signed in", () => {
+      // Deactivating a dormant account shouldn't promote it to
+      // "offline", which would read as "was here once".
+      expect(presenceOf(null, NOW, W, { active: false })).toBe("NEVER");
+    });
+
+    it("ignores an unparseable revocation rather than hiding a live user", () => {
+      expect(
+        presenceOf(ago(0), NOW, W, { sessionsRevokedAt: "not-a-date" }),
+      ).toBe("ONLINE");
+    });
+  });
 });

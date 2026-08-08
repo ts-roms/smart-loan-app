@@ -1108,6 +1108,16 @@ export interface UserWithRoles {
    */
   presence: UserPresence;
   /**
+   * Whether the user currently holds any live refresh token.
+   *
+   * Deliberately NOT the same question as `presence`. Someone idle
+   * since this morning reads OFFLINE but is still signed in, and
+   * ending their session is a real act; someone who has never signed
+   * in has nothing to end. The Users page uses this to decide whether
+   * "Sign out everywhere" is worth offering at all.
+   */
+  hasActiveSession: boolean;
+  /**
    * `expiresAt` is null for perpetual grants; an ISO-8601 string
    * otherwise. A date in the past means the assignment row is still on
    * file (audit) but no longer contributes to effective permissions.
