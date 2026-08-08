@@ -1,6 +1,7 @@
 import { phoneChangeError } from "@loan/shared-utils";
 
 import type {
+  AuditLogRepository,
   Customer,
   CustomerListFilter,
   CustomerListItem,
@@ -32,6 +33,22 @@ interface PhoneIssue {
   message: string;
 }
 
+/** The live loans standing in the way of filing someone away. */
+export interface OpenLoanRef {
+  number: string;
+  status: string;
+}
+
+export type ArchiveCustomerResult =
+  | {
+      ok: true;
+      customerId: string;
+      number: string;
+      archivedAt: string | null;
+    }
+  | { ok: false; reason: "NotFound" }
+  | { ok: false; reason: "HasOpenLoans"; loans: OpenLoanRef[] };
+
 export type UpdateResult =
   | { ok: true; customer: Customer }
   | { ok: false; reason: "NotFound" }
@@ -58,6 +75,7 @@ export class CustomerService {
     private readonly customers: CustomerRepository,
     private readonly prisma: PrismaClient,
     private readonly screening: ScreeningRepository,
+    private readonly audit: AuditLogRepository,
   ) {}
 
   /**
@@ -93,6 +111,101 @@ export class CustomerService {
     });
     void this.screening.screen(created.id).catch(() => undefined);
     return created;
+  }
+
+  /**
+   * Archive or restore a customer — the soft delete.
+   *
+   * There is deliberately no hard delete. A customer row is the anchor
+   * for loans, payments, contributions and the ledger lines that
+   * reference them, and a cooperative's member register is a record in
+   * its own right; the org has to be able to answer "who was this"
+   * years after they stopped borrowing. The schema agrees only
+   * halfway, which is why leaving deletion available was dangerous:
+   * LoanApplication and CoMaker are RESTRICT, but Contribution and
+   * SavingsTransaction CASCADE, so removing a member who had saved for
+   * years and never borrowed would have taken every contribution and
+   * savings movement with them while the ledger still showed the cash.
+   *
+   * Archiving keeps all of it. The record drops out of pickers and the
+   * default list, cannot take a new loan, and can be restored.
+   *
+   * Refused while a loan is live: you cannot file away someone who
+   * currently owes the cooperative money, and a borrower who vanished
+   * from the collections queue because an operator tidied up is a
+   * worse outcome than a cluttered list.
+   */
+  async setArchived(args: {
+    idOrNumber: string;
+    archived: boolean;
+    actorId: string;
+    reason?: string;
+  }): Promise<ArchiveCustomerResult> {
+    const existing = await this.customers.findByIdOrNumber(args.idOrNumber);
+    if (!existing) return { ok: false, reason: "NotFound" };
+
+    const id = existing.id;
+
+    // Idempotent — already in the requested state, so no write and no
+    // audit row. Two operators archiving the same record shouldn't read
+    // later as two separate decisions.
+    if (!!existing.archivedAt === args.archived) {
+      return {
+        ok: true,
+        customerId: id,
+        number: existing.number,
+        archivedAt: existing.archivedAt?.toISOString() ?? null,
+      };
+    }
+
+    if (args.archived) {
+      const open = await this.prisma.loanApplication.findMany({
+        where: {
+          customerId: id,
+          status: {
+            in: [
+              "SUBMITTED",
+              "UNDER_REVIEW",
+              "APPROVED",
+              "DISBURSED",
+              "ACTIVE",
+              "DEFAULTED",
+            ],
+          },
+        },
+        select: { number: true, status: true },
+        orderBy: { submittedAt: "desc" },
+      });
+      if (open.length > 0) {
+        return { ok: false, reason: "HasOpenLoans", loans: open };
+      }
+    }
+
+    const archivedAt = args.archived ? new Date() : null;
+    const customer = await this.customers.setArchived(id, {
+      archivedAt,
+      archiveReason: args.archived ? (args.reason ?? null) : null,
+      archivedById: args.archived ? args.actorId : null,
+    });
+
+    await this.audit.record({
+      action: args.archived ? "CUSTOMER_ARCHIVE" : "CUSTOMER_RESTORE",
+      actorId: args.actorId,
+      targetType: "Customer",
+      targetId: id,
+      payload: {
+        number: existing.number,
+        name: [existing.firstName, existing.lastName].filter(Boolean).join(" "),
+        reason: args.reason ?? null,
+      },
+    });
+
+    return {
+      ok: true,
+      customerId: id,
+      number: customer.number,
+      archivedAt: archivedAt?.toISOString() ?? null,
+    };
   }
 
   /**

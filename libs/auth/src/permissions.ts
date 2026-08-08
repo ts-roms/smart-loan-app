@@ -188,6 +188,18 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
   // Customers
   { key: "customers.read", label: "View customers", category: "Customers" },
   { key: "customers.write", label: "Create / edit", category: "Customers" },
+  /**
+   * Archiving is its own key, not part of customers.write. It is
+   * reversible and destroys nothing, but it removes someone from every
+   * picker and blocks new lending to them — "can fix a typo" and "can
+   * take a member off the books" are different powers, and a clerk
+   * needs only the first.
+   */
+  {
+    key: "customers.archive",
+    label: "Archive / restore customers",
+    category: "Customers",
+  },
 
   // Accounting
   { key: "accounting.read", label: "View ledger", category: "Accounting" },

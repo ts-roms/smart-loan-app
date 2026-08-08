@@ -192,6 +192,14 @@ export interface Customer {
    * as "erased on purpose", not "data loss".
    */
   erasedAt: string | null;
+  /**
+   * Soft delete. Set when the customer was filed away: they drop out of
+   * pickers and the default list and cannot take a new loan, while
+   * every loan, payment and ledger line that references them stays put.
+   * Null once restored.
+   */
+  archivedAt: string | null;
+  archiveReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -629,6 +637,8 @@ export interface LoanListQuery extends PageQuery {
 
 /** Query-string for GET /customers. Same shape of contract as above. */
 export interface CustomerListQuery extends PageQuery {
+  /** Archived customers are excluded unless this is true. */
+  includeArchived?: boolean;
   /**
    * Free text over reference number, name, phone, email and government
    * ID. Tokenized, so "dela cruz" and "cruz juan" both find the same
@@ -1107,6 +1117,16 @@ export interface UserWithRoles {
    * a few seconds of drift costs nothing.
    */
   presence: UserPresence;
+  /**
+   * Whether the user currently holds any live refresh token.
+   *
+   * Deliberately NOT the same question as `presence`. Someone idle
+   * since this morning reads OFFLINE but is still signed in, and
+   * ending their session is a real act; someone who has never signed
+   * in has nothing to end. The Users page uses this to decide whether
+   * "Sign out everywhere" is worth offering at all.
+   */
+  hasActiveSession: boolean;
   /**
    * `expiresAt` is null for perpetual grants; an ISO-8601 string
    * otherwise. A date in the past means the assignment row is still on

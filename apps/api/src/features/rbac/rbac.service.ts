@@ -70,6 +70,23 @@ export type AssignRoleResult =
   | { ok: true; assignment: Awaited<ReturnType<RoleRepository["assign"]>> }
   | { ok: false; kind: "RepoError" | "BadExpiry"; message: string };
 
+export type SetUserActiveResult =
+  | {
+      ok: true;
+      userId: string;
+      email: string;
+      name: string;
+      active: boolean;
+      /** Set only when deactivating — live tokens are cut at this instant. */
+      revokedAt: Date | null;
+      refreshTokensRevoked: number;
+    }
+  | {
+      ok: false;
+      kind: "NotFound" | "Self" | "LastAdmin";
+      message: string;
+    };
+
 export type ForceLogoutResult =
   | {
       ok: true;
@@ -605,6 +622,24 @@ export class RbacService {
           active: true,
           createdAt: true,
           lastSeenAt: true,
+          sessionsRevokedAt: true,
+          /*
+           * Does this person hold a session at all?
+           *
+           * Distinct from presence: someone idle since this morning is
+           * OFFLINE but still signed in, and signing them out is a
+           * meaningful act. Someone who has never signed in, or was
+           * already signed out, has nothing to end — offering the
+           * action there is offering a no-op.
+           *
+           * A bounded `take: 1` rather than a count: we only need to
+           * know whether one exists.
+           */
+          refreshTokens: {
+            where: { revokedAt: null, expiresAt: { gt: new Date() } },
+            select: { id: true },
+            take: 1,
+          },
           roleAssignments: {
             select: {
               expiresAt: true,
@@ -648,7 +683,11 @@ export class RbacService {
       active: u.active,
       createdAt: u.createdAt,
       lastSeenAt: u.lastSeenAt,
-      presence: presenceOf(u.lastSeenAt, now, windowMs),
+      presence: presenceOf(u.lastSeenAt, now, windowMs, {
+        sessionsRevokedAt: u.sessionsRevokedAt,
+        active: u.active,
+      }),
+      hasActiveSession: u.refreshTokens.length > 0,
       // Flatten + carry expiry. Note expired assignments are still
       // returned — the resolver filters them out at permission-check
       // time, but the UI wants to show "expired 3 days ago" for
@@ -756,6 +795,140 @@ export class RbacService {
    * separately, and now that `authenticate` checks `active`, it takes
    * effect immediately too.
    */
+  /**
+   * Enable or disable a staff login — the off switch the force-logout
+   * dialog has always pointed at ("set their status to Inactive")
+   * without one existing. `User.active` was written at seed time and
+   * read on every login and refresh; nothing could flip it, so the only
+   * way to retire someone was a hand-written UPDATE.
+   *
+   * Deactivate rather than delete, and not as a soft-delete compromise:
+   * AuditEvent.actor, LoanPayment.recordedBy and JournalEntry.postedBy
+   * are all required relations, so Postgres refuses to delete anyone who
+   * has ever acted. A staff row is the name attached to years of
+   * decisions; the account is what gets switched off.
+   */
+  async setUserActive(args: {
+    userId: string;
+    active: boolean;
+    actorId: string;
+    reason?: string;
+  }): Promise<SetUserActiveResult> {
+    // Same reasoning as forceLogout: you'd lock yourself out mid-request
+    // and the failure would look like a bug rather than a decision.
+    if (args.userId === args.actorId) {
+      return {
+        ok: false,
+        kind: "Self",
+        message:
+          "You can't change your own status. Ask another admin to do it.",
+      };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: args.userId },
+      select: { id: true, email: true, name: true, active: true },
+    });
+    if (!user) {
+      return { ok: false, kind: "NotFound", message: "User not found" };
+    }
+
+    // Idempotent: already in the requested state, so no write and no
+    // audit row. Two admins clicking Deactivate shouldn't read later as
+    // two separate decisions.
+    if (user.active === args.active) {
+      return {
+        ok: true,
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        active: user.active,
+        revokedAt: null,
+        refreshTokensRevoked: 0,
+      };
+    }
+
+    // Last-admin guard, same shape as unassignRole's: disabling the
+    // final active admin strands the org with nobody who can undo it.
+    // Losing the account and losing the role are the same outcome, so
+    // they need the same refusal.
+    if (!args.active) {
+      const now = new Date();
+      const remainingActiveAdmins = await this.prisma.userRoleAssignment.count({
+        where: {
+          role: { key: "ADMIN" },
+          user: { active: true },
+          userId: { not: args.userId },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+      });
+      const targetIsAdmin = await this.prisma.userRoleAssignment.count({
+        where: {
+          userId: args.userId,
+          role: { key: "ADMIN" },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+      });
+      if (targetIsAdmin > 0 && remainingActiveAdmins === 0) {
+        return {
+          ok: false,
+          kind: "LastAdmin",
+          message:
+            "Cannot deactivate — this is the last active admin on the org. Promote another user to ADMIN first.",
+        };
+      }
+    }
+
+    /*
+     * Deactivating has to cut live sessions, not just future logins.
+     * `active` is checked at login and at refresh, so on its own a
+     * disabled user keeps working until their access token expires —
+     * the exact window in which you'd disable someone. Reuse the
+     * force-logout cutoff so the account dies at the click.
+     *
+     * Reactivating leaves sessionsRevokedAt where it is: it's a
+     * historical cutoff, and the user gets fresh tokens by signing in.
+     */
+    const revokedAt = args.active ? null : new Date();
+    const refreshTokensRevoked = await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          active: args.active,
+          ...(revokedAt ? { sessionsRevokedAt: revokedAt } : {}),
+        },
+      });
+      if (!revokedAt) return 0;
+      const { count } = await tx.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt },
+      });
+      return count;
+    });
+
+    await this.audit.record({
+      action: args.active ? "USER_ACTIVATED" : "USER_DEACTIVATED",
+      actorId: args.actorId,
+      targetType: "User",
+      targetId: user.id,
+      payload: {
+        email: user.email,
+        reason: args.reason ?? null,
+        refreshTokensRevoked,
+      },
+    });
+
+    return {
+      ok: true,
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      active: args.active,
+      revokedAt,
+      refreshTokensRevoked,
+    };
+  }
+
   async forceLogout(args: {
     userId: string;
     actorId: string;

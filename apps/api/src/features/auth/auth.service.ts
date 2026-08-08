@@ -237,6 +237,24 @@ export class AuthService {
       }
     }
 
+    /*
+     * Signing in counts as being seen.
+     *
+     * The heartbeat lives in the authenticated-request hook, which
+     * login is not — so a session that logged in and then made no
+     * authenticated call left `lastSeenAt` null and the Users page
+     * said "Never signed in" about somebody holding a live token.
+     * Rare for a browser, routine for a script, and confusing either
+     * way next to a Sign-out action that was correctly on offer.
+     *
+     * Not awaited: presence is an observation, not part of issuing a
+     * session, and a failed write should never cost someone their
+     * login.
+     */
+    void this.prisma.user
+      .update({ where: { id: user.id }, data: { lastSeenAt: new Date() } })
+      .catch(() => undefined);
+
     const tokens = await this.issueTokens(user, tenant);
     return { ok: true, tokens, user: digest(user) };
   }

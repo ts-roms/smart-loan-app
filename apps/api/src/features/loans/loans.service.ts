@@ -73,6 +73,7 @@ export type ApplyResult =
     }
   | { ok: false; kind: "BadRequest"; message: string; issues?: unknown }
   | { ok: false; kind: "CustomerErased"; message: string }
+  | { ok: false; kind: "CustomerArchived"; message: string }
   | {
       ok: false;
       kind: "HasLiveLoan";
@@ -238,7 +239,7 @@ export class LoanWorkflowService {
     // the apply button, but the endpoint is the actual guarantee.
     const applicant = await this.prisma.customer.findUnique({
       where: { id: input.customerId },
-      select: { erasedAt: true },
+      select: { erasedAt: true, archivedAt: true },
     });
     if (applicant?.erasedAt) {
       return {
@@ -246,6 +247,16 @@ export class LoanWorkflowService {
         kind: "CustomerErased",
         message:
           "This customer's personal data was erased under a data privacy request; new loan applications are not possible.",
+      };
+    }
+    // Archived means taken off the books. Restoring them is one click
+    // and is the deliberate decision this refusal asks for.
+    if (applicant?.archivedAt) {
+      return {
+        ok: false,
+        kind: "CustomerArchived",
+        message:
+          "This customer is archived. Restore them before starting a new application.",
       };
     }
 

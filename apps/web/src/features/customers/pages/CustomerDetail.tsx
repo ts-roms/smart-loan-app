@@ -1,4 +1,5 @@
 import {
+  useArchiveCustomer,
   useCustomer,
   useCustomerScore,
   useKycForCustomer,
@@ -23,7 +24,13 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   SkeletonCard,
+  useConfirm,
+  usePrompt,
   useToast,
 } from "@loan/ui";
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
@@ -31,9 +38,12 @@ import { usePermission } from "../../../hooks/use-permission";
 import { FileUpload } from "../../../components/FileUpload";
 import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
 import {
+  Archive,
+  ArchiveRestore,
   CreditCard,
   FileUp,
   Gauge,
+  MoreHorizontal,
   Pencil,
   ShieldCheck,
   X,
@@ -77,6 +87,13 @@ export function CustomerDetailPage() {
   // Same key the API requires for POST /loans/apply, so a collector
   // never sees a button that will 403 on them.
   const canApply = usePermission("loans.apply");
+  // Same key the archive endpoint requires, so the item never appears
+  // for someone it would 403 on.
+  const canArchive = usePermission("customers.archive");
+  const archiveCustomer = useArchiveCustomer();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [editing, setEditing] = useState(false);
 
   // Name the breadcrumb crumb for this route. Called before the early
@@ -100,6 +117,64 @@ export function CustomerDetailPage() {
     .filter(Boolean)
     .join(" ");
 
+  /**
+   * Archive — the soft delete. Nothing is removed; the member leaves
+   * the pickers and the default list and stops being eligible for new
+   * lending, and every loan, payment and ledger line that points at
+   * them is untouched. The server refuses while a loan is still open
+   * and names which, so the dialog can stay short.
+   */
+  const onArchive = async () => {
+    const reason = await prompt({
+      title: `Archive ${fullName}?`,
+      message: (
+        <div className="space-y-2">
+          <p>
+            They will no longer appear in borrower pickers or the customer list,
+            and cannot start a new loan application.
+          </p>
+          <p className="text-fg-muted">
+            Nothing is deleted. Their loans, payments, contributions and ledger
+            history stay exactly as they are, and you can restore them at any
+            time.
+          </p>
+        </div>
+      ),
+      label: "Reason (optional)",
+      placeholder: "e.g. moved abroad, or duplicate of CUST-2026-000012",
+      confirmLabel: "Archive",
+    });
+    if (reason === null) return;
+    try {
+      await archiveCustomer.mutateAsync({
+        id: c.id,
+        archived: true,
+        reason: reason.trim() || undefined,
+      });
+      toast.success(`${fullName} archived`);
+    } catch (err) {
+      // 409 HasOpenLoans arrives with the server's sentence, which
+      // names the loans in the way.
+      toast.error((err as Error).message ?? "Could not archive");
+    }
+  };
+
+  const onRestore = async () => {
+    const ok = await confirm({
+      title: `Restore ${fullName}?`,
+      message:
+        "They will appear in the customer list and borrower pickers again, and become eligible for new loan applications.",
+      confirmLabel: "Restore",
+    });
+    if (!ok) return;
+    try {
+      await archiveCustomer.mutateAsync({ id: c.id, archived: false });
+      toast.success(`${fullName} restored`);
+    } catch (err) {
+      toast.error((err as Error).message ?? "Could not restore");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <DorsiScreenBanner customerId={c.id} customerName={fullName} />
@@ -116,6 +191,14 @@ export function CustomerDetailPage() {
           law; the identifying fields are permanently redacted.
         </div>
       )}
+      {c.archivedAt && (
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+          Archived {formatDateTime(c.archivedAt)}
+          {c.archiveReason ? ` — ${c.archiveReason}` : ""}. Hidden from borrower
+          pickers and not eligible for new loans. Their records are intact and
+          this can be undone.
+        </div>
+      )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
@@ -130,6 +213,7 @@ export function CustomerDetailPage() {
                 {c.lastName}
               </span>
               {c.erasedAt && <Badge variant="danger">Erased</Badge>}
+              {c.archivedAt && <Badge variant="warning">Archived</Badge>}
             </CardTitle>
             <div className="text-xs text-fg-muted mt-1">
               {c.phone} · {c.email ?? "—"} · DOB {formatDate(c.dateOfBirth)}
@@ -143,7 +227,7 @@ export function CustomerDetailPage() {
               an identity to underwrite. The survey link stays — it is
               harmless and read-only from the profile's point of view.
             */}
-            {!c.erasedAt && (
+            {!c.erasedAt && !c.archivedAt && (
               <button
                 type="button"
                 onClick={() => setEditing(true)}
@@ -169,7 +253,7 @@ export function CustomerDetailPage() {
               Gated on `loans.apply` — the same key the API requires, so
               a collector doesn't see a button that will 403.
             */}
-            {canApply && !c.erasedAt && (
+            {canApply && !c.erasedAt && !c.archivedAt && (
               <Link
                 to={`/loans/new?customerId=${id}`}
                 className="inline-flex items-center gap-1 rounded-md border border-transparent bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-sm transition hover:opacity-90"
@@ -177,6 +261,41 @@ export function CustomerDetailPage() {
                 <CreditCard className="h-4 w-4" />
                 Apply for a loan
               </Link>
+            )}
+            {/*
+              Archive lives behind the overflow menu, not beside "Apply
+              for a loan". They are one pixel apart and opposite in
+              consequence; the menu costs a click and removes a whole
+              class of mistake.
+            */}
+            {canArchive && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="More actions"
+                    className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-md border border-default bg-surface-3 text-fg-muted hover:bg-hover hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[12rem]">
+                  {c.archivedAt ? (
+                    <DropdownMenuItem onSelect={() => void onRestore()}>
+                      <ArchiveRestore className="h-4 w-4" />
+                      Restore customer
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      className="text-danger focus:text-danger"
+                      onSelect={() => void onArchive()}
+                    >
+                      <Archive className="h-4 w-4" />
+                      Archive customer
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </CardHeader>

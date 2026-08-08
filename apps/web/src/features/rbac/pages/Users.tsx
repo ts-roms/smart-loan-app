@@ -2,6 +2,7 @@ import {
   useAssignRole,
   useCreateUser,
   useForceLogout,
+  useSetUserActive,
   useRoles,
   useUnassignRole,
   useUsers,
@@ -27,13 +28,28 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   SkeletonCard,
   useConfirm,
   usePrompt,
   useToast,
 } from "@loan/ui";
 import { formatDate } from "@loan/shared-utils";
-import { LogOut, Plus, UserCog, UserPlus, X } from "lucide-react";
+import {
+  LogOut,
+  MoreHorizontal,
+  Plus,
+  Search,
+  UserCheck,
+  UserCog,
+  UserPlus,
+  UserX,
+  X,
+} from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { usePermission } from "../../../hooks/use-permission";
@@ -51,6 +67,7 @@ export function UsersPage() {
   const assign = useAssignRole();
   const unassign = useUnassignRole();
   const forceLogout = useForceLogout();
+  const setActive = useSetUserActive();
   const toast = useToast();
   const confirm = useConfirm();
   const prompt = usePrompt();
@@ -61,6 +78,50 @@ export function UsersPage() {
   const canForceLogout = usePermission("admin.force_logout");
   const [assigning, setAssigning] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState("");
+
+  /*
+   * Filtered in the browser, not on the server. The endpoint returns
+   * the whole staff list in one shot (capped at 500) and there is no
+   * pagination to coordinate with, so a server round-trip per keystroke
+   * would add latency and a loading state to something that can be
+   * instant. If this list ever outgrows that cap, the filter moves
+   * server-side with the pagination it would need anyway.
+   *
+   * Roles are searchable too — "who are the accountants" is the
+   * question people actually bring to this page.
+   */
+  /**
+   * Can this person be signed out of anything?
+   *
+   * Holding a live refresh token is necessary but not sufficient. The
+   * Presence column is what an operator reads as "are they logged in",
+   * and offering to end the sessions of someone it calls "Never signed
+   * in" is a contradiction on one line — they will believe the menu
+   * over the column, and the menu would be wrong.
+   *
+   * NEVER alongside a live token is legacy data: a login that never
+   * made an authenticated call left lastSeenAt null. Login stamps it
+   * now, so real sessions always carry a presence; anything still in
+   * that state predates the fix and is a script's leftovers, not a
+   * person to sign out.
+   *
+   * OFFLINE with a session is a different matter and stays offered —
+   * that is someone idle since this morning who is genuinely logged in.
+   */
+  const canEndSessions = (u: { hasActiveSession: boolean; presence: string }) =>
+    u.hasActiveSession && u.presence !== "NEVER";
+
+  const allUsers = users.data ?? [];
+  const needle = query.trim().toLowerCase();
+  const rows = needle
+    ? allUsers.filter((u) =>
+        [u.name, u.email, u.primaryRole, ...u.roles.map((r) => r.name)]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle),
+      )
+    : allUsers;
 
   const onAssign = async (
     userId: string,
@@ -154,6 +215,64 @@ export function UsersPage() {
     }
   };
 
+  /**
+   * The off switch the force-logout dialog has always pointed at.
+   *
+   * Deactivating asks for a reason and warns that live sessions end,
+   * because it is the heavier of the two actions and reversible only
+   * by another admin. Reactivating just confirms — restoring access to
+   * a colleague needs no paperwork.
+   */
+  const onToggleActive = async (
+    userId: string,
+    name: string,
+    email: string,
+    currentlyActive: boolean,
+  ) => {
+    if (currentlyActive) {
+      const reason = await prompt({
+        title: `Deactivate ${name}?`,
+        message: (
+          <div className="space-y-2">
+            <p>
+              <strong>{email}</strong> will not be able to sign in, and every
+              session they currently hold ends immediately.
+            </p>
+            <p className="text-fg-muted">
+              Their history stays exactly as it is — every loan they decided and
+              payment they recorded keeps their name on it. Reversible by
+              another admin.
+            </p>
+          </div>
+        ),
+        label: "Reason (optional)",
+        placeholder: "e.g. resigned, last day 15 Aug",
+        confirmLabel: "Deactivate",
+      });
+      if (reason === null) return;
+      try {
+        await setActive.mutateAsync({ userId, active: false, reason });
+        toast.success(`${name} deactivated`);
+      } catch (err) {
+        // 409 for the last active admin, or for your own row.
+        toast.error((err as Error).message ?? "Could not deactivate");
+      }
+      return;
+    }
+    const ok = await confirm({
+      title: `Reactivate ${name}?`,
+      message: `${email} will be able to sign in again with their existing password.`,
+      confirmLabel: "Reactivate",
+    });
+    if (!ok) return;
+    try {
+      await setActive.mutateAsync({ userId, active: true });
+      toast.success(`${name} reactivated`);
+    } catch (err) {
+      toast.error((err as Error).message ?? "Could not reactivate");
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
@@ -161,18 +280,32 @@ export function UsersPage() {
           <UserCog className="h-4 w-4" />
           Users
         </CardTitle>
-        {canManage && (
-          <Button onClick={() => setCreating(true)}>
-            <UserPlus className="h-4 w-4" />
-            New user
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-subtle" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name, email or role"
+              aria-label="Search users"
+              className="w-64 pl-7"
+            />
+          </div>
+          {canManage && (
+            <Button onClick={() => setCreating(true)}>
+              <UserPlus className="h-4 w-4" />
+              New user
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {users.isLoading ? (
           <SkeletonCard />
-        ) : (users.data ?? []).length === 0 ? (
-          <p className="text-sm text-fg-muted">No users.</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-fg-muted">
+            {needle ? `No user matches "${query.trim()}".` : "No users."}
+          </p>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-wider text-fg-subtle">
@@ -192,7 +325,7 @@ export function UsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-default">
-              {(users.data ?? []).map((u) => (
+              {rows.map((u) => (
                 <tr key={u.id} className="hover:bg-hover align-top">
                   <td className="py-2 px-2">
                     <div>{u.name}</div>
@@ -287,42 +420,89 @@ export function UsersPage() {
                     {formatDate(u.createdAt)}
                   </td>
                   <td className="py-2 px-2">
-                    <div className="flex items-center justify-end gap-2">
-                      {canManage && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setAssigning(u.id)}
-                        >
-                          <Plus className="h-3 w-3" />
-                          Assign
-                        </Button>
-                      )}
-                      {/*
-                        Hidden on your own row rather than shown
-                        disabled. The API refuses it anyway, but a
-                        greyed-out button invites a hover to find out
-                        why, and there is nothing useful to say — you
-                        end your own session with Sign out.
-                      */}
-                      {canForceLogout && u.id !== me?.id && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          loading={
-                            forceLogout.isPending &&
-                            forceLogout.variables?.userId === u.id
-                          }
-                          onClick={() =>
-                            void onForceLogout(u.id, u.name, u.email)
-                          }
-                          title="End every session this user has"
-                        >
-                          {!forceLogout.isPending && (
-                            <LogOut className="h-3 w-3" />
-                          )}
-                          Sign out
-                        </Button>
+                    {/*
+                      One menu rather than a row of buttons. Three
+                      actions x N rows filled the table with more
+                      chrome than data, and the destructive one sat
+                      one pixel from the routine one — the kind of
+                      layout that produces a mis-click nobody meant.
+                      Collapsed, the row reads as data again and the
+                      dangerous item is separated and colour-coded.
+                    */}
+                    <div className="flex items-center justify-end">
+                      {(canManage ||
+                        (canForceLogout && u.hasActiveSession)) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`Actions for ${u.name}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-default bg-surface-3 text-fg-muted hover:bg-hover hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="min-w-[12rem]"
+                          >
+                            {canManage && (
+                              <DropdownMenuItem
+                                onSelect={() => setAssigning(u.id)}
+                              >
+                                <Plus className="h-4 w-4" />
+                                Assign role
+                              </DropdownMenuItem>
+                            )}
+                            {/*
+                              Both self-targeting actions are hidden on
+                              your own row rather than disabled: the API
+                              refuses them, and a greyed item only
+                              raises the question of why.
+                            */}
+                            {/* Only when there is a session to end —
+                                see canEndSessions above. */}
+                            {canForceLogout &&
+                              u.id !== me?.id &&
+                              canEndSessions(u) && (
+                                <DropdownMenuItem
+                                  onSelect={() =>
+                                    void onForceLogout(u.id, u.name, u.email)
+                                  }
+                                >
+                                  <LogOut className="h-4 w-4" />
+                                  Sign out everywhere
+                                </DropdownMenuItem>
+                              )}
+                            {canManage && u.id !== me?.id && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className={
+                                    u.active
+                                      ? "text-danger focus:text-danger"
+                                      : undefined
+                                  }
+                                  onSelect={() =>
+                                    void onToggleActive(
+                                      u.id,
+                                      u.name,
+                                      u.email,
+                                      u.active,
+                                    )
+                                  }
+                                >
+                                  {u.active ? (
+                                    <UserX className="h-4 w-4" />
+                                  ) : (
+                                    <UserCheck className="h-4 w-4" />
+                                  )}
+                                  {u.active ? "Deactivate" : "Reactivate"}
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
                   </td>

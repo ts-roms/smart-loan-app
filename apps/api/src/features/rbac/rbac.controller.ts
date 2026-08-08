@@ -7,6 +7,7 @@ import {
   createUserSchema,
   editImpactSchema,
   forceLogoutSchema,
+  setUserActiveSchema,
   permissionPatchSchema,
   updateRoleSchema,
   userBulkImportSchema,
@@ -221,6 +222,45 @@ export class RbacController {
         .send({ error: "BadRequest", message: result.message });
     }
     return { ok: true };
+  };
+
+  setUserActive = async (
+    req: FastifyRequest<{ Params: { userId: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = setUserActiveSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await req.rbacServices!.rbac.setUserActive({
+      userId: req.params.userId,
+      active: parsed.data.active,
+      actorId: req.user.sub,
+      reason: parsed.data.reason,
+    });
+    if (!result.ok) {
+      if (result.kind === "NotFound") {
+        return reply
+          .code(404)
+          .send({ error: "NotFound", message: result.message });
+      }
+      // Self and LastAdmin are both well-formed requests refused on the
+      // state of the org, which is what 409 is for.
+      return reply
+        .code(409)
+        .send({ error: result.kind, message: result.message });
+    }
+    return {
+      ok: true,
+      userId: result.userId,
+      email: result.email,
+      name: result.name,
+      active: result.active,
+      revokedAt: result.revokedAt?.toISOString() ?? null,
+      refreshTokensRevoked: result.refreshTokensRevoked,
+    };
   };
 
   forceLogout = async (

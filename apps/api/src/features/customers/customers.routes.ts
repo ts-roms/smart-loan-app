@@ -57,4 +57,16 @@ export function registerCustomerHttp(
     { preHandler: app.requirePermission("customers.write") },
     controller.update,
   );
+
+  /*
+   * Archive / restore — the soft delete. There is no DELETE route on
+   * purpose: a customer anchors loans, payments, contributions and
+   * ledger lines, and the member register is itself a record the
+   * cooperative has to keep.
+   */
+  app.patch<{ Params: { id: string } }>(
+    "/:id/archive",
+    { preHandler: app.requirePermission("customers.archive") },
+    controller.setArchived,
+  );
 }

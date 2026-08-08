@@ -131,6 +131,18 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
  * optional because an incident is a bad moment to make someone fill in
  * a form — but the audit row is worth far more with it, so the UI asks.
  */
+/**
+ * Status change. The reason is optional for the same reason
+ * force-logout's is — an offboarding at 5pm on a Friday shouldn't
+ * stall on a text field — but it's what makes the audit row answer
+ * "why is this account off" a year later.
+ */
+export const setUserActiveSchema = z.object({
+  active: z.boolean(),
+  reason: z.string().trim().max(500).optional(),
+});
+export type SetUserActiveInput = z.infer<typeof setUserActiveSchema>;
+
 export const forceLogoutSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });

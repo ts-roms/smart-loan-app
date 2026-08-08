@@ -64,6 +64,7 @@ export function CustomersPage() {
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
   const [kycStatus, setKycStatus] = useState<KycStatus | "ALL">("ALL");
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [page, setPage] = useState(1);
 
   // Only the debounced copy reaches the query key, so a typed name costs
@@ -72,17 +73,23 @@ export function CustomersPage() {
   const filter: CustomerListQuery = {
     q,
     kycStatus: kycStatus === "ALL" ? undefined : kycStatus,
+    // Only sent when on: an absent param means "exclude archived", and
+    // that default is what keeps filed-away members out of every
+    // borrower picker in the app.
+    includeArchived: includeArchived || undefined,
     page,
     pageSize: PAGE_SIZE,
   };
-  const filtered = Boolean(filter.q || filter.kycStatus);
+  const filtered = Boolean(
+    filter.q || filter.kycStatus || filter.includeArchived,
+  );
 
   // Narrowing the filter reshuffles the result set, so the page the
   // operator was on no longer means anything — page 4 of a two-page
   // result is an empty table that reads as "no matches".
   useEffect(() => {
     setPage(1);
-  }, [q, kycStatus]);
+  }, [q, kycStatus, includeArchived]);
 
   const customers = useCustomersPage(filter);
   const rows = customers.data?.rows ?? [];
@@ -91,6 +98,7 @@ export function CustomersPage() {
   const clearFilters = () => {
     setSearch("");
     setKycStatus("ALL");
+    setIncludeArchived(false);
   };
 
   return (
@@ -146,6 +154,17 @@ export function CustomersPage() {
               <SelectItem value="REJECTED">Rejected</SelectItem>
             </SelectContent>
           </Select>
+          {/* A checkbox rather than a fourth Select value: "archived"
+              is orthogonal to KYC status, and folding it in would make
+              "All KYC statuses" quietly mean "all but the archived". */}
+          <label className="flex items-center gap-1.5 text-sm text-fg-muted">
+            <input
+              type="checkbox"
+              checked={includeArchived}
+              onChange={(e) => setIncludeArchived(e.target.checked)}
+            />
+            Include archived
+          </label>
           {filtered && (
             <Button variant="ghost" onClick={clearFilters}>
               <X className="h-3.5 w-3.5" />
@@ -210,6 +229,11 @@ export function CustomersPage() {
                     {c.erasedAt && (
                       <Badge variant="danger" className="ml-2">
                         Erased
+                      </Badge>
+                    )}
+                    {c.archivedAt && (
+                      <Badge variant="warning" className="ml-2">
+                        Archived
                       </Badge>
                     )}
                   </td>

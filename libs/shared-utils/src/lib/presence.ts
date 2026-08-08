@@ -84,10 +84,37 @@ export function presenceOf(
   lastSeenAt: Date | string | null | undefined,
   nowMs: number,
   windowMs: number,
+  /**
+   * State that ENDS presence regardless of the heartbeat.
+   *
+   * A decaying timestamp can only answer "did we hear from them
+   * recently". It cannot know that we hung up. An admin who signed
+   * someone out watched them keep reading "Online" for the rest of the
+   * window — the one moment the badge is being checked closely, and
+   * the one moment it was wrong. Same for a deactivated account.
+   *
+   * `sessionsRevokedAt` beats `lastSeenAt` only when it is the LATER
+   * of the two: sign back in after a revoke and the fresh heartbeat
+   * wins, which is exactly right.
+   */
+  ended?: {
+    sessionsRevokedAt?: Date | string | null;
+    active?: boolean;
+  },
 ): Presence {
   if (!lastSeenAt) return "NEVER";
   const then = new Date(lastSeenAt).getTime();
   if (!Number.isFinite(then)) return "NEVER";
+
+  // Disabled accounts cannot hold a session. Keep the "was here once"
+  // fact — NEVER above still wins for someone who never signed in.
+  if (ended?.active === false) return "OFFLINE";
+
+  if (ended?.sessionsRevokedAt) {
+    const cut = new Date(ended.sessionsRevokedAt).getTime();
+    if (Number.isFinite(cut) && cut >= then) return "OFFLINE";
+  }
+
   // Clock skew, or a row written by a host running slightly ahead.
   // A future timestamp is evidence of very recent contact, not of
   // absence, so it reads as online rather than falling through.

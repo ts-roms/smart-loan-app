@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import {
+  archiveCustomerSchema,
   customerBaseSchema,
   customerListQuerySchema,
   customerSchema,
@@ -69,6 +70,41 @@ export class CustomerController {
       req.params.id,
     );
     if (!result) return reply.code(404).send({ error: "NotFound" });
+    return result;
+  };
+
+  setArchived = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = archiveCustomerSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await req.customerServices!.customer.setArchived({
+      idOrNumber: req.params.id,
+      archived: parsed.data.archived,
+      actorId: req.user.sub,
+      reason: parsed.data.reason,
+    });
+    if (!result.ok) {
+      if (result.reason === "NotFound") {
+        return reply.code(404).send({ error: "NotFound" });
+      }
+      // 409: well-formed, refused on the customer's state. Naming the
+      // loans beats a bare "cannot archive" — the operator can go and
+      // settle them.
+      const list = result.loans
+        .map((l) => `${l.number} (${l.status})`)
+        .join(", ");
+      return reply.code(409).send({
+        error: "HasOpenLoans",
+        message: `This customer still has ${result.loans.length} open loan(s): ${list}. Settle or close them before archiving.`,
+        loans: result.loans,
+      });
+    }
     return result;
   };
 
