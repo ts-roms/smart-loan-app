@@ -41,15 +41,27 @@ export const customerKeys = {
  * Both hooks share a query key, so a screen using each fetches once.
  */
 /**
- * Delete a customer. The server refuses anyone with financial history
- * (409 HasHistory), so this only ever removes a duplicate or a typo —
- * the error message names what stood in the way.
+ * Archive or restore a customer — the soft delete. Nothing is removed:
+ * the record leaves the pickers and the default list and stops being
+ * eligible for new loans, and every loan, payment and ledger line that
+ * points at it is untouched. Refused (409) while a loan is still open.
  */
-export function useDeleteCustomer() {
+export function useArchiveCustomer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      getApiClient().request<void>(`/customers/${id}`, { method: "DELETE" }),
+    mutationFn: (input: { id: string; archived: boolean; reason?: string }) =>
+      getApiClient().request<{
+        ok: true;
+        customerId: string;
+        number: string;
+        archivedAt: string | null;
+      }>(`/customers/${input.id}/archive`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          archived: input.archived,
+          ...(input.reason ? { reason: input.reason } : {}),
+        }),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: customerKeys.all }),
   });
 }

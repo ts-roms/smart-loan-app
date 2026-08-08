@@ -132,6 +132,13 @@ export interface CustomerListFilter extends PageParams {
    */
   q?: string;
   kycStatus?: KycStatus;
+  /**
+   * Archived customers are excluded by default. Every picker in the app
+   * reads this endpoint, and a filed-away member turning up in the
+   * borrower dropdown is the thing archiving exists to prevent — so the
+   * safe behaviour is the default one, and seeing them is opt-in.
+   */
+  includeArchived?: boolean;
 }
 
 /**
@@ -155,6 +162,7 @@ export class CustomerRepository {
     const paging = resolvePaging(filter, CUSTOMER_PAGING);
     const where = {
       kycStatus: filter.kycStatus,
+      ...(filter.includeArchived ? {} : { archivedAt: null }),
       ...(tokenizedWhere(filter.q, (token) => [
         { number: contains(token) },
         { firstName: contains(token) },
@@ -232,6 +240,23 @@ export class CustomerRepository {
 
   update(id: string, input: CustomerUpdateInput): Promise<Customer> {
     return this.prisma.customer.update({ where: { id }, data: input });
+  }
+
+  /**
+   * Archive fields are written through their own method rather than
+   * `update`, whose input is Partial<CustomerCreateInput> — the profile
+   * shape. Keeping them apart means no profile edit can archive someone
+   * by accident, and the three fields always move together.
+   */
+  setArchived(
+    id: string,
+    data: {
+      archivedAt: Date | null;
+      archiveReason: string | null;
+      archivedById: string | null;
+    },
+  ): Promise<Customer> {
+    return this.prisma.customer.update({ where: { id }, data });
   }
 
   /**

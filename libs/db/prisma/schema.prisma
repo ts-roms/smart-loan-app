@@ -435,6 +435,20 @@ model Customer {
   /// rows remain on file (typical retention is 5–10 years).
   erasedById String?
 
+  /// Soft delete. A customer is never removed — the loans, payments and
+  /// ledger lines that reference them have to keep resolving, and a
+  /// cooperative's member register is a record in its own right. Filing
+  /// someone away sets this instead: they drop out of pickers and the
+  /// default list, and cannot take a new loan, while every historical
+  /// row stays exactly where it was. Reversible.
+  archivedAt    DateTime?
+  /// Why they were archived ("moved abroad", "duplicate of CUST-...").
+  /// The whole value of the row a year later.
+  archiveReason String?
+  /// User id of whoever archived them. NOT a foreign key, same reasoning
+  /// as erasedById — the operator may leave while the record remains.
+  archivedById  String?
+
   user             User?             @relation("CustomerLogin")
   kycSubmissions   KycSubmission[]
   loanApplications LoanApplication[]
@@ -460,6 +474,7 @@ model Customer {
   @@index([phone])
   @@index([governmentIdType, governmentIdNumber])
   @@index([erasedAt])
+  @@index([archivedAt])
 }
 
 // ─── KYC document submissions ────────────────────────────────────────────────

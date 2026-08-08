@@ -194,6 +194,16 @@ export type BulkImportInput = z.infer<typeof bulkImportSchema>;
 export const customerListQuerySchema = z.object({
   q: z.string().max(120).optional(),
   kycStatus: z.enum(["NONE", "PENDING", "VERIFIED", "REJECTED"]).optional(),
+  /**
+   * Query strings carry no booleans, so accept the string form the
+   * browser actually sends. Absent means false: excluding archived
+   * customers is the safe default, and every picker in the app relies
+   * on getting it without asking.
+   */
+  includeArchived: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
   page: z.coerce.number().optional(),
   pageSize: z.coerce.number().optional(),
 });
@@ -209,3 +219,14 @@ export interface LedgerQuery {
 
 /** Narrowed ledger scope after route-level validation. */
 export type LedgerScope = "ALL" | "LOANS" | "COOP";
+
+/**
+ * Archive / restore. The reason is optional — an operator tidying the
+ * register at 5pm shouldn't stall on a text field — but it is what
+ * makes the audit row answer "why is this member filed away" later.
+ */
+export const archiveCustomerSchema = z.object({
+  archived: z.boolean(),
+  reason: z.string().trim().max(500).optional(),
+});
+export type ArchiveCustomerInput = z.infer<typeof archiveCustomerSchema>;

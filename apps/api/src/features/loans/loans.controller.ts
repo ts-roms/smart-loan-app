@@ -40,9 +40,12 @@ export class LoanWorkflowController {
         screeningId: result.screeningId,
       });
     }
-    if (result.kind === "CustomerErased") {
+    if (
+      result.kind === "CustomerErased" ||
+      result.kind === "CustomerArchived"
+    ) {
       return reply.code(409).send({
-        error: "CustomerErased",
+        error: result.kind,
         message: result.message,
       });
     }

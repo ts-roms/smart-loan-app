@@ -33,20 +33,21 @@ interface PhoneIssue {
   message: string;
 }
 
-/** What made a customer undeletable, so the UI can say which. */
-export interface CustomerHistoryCounts {
-  loans: number;
-  contributions: number;
-  savingsTransactions: number;
-  coMakerFor: number;
-  fundTransactions: number;
-  fundWithdrawals: number;
+/** The live loans standing in the way of filing someone away. */
+export interface OpenLoanRef {
+  number: string;
+  status: string;
 }
 
-export type DeleteCustomerResult =
-  | { ok: true; customerId: string; number: string }
+export type ArchiveCustomerResult =
+  | {
+      ok: true;
+      customerId: string;
+      number: string;
+      archivedAt: string | null;
+    }
   | { ok: false; reason: "NotFound" }
-  | { ok: false; reason: "HasHistory"; counts: CustomerHistoryCounts };
+  | { ok: false; reason: "HasOpenLoans"; loans: OpenLoanRef[] };
 
 export type UpdateResult =
   | { ok: true; customer: Customer }
@@ -113,84 +114,98 @@ export class CustomerService {
   }
 
   /**
-   * Delete a customer outright — the escape hatch for a mistyped or
-   * duplicated record, and nothing more.
+   * Archive or restore a customer — the soft delete.
    *
-   * The guard below is doing load-bearing work, because the schema
-   * alone would let this destroy money. LoanApplication and CoMaker are
-   * RESTRICT, so Postgres refuses those on its own — but Contribution
-   * and SavingsTransaction CASCADE. A coop member who has been saving
-   * for years and never borrowed would delete cleanly, taking every
-   * contribution and savings movement with them, and the ledger would
-   * still show the cash. Fund transactions and withdrawals are SetNull,
-   * which is quieter and just as wrong: the money stays, the name
-   * detaches from it.
+   * There is deliberately no hard delete. A customer row is the anchor
+   * for loans, payments, contributions and the ledger lines that
+   * reference them, and a cooperative's member register is a record in
+   * its own right; the org has to be able to answer "who was this"
+   * years after they stopped borrowing. The schema agrees only
+   * halfway, which is why leaving deletion available was dangerous:
+   * LoanApplication and CoMaker are RESTRICT, but Contribution and
+   * SavingsTransaction CASCADE, so removing a member who had saved for
+   * years and never borrowed would have taken every contribution and
+   * savings movement with them while the ledger still showed the cash.
    *
-   * So the rule is: a customer with ANY financial or legal history is
-   * not deletable at all. For those, erasure under the Data Privacy Act
-   * is the correct instrument — it redacts the person and keeps the
-   * records the law requires us to keep.
+   * Archiving keeps all of it. The record drops out of pickers and the
+   * default list, cannot take a new loan, and can be restored.
    *
-   * What does cascade away is the identity apparatus around a record
-   * that never traded: KYC submissions, credit scores, survey
-   * responses, AML screenings, DORSI rows, notifications.
+   * Refused while a loan is live: you cannot file away someone who
+   * currently owes the cooperative money, and a borrower who vanished
+   * from the collections queue because an operator tidied up is a
+   * worse outcome than a cluttered list.
    */
-  async remove(
-    idOrNumber: string,
-    actorId: string,
-  ): Promise<DeleteCustomerResult> {
-    const existing = await this.customers.findByIdOrNumber(idOrNumber);
+  async setArchived(args: {
+    idOrNumber: string;
+    archived: boolean;
+    actorId: string;
+    reason?: string;
+  }): Promise<ArchiveCustomerResult> {
+    const existing = await this.customers.findByIdOrNumber(args.idOrNumber);
     if (!existing) return { ok: false, reason: "NotFound" };
 
     const id = existing.id;
-    const [
-      loans,
-      contributions,
-      savingsTransactions,
-      coMakerFor,
-      fundTransactions,
-      fundWithdrawals,
-    ] = await Promise.all([
-      this.prisma.loanApplication.count({ where: { customerId: id } }),
-      this.prisma.contribution.count({ where: { customerId: id } }),
-      this.prisma.savingsTransaction.count({ where: { customerId: id } }),
-      this.prisma.coMaker.count({ where: { customerId: id } }),
-      this.prisma.fundTransaction.count({ where: { customerId: id } }),
-      this.prisma.fundWithdrawal.count({ where: { customerId: id } }),
-    ]);
-    const counts: CustomerHistoryCounts = {
-      loans,
-      contributions,
-      savingsTransactions,
-      coMakerFor,
-      fundTransactions,
-      fundWithdrawals,
-    };
-    if (Object.values(counts).some((n) => n > 0)) {
-      return { ok: false, reason: "HasHistory", counts };
+
+    // Idempotent — already in the requested state, so no write and no
+    // audit row. Two operators archiving the same record shouldn't read
+    // later as two separate decisions.
+    if (!!existing.archivedAt === args.archived) {
+      return {
+        ok: true,
+        customerId: id,
+        number: existing.number,
+        archivedAt: existing.archivedAt?.toISOString() ?? null,
+      };
     }
 
-    /*
-     * Audit BEFORE the delete, and snapshot the identity into the
-     * payload. Afterwards there is no row to describe: targetId would
-     * point at nothing and the trail would record that someone deleted
-     * "a customer". The name and reference number are the only things
-     * that make this row answerable later.
-     */
+    if (args.archived) {
+      const open = await this.prisma.loanApplication.findMany({
+        where: {
+          customerId: id,
+          status: {
+            in: [
+              "SUBMITTED",
+              "UNDER_REVIEW",
+              "APPROVED",
+              "DISBURSED",
+              "ACTIVE",
+              "DEFAULTED",
+            ],
+          },
+        },
+        select: { number: true, status: true },
+        orderBy: { submittedAt: "desc" },
+      });
+      if (open.length > 0) {
+        return { ok: false, reason: "HasOpenLoans", loans: open };
+      }
+    }
+
+    const archivedAt = args.archived ? new Date() : null;
+    const customer = await this.customers.setArchived(id, {
+      archivedAt,
+      archiveReason: args.archived ? (args.reason ?? null) : null,
+      archivedById: args.archived ? args.actorId : null,
+    });
+
     await this.audit.record({
-      action: "CUSTOMER_DELETE",
-      actorId,
+      action: args.archived ? "CUSTOMER_ARCHIVE" : "CUSTOMER_RESTORE",
+      actorId: args.actorId,
       targetType: "Customer",
       targetId: id,
       payload: {
         number: existing.number,
         name: [existing.firstName, existing.lastName].filter(Boolean).join(" "),
-        email: existing.email,
-        phone: existing.phone,
+        reason: args.reason ?? null,
       },
     });
-    await this.prisma.customer.delete({ where: { id } });
-    return { ok: true, customerId: id, number: existing.number };
+
+    return {
+      ok: true,
+      customerId: id,
+      number: customer.number,
+      archivedAt: archivedAt?.toISOString() ?? null,
+    };
   }
 
   /**

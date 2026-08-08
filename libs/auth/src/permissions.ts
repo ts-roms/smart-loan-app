@@ -189,15 +189,15 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
   { key: "customers.read", label: "View customers", category: "Customers" },
   { key: "customers.write", label: "Create / edit", category: "Customers" },
   /**
-   * Deleting is its own key, not part of customers.write. The endpoint
-   * refuses any customer with financial history, so this only ever
-   * removes a mistyped or duplicated record — but "can fix a typo" and
-   * "can make a record cease to exist" are different powers and a
-   * clerk needs only the first.
+   * Archiving is its own key, not part of customers.write. It is
+   * reversible and destroys nothing, but it removes someone from every
+   * picker and blocks new lending to them — "can fix a typo" and "can
+   * take a member off the books" are different powers, and a clerk
+   * needs only the first.
    */
   {
-    key: "customers.delete",
-    label: "Delete (only records with no history)",
+    key: "customers.archive",
+    label: "Archive / restore customers",
     category: "Customers",
   },
 

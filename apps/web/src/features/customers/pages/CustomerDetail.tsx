@@ -1,7 +1,7 @@
 import {
+  useArchiveCustomer,
   useCustomer,
   useCustomerScore,
-  useDeleteCustomer,
   useKycForCustomer,
   useKycStatus,
   useSubmitKyc,
@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
   SkeletonCard,
   useConfirm,
+  usePrompt,
   useToast,
 } from "@loan/ui";
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
@@ -37,17 +38,18 @@ import { usePermission } from "../../../hooks/use-permission";
 import { FileUpload } from "../../../components/FileUpload";
 import { formatDate, formatDateTime, formatMoney } from "@loan/shared-utils";
 import {
+  Archive,
+  ArchiveRestore,
   CreditCard,
   FileUp,
   Gauge,
   MoreHorizontal,
   Pencil,
   ShieldCheck,
-  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { CustomerLedgerPanel } from "../components/CustomerLedgerPanel";
@@ -85,13 +87,13 @@ export function CustomerDetailPage() {
   // Same key the API requires for POST /loans/apply, so a collector
   // never sees a button that will 403 on them.
   const canApply = usePermission("loans.apply");
-  // Same key the DELETE endpoint requires, so the button never appears
+  // Same key the archive endpoint requires, so the item never appears
   // for someone it would 403 on.
-  const canDelete = usePermission("customers.delete");
-  const removeCustomer = useDeleteCustomer();
+  const canArchive = usePermission("customers.archive");
+  const archiveCustomer = useArchiveCustomer();
   const toast = useToast();
   const confirm = useConfirm();
-  const navigate = useNavigate();
+  const prompt = usePrompt();
   const [editing, setEditing] = useState(false);
 
   // Name the breadcrumb crumb for this route. Called before the early
@@ -116,30 +118,60 @@ export function CustomerDetailPage() {
     .join(" ");
 
   /**
-   * Delete is for a record that should never have existed — a typo, a
-   * duplicate. The server refuses anything with financial history and
-   * says what stood in the way, so the dialog can promise this is
-   * limited to a clean record without the page having to work it out.
+   * Archive — the soft delete. Nothing is removed; the member leaves
+   * the pickers and the default list and stops being eligible for new
+   * lending, and every loan, payment and ledger line that points at
+   * them is untouched. The server refuses while a loan is still open
+   * and names which, so the dialog can stay short.
    */
-  const onDelete = async () => {
+  const onArchive = async () => {
+    const reason = await prompt({
+      title: `Archive ${fullName}?`,
+      message: (
+        <div className="space-y-2">
+          <p>
+            They will no longer appear in borrower pickers or the customer list,
+            and cannot start a new loan application.
+          </p>
+          <p className="text-fg-muted">
+            Nothing is deleted. Their loans, payments, contributions and ledger
+            history stay exactly as they are, and you can restore them at any
+            time.
+          </p>
+        </div>
+      ),
+      label: "Reason (optional)",
+      placeholder: "e.g. moved abroad, or duplicate of CUST-2026-000012",
+      confirmLabel: "Archive",
+    });
+    if (reason === null) return;
+    try {
+      await archiveCustomer.mutateAsync({
+        id: c.id,
+        archived: true,
+        reason: reason.trim() || undefined,
+      });
+      toast.success(`${fullName} archived`);
+    } catch (err) {
+      // 409 HasOpenLoans arrives with the server's sentence, which
+      // names the loans in the way.
+      toast.error((err as Error).message ?? "Could not archive");
+    }
+  };
+
+  const onRestore = async () => {
     const ok = await confirm({
-      title: `Delete ${fullName}?`,
+      title: `Restore ${fullName}?`,
       message:
-        "This removes the customer record permanently, along with their KYC documents, credit score and survey answers. It only works for a record with no loans, contributions or savings — anyone with financial history is refused, and should be erased under a privacy request instead.",
-      confirmLabel: "Delete customer",
-      tone: "destructive",
+        "They will appear in the customer list and borrower pickers again, and become eligible for new loan applications.",
+      confirmLabel: "Restore",
     });
     if (!ok) return;
     try {
-      await removeCustomer.mutateAsync(c.id);
-      toast.success(`${fullName} deleted`);
-      // The record this page renders no longer exists — staying here
-      // would show "Customer not found" over a stale header.
-      void navigate("/customers");
+      await archiveCustomer.mutateAsync({ id: c.id, archived: false });
+      toast.success(`${fullName} restored`);
     } catch (err) {
-      // 409 HasHistory arrives here with the server's own sentence,
-      // which names the loans / contributions in the way.
-      toast.error((err as Error).message ?? "Could not delete");
+      toast.error((err as Error).message ?? "Could not restore");
     }
   };
 
@@ -159,6 +191,14 @@ export function CustomerDetailPage() {
           law; the identifying fields are permanently redacted.
         </div>
       )}
+      {c.archivedAt && (
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+          Archived {formatDateTime(c.archivedAt)}
+          {c.archiveReason ? ` — ${c.archiveReason}` : ""}. Hidden from borrower
+          pickers and not eligible for new loans. Their records are intact and
+          this can be undone.
+        </div>
+      )}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
@@ -173,6 +213,7 @@ export function CustomerDetailPage() {
                 {c.lastName}
               </span>
               {c.erasedAt && <Badge variant="danger">Erased</Badge>}
+              {c.archivedAt && <Badge variant="warning">Archived</Badge>}
             </CardTitle>
             <div className="text-xs text-fg-muted mt-1">
               {c.phone} · {c.email ?? "—"} · DOB {formatDate(c.dateOfBirth)}
@@ -186,7 +227,7 @@ export function CustomerDetailPage() {
               an identity to underwrite. The survey link stays — it is
               harmless and read-only from the profile's point of view.
             */}
-            {!c.erasedAt && (
+            {!c.erasedAt && !c.archivedAt && (
               <button
                 type="button"
                 onClick={() => setEditing(true)}
@@ -212,7 +253,7 @@ export function CustomerDetailPage() {
               Gated on `loans.apply` — the same key the API requires, so
               a collector doesn't see a button that will 403.
             */}
-            {canApply && !c.erasedAt && (
+            {canApply && !c.erasedAt && !c.archivedAt && (
               <Link
                 to={`/loans/new?customerId=${id}`}
                 className="inline-flex items-center gap-1 rounded-md border border-transparent bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-sm transition hover:opacity-90"
@@ -222,12 +263,12 @@ export function CustomerDetailPage() {
               </Link>
             )}
             {/*
-              Delete lives behind the overflow menu, not beside "Apply
+              Archive lives behind the overflow menu, not beside "Apply
               for a loan". They are one pixel apart and opposite in
               consequence; the menu costs a click and removes a whole
               class of mistake.
             */}
-            {canDelete && (
+            {canArchive && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -239,13 +280,20 @@ export function CustomerDetailPage() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[12rem]">
-                  <DropdownMenuItem
-                    className="text-danger focus:text-danger"
-                    onSelect={() => void onDelete()}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete customer
-                  </DropdownMenuItem>
+                  {c.archivedAt ? (
+                    <DropdownMenuItem onSelect={() => void onRestore()}>
+                      <ArchiveRestore className="h-4 w-4" />
+                      Restore customer
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      className="text-danger focus:text-danger"
+                      onSelect={() => void onArchive()}
+                    >
+                      <Archive className="h-4 w-4" />
+                      Archive customer
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}

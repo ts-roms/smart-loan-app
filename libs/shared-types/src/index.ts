@@ -192,6 +192,14 @@ export interface Customer {
    * as "erased on purpose", not "data loss".
    */
   erasedAt: string | null;
+  /**
+   * Soft delete. Set when the customer was filed away: they drop out of
+   * pickers and the default list and cannot take a new loan, while
+   * every loan, payment and ledger line that references them stays put.
+   * Null once restored.
+   */
+  archivedAt: string | null;
+  archiveReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -629,6 +637,8 @@ export interface LoanListQuery extends PageQuery {
 
 /** Query-string for GET /customers. Same shape of contract as above. */
 export interface CustomerListQuery extends PageQuery {
+  /** Archived customers are excluded unless this is true. */
+  includeArchived?: boolean;
   /**
    * Free text over reference number, name, phone, email and government
    * ID. Tokenized, so "dela cruz" and "cruz juan" both find the same

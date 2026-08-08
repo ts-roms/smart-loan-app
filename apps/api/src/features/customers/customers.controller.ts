@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import {
+  archiveCustomerSchema,
   customerBaseSchema,
   customerListQuerySchema,
   customerSchema,
@@ -72,40 +73,39 @@ export class CustomerController {
     return result;
   };
 
-  remove = async (
+  setArchived = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ) => {
-    const result = await req.customerServices!.customer.remove(
-      req.params.id,
-      req.user.sub,
-    );
+    const parsed = archiveCustomerSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await req.customerServices!.customer.setArchived({
+      idOrNumber: req.params.id,
+      archived: parsed.data.archived,
+      actorId: req.user.sub,
+      reason: parsed.data.reason,
+    });
     if (!result.ok) {
       if (result.reason === "NotFound") {
         return reply.code(404).send({ error: "NotFound" });
       }
-      // 409, not 403: the caller is allowed to delete customers, this
-      // particular one just isn't deletable. The counts let the UI say
-      // which history is in the way instead of a bare refusal.
-      const { counts } = result;
-      const parts = [
-        counts.loans && `${counts.loans} loan(s)`,
-        counts.contributions && `${counts.contributions} contribution(s)`,
-        counts.savingsTransactions &&
-          `${counts.savingsTransactions} savings transaction(s)`,
-        counts.coMakerFor && `co-maker on ${counts.coMakerFor} loan(s)`,
-        counts.fundTransactions &&
-          `${counts.fundTransactions} fund transaction(s)`,
-        counts.fundWithdrawals &&
-          `${counts.fundWithdrawals} fund withdrawal(s)`,
-      ].filter(Boolean);
+      // 409: well-formed, refused on the customer's state. Naming the
+      // loans beats a bare "cannot archive" — the operator can go and
+      // settle them.
+      const list = result.loans
+        .map((l) => `${l.number} (${l.status})`)
+        .join(", ");
       return reply.code(409).send({
-        error: "HasHistory",
-        message: `This customer has ${parts.join(", ")} and cannot be deleted. Financial records must be kept. To honour a privacy request, erase their personal data instead.`,
-        counts,
+        error: "HasOpenLoans",
+        message: `This customer still has ${result.loans.length} open loan(s): ${list}. Settle or close them before archiving.`,
+        loans: result.loans,
       });
     }
-    return reply.code(204).send();
+    return result;
   };
 
   update = async (

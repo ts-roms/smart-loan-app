@@ -563,7 +563,7 @@ export class LoanRepository {
       // after erasure" lives inside the transaction, not in a caller.
       const applicant = await tx.customer.findUnique({
         where: { id: input.customerId },
-        select: { erasedAt: true },
+        select: { erasedAt: true, archivedAt: true },
       });
       if (!applicant) {
         throw new Error(`Customer ${input.customerId} not found.`);
@@ -571,6 +571,11 @@ export class LoanRepository {
       if (applicant.erasedAt) {
         throw new Error(
           "This customer's personal data was erased under a data privacy request; new loan applications are not possible.",
+        );
+      }
+      if (applicant.archivedAt) {
+        throw new Error(
+          "This customer is archived. Restore them before starting a new application.",
         );
       }
 
