@@ -91,6 +91,27 @@ export function UsersPage() {
    * Roles are searchable too — "who are the accountants" is the
    * question people actually bring to this page.
    */
+  /**
+   * Can this person be signed out of anything?
+   *
+   * Holding a live refresh token is necessary but not sufficient. The
+   * Presence column is what an operator reads as "are they logged in",
+   * and offering to end the sessions of someone it calls "Never signed
+   * in" is a contradiction on one line — they will believe the menu
+   * over the column, and the menu would be wrong.
+   *
+   * NEVER alongside a live token is legacy data: a login that never
+   * made an authenticated call left lastSeenAt null. Login stamps it
+   * now, so real sessions always carry a presence; anything still in
+   * that state predates the fix and is a script's leftovers, not a
+   * person to sign out.
+   *
+   * OFFLINE with a session is a different matter and stays offered —
+   * that is someone idle since this morning who is genuinely logged in.
+   */
+  const canEndSessions = (u: { hasActiveSession: boolean; presence: string }) =>
+    u.hasActiveSession && u.presence !== "NEVER";
+
   const allUsers = users.data ?? [];
   const needle = query.trim().toLowerCase();
   const rows = needle
@@ -439,17 +460,11 @@ export function UsersPage() {
                               refuses them, and a greyed item only
                               raises the question of why.
                             */}
-                            {/*
-                              Only when there is a session to end.
-                              Offering it to someone who has never
-                              signed in — or who was signed out a
-                              minute ago — is offering a no-op, and the
-                              admin reasonably reads the item's
-                              presence as evidence they are logged in.
-                            */}
+                            {/* Only when there is a session to end —
+                                see canEndSessions above. */}
                             {canForceLogout &&
                               u.id !== me?.id &&
-                              u.hasActiveSession && (
+                              canEndSessions(u) && (
                                 <DropdownMenuItem
                                   onSelect={() =>
                                     void onForceLogout(u.id, u.name, u.email)
