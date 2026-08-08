@@ -188,6 +188,18 @@ export const PERMISSIONS: ReadonlyArray<PermissionDefinition> = [
   // Customers
   { key: "customers.read", label: "View customers", category: "Customers" },
   { key: "customers.write", label: "Create / edit", category: "Customers" },
+  /**
+   * Deleting is its own key, not part of customers.write. The endpoint
+   * refuses any customer with financial history, so this only ever
+   * removes a mistyped or duplicated record — but "can fix a typo" and
+   * "can make a record cease to exist" are different powers and a
+   * clerk needs only the first.
+   */
+  {
+    key: "customers.delete",
+    label: "Delete (only records with no history)",
+    category: "Customers",
+  },
 
   // Accounting
   { key: "accounting.read", label: "View ledger", category: "Accounting" },

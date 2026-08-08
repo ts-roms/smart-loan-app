@@ -40,6 +40,20 @@ export const customerKeys = {
  *
  * Both hooks share a query key, so a screen using each fetches once.
  */
+/**
+ * Delete a customer. The server refuses anyone with financial history
+ * (409 HasHistory), so this only ever removes a duplicate or a typo —
+ * the error message names what stood in the way.
+ */
+export function useDeleteCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      getApiClient().request<void>(`/customers/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: customerKeys.all }),
+  });
+}
+
 export function useCustomers(filter?: CustomerListQuery) {
   return useQuery({
     queryKey: customerKeys.list(filter),

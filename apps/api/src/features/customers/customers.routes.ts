@@ -57,4 +57,13 @@ export function registerCustomerHttp(
     { preHandler: app.requirePermission("customers.write") },
     controller.update,
   );
+
+  // Its own permission, not customers.write — see the catalog entry.
+  // The endpoint refuses anyone with financial history, so this is the
+  // duplicate-record escape hatch rather than a way to lose a borrower.
+  app.delete<{ Params: { id: string } }>(
+    "/:id",
+    { preHandler: app.requirePermission("customers.delete") },
+    controller.remove,
+  );
 }

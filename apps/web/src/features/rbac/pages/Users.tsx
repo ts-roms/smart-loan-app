@@ -2,6 +2,7 @@ import {
   useAssignRole,
   useCreateUser,
   useForceLogout,
+  useSetUserActive,
   useRoles,
   useUnassignRole,
   useUsers,
@@ -27,13 +28,27 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   SkeletonCard,
   useConfirm,
   usePrompt,
   useToast,
 } from "@loan/ui";
 import { formatDate } from "@loan/shared-utils";
-import { LogOut, Plus, UserCog, UserPlus, X } from "lucide-react";
+import {
+  LogOut,
+  MoreHorizontal,
+  Plus,
+  UserCheck,
+  UserCog,
+  UserPlus,
+  UserX,
+  X,
+} from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { usePermission } from "../../../hooks/use-permission";
@@ -51,6 +66,7 @@ export function UsersPage() {
   const assign = useAssignRole();
   const unassign = useUnassignRole();
   const forceLogout = useForceLogout();
+  const setActive = useSetUserActive();
   const toast = useToast();
   const confirm = useConfirm();
   const prompt = usePrompt();
@@ -151,6 +167,64 @@ export function UsersPage() {
       );
     } catch (err) {
       toast.error((err as Error).message ?? "Failed");
+    }
+  };
+
+  /**
+   * The off switch the force-logout dialog has always pointed at.
+   *
+   * Deactivating asks for a reason and warns that live sessions end,
+   * because it is the heavier of the two actions and reversible only
+   * by another admin. Reactivating just confirms — restoring access to
+   * a colleague needs no paperwork.
+   */
+  const onToggleActive = async (
+    userId: string,
+    name: string,
+    email: string,
+    currentlyActive: boolean,
+  ) => {
+    if (currentlyActive) {
+      const reason = await prompt({
+        title: `Deactivate ${name}?`,
+        message: (
+          <div className="space-y-2">
+            <p>
+              <strong>{email}</strong> will not be able to sign in, and every
+              session they currently hold ends immediately.
+            </p>
+            <p className="text-fg-muted">
+              Their history stays exactly as it is — every loan they decided and
+              payment they recorded keeps their name on it. Reversible by
+              another admin.
+            </p>
+          </div>
+        ),
+        label: "Reason (optional)",
+        placeholder: "e.g. resigned, last day 15 Aug",
+        confirmLabel: "Deactivate",
+      });
+      if (reason === null) return;
+      try {
+        await setActive.mutateAsync({ userId, active: false, reason });
+        toast.success(`${name} deactivated`);
+      } catch (err) {
+        // 409 for the last active admin, or for your own row.
+        toast.error((err as Error).message ?? "Could not deactivate");
+      }
+      return;
+    }
+    const ok = await confirm({
+      title: `Reactivate ${name}?`,
+      message: `${email} will be able to sign in again with their existing password.`,
+      confirmLabel: "Reactivate",
+    });
+    if (!ok) return;
+    try {
+      await setActive.mutateAsync({ userId, active: true });
+      toast.success(`${name} reactivated`);
+    } catch (err) {
+      toast.error((err as Error).message ?? "Could not reactivate");
     }
   };
 
@@ -287,42 +361,84 @@ export function UsersPage() {
                     {formatDate(u.createdAt)}
                   </td>
                   <td className="py-2 px-2">
-                    <div className="flex items-center justify-end gap-2">
-                      {canManage && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setAssigning(u.id)}
-                        >
-                          <Plus className="h-3 w-3" />
-                          Assign
-                        </Button>
-                      )}
-                      {/*
-                        Hidden on your own row rather than shown
-                        disabled. The API refuses it anyway, but a
-                        greyed-out button invites a hover to find out
-                        why, and there is nothing useful to say — you
-                        end your own session with Sign out.
-                      */}
-                      {canForceLogout && u.id !== me?.id && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          loading={
-                            forceLogout.isPending &&
-                            forceLogout.variables?.userId === u.id
-                          }
-                          onClick={() =>
-                            void onForceLogout(u.id, u.name, u.email)
-                          }
-                          title="End every session this user has"
-                        >
-                          {!forceLogout.isPending && (
-                            <LogOut className="h-3 w-3" />
-                          )}
-                          Sign out
-                        </Button>
+                    {/*
+                      One menu rather than a row of buttons. Three
+                      actions x N rows filled the table with more
+                      chrome than data, and the destructive one sat
+                      one pixel from the routine one — the kind of
+                      layout that produces a mis-click nobody meant.
+                      Collapsed, the row reads as data again and the
+                      dangerous item is separated and colour-coded.
+                    */}
+                    <div className="flex items-center justify-end">
+                      {(canManage || canForceLogout) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`Actions for ${u.name}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-default bg-surface-3 text-fg-muted hover:bg-hover hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="min-w-[12rem]"
+                          >
+                            {canManage && (
+                              <DropdownMenuItem
+                                onSelect={() => setAssigning(u.id)}
+                              >
+                                <Plus className="h-4 w-4" />
+                                Assign role
+                              </DropdownMenuItem>
+                            )}
+                            {/*
+                              Both self-targeting actions are hidden on
+                              your own row rather than disabled: the API
+                              refuses them, and a greyed item only
+                              raises the question of why.
+                            */}
+                            {canForceLogout && u.id !== me?.id && (
+                              <DropdownMenuItem
+                                onSelect={() =>
+                                  void onForceLogout(u.id, u.name, u.email)
+                                }
+                              >
+                                <LogOut className="h-4 w-4" />
+                                Sign out everywhere
+                              </DropdownMenuItem>
+                            )}
+                            {canManage && u.id !== me?.id && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className={
+                                    u.active
+                                      ? "text-danger focus:text-danger"
+                                      : undefined
+                                  }
+                                  onSelect={() =>
+                                    void onToggleActive(
+                                      u.id,
+                                      u.name,
+                                      u.email,
+                                      u.active,
+                                    )
+                                  }
+                                >
+                                  {u.active ? (
+                                    <UserX className="h-4 w-4" />
+                                  ) : (
+                                    <UserCheck className="h-4 w-4" />
+                                  )}
+                                  {u.active ? "Deactivate" : "Reactivate"}
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
                   </td>

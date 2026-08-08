@@ -72,6 +72,42 @@ export class CustomerController {
     return result;
   };
 
+  remove = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const result = await req.customerServices!.customer.remove(
+      req.params.id,
+      req.user.sub,
+    );
+    if (!result.ok) {
+      if (result.reason === "NotFound") {
+        return reply.code(404).send({ error: "NotFound" });
+      }
+      // 409, not 403: the caller is allowed to delete customers, this
+      // particular one just isn't deletable. The counts let the UI say
+      // which history is in the way instead of a bare refusal.
+      const { counts } = result;
+      const parts = [
+        counts.loans && `${counts.loans} loan(s)`,
+        counts.contributions && `${counts.contributions} contribution(s)`,
+        counts.savingsTransactions &&
+          `${counts.savingsTransactions} savings transaction(s)`,
+        counts.coMakerFor && `co-maker on ${counts.coMakerFor} loan(s)`,
+        counts.fundTransactions &&
+          `${counts.fundTransactions} fund transaction(s)`,
+        counts.fundWithdrawals &&
+          `${counts.fundWithdrawals} fund withdrawal(s)`,
+      ].filter(Boolean);
+      return reply.code(409).send({
+        error: "HasHistory",
+        message: `This customer has ${parts.join(", ")} and cannot be deleted. Financial records must be kept. To honour a privacy request, erase their personal data instead.`,
+        counts,
+      });
+    }
+    return reply.code(204).send();
+  };
+
   update = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,

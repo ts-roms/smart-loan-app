@@ -1,4 +1,8 @@
-import { CustomerLedgerRepository, CustomerRepository } from "@loan/db";
+import {
+  AuditLogRepository,
+  CustomerLedgerRepository,
+  CustomerRepository,
+} from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { BulkImportController } from "./bulk-import.controller";
@@ -92,7 +96,12 @@ function buildCustomerServices(app: FastifyInstance) {
     const screening = app.screening(prisma);
     const notifications = app.notifications(prisma);
     req.customerServices = {
-      customer: new CustomerService(customerRepo, prisma, screening),
+      customer: new CustomerService(
+        customerRepo,
+        prisma,
+        screening,
+        new AuditLogRepository(prisma, req.user?.impersonatedBy),
+      ),
       bulkImport: new BulkImportService(customerRepo, screening),
       ledger: new CustomerLedgerService(
         customerRepo,

@@ -1,6 +1,7 @@
 import {
   useCustomer,
   useCustomerScore,
+  useDeleteCustomer,
   useKycForCustomer,
   useKycStatus,
   useSubmitKyc,
@@ -23,7 +24,12 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   SkeletonCard,
+  useConfirm,
   useToast,
 } from "@loan/ui";
 import { DocumentThumbnail } from "../../../components/DocumentPreview";
@@ -34,12 +40,14 @@ import {
   CreditCard,
   FileUp,
   Gauge,
+  MoreHorizontal,
   Pencil,
   ShieldCheck,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
 import { CustomerLedgerPanel } from "../components/CustomerLedgerPanel";
@@ -77,6 +85,13 @@ export function CustomerDetailPage() {
   // Same key the API requires for POST /loans/apply, so a collector
   // never sees a button that will 403 on them.
   const canApply = usePermission("loans.apply");
+  // Same key the DELETE endpoint requires, so the button never appears
+  // for someone it would 403 on.
+  const canDelete = usePermission("customers.delete");
+  const removeCustomer = useDeleteCustomer();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
 
   // Name the breadcrumb crumb for this route. Called before the early
@@ -99,6 +114,34 @@ export function CustomerDetailPage() {
   const fullName = [c.firstName, c.middleName, c.lastName]
     .filter(Boolean)
     .join(" ");
+
+  /**
+   * Delete is for a record that should never have existed — a typo, a
+   * duplicate. The server refuses anything with financial history and
+   * says what stood in the way, so the dialog can promise this is
+   * limited to a clean record without the page having to work it out.
+   */
+  const onDelete = async () => {
+    const ok = await confirm({
+      title: `Delete ${fullName}?`,
+      message:
+        "This removes the customer record permanently, along with their KYC documents, credit score and survey answers. It only works for a record with no loans, contributions or savings — anyone with financial history is refused, and should be erased under a privacy request instead.",
+      confirmLabel: "Delete customer",
+      tone: "destructive",
+    });
+    if (!ok) return;
+    try {
+      await removeCustomer.mutateAsync(c.id);
+      toast.success(`${fullName} deleted`);
+      // The record this page renders no longer exists — staying here
+      // would show "Customer not found" over a stale header.
+      void navigate("/customers");
+    } catch (err) {
+      // 409 HasHistory arrives here with the server's own sentence,
+      // which names the loans / contributions in the way.
+      toast.error((err as Error).message ?? "Could not delete");
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -177,6 +220,34 @@ export function CustomerDetailPage() {
                 <CreditCard className="h-4 w-4" />
                 Apply for a loan
               </Link>
+            )}
+            {/*
+              Delete lives behind the overflow menu, not beside "Apply
+              for a loan". They are one pixel apart and opposite in
+              consequence; the menu costs a click and removes a whole
+              class of mistake.
+            */}
+            {canDelete && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="More actions"
+                    className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-md border border-default bg-surface-3 text-fg-muted hover:bg-hover hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[12rem]">
+                  <DropdownMenuItem
+                    className="text-danger focus:text-danger"
+                    onSelect={() => void onDelete()}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete customer
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </CardHeader>

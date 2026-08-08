@@ -262,6 +262,34 @@ export function useForceLogout() {
   });
 }
 
+/**
+ * Enable / disable a staff login. The force-logout dialog has always
+ * told operators to "set their status to Inactive"; this is the call
+ * that finally makes that possible.
+ */
+export function useSetUserActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { userId: string; active: boolean; reason?: string }) =>
+      getApiClient().request<{
+        ok: true;
+        userId: string;
+        email: string;
+        name: string;
+        active: boolean;
+        revokedAt: string | null;
+        refreshTokensRevoked: number;
+      }>(`/admin/users/${input.userId}/active`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          active: input.active,
+          ...(input.reason ? { reason: input.reason } : {}),
+        }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: rbacKeys.users }),
+  });
+}
+
 export function useMyPermissions() {
   return useQuery({
     queryKey: rbacKeys.mePermissions,

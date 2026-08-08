@@ -157,6 +157,14 @@ export async function rbacRoutes(app: FastifyInstance) {
     ctrl.bulkImportUsers,
   );
 
+  // Enable / disable a login. admin.users, same as creating one —
+  // whoever can mint an account can retire it.
+  app.patch<{ Params: { userId: string } }>(
+    "/users/:userId/active",
+    { preHandler: app.requirePermission("admin.users") },
+    ctrl.setUserActive,
+  );
+
   // ─── user role assignments ────────────────────────────────────────
 
   app.get<{ Params: { userId: string } }>(

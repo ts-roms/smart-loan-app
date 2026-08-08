@@ -1,6 +1,7 @@
 import { phoneChangeError } from "@loan/shared-utils";
 
 import type {
+  AuditLogRepository,
   Customer,
   CustomerListFilter,
   CustomerListItem,
@@ -32,6 +33,21 @@ interface PhoneIssue {
   message: string;
 }
 
+/** What made a customer undeletable, so the UI can say which. */
+export interface CustomerHistoryCounts {
+  loans: number;
+  contributions: number;
+  savingsTransactions: number;
+  coMakerFor: number;
+  fundTransactions: number;
+  fundWithdrawals: number;
+}
+
+export type DeleteCustomerResult =
+  | { ok: true; customerId: string; number: string }
+  | { ok: false; reason: "NotFound" }
+  | { ok: false; reason: "HasHistory"; counts: CustomerHistoryCounts };
+
 export type UpdateResult =
   | { ok: true; customer: Customer }
   | { ok: false; reason: "NotFound" }
@@ -58,6 +74,7 @@ export class CustomerService {
     private readonly customers: CustomerRepository,
     private readonly prisma: PrismaClient,
     private readonly screening: ScreeningRepository,
+    private readonly audit: AuditLogRepository,
   ) {}
 
   /**
@@ -93,6 +110,87 @@ export class CustomerService {
     });
     void this.screening.screen(created.id).catch(() => undefined);
     return created;
+  }
+
+  /**
+   * Delete a customer outright — the escape hatch for a mistyped or
+   * duplicated record, and nothing more.
+   *
+   * The guard below is doing load-bearing work, because the schema
+   * alone would let this destroy money. LoanApplication and CoMaker are
+   * RESTRICT, so Postgres refuses those on its own — but Contribution
+   * and SavingsTransaction CASCADE. A coop member who has been saving
+   * for years and never borrowed would delete cleanly, taking every
+   * contribution and savings movement with them, and the ledger would
+   * still show the cash. Fund transactions and withdrawals are SetNull,
+   * which is quieter and just as wrong: the money stays, the name
+   * detaches from it.
+   *
+   * So the rule is: a customer with ANY financial or legal history is
+   * not deletable at all. For those, erasure under the Data Privacy Act
+   * is the correct instrument — it redacts the person and keeps the
+   * records the law requires us to keep.
+   *
+   * What does cascade away is the identity apparatus around a record
+   * that never traded: KYC submissions, credit scores, survey
+   * responses, AML screenings, DORSI rows, notifications.
+   */
+  async remove(
+    idOrNumber: string,
+    actorId: string,
+  ): Promise<DeleteCustomerResult> {
+    const existing = await this.customers.findByIdOrNumber(idOrNumber);
+    if (!existing) return { ok: false, reason: "NotFound" };
+
+    const id = existing.id;
+    const [
+      loans,
+      contributions,
+      savingsTransactions,
+      coMakerFor,
+      fundTransactions,
+      fundWithdrawals,
+    ] = await Promise.all([
+      this.prisma.loanApplication.count({ where: { customerId: id } }),
+      this.prisma.contribution.count({ where: { customerId: id } }),
+      this.prisma.savingsTransaction.count({ where: { customerId: id } }),
+      this.prisma.coMaker.count({ where: { customerId: id } }),
+      this.prisma.fundTransaction.count({ where: { customerId: id } }),
+      this.prisma.fundWithdrawal.count({ where: { customerId: id } }),
+    ]);
+    const counts: CustomerHistoryCounts = {
+      loans,
+      contributions,
+      savingsTransactions,
+      coMakerFor,
+      fundTransactions,
+      fundWithdrawals,
+    };
+    if (Object.values(counts).some((n) => n > 0)) {
+      return { ok: false, reason: "HasHistory", counts };
+    }
+
+    /*
+     * Audit BEFORE the delete, and snapshot the identity into the
+     * payload. Afterwards there is no row to describe: targetId would
+     * point at nothing and the trail would record that someone deleted
+     * "a customer". The name and reference number are the only things
+     * that make this row answerable later.
+     */
+    await this.audit.record({
+      action: "CUSTOMER_DELETE",
+      actorId,
+      targetType: "Customer",
+      targetId: id,
+      payload: {
+        number: existing.number,
+        name: [existing.firstName, existing.lastName].filter(Boolean).join(" "),
+        email: existing.email,
+        phone: existing.phone,
+      },
+    });
+    await this.prisma.customer.delete({ where: { id } });
+    return { ok: true, customerId: id, number: existing.number };
   }
 
   /**
