@@ -205,9 +205,20 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    /*
+     * 127.0.0.1, not "localhost".
+     *
+     * The API binds config.host, which is 0.0.0.0 — IPv4 only. On a
+     * dual-stack machine Node resolves "localhost" to ::1 FIRST, so the
+     * proxy would reach whatever holds the IPv6 half of :3001. That is
+     * not hypothetical: another project's dev server took [::]:3001 and
+     * every proxied call — login included — came back 404 from a server
+     * that had never heard of this API. Pinning the family makes the
+     * proxy hit our API or nothing at all, which fails honestly.
+     */
     proxy: {
-      "/api": { target: "http://localhost:3001", changeOrigin: true },
-      "/uploads": { target: "http://localhost:3001", changeOrigin: true },
+      "/api": { target: "http://127.0.0.1:3001", changeOrigin: true },
+      "/uploads": { target: "http://127.0.0.1:3001", changeOrigin: true },
     },
   },
 });
