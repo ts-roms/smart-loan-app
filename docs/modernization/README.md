@@ -4,6 +4,33 @@ Audit of the working copy at `D:\codespaces\commercial\smart-loan-app`
 (branch `feat/version-update`, 266 commits). Observation only — no production
 behaviour was changed to produce any document here.
 
+## Two sets of documents
+
+**Audit artifacts (§8)** — point-in-time findings, dated 11 Aug 2026. They record
+what was found and should not be edited to stay current; they are the historical
+record.
+
+**Reference set (§85)** — living documentation of how each subsystem works.
+Update these as the system changes.
+
+| §85 reference                                  | §8 audit it draws on                                                                           |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [`architecture.md`](architecture.md)           | [`architecture-audit.md`](architecture-audit.md)                                               |
+| [`database.md`](database.md)                   | [`database-audit.md`](database-audit.md)                                                       |
+| [`financial-engine.md`](financial-engine.md)   | [`financial-engine-audit.md`](financial-engine-audit.md)                                       |
+| [`credit-engine.md`](credit-engine.md)         | — (domain not separately audited)                                                              |
+| [`collections.md`](collections.md)             | —                                                                                              |
+| [`accounting.md`](accounting.md)               | —                                                                                              |
+| [`security.md`](security.md)                   | [`security-audit.md`](security-audit.md)                                                       |
+| [`compliance.md`](compliance.md)               | —                                                                                              |
+| [`testing.md`](testing.md)                     | [`test-coverage-audit.md`](test-coverage-audit.md)                                             |
+| [`disaster-recovery.md`](disaster-recovery.md) | —                                                                                              |
+| [`nextjs-migration.md`](nextjs-migration.md)   | [`frontend-audit.md`](frontend-audit.md)                                                       |
+| [`roadmap.md`](roadmap.md)                     | [`gap-matrix.md`](gap-matrix.md), [`recommended-architecture.md`](recommended-architecture.md) |
+
+Plus [`CHANGELOG.md`](../../CHANGELOG.md) and [`MIGRATIONS.md`](../../MIGRATIONS.md)
+at the repository root.
+
 ## Read in this order
 
 | Document                                                         | Answers                                                                                       |
