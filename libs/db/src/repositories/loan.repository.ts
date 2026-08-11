@@ -932,9 +932,47 @@ export class LoanRepository {
        * would leave them matching a number against a uuid column.
        */
       const id = loan.id;
-      if (loan.status !== "APPROVED") {
-        throw new Error(`Cannot disburse from status ${loan.status}`);
+
+      /*
+       * Claim the transition before doing any of the work, and let the
+       * WHERE clause be the lock.
+       *
+       * Reading the status and then acting on it is a check-then-act:
+       * Prisma runs this transaction at Postgres' default READ COMMITTED
+       * and nothing here holds a row lock, so two concurrent disbursements
+       * both read APPROVED, both pass the guard, and both go on to post
+       * cash movements. That is money out of the door twice.
+       *
+       * `updateMany` with the status in the WHERE is atomic: exactly one
+       * caller can move the row off APPROVED, and the loser matches zero
+       * rows and refuses. The claim happens first so that everything below
+       * — the schedule, the journal entries, the commission, the renewal
+       * settlement — runs only for the winner, and rolls back with the
+       * transaction if any of it fails.
+       *
+       * It writes the status and nothing else. The real state write is the
+       * `update` at the end of this method, which lands the loan on ACTIVE
+       * along with disbursedAt/By; DISBURSED here is a transient marker
+       * that never escapes the transaction. One field, one purpose: to be
+       * the thing a second caller cannot also claim.
+       */
+      const claimed = await tx.loanApplication.updateMany({
+        where: { id, status: "APPROVED" },
+        data: { status: "DISBURSED" },
+      });
+      if (claimed.count === 0) {
+        // Re-read rather than reporting the stale status: by now another
+        // caller has almost certainly moved it to DISBURSED, and naming
+        // the status the operator can actually see is the useful message.
+        const current = await tx.loanApplication.findUnique({
+          where: { id },
+          select: { status: true },
+        });
+        throw new Error(
+          `Cannot disburse from status ${current?.status ?? loan.status}`,
+        );
       }
+
       const product = loan.product;
       const principal = Number(loan.principal);
       const annual = Number(loan.annualInterestRate);
@@ -1365,8 +1403,24 @@ export class LoanRepository {
         },
       });
       if (!loan) throw new Error("Loan not found");
-      if (loan.status !== "ACTIVE" && loan.status !== "DISBURSED") {
-        throw new Error(`Cannot close early from status ${loan.status}`);
+      /*
+       * Claim the transition — same reasoning as `disburse`. An early
+       * closure posts a payoff; running it twice posts it twice. The
+       * WHERE clause is the lock, and only one caller can move the loan
+       * off ACTIVE/DISBURSED.
+       */
+      const closeClaim = await tx.loanApplication.updateMany({
+        where: { id: loan.id, status: { in: ["ACTIVE", "DISBURSED"] } },
+        data: { status: "CLOSED" },
+      });
+      if (closeClaim.count === 0) {
+        const current = await tx.loanApplication.findUnique({
+          where: { id: loan.id },
+          select: { status: true },
+        });
+        throw new Error(
+          `Cannot close early from status ${current?.status ?? loan.status}`,
+        );
       }
       /*
        * Rebound to the row's real id. Everything below keys on `loanId`
@@ -1613,8 +1667,27 @@ export class LoanRepository {
        * a loan number would not match the uuid column.
        */
       const id = loan.id;
-      if (loan.status === "WRITTEN_OFF" || loan.status === "CLOSED") {
-        throw new Error(`Cannot write off from status ${loan.status}`);
+      /*
+       * Claim the transition — same reasoning as `disburse`. A write-off
+       * books principal to Bad Debt; running it twice books it twice.
+       * Expressed as "not already terminal" to match the original guard,
+       * so the set of statuses accepted here is unchanged.
+       */
+      const writeOffClaim = await tx.loanApplication.updateMany({
+        where: {
+          id: loan.id,
+          status: { notIn: ["WRITTEN_OFF", "CLOSED"] },
+        },
+        data: { status: "WRITTEN_OFF" },
+      });
+      if (writeOffClaim.count === 0) {
+        const current = await tx.loanApplication.findUnique({
+          where: { id: loan.id },
+          select: { status: true },
+        });
+        throw new Error(
+          `Cannot write off from status ${current?.status ?? loan.status}`,
+        );
       }
 
       const remaining = loan.schedule.reduce(
