@@ -36,26 +36,9 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
-type Tx = Prisma.TransactionClient | PrismaClient;
+import { isUniqueViolation } from "../lib/prisma-errors";
 
-/**
- * A Postgres unique-constraint violation, as Prisma reports it.
- *
- * Matched structurally rather than with `instanceof
- * PrismaClientKnownRequestError`: the error can arrive from a different
- * copy of the client package (the API and the repositories resolve
- * @prisma/client independently under pnpm), and an instanceof check
- * across two copies silently returns false — which here would turn a
- * handled race into a 500.
- */
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: unknown }).code === "P2002"
-  );
-}
+type Tx = Prisma.TransactionClient | PrismaClient;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;

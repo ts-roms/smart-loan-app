@@ -515,6 +515,22 @@ export async function loanRoutes(app: FastifyInstance) {
           .code(400)
           .send({ error: "ValidationError", issues: parsed.error.issues });
       }
+      /*
+       * Idempotency-Key, the conventional header, with the body field as
+       * a fallback for callers that cannot set headers (some provider
+       * webhooks, and the bulk importer).
+       *
+       * A repeat returns the ORIGINAL payment rather than an error: a
+       * retry after a timeout is not a mistake to report, it is a
+       * question to answer with the same answer as last time. The status
+       * stays 201 because from the caller's point of view the payment
+       * they asked for exists.
+       */
+      const headerKey = req.headers["idempotency-key"];
+      const idempotencyKey =
+        (typeof headerKey === "string" ? headerKey : undefined) ??
+        parsed.data.idempotencyKey;
+
       try {
         return reply.code(201).send(
           await req.loanCtx!.loans.recordPayment(req.params.id, {
@@ -524,6 +540,7 @@ export async function loanRoutes(app: FastifyInstance) {
               : new Date(),
             reference: parsed.data.reference,
             recordedById: req.user.sub,
+            idempotencyKey,
           }),
         );
       } catch (err) {

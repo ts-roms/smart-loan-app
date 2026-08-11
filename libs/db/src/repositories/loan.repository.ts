@@ -29,6 +29,7 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
+import { isUniqueViolation } from "../lib/prisma-errors";
 import { AccountingRepository } from "./accounting.repository";
 import {
   idOrNumberWhere,
@@ -179,6 +180,12 @@ export interface RecordPaymentInput {
   paidOn: Date;
   reference?: string;
   recordedById: string;
+  /**
+   * Opt-in idempotency. Two requests carrying the same key produce one
+   * payment; the second gets the first one back. Omit it and behaviour
+   * is unchanged — which is why every existing caller still compiles.
+   */
+  idempotencyKey?: string;
 }
 
 export interface BulkPaymentRow {
@@ -1218,6 +1225,48 @@ export class LoanRepository {
     loanIdOrNumber: string,
     input: RecordPaymentInput,
   ): Promise<LoanPayment> {
+    /*
+     * Replay before doing anything. A retry is the common case for a key
+     * that already exists — the caller timed out and asked again — and
+     * answering from the existing row costs one indexed lookup.
+     *
+     * This is NOT the guarantee; the unique index is. Between this read
+     * and the insert below another request can commit the same key, so
+     * the write path catches P2002 and replays there too. A payment is
+     * unlike a disbursement: it is a legitimately repeatable event, so
+     * it cannot be protected by a state claim — a borrower may really
+     * pay twice in a day. Only the key can tell "again" from "twice".
+     */
+    if (input.idempotencyKey) {
+      const replay = await this.prisma.loanPayment.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (replay) return replay;
+    }
+
+    try {
+      return await this.recordPaymentUnsafe(loanIdOrNumber, input);
+    } catch (err) {
+      if (!input.idempotencyKey || !isUniqueViolation(err)) throw err;
+      const winner = await this.prisma.loanPayment.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      // A unique violation with no matching key afterwards came from a
+      // different constraint and must not be swallowed as idempotency.
+      if (!winner) throw err;
+      return winner;
+    }
+  }
+
+  /**
+   * The actual posting. Split out so `recordPayment` can wrap it with
+   * replay handling without the transaction body growing a second
+   * concern.
+   */
+  private async recordPaymentUnsafe(
+    loanIdOrNumber: string,
+    input: RecordPaymentInput,
+  ): Promise<LoanPayment> {
     return this.prisma.$transaction(async (tx) => {
       const loan = await tx.loanApplication.findFirst({
         where: idOrNumberWhere(loanIdOrNumber),
@@ -1247,6 +1296,7 @@ export class LoanRepository {
           paidOn: input.paidOn,
           reference: input.reference,
           recordedById: input.recordedById,
+          idempotencyKey: input.idempotencyKey,
         },
       });
 

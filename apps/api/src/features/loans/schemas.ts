@@ -132,6 +132,16 @@ export const paymentSchema = z.object({
   amount: z.number().positive(),
   paidOn: z.string().optional(),
   reference: z.string().max(120).optional(),
+  /**
+   * Idempotency key, for callers that cannot set the `Idempotency-Key`
+   * header. The header wins when both are present.
+   *
+   * Bounded and required non-empty: an empty string would be stored as
+   * a real key and, being unique, would make the SECOND payment from
+   * any other caller sending "" a replay of the first — which is worse
+   * than having no idempotency at all.
+   */
+  idempotencyKey: z.string().min(8).max(255).optional(),
 });
 
 /**

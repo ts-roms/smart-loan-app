@@ -1238,14 +1238,24 @@ model LoanSchedule {
 }
 
 model LoanPayment {
-  id           String   @id @default(uuid())
-  loanId       String
-  amount       Decimal  @db.Decimal(14, 2)
-  paidOn       DateTime @default(now())
-  reference    String?
+  id             String   @id @default(uuid())
+  loanId         String
+  amount         Decimal  @db.Decimal(14, 2)
+  paidOn         DateTime @default(now())
+  reference      String?
   /// Free-form note (e.g. "settled via GCash REF abc123")
-  notes        String?
-  recordedById String
+  notes          String?
+  /// Client-supplied idempotency key. A retried request — a timeout the
+  /// caller never saw, a double-submitted form, an at-least-once provider
+  /// callback — carries the same key, and the unique index turns the
+  /// second attempt into a replay of the first rather than a second real
+  /// payment against the borrower's balance.
+  ///
+  /// Nullable because it is opt-in: callers that send no key behave
+  /// exactly as before, and Postgres treats NULLs as distinct so they
+  /// never collide with each other.
+  idempotencyKey String?  @unique
+  recordedById   String
 
   loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
   recordedBy User            @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
