@@ -169,6 +169,45 @@ export interface LoanApplyInput {
   renewedFromId?: string;
 }
 
+/**
+ * Statuses a loan may be decided FROM.
+ *
+ * DRAFT is absent: an application is submitted before it is judged.
+ * Everything past APPROVED is absent because money has moved — a
+ * disbursed loan is not a pending decision, and re-deciding one would
+ * contradict a schedule and a journal entry that already exist.
+ *
+ * REJECTED is present on purpose: reconsidering a declined applicant by
+ * hand is a documented part of this workflow.
+ */
+const DECIDABLE_STATUSES = [
+  "SUBMITTED",
+  "UNDER_REVIEW",
+  "REJECTED",
+  "APPROVED",
+] as const;
+
+/**
+ * Thrown when a loan's current status forbids a decision. Typed so the
+ * API can map it to 409 — the request is well-formed and the refusal is
+ * about the loan's state — rather than letting it surface as a 500.
+ */
+export class LoanNotDecidableError extends Error {
+  readonly code = "LoanNotDecidable";
+  constructor(
+    readonly loanRef: string,
+    readonly status: string,
+  ) {
+    super(
+      `Loan ${loanRef} cannot be decided from status ${status}.` +
+        (status === "APPROVED" || status === "REJECTED"
+          ? " It has already been decided; a second identical decision is not applied."
+          : " Deciding a loan that has been disbursed would contradict its schedule and journal entries."),
+    );
+    this.name = "LoanNotDecidableError";
+  }
+}
+
 export interface LoanDecideInput {
   status: "APPROVED" | "REJECTED";
   reason?: string;
@@ -874,14 +913,53 @@ export class LoanRepository {
       select: { id: true },
     });
     if (!found) throw new Error("Loan not found");
-    return this.prisma.loanApplication.update({
-      where: { id: found.id },
+
+    /*
+     * Claim the decision, same pattern as `disburse`. This one had no
+     * status guard at ALL — it wrote the caller's status over whatever
+     * was there — which left two holes:
+     *
+     *   1. Two concurrent approvals both succeeded. Last writer won and
+     *      both callers got a 200, so a four-eyes control could be
+     *      satisfied twice by one click.
+     *   2. Worse, and needing no concurrency: a DISBURSED, ACTIVE or
+     *      CLOSED loan could be decided again, silently rewinding a
+     *      funded loan to APPROVED — or to REJECTED, with the money
+     *      already out and the schedule already posted.
+     *
+     * `not: input.status` is what closes the race while leaving the
+     * legitimate flows alone. Two racing APPROVEs: the first moves the
+     * row to APPROVED, and the second no longer matches, so exactly one
+     * wins. But REJECTED -> APPROVED still works, because reconsidering
+     * a rejected applicant by hand is a real part of this workflow (see
+     * the AUTO_REJECT note in loans.service.ts), and so does
+     * APPROVED -> REJECTED, which is how an approval is pulled back
+     * before any money moves.
+     */
+    const claimed = await this.prisma.loanApplication.updateMany({
+      where: {
+        id: found.id,
+        status: { in: [...DECIDABLE_STATUSES], not: input.status },
+      },
       data: {
         status: input.status,
         decisionReason: input.reason,
         decidedAt: new Date(),
         decidedById: input.decidedById,
       },
+    });
+
+    if (claimed.count === 0) {
+      const current = await this.prisma.loanApplication.findUnique({
+        where: { id: found.id },
+        select: { status: true },
+      });
+      throw new LoanNotDecidableError(idOrNumber, current?.status ?? "UNKNOWN");
+    }
+
+    // The row is ours; re-read it for the caller.
+    return this.prisma.loanApplication.findUniqueOrThrow({
+      where: { id: found.id },
     });
   }
 
