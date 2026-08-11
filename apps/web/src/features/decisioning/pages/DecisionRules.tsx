@@ -1,5 +1,6 @@
 import {
   useCreateDecisionRule,
+  useDecisionRuleHistory,
   useDecisionRules,
   useDeleteDecisionRule,
   useSeedDecisionRules,
@@ -7,6 +8,7 @@ import {
 } from "@loan/api-client";
 import type {
   DecisionRule,
+  DecisionRuleVersion,
   DecisioningCondition,
   DecisioningOp,
   RuleAction,
@@ -33,7 +35,7 @@ import {
   useConfirm,
   useToast,
 } from "@loan/ui";
-import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { History, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { usePermission } from "../../../hooks/use-permission";
@@ -72,19 +74,22 @@ export function DecisionRulesPage() {
   const canEdit = usePermission("admin.decision_rules");
   const [editing, setEditing] = useState<DecisionRule | null>(null);
   const [creating, setCreating] = useState(false);
+  const [historyFor, setHistoryFor] = useState<DecisionRule | null>(null);
 
-  const onDelete = async (r: DecisionRule) => {
+  const onRetire = async (r: DecisionRule) => {
     const ok = await confirm({
-      title: `Delete rule "${r.name}"?`,
+      title: `Retire rule "${r.name}"?`,
       message:
-        "New applications will no longer be evaluated against this rule. Existing decisions are unaffected.",
-      confirmLabel: "Delete rule",
+        "New applications will no longer be evaluated against this rule. " +
+        "Decisions already made are unaffected, and this rule's history stays " +
+        "on file so they remain explainable.",
+      confirmLabel: "Retire rule",
       tone: "destructive",
     });
     if (!ok) return;
     try {
       await remove.mutateAsync(r.id);
-      toast.success("Rule deleted");
+      toast.success("Rule retired");
     } catch (err) {
       toast.error((err as Error).message ?? "Failed");
     }
@@ -149,7 +154,23 @@ export function DecisionRulesPage() {
                 <tr key={r.id} className="hover:bg-hover align-top">
                   <td className="py-2 px-2 font-mono">{r.priority}</td>
                   <td className="py-2 px-2">
-                    <div className="font-medium">{r.name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">{r.name}</span>
+                      {/*
+                        Shown for every rule, including v1. A version
+                        number only present on edited rules would read as
+                        a warning badge; present on all of them it reads
+                        as what it is — which revision this is.
+                      */}
+                      <button
+                        type="button"
+                        onClick={() => setHistoryFor(r)}
+                        title="View change history"
+                        className="rounded px-1 font-mono text-[10px] text-fg-subtle hover:bg-hover hover:text-info"
+                      >
+                        v{r.version}
+                      </button>
+                    </div>
                     {r.description && (
                       <div className="text-xs text-fg-subtle">
                         {r.description}
@@ -189,9 +210,17 @@ export function DecisionRulesPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => onDelete(r)}
+                          onClick={() => setHistoryFor(r)}
+                          className="text-fg-muted hover:text-info"
+                          title="History"
+                        >
+                          <History className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRetire(r)}
                           className="text-fg-muted hover:text-danger"
-                          title="Delete"
+                          title="Retire"
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
@@ -207,6 +236,9 @@ export function DecisionRulesPage() {
       {creating && <RuleDialog onClose={() => setCreating(false)} />}
       {editing && (
         <RuleDialog rule={editing} onClose={() => setEditing(null)} />
+      )}
+      {historyFor && (
+        <HistoryDialog rule={historyFor} onClose={() => setHistoryFor(null)} />
       )}
     </Card>
   );
@@ -243,6 +275,7 @@ function RuleDialog({
   const [conditions, setConditions] = useState<DecisioningCondition[]>(
     rule?.conditions ?? [{ field: "tierAtApply", op: "=", value: "A" }],
   );
+  const [changeNote, setChangeNote] = useState("");
 
   const setCondition = (idx: number, patch: Partial<DecisioningCondition>) => {
     setConditions(
@@ -256,6 +289,7 @@ function RuleDialog({
       if (rule) {
         await update.mutateAsync({
           id: rule.id,
+          changeNote: changeNote || undefined,
           name,
           description: description || undefined,
           priority,
@@ -347,6 +381,20 @@ function RuleDialog({
           <Field label="Reason (stored on loan when this rule fires)">
             <Input value={reason} onChange={(e) => setReason(e.target.value)} />
           </Field>
+
+          {/*
+            Only on edit. On create the change note would just restate
+            "created", which the version row already says.
+          */}
+          {rule && (
+            <Field label="What changed, and why (optional — kept in history)">
+              <Input
+                value={changeNote}
+                onChange={(e) => setChangeNote(e.target.value)}
+                placeholder="e.g. Raised the B-tier ceiling after Q2 delinquency review"
+              />
+            </Field>
+          )}
 
           <div className="rounded-md border border-default p-3 space-y-2">
             <div className="text-xs uppercase tracking-wider text-fg-subtle flex items-center justify-between">
@@ -455,6 +503,117 @@ function RuleDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Every revision of one rule, newest first.
+ *
+ * The question this page previously could not answer: a loan approved
+ * in March was approved under the rule AS IT READ IN MARCH, and until
+ * now the only copy of a rule was the current one. Reading today's
+ * threshold to explain last quarter's approval is not an audit trail —
+ * it is a guess that looks like one.
+ *
+ * Rendered as a list rather than a diff on purpose: what an auditor
+ * needs is what the rule REQUIRED in a period, and a diff shows the
+ * change while hiding the state.
+ */
+function HistoryDialog({
+  rule,
+  onClose,
+}: {
+  rule: DecisionRule;
+  onClose: () => void;
+}) {
+  const history = useDecisionRuleHistory(rule.id);
+  const versions = history.data ?? [];
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>History — {rule.name}</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-fg-muted">
+          Each entry is the rule as it stood for that period. Loans decided
+          inside a period were decided by that text of the rule.
+        </p>
+        {history.isLoading ? (
+          <SkeletonCard />
+        ) : versions.length === 0 ? (
+          <p className="text-sm text-fg-muted">No history recorded.</p>
+        ) : (
+          <ol className="max-h-[26rem] space-y-2 overflow-y-auto">
+            {versions.map((v) => (
+              <VersionEntry key={v.id} version={v} />
+            ))}
+          </ol>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function VersionEntry({ version: v }: { version: DecisionRuleVersion }) {
+  /*
+   * A RETIRE row has effectiveTo === effectiveFrom — a zero-width
+   * window, because that text of the rule was never in force. Labelling
+   * it as a period would invite someone to read it as one.
+   */
+  const retired = v.changeType === "RETIRE";
+  const current = v.effectiveTo === null;
+
+  return (
+    <li className="rounded-md border border-default p-3 text-xs">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <span className="font-mono text-fg-subtle">v{v.version}</span>
+        <span className="font-medium">{v.ruleName}</span>
+        <ActionBadge action={v.action} />
+        <Badge variant={v.active ? "success" : "muted"}>
+          {v.active ? "Active" : "Paused"}
+        </Badge>
+        {current && <Badge variant="info">Current</Badge>}
+        {retired && <Badge variant="muted">Retired</Badge>}
+      </div>
+      <div className="mb-1.5 text-fg-subtle">
+        {retired ? (
+          <>Withdrawn {fmt(v.effectiveFrom)}</>
+        ) : (
+          <>
+            In force {fmt(v.effectiveFrom)} —{" "}
+            {v.effectiveTo ? fmt(v.effectiveTo) : "now"}
+          </>
+        )}
+        <span className="mx-1.5">·</span>
+        priority {v.priority}
+      </div>
+      <ul className="space-y-0.5 font-mono text-fg-muted">
+        {(v.conditions ?? []).map((c, i) => (
+          <li key={i}>
+            {c.field} {c.op}{" "}
+            {Array.isArray(c.value)
+              ? `[${c.value.join(",")}]`
+              : String(c.value)}
+          </li>
+        ))}
+      </ul>
+      {v.changeNote && (
+        <p className="mt-1.5 italic text-fg-subtle">{v.changeNote}</p>
+      )}
+    </li>
+  );
+}
+
+function fmt(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 function Field({

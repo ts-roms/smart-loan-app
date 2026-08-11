@@ -73,6 +73,20 @@ from arriving in between. All four are now enforced by the database.
   endpoint could write it. Deactivating now also cuts live sessions. (`fbb98a0`)
 - Erased-customer badges, banners and server-side guards at both service and
   repository layers. (`a2937ef`, `e803344`, `290cf18`)
+- **Standing reconciliation** — a nightly job asserting five ledger identities,
+  including GL Loans Receivable against outstanding principal. It throws on a
+  finding so the run shows FAILED rather than succeeding with a note nobody
+  reads. Found a real disagreement of ₱46,272.02 on its first run, traced to
+  smoke-test fixtures that credited the receivable for a written-off loan while
+  leaving its instalments open. (`515d26f`)
+- **Decision-rule versioning** — rules were one mutable row each, so retuning a
+  rule destroyed the only copy of what it used to say, and retuning is the
+  entire reason the criteria live in a table. Every change now closes the
+  standing version and opens the next; a decision records the rule id, name,
+  **version** and the full context the engine saw. `GET /decision-rules/as-of`
+  rebuilds the whole set at a moment. Only outcome-changing edits mint a version
+  — a rename does not, so the history stays worth reading. DELETE retires rather
+  than erases. (migration `20260811180000`)
 
 ### Fixed — other
 
@@ -96,8 +110,15 @@ from arriving in between. All four are now enforced by the database.
 
 Carried in [`docs/modernization/gap-matrix.md`](docs/modernization/gap-matrix.md):
 
-- **P0** — webhook / provider-callback idempotency (the payment key applied to a
-  different door)
-- **P1** — object storage for uploads; decision-rule versioning; standing
-  subledger⇄GL reconciliation; `Contribution`/`SavingsTransaction` FK →
-  RESTRICT; frontend test coverage
+Every P0 is closed, and so is every P1 except the frontend one.
+
+- **P1** — frontend test coverage (there is none, and it is the precondition
+  for any framework migration); object storage for uploads, now planned work
+  rather than urgent since the backup script archives `UPLOADS_DIR`
+- **P2** — scorecard (`SurveyCatalog`) versioning, the same argument as
+  decision rules applied to factor weights; seven aging buckets rather than
+  five; OpenAPI response schemas; CSP; Nx module-boundary tags
+
+Two things only a deployer can do: set `UPLOADS_DIR` in the environment, and
+supply a real amortization schedule from a signed loan document so the golden
+corpus becomes authoritative rather than self-consistent.

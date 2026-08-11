@@ -74,7 +74,7 @@ export type PreDecisionVerdict = "APPROVE" | "REVIEW" | "REJECT";
 export interface PreDecisionOutcome {
   verdict: PreDecisionVerdict;
   reason: string;
-  matchedRule: { id: string; name: string } | null;
+  matchedRule: { id: string; name: string; version: number } | null;
   /** Null for a prospect — no customer, so nothing to gate on. */
   gates: PreDecisionGates | null;
   anomalies: AnomalyFlag[];
@@ -203,7 +203,11 @@ async function finish(
     verdict: toVerdict(decision.action),
     reason: decision.reason,
     matchedRule: decision.matched
-      ? { id: decision.matched.id, name: decision.matched.name }
+      ? {
+          id: decision.matched.id,
+          name: decision.matched.name,
+          version: decision.matched.version,
+        }
       : null,
     gates: extra.gates,
     anomalies,

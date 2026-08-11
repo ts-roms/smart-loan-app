@@ -74,31 +74,55 @@ Snapshotted onto the loan: `creditScoreAtApply`, `tierAtApply`,
 
 ## Gaps against §19–§22
 
-| Requirement                          | Status                 | Note                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Explainable decisions                | **EXISTS**             | verdict + reason + matched rule + gates                                                                                                                                                                                                                                                                             |
-| Score/tier snapshot on the loan      | **EXISTS**             | `creditScoreAtApply`, `tierAtApply`                                                                                                                                                                                                                                                                                 |
-| **Rule versioning**                  | **MISSING**            | `DecisionRule` has no `version`                                                                                                                                                                                                                                                                                     |
-| **Effective dating**                 | **MISSING**            | no `effectiveFrom` / `effectiveTo`                                                                                                                                                                                                                                                                                  |
-| **Decision reproducibility**         | **PARTIAL — P1**       | the score is stored, but not _which version of which rule_ fired. Editing a rule silently changes what a historical decision would have been, and the original cannot be replayed. §21: "Never modify historical decisions when a rule changes" — the decisions are not modified, but they are no longer explicable |
-| Scorecard versioning                 | **MISSING**            | same problem for the catalog: an edited factor weight changes what a stored score _means_, though stored breakdowns retain their computed values                                                                                                                                                                    |
-| `CONDITIONAL_APPROVAL` as a decision | **MISSING**            | §19 lists four decisions; the system has three actions and a separate approval chain                                                                                                                                                                                                                                |
-| Approval matrix by amount band       | **PARTIAL**            | `LoanApprovalStep` chain exists and is configurable, but amount-banded levels (§22) not confirmed                                                                                                                                                                                                                   |
-| Self-approval prevention             | **NEEDS VERIFICATION** | approval chain exists; whether an approver can approve their own submission was not traced                                                                                                                                                                                                                          |
-| DTI / LTV as first-class rules       | **PARTIAL**            | conditions can express them from context, but there is no DTI/LTV band in product config                                                                                                                                                                                                                            |
+| Requirement                          | Status                 | Note                                                                                                                                                                                    |
+| ------------------------------------ | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Explainable decisions                | **EXISTS**             | verdict + reason + matched rule + gates                                                                                                                                                 |
+| Score/tier snapshot on the loan      | **EXISTS**             | `creditScoreAtApply`, `tierAtApply`                                                                                                                                                     |
+| Rule versioning                      | **EXISTS**             | `DecisionRule.version` + append-only `DecisionRuleVersion`. Only outcome-changing edits mint a version — a rename does not                                                              |
+| Effective dating                     | **EXISTS**             | `[effectiveFrom, effectiveTo)` per version; `GET /decision-rules/as-of?at=` rebuilds the whole set at a moment, paused rules included                                                   |
+| Decision reproducibility             | **EXISTS**             | `LoanApplication.decisionRuleId/Name/Version` + `decisionContext`; `versionsToEvaluable` replays a historical set through the same evaluator. Stamped even on manual review — see below |
+| Scorecard versioning                 | **MISSING**            | same problem for the catalog: an edited factor weight changes what a stored score _means_, though stored breakdowns retain their computed values                                        |
+| `CONDITIONAL_APPROVAL` as a decision | **MISSING**            | §19 lists four decisions; the system has three actions and a separate approval chain                                                                                                    |
+| Approval matrix by amount band       | **PARTIAL**            | `LoanApprovalStep` chain exists and is configurable, but amount-banded levels (§22) not confirmed                                                                                       |
+| Self-approval prevention             | **NEEDS VERIFICATION** | approval chain exists; whether an approver can approve their own submission was not traced                                                                                              |
+| DTI / LTV as first-class rules       | **PARTIAL**            | conditions can express them from context, but there is no DTI/LTV band in product config                                                                                                |
 
-**The P1 here is reproducibility.** Everything else on this list is an
-enhancement; rule versioning is the difference between being able and unable to
-answer "why was this loan declined in March" after the rule has been edited.
+**Closed 11 Aug 2026** (migration `20260811180000_decision_rule_versioning`).
+Scorecard versioning remains open — the same problem for
+`SurveyCatalog` factor weights, where an edited weight changes what a stored
+score _means_.
 
-## Recommended change
+## How it works
 
-Add to `DecisionRule`: `version` (incrementing), `effectiveFrom`,
-`effectiveTo` (nullable). Never mutate a rule in place — supersede it. Snapshot
-`ruleId + version` and `catalogVersion` onto the loan at decision time. That
-makes a decision replayable, which is what §20's "store the exact rule version /
-scorecard version used at decision time" asks for.
+Editing a rule closes the standing version and opens the next, in one
+transaction. Two admins saving at once both compute the same next number, and
+the unique index on `(ruleId, version)` makes the loser's transaction roll back
+rather than leaving the rule with two "current" texts — the same
+claim-don't-check shape as every other concurrent path in this codebase.
 
-Sequenced as roadmap 4.3 rather than P0 because nothing about it risks money
-today; it risks the ability to explain a past decision to a regulator or a
-declined applicant.
+Only **decisive** fields mint a version: `conditions`, `action`, `priority`,
+`reason`, `active`. A rename or a reworded description updates in place. This is
+deliberate: a history that logs cosmetic edits is one an auditor has to open and
+discard, which buries the entries that matter.
+
+DELETE **retires** rather than erases. Dropping the row would cascade its
+history away and leave every loan citing it pointing at nothing — the decisions
+would not become wrong, they would become unexplainable. Same call the customer
+records made.
+
+### An unplanned improvement
+
+The stamp is written on every path, including manual review. That turned out to
+matter more than expected: `decisionReason` was only ever set for decided loans,
+so a loan **routed to manual review recorded nothing at all** about why. A
+SUBMITTED loan now names the rule that routed it — verified end to end, where a
+probe application came back stamped `KYC incomplete → manual v1` with the full
+context the engine saw.
+
+### Still open
+
+- Scorecard (`SurveyCatalog`) versioning — same argument, different table.
+- Scheduled activation. `effectiveFrom` records when a version **took** effect,
+  not when it **will**; a rule that should start on the 1st still has to be
+  switched on by hand. Different feature, and worth doing separately rather than
+  overloading these columns.

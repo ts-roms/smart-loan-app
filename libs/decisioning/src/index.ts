@@ -28,6 +28,15 @@ export type RuleAction = "AUTO_APPROVE" | "AUTO_REJECT" | "MANUAL_REVIEW";
 export interface DecisionRule {
   id: string;
   name: string;
+  /**
+   * Which revision of this rule. Carried through evaluation so a
+   * decision can record not just WHICH rule fired but what that rule
+   * required at the time — the rule named "A-tier fast-track" a year
+   * from now may demand a score this borrower never had.
+   *
+   * 1 for a rule that has never been edited.
+   */
+  version: number;
   priority: number;
   /** ALL conditions must match. */
   conditions: DecisioningCondition[];
@@ -172,7 +181,8 @@ function matchesCondition(
  *   110 · B tier ≤ 100k + clean  AUTO_APPROVE
  *   1000 · catch-all             MANUAL_REVIEW
  */
-export const DEFAULT_RULES: Omit<DecisionRule, "id">[] = [
+/** Version is assigned by the catalog on insert; these are the text. */
+export const DEFAULT_RULES: Omit<DecisionRule, "id" | "version">[] = [
   {
     name: "AML hard-block",
     priority: 10,

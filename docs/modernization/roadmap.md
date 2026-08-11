@@ -123,13 +123,13 @@ Original plan:
 
 ## Phase 4 — Enterprise depth (P2)
 
-| Step | Change                                                                                                                     |
-| ---- | -------------------------------------------------------------------------------------------------------------------------- |
-| 4.1  | Nx module-boundary tags + lint rule                                                                                        |
-| 4.2  | Query plans for the 10 slowest endpoints; index from evidence                                                              |
-| 4.3  | Verify GAP-15 (immutable schedule versions) and GAP-18 (rule versioning + effective dating); implement if genuinely absent |
-| 4.4  | Consolidated customer exposure (GAP-29) if not already derivable                                                           |
-| 4.5  | Next.js pilot on `apps/marketing` only                                                                                     |
+| Step | Change                                                                                                                           |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 4.1  | Nx module-boundary tags + lint rule                                                                                              |
+| 4.2  | Query plans for the 10 slowest endpoints; index from evidence                                                                    |
+| 4.3  | ✅ GAP-15 verified (restructure links a new loan, never mutates a schedule) · ✅ GAP-18 implemented — migration `20260811180000` |
+| 4.4  | Consolidated customer exposure (GAP-29) if not already derivable                                                                 |
+| 4.5  | Next.js pilot on `apps/marketing` only                                                                                           |
 
 ## Phase 5 — Intelligence (P3)
 

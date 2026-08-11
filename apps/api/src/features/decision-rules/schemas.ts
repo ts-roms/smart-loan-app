@@ -33,6 +33,30 @@ export type CreateRuleInput = z.infer<typeof createRuleSchema>;
 /**
  * Patch — every field optional. Zod's `.partial()` on the create
  * shape would also work but explicit is friendlier to read.
+ *
+ * `changeNote` rides along rather than sitting in the rule: it describes
+ * the EDIT, not the rule, and belongs in the version row. Optional on
+ * purpose — mandating it produces a hundred notes reading "update",
+ * which is worse than a blank, because a blank does not pretend to be
+ * an explanation.
  */
-export const updateRuleSchema = createRuleSchema.partial();
+export const updateRuleSchema = createRuleSchema.partial().extend({
+  changeNote: z.string().max(500).optional(),
+});
 export type UpdateRuleInput = z.infer<typeof updateRuleSchema>;
+
+/** Why a rule is being withdrawn. Same reasoning as `changeNote`. */
+export const retireRuleSchema = z.object({
+  changeNote: z.string().max(500).optional(),
+});
+export type RetireRuleInput = z.infer<typeof retireRuleSchema>;
+
+/**
+ * `?at=` for the historical rule set. Defaults to now, which makes
+ * `/decision-rules/as-of` with no argument a plain listing — useful for
+ * confirming the endpoint agrees with the live catalog.
+ */
+export const asOfQuerySchema = z.object({
+  at: z.coerce.date().optional(),
+});
+export type AsOfQuery = z.infer<typeof asOfQuerySchema>;

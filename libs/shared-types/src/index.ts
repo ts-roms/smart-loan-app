@@ -1015,8 +1015,47 @@ export interface DecisionRule {
   action: RuleAction;
   reason: string | null;
   active: boolean;
+  /**
+   * Which revision this is. Bumped only by changes that alter an
+   * OUTCOME — conditions, action, priority, reason, active. Renaming a
+   * rule leaves it alone, so the history stays worth reading.
+   */
+  version: number;
+  /** When the current version took effect. */
+  effectiveFrom: string;
+  /** Set when the rule was withdrawn. Retired rules never appear in
+   * listings; the field is here because a version row can name one. */
+  retiredAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type DecisionRuleChangeType = "CREATE" | "UPDATE" | "RETIRE";
+
+/**
+ * One frozen revision of a rule.
+ *
+ * The window [effectiveFrom, effectiveTo) is when this text of the rule
+ * was the one in force. `effectiveTo` is null on the current version,
+ * and equal to `effectiveFrom` on a RETIRE row — a zero-width window,
+ * because that row records a withdrawal rather than a period.
+ */
+export interface DecisionRuleVersion {
+  id: string;
+  ruleId: string;
+  version: number;
+  ruleName: string;
+  description: string | null;
+  priority: number;
+  conditions: DecisioningCondition[];
+  action: RuleAction;
+  reason: string | null;
+  active: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  changeType: DecisionRuleChangeType;
+  changeNote: string | null;
+  changedById: string | null;
 }
 
 export interface DecisionRuleInput {
@@ -2165,6 +2204,13 @@ export interface PreAssessment {
   matchedRuleId: string | null;
   /** Snapshotted — the rule itself may since have been edited or deleted. */
   matchedRuleName: string | null;
+  /**
+   * Which revision of that rule fired. The name alone does not settle
+   * what was required — rules get retuned, and a rule reading "A-tier
+   * fast-track" today may demand a score this applicant never had. Null
+   * on assessments run before rules were versioned.
+   */
+  matchedRuleVersion: number | null;
 
   /**
    * How much the engine actually knew. `FULL` means score, AML and KYC

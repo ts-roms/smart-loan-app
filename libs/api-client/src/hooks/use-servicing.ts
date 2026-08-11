@@ -6,6 +6,7 @@ import type {
   CoMakerInput,
   DecisionRule,
   DecisionRuleInput,
+  DecisionRuleVersion,
   LoanApplication,
 } from "@loan/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -103,6 +104,33 @@ export function useDecisionRules() {
   });
 }
 
+/**
+ * Every revision of one rule, newest first. Lazy — a rule's history is
+ * only fetched when someone opens it, which is rare and deliberate.
+ */
+export function useDecisionRuleHistory(ruleId: string | null) {
+  return useQuery({
+    queryKey: ["decision-rules", ruleId, "versions"],
+    queryFn: () =>
+      getApiClient().get<DecisionRuleVersion[]>(
+        `/decision-rules/${ruleId}/versions`,
+      ),
+    enabled: !!ruleId,
+  });
+}
+
+/** The whole rule set as it stood at a moment. */
+export function useDecisionRulesAsOf(at: string | null) {
+  return useQuery({
+    queryKey: ["decision-rules", "as-of", at],
+    queryFn: () =>
+      getApiClient().get<DecisionRuleVersion[]>(
+        `/decision-rules/as-of?at=${encodeURIComponent(at!)}`,
+      ),
+    enabled: !!at,
+  });
+}
+
 export function useCreateDecisionRule() {
   const qc = useQueryClient();
   return useMutation({
@@ -115,7 +143,9 @@ export function useCreateDecisionRule() {
 export function useUpdateDecisionRule() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { id: string } & Partial<DecisionRuleInput>) => {
+    mutationFn: (
+      input: { id: string; changeNote?: string } & Partial<DecisionRuleInput>,
+    ) => {
       const { id, ...rest } = input;
       return getApiClient().request<DecisionRule>(`/decision-rules/${id}`, {
         method: "PATCH",
@@ -126,13 +156,24 @@ export function useUpdateDecisionRule() {
   });
 }
 
+/**
+ * Retires the rule. The endpoint is still DELETE and the rule still
+ * vanishes from the list, but the row and its history survive — every
+ * loan whose approval cites it has to stay explainable.
+ */
 export function useDeleteDecisionRule() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) =>
-      getApiClient().request<DecisionRule>(`/decision-rules/${id}`, {
+    mutationFn: (input: string | { id: string; changeNote?: string }) => {
+      const { id, changeNote } =
+        typeof input === "string"
+          ? { id: input, changeNote: undefined }
+          : input;
+      return getApiClient().request<DecisionRule>(`/decision-rules/${id}`, {
         method: "DELETE",
-      }),
+        body: JSON.stringify({ changeNote }),
+      });
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["decision-rules"] }),
   });
 }

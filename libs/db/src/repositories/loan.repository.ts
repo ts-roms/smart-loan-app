@@ -157,6 +157,22 @@ export interface LoanApplyInput {
   initialStatus?: "SUBMITTED" | "APPROVED" | "REJECTED";
   /** Reason recorded with the decision when not SUBMITTED. */
   initialDecisionReason?: string;
+  /**
+   * Which rule version the engine landed on, and what it was looking at.
+   *
+   * Recorded regardless of outcome — including when the loan merely goes
+   * to manual review, because "the engine had nothing to say about this"
+   * is itself a finding an auditor may need to see was reached against
+   * the rules in force that day rather than against a gap in them.
+   * Absent when no rule matched, since there is no version to name.
+   */
+  decisionRule?: {
+    id: string;
+    name: string;
+    version: number;
+  } | null;
+  /** DecisioningContext as evaluated, stored verbatim. */
+  decisionContext?: unknown;
   /** If this loan replaces an older one, the original's id. */
   restructuredFromId?: string;
   /**
@@ -806,6 +822,10 @@ export class LoanRepository {
           tierAtApply: input.tierAtApply,
           status: initialStatus,
           decisionReason: input.initialDecisionReason,
+          decisionRuleId: input.decisionRule?.id ?? null,
+          decisionRuleName: input.decisionRule?.name ?? null,
+          decisionRuleVersion: input.decisionRule?.version ?? null,
+          decisionContext: (input.decisionContext ?? undefined) as never,
           decidedAt: initialStatus === "SUBMITTED" ? null : new Date(),
           decidedById:
             initialStatus === "SUBMITTED" ? null : input.submittedById,
@@ -2124,6 +2144,10 @@ export class LoanRepository {
         tierAtApply: input.tierAtApply,
         status: initialStatus,
         decisionReason: input.initialDecisionReason,
+        decisionRuleId: input.decisionRule?.id ?? null,
+        decisionRuleName: input.decisionRule?.name ?? null,
+        decisionRuleVersion: input.decisionRule?.version ?? null,
+        decisionContext: (input.decisionContext ?? undefined) as never,
         decidedAt: initialStatus === "SUBMITTED" ? null : new Date(),
         decidedById: initialStatus === "SUBMITTED" ? null : input.submittedById,
         submittedById: input.submittedById,
