@@ -69,18 +69,18 @@ Advances.
 
 ## Controls — §34
 
-| Control                           | Status                                                                  |
-| --------------------------------- | ----------------------------------------------------------------------- |
-| Period close                      | **EXISTS** — posting to a CLOSED period throws `PERIOD_CLOSED`          |
-| Period reopen with authorization  | **EXISTS** — permission-gated                                           |
-| Journal reversal                  | **EXISTS** — swap-and-link, never delete                                |
-| Trial balance                     | **EXISTS** — `/accounting/trial-balance`                                |
-| Bank reconciliation               | **EXISTS** — `BankStatement` + line matching                            |
-| Unbalanced journal detection      | **EXISTS** — impossible to construct one; `buildEntry` throws           |
-| Silent edit prevention            | **EXISTS** — no update path on a posted entry                           |
-| **Journal approval**              | **MISSING** — a manual entry posts immediately; §34 lists maker-checker |
-| **Subledger ⇄ GL reconciliation** | **MISSING** — no standing assertion (roadmap 2.3)                       |
-| **Suspense account monitoring**   | **MISSING**                                                             |
+| Control                          | Status                                                                       |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| Period close                     | **EXISTS** — posting to a CLOSED period throws `PERIOD_CLOSED`               |
+| Period reopen with authorization | **EXISTS** — permission-gated                                                |
+| Journal reversal                 | **EXISTS** — swap-and-link, never delete                                     |
+| Trial balance                    | **EXISTS** — `/accounting/trial-balance`                                     |
+| Bank reconciliation              | **EXISTS** — `BankStatement` + line matching                                 |
+| Unbalanced journal detection     | **EXISTS** — impossible to construct one; `buildEntry` throws                |
+| Silent edit prevention           | **EXISTS** — no update path on a posted entry                                |
+| **Journal approval**             | **MISSING** — a manual entry posts immediately; §34 lists maker-checker      |
+| Subledger ⇄ GL reconciliation    | **EXISTS** — `ledger-reconciliation` job, nightly 04:30, throws on a finding |
+| **Suspense account monitoring**  | **MISSING**                                                                  |
 
 ## Idempotency
 
