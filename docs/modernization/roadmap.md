@@ -50,7 +50,27 @@ Original plan, for the record:
 identical payments / disbursements / accruals simultaneously and assert exactly
 one financial effect.
 
-## Phase 2 — Proof (P1)
+## Phase 2 — Proof (P1) — 2.1 and 2.2 ✅
+
+Shipped in `e1620a1` (invariants) and this commit (golden corpus).
+
+| Step                                           | Status                                                |
+| ---------------------------------------------- | ----------------------------------------------------- |
+| 2.1 Invariant tests                            | ✅ 26 tests across `libs/accounting` and `libs/loans` |
+| 2.2 Golden corpus                              | ✅ 8 scenarios, 49 assertions                         |
+| 2.3 Standing reconciliation job                | not started                                           |
+| 2.4 Contribution/Savings FK CASCADE → RESTRICT | not started                                           |
+
+**The corpus carries two levels of authority, and the file says so.** Half its
+assertions are closed-form — first-period interest, flat interest, the annuity
+formula, principal summing exactly to the loan — and if the code disagrees with
+those, the code is wrong. The other half are fingerprints captured from the
+current implementation: they prove behaviour has not _changed_, which is what a
+refactor needs, but they do not prove it is _right_. Replacing them with worked
+examples from signed loan documents is the one change that would make the corpus
+authoritative rather than merely protective.
+
+Original plan:
 
 | Step | Change                                                                                                                                         | Why                                                      |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
