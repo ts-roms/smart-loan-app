@@ -98,6 +98,23 @@ from arriving in between. All four are now enforced by the database.
 - The dev proxy targeted `localhost`, which resolves to IPv6 first; another
   project's server on `[::]:3001` was answering every API call with a truthful 404. Pinned to `127.0.0.1`. (`4cf5a0b`)
 
+### Added — frontend tests
+
+The web app had one test file against 148 components. It now has a harness
+(jsdom + Testing Library, `apps/web/src/test/`) and four suites chosen by
+consequence rather than by coverage percentage — the erased/archived customer
+guards, the "Sign out everywhere" gate, the decision-rule version history, and
+`usePermission` failing closed. 45 tests.
+
+Writing them found two real accessibility defects, both fixed: the rule version
+badge announced only "v3" to a screen reader, and the rule editor's labels were
+not associated with their controls. Nine other copies of the same `Field`
+helper share the second defect and are flagged for a follow-up.
+
+E2E is still absent. Playwright is not a dependency, and component tests prove
+a page renders correctly from given data without proving the data is what the
+API sends. That remains the gap blocking a framework migration.
+
 ### Added — documentation
 
 - Phase 0 audit: nine artifacts plus a gap matrix, recommended architecture and
@@ -112,9 +129,10 @@ Carried in [`docs/modernization/gap-matrix.md`](docs/modernization/gap-matrix.md
 
 Every P0 is closed, and so is every P1 except the frontend one.
 
-- **P1** — frontend test coverage (there is none, and it is the precondition
-  for any framework migration); object storage for uploads, now planned work
-  rather than urgent since the backup script archives `UPLOADS_DIR`
+- **P1** — Playwright E2E, the precondition for any framework migration.
+  Component tests now cover the costly render decisions; nothing yet exercises
+  a journey end to end. Object storage for uploads is planned work rather than
+  urgent, since the backup script archives `UPLOADS_DIR`
 - **P2** — scorecard (`SurveyCatalog`) versioning, the same argument as
   decision rules applied to factor weights; seven aging buckets rather than
   five; OpenAPI response schemas; CSP; Nx module-boundary tags

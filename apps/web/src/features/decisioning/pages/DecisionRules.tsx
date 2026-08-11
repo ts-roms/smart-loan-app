@@ -36,7 +36,7 @@ import {
   useToast,
 } from "@loan/ui";
 import { History, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 
 import { usePermission } from "../../../hooks/use-permission";
 
@@ -166,6 +166,14 @@ export function DecisionRulesPage() {
                         type="button"
                         onClick={() => setHistoryFor(r)}
                         title="View change history"
+                        /*
+                          The visible label is "v3", which as an
+                          accessible name tells a screen-reader user
+                          nothing — `title` does not win against text
+                          content. Named explicitly so the control
+                          announces what it does.
+                        */
+                        aria-label={`View change history for ${r.name} (currently v${r.version})`}
                         className="rounded px-1 font-mono text-[10px] text-fg-subtle hover:bg-hover hover:text-info"
                       >
                         v{r.version}
@@ -616,6 +624,16 @@ function fmt(iso: string) {
   });
 }
 
+/**
+ * The label was floating free — no `htmlFor`, no wrapping — so nothing
+ * connected it to the control beneath it. Sighted users infer the pair
+ * from position; a screen reader announces an unlabelled textbox, and
+ * clicking the label does not focus the field.
+ *
+ * `aria-labelledby` rather than `htmlFor`, because the children here
+ * are a mix of plain inputs and Radix Selects, and a Radix trigger is a
+ * button whose real id the parent does not own.
+ */
 function Field({
   label,
   children,
@@ -623,10 +641,13 @@ function Field({
   label: string;
   children: React.ReactNode;
 }) {
+  const id = useId();
   return (
     <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
+      <label id={id} className="text-xs text-fg-muted">
+        {label}
+      </label>
+      <div aria-labelledby={id}>{children}</div>
     </div>
   );
 }

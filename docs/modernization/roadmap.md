@@ -113,13 +113,14 @@ Original plan:
 
 ## Phase 3 — Durability and operations (P1/P2)
 
-| Step | Change                                                                | Notes                                                    |
-| ---- | --------------------------------------------------------------------- | -------------------------------------------------------- |
-| 3.1  | Object storage (S3/MinIO) for uploads; DB keeps metadata; signed URLs | Closes GAP-07 / S-1. Required before horizontal scaling. |
-| 3.2  | Playwright + 6 critical journeys                                      | Precondition for any frontend migration                  |
-| 3.3  | Enable CSP in production                                              | Closes S-2                                               |
-| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | Closes API-1                                             |
-| 3.5  | Documented restore drill                                              | Closes GAP-11                                            |
+| Step | Change                                                                 | Notes                                                    |
+| ---- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
+| 3.1  | Object storage (S3/MinIO) for uploads; DB keeps metadata; signed URLs  | Closes GAP-07 / S-1. Required before horizontal scaling. |
+| 3.1  | ✅ Frontend component-test harness + 4 suites over the costly surfaces |                                                          |
+| 3.2  | Playwright + 6 critical journeys                                       | Still the precondition for any frontend migration        |
+| 3.3  | Enable CSP in production                                               | Closes S-2                                               |
+| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                  | Closes API-1                                             |
+| 3.5  | Documented restore drill                                               | Closes GAP-11                                            |
 
 ## Phase 4 — Enterprise depth (P2)
 

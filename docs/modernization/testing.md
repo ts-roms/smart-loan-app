@@ -63,12 +63,45 @@ change that would make it authoritative rather than merely protective.
 
 ## Gaps
 
-| Gap                                                                                            | Priority                               |
-| ---------------------------------------------------------------------------------------------- | -------------------------------------- |
-| Frontend effectively untested — 1 file, 148 components                                         | **P1**                                 |
-| No E2E framework (`docs/smoke-tests/e2e.sh` is a shell script; Playwright is not a dependency) | **P1** — blocks any frontend migration |
-| Golden corpus lacks fees, penalties, grace period, payment history, restructure, payoff (§82)  | P1                                     |
-| No coverage reporting — the numbers above are files, not lines                                 | P3                                     |
+| Gap                                                                                                                                  | Priority                               |
+| ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| Frontend component testing — harness plus 5 files, 45 tests. Covers the surfaces where being wrong is costly, not the 148 components | **PARTIAL** (was P1)                   |
+| No E2E framework (`docs/smoke-tests/e2e.sh` is a shell script; Playwright is not a dependency)                                       | **P1** — blocks any frontend migration |
+| Golden corpus lacks fees, penalties, grace period, payment history, restructure, payoff (§82)                                        | P1                                     |
+| No coverage reporting — the numbers above are files, not lines                                                                       | P3                                     |
+
+## Frontend
+
+The harness is jsdom + Testing Library, wired in `apps/web/vitest.config.ts`:
+
+- `src/test/setup.ts` — stubs only what jsdom genuinely lacks (ResizeObserver,
+  pointer capture, matchMedia), and **fails any test that reaches `fetch`**. A
+  component test that quietly falls through to the network is testing the
+  absence of a response, and it passes for the wrong reason.
+- `src/test/render.tsx` — `renderWithProviders` mirrors `main.tsx` minus theme,
+  auth and PWA. Tests mock `@loan/api-client` at the module boundary, so they
+  depend on what a hook RETURNS rather than on how a request is built — the seam
+  that survives a transport change.
+
+What is covered is chosen by consequence, not by coverage percentage. The four
+suites are the places where a wrong render costs something:
+
+| Suite                   | The risk it holds down                                            |
+| ----------------------- | ----------------------------------------------------------------- |
+| `CustomerDetail.guards` | Edit / Apply offered on an erased or archived customer            |
+| `Users.actions`         | "Sign out everywhere" contradicting the Presence column beside it |
+| `DecisionRules.history` | A rule's version and its superseded text staying readable         |
+| `use-permission`        | The gate behind every hidden control failing OPEN                 |
+
+Writing them found two real accessibility defects, both now fixed: the version
+badge announced only "v3" to a screen reader, and the rule editor's labels were
+not associated with their controls. Nine other copies of that `Field` helper
+carry the same defect — see the spawned task.
+
+**Still missing: E2E.** Playwright is not a dependency and no journey is
+exercised end to end. Component tests prove a page renders what it should from
+given data; they cannot prove the data is what the API sends. That gap is the
+one that still blocks a framework migration.
 
 ## CI
 
