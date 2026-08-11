@@ -7,9 +7,10 @@
  *   3. Validates that debits == credits (the lib also enforces this).
  *   4. Inserts the entry + lines.
  *
- * `postIfAbsent` is the idempotent variant used by auto-posting — if a
- * journal entry already exists for the given (source, sourceRefId) it
- * returns the existing row instead of double-posting.
+ * `postIfAbsent` is the idempotent variant used by auto-posting. Its
+ * guarantee is the unique index on (source, sourceRefType, sourceRefId),
+ * not the lookup it performs first — see the method for why the lookup
+ * alone was never enough.
  */
 
 import {
@@ -36,6 +37,25 @@ import type {
 } from "@prisma/client";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
+
+/**
+ * A Postgres unique-constraint violation, as Prisma reports it.
+ *
+ * Matched structurally rather than with `instanceof
+ * PrismaClientKnownRequestError`: the error can arrive from a different
+ * copy of the client package (the API and the repositories resolve
+ * @prisma/client independently under pnpm), and an instanceof check
+ * across two copies silently returns false — which here would turn a
+ * handled race into a 500.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: unknown }).code === "P2002"
+  );
+}
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -615,18 +635,59 @@ export class AccountingRepository {
     opts: PostEntryOptions,
   ): Promise<{ entry: JournalEntry; created: boolean }> {
     const tx = opts.tx ?? this.prisma;
+
+    /*
+     * Read first — not as the guarantee, but because it is the common case
+     * and it costs one indexed lookup to avoid burning a journal number on
+     * an entry we are about to discard.
+     */
     if (input.sourceRefId) {
-      const existing = await tx.journalEntry.findFirst({
-        where: {
-          source: input.source as never,
-          sourceRefType: input.sourceRefType ?? null,
-          sourceRefId: input.sourceRefId,
-        },
-      });
+      const existing = await this.findBySourceRef(tx, input);
       if (existing) return { entry: existing, created: false };
     }
-    const entry = await this.postEntry(input, opts);
-    return { entry, created: true };
+
+    /*
+     * The guarantee is the unique index on
+     * (source, sourceRefType, sourceRefId).
+     *
+     * The read above cannot provide it: between the SELECT and the INSERT
+     * another caller can post the same event, and both callers would see an
+     * empty result. That is not hypothetical — the interest-accrual job can
+     * overlap itself, and a double-submitted payment posts twice. Each
+     * entry balances on its own, so the trial balance still ties and the
+     * duplicate is invisible to every check the system performs.
+     *
+     * So we attempt the insert and let Postgres arbitrate. P2002 means
+     * someone else won the race; their entry is the real one, and returning
+     * it with created:false is exactly what the caller of an idempotent
+     * post expects.
+     */
+    try {
+      const entry = await this.postEntry(input, opts);
+      return { entry, created: true };
+    } catch (err) {
+      if (!isUniqueViolation(err) || !input.sourceRefId) throw err;
+      const winner = await this.findBySourceRef(tx, input);
+      // A unique violation with nothing to find afterwards would mean the
+      // conflict came from a different constraint (the entry number), which
+      // is a real error and must not be swallowed as idempotency.
+      if (!winner) throw err;
+      return { entry: winner, created: false };
+    }
+  }
+
+  /** The idempotency lookup, shared by the fast path and the race loser. */
+  private findBySourceRef(
+    tx: Tx,
+    input: JournalEntryInput,
+  ): Promise<JournalEntry | null> {
+    return tx.journalEntry.findFirst({
+      where: {
+        source: input.source as never,
+        sourceRefType: input.sourceRefType ?? null,
+        sourceRefId: input.sourceRefId,
+      },
+    });
   }
 
   // ─── Reports ─────────────────────────────────────────────────────────

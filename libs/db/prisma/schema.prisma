@@ -1388,6 +1388,15 @@ model JournalEntry {
   repossessionCases RepossessionCase[]
   leaseAgreements   LeaseAgreement[]
 
+  /// Auto-posting is idempotent on this tuple, and the guarantee lives
+  /// here rather than in application code. `postIfAbsent` used to read for
+  /// an existing entry and post if it found none; two concurrent callers
+  /// both found none and both posted, and because each entry balances on
+  /// its own the trial balance still tied — a duplicate no check could see.
+  ///
+  /// Postgres treats NULLs as distinct, so manual entries (sourceRefId
+  /// null) are untouched and may repeat freely, which is correct.
+  @@unique([source, sourceRefType, sourceRefId], name: "journal_source_ref_unique")
   @@index([entryDate])
   @@index([source, sourceRefId])
   @@index([sourceRefType, sourceRefId])
