@@ -36,8 +36,14 @@ holding when someone changes a rate, a fee rule or an account code:
 - a due job runs exactly once per slot
 - a loan is decided once, and only while it is still a pending decision
 
-**Golden corpus (§82).** Fixed scenarios with committed expected values, in two
-halves with **different authority** — and the file says so in its header:
+**Golden corpus (§82).** Two files, 76 assertions:
+
+- `golden-corpus.test.ts` — principal, rate, term, frequency across 8 scenarios
+- `golden-corpus-lifecycle.test.ts` — fees, penalties, grace, payment history,
+  payoff, renewal proceeds
+
+Fixed scenarios with committed expected values, in two halves with **different
+authority** — and both files say so in their headers:
 
 | Half             | Authority                                                                                                                                                                            |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
