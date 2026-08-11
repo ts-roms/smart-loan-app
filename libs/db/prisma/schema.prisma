@@ -2456,7 +2456,13 @@ model Contribution {
   /// Journal entry that booked this contribution. Null = posting deferred.
   journalEntryId String?
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. A member's capital build-up is money the
+  /// cooperative holds for them; deleting the member must never take it
+  /// with them. The service layer already refuses to delete customers at
+  /// all — archiving replaced deletion — but the schema is what makes
+  /// that true for a code path nobody has written yet, or a hand-typed
+  /// DELETE at 2am.
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([customerId, contributedAt])
   @@index([contributedAt])
@@ -2477,7 +2483,10 @@ model SavingsTransaction {
   recordedById   String?
   journalEntryId String?
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade — same reasoning as Contribution. A savings
+  /// movement is the member's money, and a cascade would erase the
+  /// record of it while the cash stayed in the coop's account.
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([customerId, txnDate])
   @@index([txnDate])

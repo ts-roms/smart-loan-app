@@ -40,11 +40,17 @@ Precision table and rounding rules live in `financial-engine.md`.
 | `FundTransaction` / `FundWithdrawal`                                            | SetNull     | money kept, attribution lost              |
 | `KycSubmission`, `CreditScore`, `SurveyResponse`, `AmlScreening`, `DorsiRecord` | CASCADE     | acceptable for a record that never traded |
 
-**Open hazard (roadmap 2.4).** The application layer no longer deletes customers
-at all — archiving replaced deletion in `3a9d0fa` — but the schema still permits
-the cascade, so any future code path or manual `DELETE` re-opens it. Change
-`Contribution` and `SavingsTransaction` to RESTRICT so the database enforces
-what the service promises.
+**Closed 11 Aug 2026** (migration `20260811160000_coop_money_restrict`). Both
+were CASCADE. A member who had saved for years and never borrowed was therefore
+deletable — `LoanApplication` and `CoMaker` would have refused, but a member with
+no loan has neither — and deleting them took every contribution and savings
+movement with them while the cash stayed in the cooperative's bank account.
+
+The application layer had already stopped deleting customers (archiving replaced
+it in `3a9d0fa`); this closes the gap between what the service promises and what
+the database permits, so a code path nobody has written yet fails loudly instead
+of destroying money. Verified: a member with a ₱25,000 deposit now refuses
+deletion with P2003 and the savings row survives.
 
 ## Lifecycle and privacy columns
 
