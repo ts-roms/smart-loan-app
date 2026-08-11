@@ -83,11 +83,9 @@ This is P3 in the roadmap — genuinely valuable, not urgent, and the sort of
 thing that should be built once the seven buckets exist so that "recommended
 action" can key off a meaningful band.
 
-## Recovery-after-write-off
+## Recovery-after-write-off — resolved
 
-Flagged as **needs verification** rather than missing. `writeOff` is a terminal
-transition (now claimed, `fa5e3fb`) and the accounting posts principal to Bad
-Debt. Whether a subsequent payment can be recorded against a `WRITTEN_OFF` loan
-depends on `PAYABLE_STATUSES`, which was not read closely enough to assert
-either way. If it cannot, recovery accounting has no home — worth tracing before
-the next collections change.
+`PAYABLE_STATUSES` includes `WRITTEN_OFF`, so a recovery payment is accepted.
+Tracing what it _posted_ turned up a real defect — the whole amount was booked
+to Customer Advances, recording the defaulter as a creditor — fixed on 11 Aug
+with a dedicated Bad Debt Recovery account. Full account in `accounting.md`.
