@@ -36,20 +36,30 @@ a restore matches the blast radius of the incident.
 | **Restore verification**     | **MISSING**                                                                                                                                                                                                                      |
 | **Documented restore drill** | **MISSING**                                                                                                                                                                                                                      |
 
-## The gap that matters most
+## Uploaded files — closed, but only if configured
 
-**Uploaded documents are not backed up by anything.** `backup.sh` dumps
-Postgres. Files live in `config.uploadsDir` on the API container. A restore
-therefore produces a database that references KYC documents, signed loan
-agreements and collateral photographs that no longer exist.
+Until 11 Aug 2026 `backup.sh` dumped Postgres and nothing else. Files live on
+the API container, so a restore produced a database referencing KYC documents,
+signed loan agreements and collateral photographs that no longer existed: every
+row intact, every file gone.
 
-This is the same finding as `security.md` S-1 approached from the other side,
-and it is the strongest argument for roadmap 3.1 (object storage): S3/MinIO
-gives durability, lifecycle and offsite replication in one move, and removes
-this class of loss rather than adding a second backup job to manage.
+`backup.sh` now archives `UPLOADS_DIR` into `${TS}-uploads.tar.gz` alongside the
+dumps, promotes it to `weekly/` on Sundays, ships it in the offsite sync and
+rotates it on the same schedule.
 
-**Interim mitigation if 3.1 is not imminent:** add `uploadsDir` to the backup
-script alongside the SQL dumps, and to the `s3 sync`.
+**Two things to know:**
+
+1. **`UPLOADS_DIR` is unset by default.** An existing deployment gets no upload
+   backup until it is configured. Set it to whatever `config.uploadsDir`
+   resolves to for that host.
+2. **A configured-but-missing directory logs loudly and continues.** A wrong
+   path is far more likely than a deliberate absence, and a backup that
+   silently skips the files is worse than one that complains.
+
+Leave it unset once uploads move to object storage — S3/MinIO has its own
+replication and does not want a nightly tar of the same bytes. That remains the
+structural fix (roadmap 3.1); this is the mitigation that stops the bleeding
+now.
 
 ## Restore drill — to be written and run
 

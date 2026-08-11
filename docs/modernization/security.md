@@ -29,10 +29,29 @@ endpoint's exact permission key and are never the only gate.
 
 **S-1 (P1) — uploads on local disk.** `config.uploadsDir`, served by a static
 plugin on the same process. KYC identity documents — government IDs, payslips,
-selfies — therefore live on the API container's filesystem. No durability
-guarantee, no lifecycle policy on the blobs, no signed-URL expiry, and
-horizontal scaling breaks document access outright. The biggest combined
-security and operational gap. Roadmap 3.1.
+selfies — live on the API container's filesystem.
+
+**Correction (11 Aug 2026):** the Phase 0 audit claimed this included "no
+signed-URL expiry". That was wrong, and it was wrong because I asserted it
+without reading `uploads/signing.ts`. Signed access **does** exist: a protected
+path needs `?exp=<unix-ms>&sig=<hmac>`, minted through an authenticated
+endpoint, and `static.plugin.ts` enforces it on every request — 401 on expiry,
+403 on a bad signature. The module's own header is candid about what that does
+and does not buy: it closes the anonymous hole, but any authenticated caller can
+sign any path, so it is not an ownership model.
+
+What remains true, and is the real gap:
+
+|                                |                                                                       |
+| ------------------------------ | --------------------------------------------------------------------- |
+| Access control                 | ✅ HMAC + expiry, enforced                                            |
+| Durability                     | ❌ one container filesystem                                           |
+| Backup                         | ⚠️ now covered by `UPLOADS_DIR` in `backup.sh`, but only if it is set |
+| Horizontal scaling             | ❌ a second API process cannot read the first's files                 |
+| Lifecycle / retention on blobs | ❌                                                                    |
+
+Object storage remains the structural answer (roadmap 3.1), but it is no longer
+urgent for _access_, only for durability and scale.
 
 **S-2 (P2) — CSP disabled.** `helmet` is registered with
 `contentSecurityPolicy: false`. Understandable in development; in production it

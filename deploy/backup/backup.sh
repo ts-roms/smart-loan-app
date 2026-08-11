@@ -28,6 +28,10 @@
 #
 # Optional env:
 #   BACKUP_DIR            local directory (default /var/backups/smart-loan)
+#   UPLOADS_DIR           directory holding uploaded files. When set and
+#                          present, each run also archives it. Leave unset
+#                          if uploads live in object storage, which has its
+#                          own durability story.
 #   BACKUP_KEEP_DAYS      daily retention (default 14)
 #   BACKUP_KEEP_WEEKS     weekly retention (default 8) — Sunday dumps
 #                          are also tagged "weekly" and kept longer
@@ -67,6 +71,7 @@ MULTI_TENANT="${MULTI_TENANT:-false}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/smart-loan}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
 KEEP_WEEKS="${BACKUP_KEEP_WEEKS:-8}"
+UPLOADS_DIR="${UPLOADS_DIR:-}"
 S3_BUCKET="${BACKUP_S3_BUCKET:-}"
 S3_ENDPOINT="${BACKUP_S3_ENDPOINT:-}"
 
@@ -126,6 +131,33 @@ else
   PRODUCED+=("$target")
 fi
 
+# ── Uploaded files ──────────────────────────────────────────────────────
+#
+# The dumps above cover Postgres. Uploaded files do NOT live in Postgres —
+# KYC documents, signed loan agreements and collateral photographs are on
+# a filesystem, and the database only holds their paths. Without this
+# step a restore produces a database referencing documents that no longer
+# exist: every row intact, every file gone.
+#
+# Skipped silently when UPLOADS_DIR is unset or absent, which is the
+# correct behaviour once uploads move to object storage — that has its own
+# replication and does not want a nightly tar of the same bytes.
+if [[ -n "$UPLOADS_DIR" ]]; then
+  if [[ -d "$UPLOADS_DIR" ]]; then
+    uploads_target="$BACKUP_DIR/daily/${TS}-uploads.tar.gz"
+    log "→ archiving uploads from ${UPLOADS_DIR} to ${uploads_target}"
+    # -C so the archive holds paths relative to the uploads root, which
+    # makes it restorable into a directory of a different name.
+    tar -czf "$uploads_target" -C "$UPLOADS_DIR" .
+    PRODUCED+=("$uploads_target")
+  else
+    # Loud, not silent. A configured-but-missing uploads directory is far
+    # more likely to be a wrong path than a deliberate absence, and a
+    # backup that quietly skips the files is worse than one that fails.
+    log "!! UPLOADS_DIR is set to ${UPLOADS_DIR} but that directory does not exist — NOT backing up uploads"
+  fi
+fi
+
 # ── Promote Sunday → weekly ─────────────────────────────────────────────
 if [[ "$DOW" == "7" ]]; then
   log "Sunday — copying daily dumps to weekly/"
@@ -145,12 +177,12 @@ if [[ -n "$S3_BUCKET" ]]; then
   aws s3 sync "$BACKUP_DIR" "$S3_BUCKET" \
     "${endpoint_args[@]}" \
     --no-progress \
-    --exclude "*" --include "*.sql.gz"
+    --exclude "*" --include "*.sql.gz" --include "*.tar.gz"
 fi
 
 # ── Rotate ──────────────────────────────────────────────────────────────
 log "rotating daily/ (keep ${KEEP_DAYS} days)"
-find "$BACKUP_DIR/daily" -name "*.sql.gz" -type f -mtime "+${KEEP_DAYS}" -delete
+find "$BACKUP_DIR/daily" \( -name "*.sql.gz" -o -name "*.tar.gz" \)   -type f -mtime "+${KEEP_DAYS}" -delete
 
 log "rotating weekly/ (keep ${KEEP_WEEKS} weeks)"
 # Weeks → ${KEEP_WEEKS} × 7 days. Conservative upper bound on disk use:
