@@ -1,6 +1,7 @@
 import {
   agentCommissionEntry,
   allocatePayment,
+  badDebtRecoveryEntry,
   loanDisbursementEntry,
   loanPaymentEntry,
   preTerminationFeeEntry,
@@ -1416,16 +1417,40 @@ export class LoanRepository {
       }
 
       await this.accounting.postIfAbsent(
-        loanPaymentEntry({
-          loanId,
-          loanNumber: loan.number,
-          paymentId: payment.id,
-          amount: Number(input.amount),
-          interestPortion: allocation.interest,
-          principalPortion: allocation.principal,
-          advancePortion: allocation.overpayment,
-          paidOn: input.paidOn,
-        }),
+        /*
+         * A recovery on a written-off loan is income, not a liability.
+         *
+         * `writeOff` marks every instalment paid in full and credits
+         * Loans Receivable down to nothing, so a later payment finds no
+         * open instalment. Allocation therefore returns 0 interest, 0
+         * principal and the whole amount as overpayment, and the normal
+         * payment entry books overpayment to Customer Advances — which
+         * recorded the borrower who defaulted as a CREDITOR of the
+         * lender, for the money the lender had just clawed back.
+         *
+         * Branching on the loan's status rather than on "no open
+         * instalments", because those are different situations: a
+         * genuinely overpaid live loan DOES owe the borrower their
+         * excess back, and must keep booking to Customer Advances.
+         */
+        loan.status === "WRITTEN_OFF"
+          ? badDebtRecoveryEntry({
+              loanId,
+              loanNumber: loan.number,
+              paymentId: payment.id,
+              amount: Number(input.amount),
+              paidOn: input.paidOn,
+            })!
+          : loanPaymentEntry({
+              loanId,
+              loanNumber: loan.number,
+              paymentId: payment.id,
+              amount: Number(input.amount),
+              interestPortion: allocation.interest,
+              principalPortion: allocation.principal,
+              advancePortion: allocation.overpayment,
+              paidOn: input.paidOn,
+            }),
         { postedById: input.recordedById, tx },
       );
 

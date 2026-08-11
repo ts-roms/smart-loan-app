@@ -89,8 +89,21 @@ export class AccountingRepository {
   ): Promise<{ created: number; existing: number }> {
     let created = 0;
     let existing = 0;
+    /*
+     * Existence is checked before the upsert rather than inferred from
+     * the result's timestamps. The old test compared createdAt to
+     * updatedAt — but the upsert's update clause is empty, so updatedAt
+     * never advances and EVERY row looked newly created. The boot log
+     * then reported "20 accounts created" on every restart of a
+     * database that had all twenty already, which reads as the seed
+     * churning the chart when it is doing nothing at all.
+     */
     for (const a of chart) {
-      const result = await this.prisma.account.upsert({
+      const before = await this.prisma.account.findUnique({
+        where: { code: a.code },
+        select: { id: true },
+      });
+      await this.prisma.account.upsert({
         where: { code: a.code },
         create: {
           code: a.code,
@@ -102,9 +115,8 @@ export class AccountingRepository {
         },
         update: {},
       });
-      if (result.createdAt.getTime() === result.updatedAt.getTime())
-        created += 1;
-      else existing += 1;
+      if (before) existing += 1;
+      else created += 1;
     }
     return { created, existing };
   }

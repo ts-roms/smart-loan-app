@@ -39,6 +39,7 @@ the amount range in `invariants.test.ts`:
 | Agent commission                                                             | Dr Commission Expense / Cr Agent Payable                                                   |
 | Agent payout                                                                 | Dr Agent Payable / Cr Cash                                                                 |
 | Repossession auction                                                         | proceeds applied; **surplus → Customer Advances**, deficiency → Bad Debt                   |
+| Bad-debt recovery                                                            | Dr Cash / Cr Bad Debt Recovery (4300) — the write-off is NOT reversed                      |
 | Lease buyout                                                                 | Dr Cash / Cr Other Income                                                                  |
 | ECL provision                                                                | Dr Impairment Loss / Cr Allowance (reverses for write-backs)                               |
 | Coop: contribution, savings, fund in/out, expense, other income, big brother | per `chart.ts` bucket mapping                                                              |
@@ -47,6 +48,24 @@ the amount range in `invariants.test.ts`:
 owes are the borrower's money, not income. They land in Customer Advances
 (2100) with a memo saying refundable. Booking them as income would be taking
 money that is not the lender's.
+
+## Bad-debt recovery
+
+A recovery on a written-off loan credits **Bad Debt Recovery (4300)**, an
+income account, and does not touch the original write-off. The expense belonged
+to the period the loan was given up on; the recovery belongs to the period the
+cash arrived.
+
+Until 11 Aug 2026 this was wrong, and silently so. `writeOff` marks every
+instalment paid in full, so a later payment found no open instalment to
+allocate against; the whole amount fell through to the overpayment branch and
+was booked **Cr Customer Advances** — recording the borrower who defaulted as a
+_creditor_ of the lender, for money the lender had just clawed back. Income
+understated, liabilities overstated, and the entry balanced, so nothing
+complained. `recordPayment` now branches on loan status, keying on
+`WRITTEN_OFF` rather than on "no open instalments" — a genuinely overpaid live
+loan really does owe its borrower the excess and must keep crediting Customer
+Advances.
 
 ## Controls — §34
 
