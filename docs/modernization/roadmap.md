@@ -11,10 +11,32 @@ migration.
 
 ---
 
-## Phase 1 — Financial guarantees (P0)
+## Phase 1 — Financial guarantees (P0) — ✅ COMPLETE
 
-Nothing else should start before this phase ships. Each item is small; together
-they eliminate three classes of silent money error.
+Shipped in `64e17ff`, `fa5e3fb`, `6359027`, `7564fa8`. Every defect below is now
+prevented by the database rather than by a check a second request can walk past.
+
+| Step                                                           | Status                                | Commit    |
+| -------------------------------------------------------------- | ------------------------------------- | --------- |
+| 1.1 Duplicate-journal detection script                         | ✅ clean on dev (27 entries, 0 dupes) | `64e17ff` |
+| 1.2 Unique index + insert-and-catch `postIfAbsent`             | ✅                                    | `64e17ff` |
+| 1.3 Conditional-update claims (disburse, closeEarly, writeOff) | ✅                                    | `fa5e3fb` |
+| 1.4 Payment idempotency key                                    | ✅                                    | `7564fa8` |
+| 1.5 Job slot claim                                             | ✅                                    | `6359027` |
+
+**One finding the audit understated.** 1.5 was filed as "needs a lock before
+multi-process deploy". Reading the code, `nextRunAt` advanced only _after_ a job
+finished and `setInterval` does not wait for an async tick — so any job slower
+than the tick interval restarted itself, on one process, with no scaling
+involved. For interest accrual that is the same accrual posted twice.
+
+**One deviation from the plan.** 1.5 proposed `pg_try_advisory_lock`. A
+session-level advisory lock is tied to a connection and Prisma pools
+connections, so the lock and its release can land on different ones. A
+conditional UPDATE needs no lock, survives a process dying mid-job, and matches
+the claim pattern used for loan transitions.
+
+Original plan, for the record:
 
 | Step | Change                                                                                                                                                           | Files                                                  | DB change | Risk                     |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------- | ------------------------ |
@@ -80,9 +102,17 @@ signals. All genuinely valuable, none urgent, all safe to defer.
 
 ## Immediate next step
 
-Phase 1.1 — the duplicate-journal detection query. It is read-only, it is a
-handful of lines, and its result determines whether 1.2 can ship as a
-straightforward constraint or needs a reconciliation step first.
+Phase 2.1 — the remaining invariant tests. Phase 1 shipped with three of them
+already (journal idempotency, job slots, payment idempotency); what is still
+missing is the set that guards the arithmetic rather than the concurrency:
+debits == credits per entry and period, allocations <= payment amount, the
+outstanding-principal identity, and a reversal exactly offsetting its original.
 
-I have **not** started it: the brief says audit first, and this document is the
-audit. Say the word and Phase 1 begins.
+Then 2.2, the golden corpus — which remains the precondition for touching any
+calculation.
+
+**Deployment note for Phase 1.** Run
+`libs/db/scripts/detect-duplicate-journal-entries.mjs` against each environment
+BEFORE `migrate deploy`. The unique index cannot be created while duplicates
+exist, and discovering that mid-migration on production is the wrong moment. The
+remedy for any duplicate found is a reversing entry, not a delete.
