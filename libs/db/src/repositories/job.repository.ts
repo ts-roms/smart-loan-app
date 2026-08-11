@@ -86,7 +86,15 @@ export class JobRepository {
   async runOne(
     name: string,
     fn: JobDefinition["fn"],
-    opts: { manual?: boolean } = {},
+    opts: {
+      manual?: boolean;
+      /**
+       * The scheduler already advanced `nextRunAt` to claim this slot,
+       * so advancing it again here would skip a scheduled run. Manual
+       * triggers leave this false and keep the original behaviour.
+       */
+      slotClaimed?: boolean;
+    } = {},
   ): Promise<JobRun> {
     const job = await this.findByName(name);
     if (!job) throw new Error(`Job ${name} is not registered.`);
@@ -106,7 +114,10 @@ export class JobRepository {
       const result = await fn(ctx);
       await this.prisma.scheduledJob.update({
         where: { id: job.id },
-        data: { lastRunAt: new Date(), nextRunAt: parseNextRun(job.cron) },
+        data: {
+          lastRunAt: new Date(),
+          ...(opts.slotClaimed ? {} : { nextRunAt: parseNextRun(job.cron) }),
+        },
       });
       return this.prisma.jobRun.update({
         where: { id: run.id },
@@ -117,9 +128,14 @@ export class JobRepository {
         },
       });
     } catch (err) {
+      // A failed run still consumed its slot — the claim already moved
+      // nextRunAt, and retrying immediately would spin on a broken job.
       await this.prisma.scheduledJob.update({
         where: { id: job.id },
-        data: { lastRunAt: new Date(), nextRunAt: parseNextRun(job.cron) },
+        data: {
+          lastRunAt: new Date(),
+          ...(opts.slotClaimed ? {} : { nextRunAt: parseNextRun(job.cron) }),
+        },
       });
       return this.prisma.jobRun.update({
         where: { id: run.id },
@@ -151,7 +167,38 @@ export class JobRepository {
     for (const job of due) {
       const def = byName.get(job.name);
       if (!def) continue;
-      await this.runOne(job.name, def.fn, { manual: false }).catch(() => {});
+
+      /*
+       * Claim the slot by advancing nextRunAt BEFORE running, with the
+       * old value in the WHERE — a compare-and-swap. Two bugs die here.
+       *
+       * 1. Self-overlap, which needs no concurrency at all: nextRunAt
+       *    used to advance only after the job finished, and `setInterval`
+       *    does not wait for an async tick. Any job slower than the tick
+       *    interval was therefore still "due" when the next tick looked,
+       *    and started again on top of itself. For the interest-accrual
+       *    job that means posting the same accrual twice.
+       *
+       * 2. Multi-process duplication: two API processes both see the job
+       *    as due and both run it. Only one can win the swap.
+       *
+       * A conditional UPDATE rather than pg_try_advisory_lock (which the
+       * roadmap originally proposed): a session-level advisory lock is
+       * tied to a connection, and Prisma pools connections, so the lock
+       * and its release can land on different ones. This needs no lock,
+       * survives a process dying mid-job, and matches the claim pattern
+       * used for loan state transitions.
+       */
+      const claimed = await this.prisma.scheduledJob.updateMany({
+        where: { id: job.id, nextRunAt: job.nextRunAt },
+        data: { nextRunAt: parseNextRun(job.cron) },
+      });
+      if (claimed.count === 0) continue;
+
+      await this.runOne(job.name, def.fn, {
+        manual: false,
+        slotClaimed: true,
+      }).catch(() => {});
     }
   }
 
