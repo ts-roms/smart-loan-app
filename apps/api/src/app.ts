@@ -24,6 +24,7 @@ import { coMakerConsentRoutes } from "./features/co-maker/consent.routes";
 import { publicRoutes } from "./features/public/index";
 import { registerRoutes } from "./routes/index";
 import { uploadStaticPlugin } from "./features/uploads/static.plugin";
+import { validationBodyOf, validationError } from "./lib/validation-error";
 
 /**
  * Sentry is opt-in via SENTRY_DSN — keeping the dep skin-deep so local
@@ -94,15 +95,15 @@ export async function buildApp() {
    * AJV's `instancePath` onto zod's `path`. The controller's parse still
    * runs for everything Fastify lets through, and remains the real gate
    * — this only covers the requests it now rejects earlier.
+   *
+   * The body itself lives in lib/validation-error.ts, because a handler
+   * can raise the same failure for something JSON Schema cannot express
+   * (see `parseAsOf` in accounting.routes.ts) and the two must not
+   * diverge.
    */
-  app.setSchemaErrorFormatter((errors, dataVar) => {
-    const err = new Error("Validation failed") as FastifyError & {
-      validationBody?: unknown;
-    };
-    err.statusCode = 400;
-    err.validationBody = {
-      error: "ValidationError",
-      issues: errors.map((e) => ({
+  app.setSchemaErrorFormatter((errors, dataVar) =>
+    validationError(
+      errors.map((e) => ({
         path: (e.instancePath || "")
           .split("/")
           .filter(Boolean)
@@ -111,9 +112,8 @@ export async function buildApp() {
         // Which part of the request failed: body, querystring, params.
         in: dataVar,
       })),
-    };
-    return err;
-  });
+    ),
+  );
 
   /*
    * One handler, not two. `setErrorHandler` REPLACES rather than chains,
@@ -124,7 +124,7 @@ export async function buildApp() {
    */
   if (sentry) {
     app.setErrorHandler((err: FastifyError, req, reply) => {
-      const body = (err as { validationBody?: unknown }).validationBody;
+      const body = validationBodyOf(err);
       if (body) return reply.code(400).send(body);
       // Don't ship validation/expected 4xx noise to Sentry — only the
       // genuine 5xx-class problems are useful signal.
@@ -171,7 +171,7 @@ export async function buildApp() {
     // Same validation branch, without the Sentry reporting. Everything
     // else falls through to Fastify's default serialisation.
     app.setErrorHandler((err: FastifyError, _req, reply) => {
-      const body = (err as { validationBody?: unknown }).validationBody;
+      const body = validationBodyOf(err);
       if (body) return reply.code(400).send(body);
       return reply.send(err);
     });

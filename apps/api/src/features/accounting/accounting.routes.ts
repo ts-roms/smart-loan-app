@@ -3,6 +3,7 @@ import { AccountingRepository, AuditLogRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { routeSchema } from "../../lib/openapi";
+import { validationError } from "../../lib/validation-error";
 import { JournalController } from "./journal.controller";
 import { JournalService } from "./journal.service";
 import {
@@ -37,9 +38,32 @@ import {
 const TAGS = ["accounting"];
 
 /**
+ * An unparseable date parameter, as the 400 it is.
+ *
+ * `?asOf=garbage` is the caller's mistake, and for a long time this file
+ * answered it 500 Internal Server Error — a bare `throw new Error` that
+ * nothing caught, so Fastify reported the client's typo as a server
+ * fault. The body is the house `{ error: "ValidationError", issues }`
+ * naming the parameter, so a bad `asOf` reads exactly like a bad field
+ * anywhere else in the API.
+ *
+ * Thrown rather than returned because the parsers below are called
+ * inline in the handlers' expressions, where `throw` is the only seam.
+ * See lib/validation-error.ts for how the body reaches the wire.
+ */
+function invalidDate(param: string) {
+  return validationError([
+    {
+      path: [param],
+      message: 'Expected a date: "YYYY-MM-DD" or an ISO 8601 timestamp.',
+      in: "querystring",
+    },
+  ]);
+}
+
+/**
  * Upper bound for a report — `asOf` or `to`. Defaults to "now" when
- * absent, rejects garbage with a thrown Error (the routes catch it via
- * the validate-on-call pattern).
+ * absent, answers 400 naming `param` when it cannot be parsed.
  *
  * `endOfDay`, not `new Date`. A bare "2026-08-07" parses as UTC
  * midnight, which is 8am in Manila, so every report asked for as-of
@@ -47,19 +71,28 @@ const TAGS = ["accounting"];
  * of entries on this repo's own fixtures. A caller sending a full
  * timestamp still gets exactly that instant; only the ambiguous
  * date-only shape is widened. See `endOfDay` in @loan/accounting.
+ *
+ * That widening is also why the check lives HERE rather than in the
+ * query schema, where the rest of the API does its validating: date-only
+ * is the shape these parameters are for, and both `z.coerce.date()` and
+ * a `format: date-time` JSON Schema would reject exactly that shape
+ * before the handler ever ran.
  */
-function parseAsOf(value: string | undefined): Date {
+function parseAsOf(value: string | undefined, param = "asOf"): Date {
   if (!value) return new Date();
   const d = endOfDay(value);
-  if (Number.isNaN(d.getTime())) throw new Error("Invalid date");
+  if (Number.isNaN(d.getTime())) throw invalidDate(param);
   return d;
 }
 
 /** Lower bound — the same treatment, anchored at the other end. */
-function parseFrom(value: string | undefined): Date | undefined {
+function parseFrom(
+  value: string | undefined,
+  param = "from",
+): Date | undefined {
   if (!value) return undefined;
   const d = startOfDay(value);
-  if (Number.isNaN(d.getTime())) throw new Error("Invalid date");
+  if (Number.isNaN(d.getTime())) throw invalidDate(param);
   return d;
 }
 
@@ -122,12 +155,18 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   /*
    * Every read below is `accounting.read` behind `app.authenticate`, so
-   * 401 and 403 are the two failures they share and nothing else — the
-   * report handlers throw on an unparseable date rather than answering
-   * 400, so claiming 400 here would document a response the API does
-   * not produce.
+   * 401 and 403 are the two failures they all share.
    */
   const readErrors = [401, 403] as const;
+
+  /*
+   * Plus 400, for the reads that take a date: `from`, `to` and `asOf`
+   * are parsed by hand (see `parseAsOf`), and an unparseable one is now
+   * answered as a validation failure naming the parameter. Listed only
+   * on the routes that HAVE such a parameter — the reads without one
+   * still cannot produce a 400, and saying they can would be fiction.
+   */
+  const dateReadErrors = [400, 401, 403] as const;
 
   // ─── Chart of accounts ─────────────────────────────────────────────
 
@@ -196,13 +235,13 @@ export async function accountingRoutes(app: FastifyInstance) {
         tags: TAGS,
         querystring: journalQuerySchema,
         response: journalEntryListResponseSchema,
-        errors: [...readErrors],
+        errors: [...dateReadErrors],
       }),
     },
     async (req) =>
       req.accountingCtx!.accounting.listEntries({
         from: parseFrom(req.query.from),
-        to: req.query.to ? parseAsOf(req.query.to) : undefined,
+        to: req.query.to ? parseAsOf(req.query.to, "to") : undefined,
         source: req.query.source,
       }),
   );
@@ -301,14 +340,14 @@ export async function accountingRoutes(app: FastifyInstance) {
         params: accountIdParamSchema,
         querystring: rangeQuerySchema,
         response: ledgerResponseSchema,
-        errors: [400, ...readErrors],
+        errors: [...dateReadErrors],
       }),
     },
     async (req) =>
       req.accountingCtx!.accounting.ledgerFor(
         req.params.accountId,
         parseFrom(req.query.from),
-        req.query.to ? parseAsOf(req.query.to) : undefined,
+        req.query.to ? parseAsOf(req.query.to, "to") : undefined,
       ),
   );
 
@@ -323,7 +362,7 @@ export async function accountingRoutes(app: FastifyInstance) {
         tags: TAGS,
         querystring: asOfQuerySchema,
         response: trialBalanceResponseSchema,
-        errors: [...readErrors],
+        errors: [...dateReadErrors],
       }),
     },
     async (req) =>
@@ -339,21 +378,20 @@ export async function accountingRoutes(app: FastifyInstance) {
         tags: TAGS,
         querystring: rangeQuerySchema,
         response: incomeStatementResponseSchema,
-        // Not 400. The handler has a 400 branch for an invalid `from`,
-        // but `parseFrom` throws before it can be reached, so the route
-        // has never actually answered one.
-        errors: [...readErrors],
+        errors: [...dateReadErrors],
       }),
     },
-    async (req, reply) => {
-      const to = parseAsOf(req.query.to);
+    async (req) => {
+      const to = parseAsOf(req.query.to, "to");
+      /*
+       * No NaN check on `from`. There used to be one, answering 400 with
+       * a different body — dead code, because `parseFrom` threw before
+       * it could be reached. `parseFrom` now raises the 400 itself, and
+       * the January-1st fallback is constructed from an already-valid
+       * `to`, so neither branch can hand a NaN date to the repository.
+       */
       const from =
         parseFrom(req.query.from) ?? new Date(to.getFullYear(), 0, 1);
-      if (Number.isNaN(from.getTime())) {
-        return reply
-          .code(400)
-          .send({ error: "BadRequest", message: "Invalid from date" });
-      }
       return req.accountingCtx!.accounting.incomeStatement(from, to);
     },
   );
@@ -367,7 +405,7 @@ export async function accountingRoutes(app: FastifyInstance) {
         tags: TAGS,
         querystring: asOfQuerySchema,
         response: balanceSheetResponseSchema,
-        errors: [...readErrors],
+        errors: [...dateReadErrors],
       }),
     },
     async (req) =>
@@ -383,7 +421,7 @@ export async function accountingRoutes(app: FastifyInstance) {
         tags: TAGS,
         querystring: asOfQuerySchema,
         response: loanPortfolioAgingResponseSchema,
-        errors: [...readErrors],
+        errors: [...dateReadErrors],
       }),
     },
     async (req) =>
@@ -401,7 +439,7 @@ export async function accountingRoutes(app: FastifyInstance) {
         tags: TAGS,
         querystring: asOfQuerySchema,
         response: portfolioSummaryResponseSchema,
-        errors: [...readErrors],
+        errors: [...dateReadErrors],
       }),
     },
     async (req) =>
@@ -417,11 +455,11 @@ export async function accountingRoutes(app: FastifyInstance) {
         tags: TAGS,
         querystring: rangeQuerySchema,
         response: originationsResponseSchema,
-        errors: [...readErrors],
+        errors: [...dateReadErrors],
       }),
     },
     async (req) => {
-      const to = parseAsOf(req.query.to);
+      const to = parseAsOf(req.query.to, "to");
       const from =
         parseFrom(req.query.from) ??
         new Date(to.getFullYear(), to.getMonth() - 11, 1);
