@@ -63,8 +63,12 @@ declare module "fastify" {
 
 export async function customerRoutes(app: FastifyInstance): Promise<void> {
   // Order matters: authenticate → resolveTenant → build services.
-  // Each preHandler depends on what the previous one set.
-  app.addHook("preHandler", app.authenticate);
+  // authenticate moved to onRequest because routes in this group now
+  // carry request schemas, and Fastify validates BEFORE preHandler — an
+  // anonymous caller with a malformed body must get a 401, not a 400
+  // describing the schema. See decision-rules.routes.ts. The two
+  // preHandlers below still run in registration order after it.
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", buildCustomerServices(app));
 
