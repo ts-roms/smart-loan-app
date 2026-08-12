@@ -195,10 +195,17 @@ final installment so the closing balance is exactly `0`.
 - `buildBalanceSheet` (computes retained earnings from income/expense)
 - `buildAgingReport` — per-loan rows plus totals keyed by `AgingBucket`
 - `agingBucketFor` — days past due → `CURRENT` | `D_1_30` | `D_31_60` |
-  `D_61_90` | `D_90_PLUS`, each band inclusive of its upper bound.
-  Exported so callers outside the lib share one derivation of a band
-  instead of restating the thresholds; `apps/api → reports.service.ts`
-  uses it for the collections-aging export.
+  `D_61_90` | `D_91_120` | `D_121_180` | `D_180_PLUS`, each band
+  inclusive of its upper bound. Exported so callers outside the lib
+  share one derivation of a band instead of restating the thresholds;
+  `apps/api → reports.service.ts` uses it for the collections-aging
+  export.
+- `AGING_BUCKETS` — the report order. Exported so the UI cannot invent
+  a different one.
+- `OVERDUE_BUCKETS` — everything except `CURRENT`, derived from
+  `AGING_BUCKETS` rather than listed, so a band added later cannot
+  render in the table while quietly dropping out of the
+  portfolio-at-risk total above it.
 
 Persistence lives in `@loan/db → AccountingRepository`, which resolves
 account codes, allocates `JE-YYYY-NNNNNN` numbers, and posts entries

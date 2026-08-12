@@ -13,21 +13,25 @@ import { formatMoney, todayLocalISO } from "@loan/shared-utils";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-const BUCKETS: AgingBucket[] = [
-  "CURRENT",
-  "D_1_30",
-  "D_31_60",
-  "D_61_90",
-  "D_90_PLUS",
-];
-
 const BUCKET_LABELS: Record<AgingBucket, string> = {
   CURRENT: "Current",
   D_1_30: "1–30 days",
   D_31_60: "31–60 days",
   D_61_90: "61–90 days",
-  D_90_PLUS: "90+ days",
+  D_91_120: "91–120 days",
+  D_121_180: "121–180 days",
+  D_180_PLUS: "180+ days",
 };
+
+/*
+ * Report order, derived from the labels rather than listed separately.
+ *
+ * `Record<AgingBucket, string>` makes the labels exhaustive, so adding a
+ * band to the type forces a label, which puts it in this list. A
+ * hand-kept second array is how a new band ends up rendering nowhere —
+ * or worse, rendering but being left out of a total.
+ */
+const BUCKETS = Object.keys(BUCKET_LABELS) as AgingBucket[];
 
 export function LoanPortfolioPage() {
   const [asOf, setAsOf] = useState(() => todayLocalISO());
@@ -139,14 +143,16 @@ function bucketVariant(
   switch (b) {
     case "CURRENT":
       return "success";
+    // Still collectable, and treated as one visual weight so the eye is
+    // not asked to rank three shades of "late".
     case "D_1_30":
-      return "warning";
     case "D_31_60":
     case "D_61_90":
       return "warning";
-    case "D_90_PLUS":
+    // Past the 90-day line: non-performing, whatever the exact band.
+    case "D_91_120":
+    case "D_121_180":
+    case "D_180_PLUS":
       return "danger";
-    default:
-      return "muted";
   }
 }
