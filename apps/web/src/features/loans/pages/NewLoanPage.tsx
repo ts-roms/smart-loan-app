@@ -17,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
   cn,
+  Field,
   Input,
   SearchInput,
   Select,
@@ -707,30 +708,32 @@ function Step2ProductTerms({
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Loan product">
-          <Select
-            value={form.productCode}
-            onValueChange={(next) => {
-              const p = products.find((x) => x.code === next);
-              setForm((f) => ({
-                ...f,
-                productCode: next,
-                ratePercent: p ? Number(p.defaultRate) * 100 : f.ratePercent,
-              }));
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="— select a product —" />
-            </SelectTrigger>
-            <SelectContent>
-              {products
-                .filter((p) => p.active)
-                .map((p) => (
-                  <SelectItem key={p.id} value={p.code}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          {(id) => (
+            <Select
+              value={form.productCode}
+              onValueChange={(next) => {
+                const p = products.find((x) => x.code === next);
+                setForm((f) => ({
+                  ...f,
+                  productCode: next,
+                  ratePercent: p ? Number(p.defaultRate) * 100 : f.ratePercent,
+                }));
+              }}
+            >
+              <SelectTrigger id={id}>
+                <SelectValue placeholder="— select a product —" />
+              </SelectTrigger>
+              <SelectContent>
+                {products
+                  .filter((p) => p.active)
+                  .map((p) => (
+                    <SelectItem key={p.id} value={p.code}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          )}
         </Field>
         {product && (
           <div className="text-xs text-fg-muted self-center">
@@ -985,21 +988,25 @@ function Step3CollateralCoMakers({
                     />
                   </Field>
                   <Field label="Role">
-                    <Select
-                      value={cm.role ?? "CO_MAKER"}
-                      onValueChange={(v) =>
-                        patchCoMaker(cm._key, { role: v as CoMakerRole })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="CO_MAKER">Co-maker</SelectItem>
-                        <SelectItem value="CO_BORROWER">Co-borrower</SelectItem>
-                        <SelectItem value="GUARANTOR">Guarantor</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {(id) => (
+                      <Select
+                        value={cm.role ?? "CO_MAKER"}
+                        onValueChange={(v) =>
+                          patchCoMaker(cm._key, { role: v as CoMakerRole })
+                        }
+                      >
+                        <SelectTrigger id={id}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CO_MAKER">Co-maker</SelectItem>
+                          <SelectItem value="CO_BORROWER">
+                            Co-borrower
+                          </SelectItem>
+                          <SelectItem value="GUARANTOR">Guarantor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </Field>
                   <Field label="Relationship">
                     <Input
@@ -1196,15 +1203,6 @@ function StepHeading({ title, subtitle }: { title: string; subtitle: string }) {
     <div className="border-b border-default pb-3 mb-2">
       <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
       <p className="text-xs text-fg-muted mt-1">{subtitle}</p>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
     </div>
   );
 }

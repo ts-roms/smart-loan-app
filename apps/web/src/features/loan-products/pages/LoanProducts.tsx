@@ -26,6 +26,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -521,33 +522,39 @@ function ProductForm({
             />
           </Field>
           <Field label="Collateral kind">
-            <Select
-              value={draft.collateralKind}
-              onValueChange={(v) => set("collateralKind", v as CollateralKind)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="NONE">None</SelectItem>
-                <SelectItem value="VEHICLE">Vehicle</SelectItem>
-                <SelectItem value="PROPERTY">Property</SelectItem>
-              </SelectContent>
-            </Select>
+            {(id) => (
+              <Select
+                value={draft.collateralKind}
+                onValueChange={(v) =>
+                  set("collateralKind", v as CollateralKind)
+                }
+              >
+                <SelectTrigger id={id}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">None</SelectItem>
+                  <SelectItem value="VEHICLE">Vehicle</SelectItem>
+                  <SelectItem value="PROPERTY">Property</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </Field>
           <Field label="Status">
-            <Select
-              value={draft.active ? "active" : "inactive"}
-              onValueChange={(v) => set("active", v === "active")}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
+            {(id) => (
+              <Select
+                value={draft.active ? "active" : "inactive"}
+                onValueChange={(v) => set("active", v === "active")}
+              >
+                <SelectTrigger id={id}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </Field>
         </div>
       </Section>
@@ -719,35 +726,41 @@ function ProductForm({
       <Section title="Repayment schedule">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Interest method">
-            <Select
-              value={draft.interestMethod}
-              onValueChange={(v) => set("interestMethod", v as InterestMethod)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="DECLINING">Declining balance</SelectItem>
-                <SelectItem value="FLAT">Flat (add-on)</SelectItem>
-              </SelectContent>
-            </Select>
+            {(id) => (
+              <Select
+                value={draft.interestMethod}
+                onValueChange={(v) =>
+                  set("interestMethod", v as InterestMethod)
+                }
+              >
+                <SelectTrigger id={id}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DECLINING">Declining balance</SelectItem>
+                  <SelectItem value="FLAT">Flat (add-on)</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </Field>
           <Field label="Payment frequency">
-            <Select
-              value={draft.paymentFrequency}
-              onValueChange={(v) =>
-                set("paymentFrequency", v as PaymentFrequency)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="MONTHLY">Monthly</SelectItem>
-                <SelectItem value="BIWEEKLY">Bi-weekly</SelectItem>
-                <SelectItem value="WEEKLY">Weekly</SelectItem>
-              </SelectContent>
-            </Select>
+            {(id) => (
+              <Select
+                value={draft.paymentFrequency}
+                onValueChange={(v) =>
+                  set("paymentFrequency", v as PaymentFrequency)
+                }
+              >
+                <SelectTrigger id={id}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">Monthly</SelectItem>
+                  <SelectItem value="BIWEEKLY">Bi-weekly</SelectItem>
+                  <SelectItem value="WEEKLY">Weekly</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </Field>
         </div>
       </Section>
@@ -875,21 +888,6 @@ function Section({
       <div className="text-xs uppercase tracking-wider text-fg-subtle">
         {title}
       </div>
-      {children}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
       {children}
     </div>
   );

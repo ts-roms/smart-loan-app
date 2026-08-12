@@ -12,6 +12,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -188,19 +189,21 @@ function TestDialog({ onClose }: { onClose: () => void }) {
         <form onSubmit={onSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Channel">
-              <Select
-                value={channel}
-                onValueChange={(v) => setChannel(v as NotificationChannel)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="EMAIL">Email</SelectItem>
-                  <SelectItem value="SMS">SMS</SelectItem>
-                  <SelectItem value="IN_APP">In-app</SelectItem>
-                </SelectContent>
-              </Select>
+              {(id) => (
+                <Select
+                  value={channel}
+                  onValueChange={(v) => setChannel(v as NotificationChannel)}
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EMAIL">Email</SelectItem>
+                    <SelectItem value="SMS">SMS</SelectItem>
+                    <SelectItem value="IN_APP">In-app</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </Field>
             <Field label="Recipient">
               <Input
@@ -231,20 +234,5 @@ function TestDialog({ onClose }: { onClose: () => void }) {
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
-    </div>
   );
 }

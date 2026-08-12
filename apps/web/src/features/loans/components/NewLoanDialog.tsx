@@ -11,6 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -166,54 +167,58 @@ export function NewLoanDialog({ onClose }: { onClose: () => void }) {
         <form onSubmit={onSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Customer">
-              <Select
-                value={form.customerId}
-                onValueChange={(v) => setForm({ ...form, customerId: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="— select a customer —" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(customers.data ?? []).map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.firstName} {c.lastName} · {c.kycStatus}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Product">
-              <Select
-                value={form.productCode}
-                onValueChange={(next) => {
-                  const p = productsQuery.data?.find((x) => x.code === next);
-                  setForm({
-                    ...form,
-                    productCode: next,
-                    ratePercent: p
-                      ? Number(p.defaultRate) * 100
-                      : form.ratePercent,
-                  });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(productsQuery.data ?? [])
-                    .filter((p) => p.active)
-                    .map((p) => (
-                      <SelectItem key={p.id} value={p.code}>
-                        {p.name}
+              {(id) => (
+                <Select
+                  value={form.customerId}
+                  onValueChange={(v) => setForm({ ...form, customerId: v })}
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue placeholder="— select a customer —" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(customers.data ?? []).map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.firstName} {c.lastName} · {c.kycStatus}
                       </SelectItem>
                     ))}
-                  {productsQuery.data?.length === 0 && (
-                    <SelectItem value="SALARY">
-                      Salary (no products configured)
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
+            <Field label="Product">
+              {(id) => (
+                <Select
+                  value={form.productCode}
+                  onValueChange={(next) => {
+                    const p = productsQuery.data?.find((x) => x.code === next);
+                    setForm({
+                      ...form,
+                      productCode: next,
+                      ratePercent: p
+                        ? Number(p.defaultRate) * 100
+                        : form.ratePercent,
+                    });
+                  }}
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(productsQuery.data ?? [])
+                      .filter((p) => p.active)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.code}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    {productsQuery.data?.length === 0 && (
+                      <SelectItem value="SALARY">
+                        Salary (no products configured)
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
             </Field>
           </div>
 
@@ -572,20 +577,22 @@ function PropertyFieldset({
       </legend>
       <div className="grid grid-cols-3 gap-3">
         <Field label="Property type">
-          <Select
-            value={value.propertyType}
-            onValueChange={(v) => onChange({ ...value, propertyType: v })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="HOUSE_AND_LOT">House &amp; Lot</SelectItem>
-              <SelectItem value="CONDO">Condominium</SelectItem>
-              <SelectItem value="LOT_ONLY">Lot Only</SelectItem>
-              <SelectItem value="COMMERCIAL">Commercial</SelectItem>
-            </SelectContent>
-          </Select>
+          {(id) => (
+            <Select
+              value={value.propertyType}
+              onValueChange={(v) => onChange({ ...value, propertyType: v })}
+            >
+              <SelectTrigger id={id}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="HOUSE_AND_LOT">House &amp; Lot</SelectItem>
+                <SelectItem value="CONDO">Condominium</SelectItem>
+                <SelectItem value="LOT_ONLY">Lot Only</SelectItem>
+                <SelectItem value="COMMERCIAL">Commercial</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </Field>
         <Field label="Title #">
           <Input
@@ -646,21 +653,6 @@ function PropertyFieldset({
         </Field>
       </div>
     </fieldset>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
-    </div>
   );
 }
 

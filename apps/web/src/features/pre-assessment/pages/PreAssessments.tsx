@@ -7,6 +7,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -197,21 +198,23 @@ export function PreAssessmentsPage() {
           <form onSubmit={onSubmit} className="space-y-4">
             {mode === "CUSTOMER" ? (
               <Field label="Customer">
-                <Select
-                  value={form.customerId}
-                  onValueChange={(v) => setForm({ ...form, customerId: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a customer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(customers.data ?? []).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.firstName} {c.lastName} · {c.kycStatus}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {(id) => (
+                  <Select
+                    value={form.customerId}
+                    onValueChange={(v) => setForm({ ...form, customerId: v })}
+                  >
+                    <SelectTrigger id={id}>
+                      <SelectValue placeholder="Select a customer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(customers.data ?? []).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.firstName} {c.lastName} · {c.kycStatus}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </Field>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -273,21 +276,23 @@ export function PreAssessmentsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <Field label="Product">
-                <Select
-                  value={form.productCode}
-                  onValueChange={(v) => setForm({ ...form, productCode: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(products.data ?? []).map((p) => (
-                      <SelectItem key={p.code} value={p.code}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {(id) => (
+                  <Select
+                    value={form.productCode}
+                    onValueChange={(v) => setForm({ ...form, productCode: v })}
+                  >
+                    <SelectTrigger id={id}>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(products.data ?? []).map((p) => (
+                        <SelectItem key={p.code} value={p.code}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </Field>
               <Field label="Principal">
                 <Input
@@ -504,15 +509,6 @@ function subjectLabel(a: PreAssessment): string {
   if (a.customer) return `${a.customer.firstName} ${a.customer.lastName}`;
   if (a.prospectName) return a.prospectName;
   return a.customerId ? "(customer)" : "(unnamed prospect)";
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-xs text-fg-muted">{label}</span>
-      {children}
-    </label>
-  );
 }
 
 function ModeButton({
