@@ -202,8 +202,12 @@ the row hits the DB (`buildEntry` enforces it in the lib too).
 - **Income statement** — `income.total - expense.total` for a range.
 - **Balance sheet** — assets vs liabilities + equity, with retained
   earnings folded in from the lifetime income-vs-expense delta.
-- **Loan portfolio aging** — buckets unpaid installments into CURRENT
-  / 1–30 / 31–60 / 61–90 / 90+ days overdue.
+- **Loan portfolio aging** — buckets unpaid installments by days past
+  due: `CURRENT`, `D_1_30`, `D_31_60`, `D_61_90`, `D_90_PLUS`, each
+  inclusive of its upper bound (90 days is still `D_61_90`).
+  `agingBucketFor` is the only place these thresholds live — the
+  compliance delinquency export calls it rather than restating them, so
+  the two reports cannot disagree about how overdue an account is.
 
 ---
 
