@@ -1442,8 +1442,19 @@ export interface BalanceSheetReport {
   inBalance: boolean;
 }
 
+/**
+ * Seven bands. `D_90_PLUS` used to pool a loan 95 days late with one
+ * three years gone — different assets, different provisioning, different
+ * collection decision. Mirrors @loan/accounting's AgingBucket.
+ */
 export type AgingBucket =
-  "CURRENT" | "D_1_30" | "D_31_60" | "D_61_90" | "D_90_PLUS";
+  | "CURRENT"
+  | "D_1_30"
+  | "D_31_60"
+  | "D_61_90"
+  | "D_91_120"
+  | "D_121_180"
+  | "D_180_PLUS";
 
 export interface AgingRow {
   loanId: string;

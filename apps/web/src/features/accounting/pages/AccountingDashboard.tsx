@@ -4,6 +4,7 @@ import {
   useLoanPortfolio,
   useTrialBalance,
 } from "@loan/api-client";
+import type { AgingBucket } from "@loan/shared-types";
 import {
   Card,
   CardContent,
@@ -56,11 +57,19 @@ export function AccountingDashboardPage() {
   const receivable =
     balance.data?.assets.rows.find((r) => r.code === "1100")?.amount ?? 0;
   const netIncome = incomeStmt.data?.netIncome ?? 0;
-  const delinquent =
-    (aging.data?.totals.D_1_30 ?? 0) +
-    (aging.data?.totals.D_31_60 ?? 0) +
-    (aging.data?.totals.D_61_90 ?? 0) +
-    (aging.data?.totals.D_90_PLUS ?? 0);
+  /*
+   * Portfolio at risk: everything that is not CURRENT.
+   *
+   * Summed by exclusion rather than by naming the overdue bands. The
+   * previous version listed them, and a listed sum is exactly what goes
+   * quietly wrong when a band is added — the new band renders in the
+   * table below and stops being counted here, so the KPI reads lower
+   * than the table it sits above.
+   */
+  const delinquent = BUCKETS.filter((b) => b !== "CURRENT").reduce(
+    (sum, b) => sum + (aging.data?.totals[b] ?? 0),
+    0,
+  );
 
   return (
     <div className="space-y-4">
@@ -145,15 +154,7 @@ export function AccountingDashboardPage() {
           </CardHeader>
           <CardContent>
             <ul className="divide-y divide-default text-sm">
-              {(
-                [
-                  "CURRENT",
-                  "D_1_30",
-                  "D_31_60",
-                  "D_61_90",
-                  "D_90_PLUS",
-                ] as const
-              ).map((b) => (
+              {BUCKETS.map((b) => (
                 <li key={b} className="flex items-center justify-between py-2">
                   <span className="text-fg">{labelFor(b)}</span>
                   <span className="font-mono">
@@ -217,21 +218,27 @@ export function AccountingDashboardPage() {
   );
 }
 
-function labelFor(bucket: string): string {
-  switch (bucket) {
-    case "CURRENT":
-      return "Current";
-    case "D_1_30":
-      return "1–30 days overdue";
-    case "D_31_60":
-      return "31–60 days overdue";
-    case "D_61_90":
-      return "61–90 days overdue";
-    case "D_90_PLUS":
-      return "90+ days overdue";
-    default:
-      return bucket;
-  }
+/*
+ * The seven bands, in report order.
+ *
+ * `Record<AgingBucket, string>` rather than a switch with a default: the
+ * switch compiled fine when a band was added and silently rendered its
+ * raw enum name. A Record fails the build instead.
+ */
+const BUCKET_LABELS: Record<AgingBucket, string> = {
+  CURRENT: "Current",
+  D_1_30: "1–30 days overdue",
+  D_31_60: "31–60 days overdue",
+  D_61_90: "61–90 days overdue",
+  D_91_120: "91–120 days overdue",
+  D_121_180: "121–180 days overdue",
+  D_180_PLUS: "180+ days overdue",
+};
+
+const BUCKETS = Object.keys(BUCKET_LABELS) as AgingBucket[];
+
+function labelFor(bucket: AgingBucket): string {
+  return BUCKET_LABELS[bucket];
 }
 
 function StatCard({

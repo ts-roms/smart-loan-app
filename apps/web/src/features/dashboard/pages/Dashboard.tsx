@@ -864,15 +864,26 @@ const AGING_LABEL: Record<AgingBucket, string> = {
   D_1_30: "1–30 days",
   D_31_60: "31–60 days",
   D_61_90: "61–90 days",
-  D_90_PLUS: "90+ days",
+  D_91_120: "91–120 days",
+  D_121_180: "121–180 days",
+  D_180_PLUS: "180+ days",
 };
 
+/*
+ * A single ramp from green through amber to red, with the three
+ * post-90-day bands darkening rather than restarting the scale. The
+ * point of splitting them was that a loan three years gone is not the
+ * same asset as one 95 days late; giving them the same red would put
+ * that distinction back in the legend and take it out of the chart.
+ */
 const AGING_COLOR: Record<AgingBucket, string> = {
   CURRENT: "hsl(var(--success))",
   D_1_30: "hsl(var(--warning))",
   D_31_60: "hsl(28 92% 60%)",
   D_61_90: "hsl(14 90% 58%)",
-  D_90_PLUS: "hsl(var(--danger))",
+  D_91_120: "hsl(var(--danger))",
+  D_121_180: "hsl(0 72% 45%)",
+  D_180_PLUS: "hsl(0 60% 32%)",
 };
 
 function AgingChart({ aging }: { aging: AgingReport | undefined }) {
@@ -886,13 +897,13 @@ function AgingChart({ aging }: { aging: AgingReport | undefined }) {
     );
   }
   const total = aging.totalOutstanding || 1;
-  const buckets: AgingBucket[] = [
-    "CURRENT",
-    "D_1_30",
-    "D_31_60",
-    "D_61_90",
-    "D_90_PLUS",
-  ];
+  /*
+   * Derived from the label map, not listed again. `Record<AgingBucket,
+   * string>` makes the labels exhaustive, so a band added to the type
+   * forces a label and lands here — where a hand-kept list would leave
+   * it out of the chart while the totals below still counted it.
+   */
+  const buckets = Object.keys(AGING_LABEL) as AgingBucket[];
 
   return (
     <div className="space-y-3">
