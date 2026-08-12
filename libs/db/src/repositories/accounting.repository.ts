@@ -24,6 +24,7 @@ import {
   buildAgingReport,
   buildBalanceSheet,
   buildIncomeStatement,
+  buildRollRateReport,
   buildTrialBalance,
   keyOf,
   periodFor,
@@ -767,6 +768,63 @@ export class AccountingRepository {
         paidInFullAt: r.paidInFullAt,
       })),
       asOf,
+    );
+  }
+
+  /**
+   * Roll-rate matrix (§30): how each aging band's loans at `from` were
+   * distributed across bands (or off the book) at `to`.
+   *
+   * Wider status filter than `loanPortfolioAging` on purpose: CLOSED,
+   * WRITTEN_OFF and RESTRUCTURED loans are exactly the transitions the
+   * matrix exists to show. `totalDue` is passed GROSS (not net of
+   * `principalPaid`/`interestPaid`) because those columns are cumulative
+   * with no timestamps — netting them would leak post-`from` payments
+   * into the `from` snapshot. See roll-rate.ts for the full argument.
+   */
+  async rollRate(from: Date, to: Date) {
+    const loans = await this.prisma.loanApplication.findMany({
+      where: {
+        disbursedAt: { not: null, lte: to },
+        status: {
+          in: [
+            "ACTIVE",
+            "DISBURSED",
+            "DEFAULTED",
+            "CLOSED",
+            "RESTRUCTURED",
+            "WRITTEN_OFF",
+          ],
+        },
+      },
+      select: {
+        id: true,
+        number: true,
+        productCode: true,
+        disbursedAt: true,
+        closedAt: true,
+        writtenOffAt: true,
+        schedule: {
+          select: { dueDate: true, totalDue: true, paidInFullAt: true },
+        },
+      },
+    });
+    return buildRollRateReport(
+      loans.map((l) => ({
+        loanId: l.id,
+        loanNumber: l.number,
+        productCode: l.productCode,
+        disbursedAt: l.disbursedAt,
+        closedAt: l.closedAt,
+        writtenOffAt: l.writtenOffAt,
+        schedule: l.schedule.map((s) => ({
+          dueDate: s.dueDate,
+          totalDue: Number(s.totalDue),
+          paidInFullAt: s.paidInFullAt,
+        })),
+      })),
+      from,
+      to,
     );
   }
 

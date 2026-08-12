@@ -1512,6 +1512,42 @@ export interface AgingReport {
   totalOutstanding: number;
 }
 
+/**
+ * Roll-rate analysis (§30) — how delinquency moved between the aging
+ * bands across two dates. Mirrors @loan/accounting's roll-rate.ts.
+ * "NEW" is the origin row for loans disbursed inside the window;
+ * CLOSED/WRITTEN_OFF are the two ways off the book.
+ */
+export type RollRateOrigin = AgingBucket | "NEW";
+export type RollRateDestination = AgingBucket | "CLOSED" | "WRITTEN_OFF";
+
+export interface RollRateCell {
+  destination: RollRateDestination;
+  count: number;
+  /** Gross exposure at `from` (at `to` for the NEW origin row). */
+  amount: number;
+  countFraction: number;
+  amountFraction: number;
+}
+
+export interface RollRateMatrixRow {
+  origin: RollRateOrigin;
+  loanCount: number;
+  amount: number;
+  /** One cell per entry of `destinations`, in that order. */
+  cells: RollRateCell[];
+}
+
+export interface RollRateReport {
+  from: string;
+  to: string;
+  totalLoans: number;
+  origins: RollRateOrigin[];
+  destinations: RollRateDestination[];
+  overall: RollRateMatrixRow[];
+  byProduct: Array<{ productCode: string; rows: RollRateMatrixRow[] }>;
+}
+
 export type PeriodStatus = "OPEN" | "CLOSED";
 
 export interface AccountingPeriod {

@@ -35,7 +35,8 @@ export interface TrialBalanceReport {
   inBalance: boolean;
 }
 
-function round2(n: number): number {
+/** Exported so sibling report builders (roll-rate.ts) share the one rounding. */
+export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 

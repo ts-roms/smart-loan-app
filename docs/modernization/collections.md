@@ -77,7 +77,42 @@ the table while quietly dropping out of the total above it.
 | Recovery _after_ write-off      | **NEEDS VERIFICATION** — write-off is terminal; whether a later recovery can be posted against it was not traced |
 | Seven aging buckets             | **EXISTS** — §28's bands, 11 tests on the boundaries                                                             |
 | Collection priority score (§29) | **MISSING**                                                                                                      |
-| Roll-rate analysis (§30)        | **MISSING**                                                                                                      |
+| Roll-rate analysis (§30)        | **EXISTS** — `buildRollRateReport`, `GET /reports/roll-rate`, matrix panel on the portfolio page                 |
+
+## Roll-rate analysis — §30, built
+
+§30 asks how delinquency MOVES between aging bands across two points in time:
+Current→1–30, 1–30→31–60, and so on. The aging table is the lagging indicator;
+a portfolio where 40% of Current rolls into 1–30 each month is deteriorating
+even while today's aging looks fine.
+
+**Shape.** `buildRollRateReport` in `libs/accounting/src/roll-rate.ts` — pure,
+like the other builders; `AccountingRepository.rollRate` supplies the rows.
+Origins are §28's seven bands plus a **NEW** row for loans disbursed inside the
+window (hiding them would hide growth). Destinations are the seven bands plus
+**CLOSED** and **WRITTEN_OFF** — a loan that left the book is a transition, not
+a dropped row. A RESTRUCTURED original counts as CLOSED: the restructure stamps
+`closedAt` when the balance is settled onto the replacement loan, and the
+replacement appears on the NEW row. Served by `GET /reports/roll-rate?from=&to=`
+(`reports.read`, JSON only — a matrix flattened to CSV would misrepresent
+itself) and rendered as a panel on the loan-portfolio page.
+
+**How the past is reconstructed — and what cannot be.** A snapshot "as of X" is
+rebuilt from schedule rows: an installment was unpaid at X iff `paidInFullAt`
+is null or later than X, so a payment made after X never counts as paid at X.
+Band membership, counts and fractions are therefore an exact reconstruction.
+What is _not_ reconstructible is the effect of **partial payments** on amounts:
+`principalPaid`/`interestPaid` are cumulative with no timestamps, and payments
+are not tied to installments. Rather than ship amounts that drift on every
+re-run, exposure is reported **gross** — the full contractual `totalDue` of
+every installment unpaid at X. Slightly overstated on partially-paid
+installments, but deterministic: the same window produces the same matrix
+whenever it is run.
+
+**Dimensions.** Product is the one §30 breakdown shipped — it exists on every
+loan. Branch does not exist in this schema. Collector is not shipped either:
+`CollectionAssignment` records only the _current_ assignee, so a per-collector
+matrix would attribute last quarter's rolls to whoever holds the account today.
 
 ## Collection priority score — §29, not built
 
