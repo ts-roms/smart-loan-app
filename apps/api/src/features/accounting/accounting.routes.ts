@@ -2,9 +2,39 @@ import { endOfDay, startOfDay } from "@loan/accounting";
 import { AccountingRepository, AuditLogRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { routeSchema } from "../../lib/openapi";
 import { JournalController } from "./journal.controller";
 import { JournalService } from "./journal.service";
-import { accountSchema } from "./schemas";
+import {
+  accountIdParamSchema,
+  accountListResponseSchema,
+  accountResponseSchema,
+  accountSchema,
+  accrueResponseSchema,
+  asOfQuerySchema,
+  balanceSheetResponseSchema,
+  entrySchema,
+  incomeStatementResponseSchema,
+  journalEntryDetailResponseSchema,
+  journalEntryListResponseSchema,
+  journalEntryResponseSchema,
+  journalIdParamSchema,
+  journalQuerySchema,
+  ledgerResponseSchema,
+  loanPortfolioAgingResponseSchema,
+  originationsResponseSchema,
+  periodListResponseSchema,
+  periodParamSchema,
+  periodResponseSchema,
+  portfolioSummaryResponseSchema,
+  rangeQuerySchema,
+  reverseSingleResponseSchema,
+  seedChartResponseSchema,
+  trialBalanceResponseSchema,
+  vintageResponseSchema,
+} from "./schemas";
+
+const TAGS = ["accounting"];
 
 /**
  * Upper bound for a report — `asOf` or `to`. Defaults to "now" when
@@ -88,15 +118,44 @@ export async function accountingRoutes(app: FastifyInstance) {
   // per call, so building it once is also one less allocation.
   const read = { preHandler: app.requirePermission("accounting.read") };
 
+  /*
+   * Every read below is `accounting.read` behind `app.authenticate`, so
+   * 401 and 403 are the two failures they share and nothing else — the
+   * report handlers throw on an unparseable date rather than answering
+   * 400, so claiming 400 here would document a response the API does
+   * not produce.
+   */
+  const readErrors = [401, 403] as const;
+
   // ─── Chart of accounts ─────────────────────────────────────────────
 
-  app.get("/accounts", read, async (req) =>
-    req.accountingCtx!.accounting.listAccounts(),
+  app.get(
+    "/accounts",
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "The chart of accounts, by code.",
+        tags: TAGS,
+        response: accountListResponseSchema,
+        errors: [...readErrors],
+      }),
+    },
+    async (req) => req.accountingCtx!.accounting.listAccounts(),
   );
 
   app.post(
     "/accounts",
-    { preHandler: app.requirePermission("accounting.accounts") },
+    {
+      preHandler: app.requirePermission("accounting.accounts"),
+      schema: routeSchema({
+        summary: "Add an account to the chart.",
+        tags: TAGS,
+        body: accountSchema,
+        response: accountResponseSchema,
+        status: 201,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const parsed = accountSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -112,7 +171,15 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.post(
     "/accounts/seed",
-    { preHandler: app.requirePermission("accounting.accounts") },
+    {
+      preHandler: app.requirePermission("accounting.accounts"),
+      schema: routeSchema({
+        summary: "Idempotently seed the shipped chart of accounts.",
+        tags: TAGS,
+        response: seedChartResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     async (req) => req.accountingCtx!.accounting.seedDefaultChart(),
   );
 
@@ -120,7 +187,16 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { from?: string; to?: string; source?: string } }>(
     "/journal",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "Journal entries in the range, newest first. Capped at 500.",
+        tags: TAGS,
+        querystring: journalQuerySchema,
+        response: journalEntryListResponseSchema,
+        errors: [...readErrors],
+      }),
+    },
     async (req) =>
       req.accountingCtx!.accounting.listEntries({
         from: parseFrom(req.query.from),
@@ -132,7 +208,16 @@ export async function accountingRoutes(app: FastifyInstance) {
   // GET /accounting/journal/:idOrNumber — accept either form.
   app.get<{ Params: { id: string } }>(
     "/journal/:id",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "One entry, by id or by its JE- number.",
+        tags: TAGS,
+        params: journalIdParamSchema,
+        response: journalEntryDetailResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const e = await req.accountingCtx!.accounting.findEntryByIdOrNumber(
         req.params.id,
@@ -145,14 +230,54 @@ export async function accountingRoutes(app: FastifyInstance) {
   // Journal write paths — delegated to JournalController.
   app.post(
     "/journal",
-    { preHandler: app.requirePermission("accounting.post_journal") },
+    {
+      preHandler: app.requirePermission("accounting.post_journal"),
+      schema: routeSchema({
+        summary: "Post a manual, balanced journal entry.",
+        tags: TAGS,
+        body: entrySchema,
+        // The 201 carries the entry ROW — no lines, no postedBy; the
+        // create runs without an include. Read it back for the detail.
+        response: journalEntryResponseSchema,
+        status: 201,
+        // 400 covers both a malformed body and a refused post: an
+        // unbalanced entry, an unknown or inactive account code, or a
+        // closed period. The controller answers all of them the same way.
+        errors: [400, 401, 403],
+      }),
+    },
     journal.post,
   );
   app.post<{ Params: { id: string } }>(
     "/journal/:id/reverse",
-    { preHandler: app.requirePermission("accounting.reverse") },
+    {
+      preHandler: app.requirePermission("accounting.reverse"),
+      schema: routeSchema({
+        summary:
+          "Reverse an entry into the CURRENT period. Idempotent — a " +
+          "second call returns the existing reversal.",
+        tags: TAGS,
+        params: journalIdParamSchema,
+        /*
+         * No `body` schema on purpose. The memo body is optional here
+         * (`req.body ?? {}`), and attaching a schema would make Fastify
+         * reject the bodyless call that works today.
+         */
+        response: reverseSingleResponseSchema,
+        status: 201,
+        // Unknown entry, an entry that is itself a reversal, and a
+        // closed current period all surface as 400 from the controller.
+        errors: [400, 401, 403],
+      }),
+    },
     journal.reverse,
   );
+  /*
+   * No schema on reverse-bulk. It answers 207 Multi-Status — partial
+   * failure is the point — and `routeSchema` has slots for 200/201/202
+   * only. Documenting it as a 200 would publish a status the route never
+   * sends, which is worse than the honest blank; see the report note.
+   */
   app.post(
     "/journal/reverse-bulk",
     { preHandler: app.requirePermission("accounting.reverse") },
@@ -164,26 +289,60 @@ export async function accountingRoutes(app: FastifyInstance) {
   app.get<{
     Params: { accountId: string };
     Querystring: { from?: string; to?: string };
-  }>("/ledger/:accountId", read, async (req) =>
-    req.accountingCtx!.accounting.ledgerFor(
-      req.params.accountId,
-      parseFrom(req.query.from),
-      req.query.to ? parseAsOf(req.query.to) : undefined,
-    ),
+  }>(
+    "/ledger/:accountId",
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "One account's ledger, oldest first, with running balance.",
+        tags: TAGS,
+        params: accountIdParamSchema,
+        querystring: rangeQuerySchema,
+        response: ledgerResponseSchema,
+        errors: [400, ...readErrors],
+      }),
+    },
+    async (req) =>
+      req.accountingCtx!.accounting.ledgerFor(
+        req.params.accountId,
+        parseFrom(req.query.from),
+        req.query.to ? parseAsOf(req.query.to) : undefined,
+      ),
   );
 
   // ─── Reports ────────────────────────────────────────────────────────
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/trial-balance",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "Trial balance as at a date. Defaults to now.",
+        tags: TAGS,
+        querystring: asOfQuerySchema,
+        response: trialBalanceResponseSchema,
+        errors: [...readErrors],
+      }),
+    },
     async (req) =>
       req.accountingCtx!.accounting.trialBalance(parseAsOf(req.query.asOf)),
   );
 
   app.get<{ Querystring: { from?: string; to?: string } }>(
     "/reports/income-statement",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "Income statement over a range. `from` defaults to Jan 1.",
+        tags: TAGS,
+        querystring: rangeQuerySchema,
+        response: incomeStatementResponseSchema,
+        // Not 400. The handler has a 400 branch for an invalid `from`,
+        // but `parseFrom` throws before it can be reached, so the route
+        // has never actually answered one.
+        errors: [...readErrors],
+      }),
+    },
     async (req, reply) => {
       const to = parseAsOf(req.query.to);
       const from =
@@ -199,14 +358,32 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/balance-sheet",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "Balance sheet as at a date. Defaults to now.",
+        tags: TAGS,
+        querystring: asOfQuerySchema,
+        response: balanceSheetResponseSchema,
+        errors: [...readErrors],
+      }),
+    },
     async (req) =>
       req.accountingCtx!.accounting.balanceSheet(parseAsOf(req.query.asOf)),
   );
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/loan-portfolio",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "Loan aging, per loan and totalled by band.",
+        tags: TAGS,
+        querystring: asOfQuerySchema,
+        response: loanPortfolioAgingResponseSchema,
+        errors: [...readErrors],
+      }),
+    },
     async (req) =>
       req.accountingCtx!.accounting.loanPortfolioAging(
         parseAsOf(req.query.asOf),
@@ -215,14 +392,32 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.get<{ Querystring: { asOf?: string } }>(
     "/reports/portfolio-summary",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "Portfolio snapshot: outstanding, PAR 30/60/90, NPL.",
+        tags: TAGS,
+        querystring: asOfQuerySchema,
+        response: portfolioSummaryResponseSchema,
+        errors: [...readErrors],
+      }),
+    },
     async (req) =>
       req.accountingCtx!.accounting.portfolioSummary(parseAsOf(req.query.asOf)),
   );
 
   app.get<{ Querystring: { from?: string; to?: string } }>(
     "/reports/originations",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "Originations by month. Range defaults to the last 12.",
+        tags: TAGS,
+        querystring: rangeQuerySchema,
+        response: originationsResponseSchema,
+        errors: [...readErrors],
+      }),
+    },
     async (req) => {
       const to = parseAsOf(req.query.to);
       const from =
@@ -232,19 +427,50 @@ export async function accountingRoutes(app: FastifyInstance) {
     },
   );
 
-  app.get("/reports/vintage", read, async (req) =>
-    req.accountingCtx!.accounting.vintageCohorts(),
+  app.get(
+    "/reports/vintage",
+    {
+      ...read,
+      schema: routeSchema({
+        summary:
+          "Vintage cohorts — share of each origination month now 90+ overdue.",
+        tags: TAGS,
+        response: vintageResponseSchema,
+        errors: [...readErrors],
+      }),
+    },
+    async (req) => req.accountingCtx!.accounting.vintageCohorts(),
   );
 
   // ─── Periods ────────────────────────────────────────────────────────
 
-  app.get("/periods", read, async (req) =>
-    req.accountingCtx!.accounting.listPeriods(),
+  app.get(
+    "/periods",
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "Accounting periods, newest first. Capped at 60.",
+        tags: TAGS,
+        response: periodListResponseSchema,
+        errors: [...readErrors],
+      }),
+    },
+    async (req) => req.accountingCtx!.accounting.listPeriods(),
   );
 
   app.post<{ Params: { year: string; month: string } }>(
     "/periods/:year/:month/close",
-    { preHandler: app.requirePermission("accounting.close_period") },
+    {
+      preHandler: app.requirePermission("accounting.close_period"),
+      schema: routeSchema({
+        summary:
+          "Close a period. Idempotent — closing a closed period returns it.",
+        tags: TAGS,
+        params: periodParamSchema,
+        response: periodResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const year = Number(req.params.year);
       const month = Number(req.params.month);
@@ -268,7 +494,18 @@ export async function accountingRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { year: string; month: string } }>(
     "/periods/:year/:month/reopen",
-    { preHandler: app.requirePermission("accounting.close_period") },
+    {
+      preHandler: app.requirePermission("accounting.close_period"),
+      schema: routeSchema({
+        summary: "Reopen a closed period so entries can be posted into it.",
+        tags: TAGS,
+        params: periodParamSchema,
+        response: periodResponseSchema,
+        // 404 is a period that was never created — not a refusal, an
+        // absence. There is nothing to reopen.
+        errors: [400, 401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const year = Number(req.params.year);
       const month = Number(req.params.month);
@@ -302,7 +539,24 @@ export async function accountingRoutes(app: FastifyInstance) {
    */
   app.post<{ Body?: { year?: number; month?: number } }>(
     "/jobs/accrue-interest",
-    { preHandler: app.requirePermission("accounting.accrue") },
+    {
+      preHandler: app.requirePermission("accounting.accrue"),
+      schema: routeSchema({
+        summary:
+          "Accrue interest for a period (default: this month). Idempotent.",
+        tags: TAGS,
+        /*
+         * No `body` schema: the whole body is optional here — omitting
+         * it means "the current month" — and attaching one would make
+         * Fastify reject the bodyless call this route is designed for.
+         */
+        response: accrueResponseSchema,
+        // 409 is the house meaning: the request was fine and the books
+        // refused it — typically the target period is closed. Retrying
+        // it unchanged will fail the same way.
+        errors: [400, 401, 403, 409],
+      }),
+    },
     async (req, reply) => {
       const now = new Date();
       const year = req.body?.year ?? now.getFullYear();

@@ -13,10 +13,19 @@
 import type { JobRepository } from "@loan/db";
 import { type JobDefinition, cronIsValid } from "@loan/jobs";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { z } from "zod";
 
-const cronSchema = z.object({ cron: z.string().min(1).max(120) });
-const enabledSchema = z.object({ enabled: z.boolean() });
+import { routeSchema } from "../../lib/openapi";
+import {
+  cronSchema,
+  enabledSchema,
+  jobNameParamSchema,
+  jobRunListResponseSchema,
+  jobRunResponseSchema,
+  scheduledJobListResponseSchema,
+  scheduledJobResponseSchema,
+} from "./schemas";
+
+const TAGS = ["jobs"];
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -48,18 +57,58 @@ export function jobRoutes(
     // history. The configure / run routes below keep their own keys.
     const read = { preHandler: app.requirePermission("jobs.read") };
 
-    app.get("/", read, async (req) => req.jobsCtx!.repo.list());
+    app.get(
+      "/",
+      {
+        ...read,
+        schema: routeSchema({
+          summary: "Every scheduled job for this tenant, by name.",
+          tags: TAGS,
+          response: scheduledJobListResponseSchema,
+          errors: [401, 403],
+        }),
+      },
+      async (req) => req.jobsCtx!.repo.list(),
+    );
 
-    app.get<{ Params: { name: string } }>("/:name/runs", read, async (req) => {
-      const { repo } = req.jobsCtx!;
-      const job = await repo.findByName(req.params.name);
-      if (!job) return [];
-      return repo.listRuns(job.id);
-    });
+    app.get<{ Params: { name: string } }>(
+      "/:name/runs",
+      {
+        ...read,
+        schema: routeSchema({
+          summary: "The last 50 runs of one job, newest first.",
+          tags: TAGS,
+          params: jobNameParamSchema,
+          response: jobRunListResponseSchema,
+          // No 404: an unknown job name answers with an empty list, on
+          // the reasoning that "this job has never run" and "there is no
+          // such job" look the same to a run-log page.
+          errors: [401, 403],
+        }),
+      },
+      async (req) => {
+        const { repo } = req.jobsCtx!;
+        const job = await repo.findByName(req.params.name);
+        if (!job) return [];
+        return repo.listRuns(job.id);
+      },
+    );
 
     app.patch<{ Params: { name: string } }>(
       "/:name/cron",
-      { preHandler: app.requirePermission("jobs.configure") },
+      {
+        preHandler: app.requirePermission("jobs.configure"),
+        schema: routeSchema({
+          summary: "Reschedule a job. Recomputes its next run.",
+          tags: TAGS,
+          params: jobNameParamSchema,
+          body: cronSchema,
+          response: scheduledJobResponseSchema,
+          // 400 covers both a malformed body and a syntactically invalid
+          // cron; the latter answers `{ error: "BadCron" }`.
+          errors: [400, 401, 403],
+        }),
+      },
       async (req, reply) => {
         const parsed = cronSchema.safeParse(req.body);
         if (!parsed.success) {
@@ -78,7 +127,17 @@ export function jobRoutes(
 
     app.patch<{ Params: { name: string } }>(
       "/:name/enabled",
-      { preHandler: app.requirePermission("jobs.configure") },
+      {
+        preHandler: app.requirePermission("jobs.configure"),
+        schema: routeSchema({
+          summary: "Enable or disable a job's schedule.",
+          tags: TAGS,
+          params: jobNameParamSchema,
+          body: enabledSchema,
+          response: scheduledJobResponseSchema,
+          errors: [400, 401, 403],
+        }),
+      },
       async (req, reply) => {
         const parsed = enabledSchema.safeParse(req.body);
         if (!parsed.success) {
@@ -96,7 +155,20 @@ export function jobRoutes(
     /** Manual run — bypasses the schedule, still records a JobRun row. */
     app.post<{ Params: { name: string } }>(
       "/:name/run",
-      { preHandler: app.requirePermission("jobs.run") },
+      {
+        preHandler: app.requirePermission("jobs.run"),
+        schema: routeSchema({
+          summary:
+            "Run a job now. Records a JobRun either way — a failure comes " +
+            "back as a FAILED run, not as an error status.",
+          tags: TAGS,
+          params: jobNameParamSchema,
+          response: jobRunResponseSchema,
+          // 404 means no job DEFINITION carries that name, so there is
+          // nothing to execute.
+          errors: [401, 403, 404],
+        }),
+      },
       async (req, reply) => {
         const { repo, defs } = req.jobsCtx!;
         const def = defs.find((d) => d.name === req.params.name);
