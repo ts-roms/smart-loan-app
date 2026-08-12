@@ -188,6 +188,33 @@ The SPA still has no CSP. It is served by Vite in development and a static host
 in production, neither of which this hook touches; that one is a deployment
 change.
 
+### Added — OpenAPI response schemas (mechanism + first slice)
+
+The generated spec had **336 operations and zero response schemas** — every
+one "Default Response" with no shape. It also declared no authentication, so
+`/docs` rendered a "Try it out" button that could only ever return 401.
+
+Hand-writing 336 schemas would create a second description of every payload,
+and the second one goes stale silently. So `apps/api/src/lib/openapi.ts`
+derives them: requests from the zod schemas the routes already validate with,
+responses declared as zod beside them, errors as shared components with the
+409 convention spelled out (well-formed, permitted, and refused by the
+target's state — retrying unchanged will not help).
+
+**Coverage is 10 of 336**, and a test ratchets it so it cannot fall and so
+nobody reads "OpenAPI: done" off a green suite. The global additions — bearer
+scheme, status-code conventions, money-as-string note — improve all 336.
+
+Two bugs found by doing it, both the same shape. Fastify does not just publish
+a response schema, it _serialises_ against it and strips undeclared fields, so
+an incomplete schema silently deletes data. Fixed with recursive
+`additionalProperties: true` — and then the identical bug turned up in the
+error schemas themselves, where `issues: { items: { type: "object" } }` reduced
+every validation issue to `{}`. Also, attaching request schemas made Fastify
+reject bad input with a bare `{"error":"Bad Request"}` instead of the
+controllers' `{ error, issues }`; a schema error formatter restores the
+contract and now names the failing field.
+
 ### Added — documentation
 
 - Phase 0 audit: nine artifacts plus a gap matrix, recommended architecture and
