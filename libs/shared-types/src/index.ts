@@ -1865,6 +1865,80 @@ export interface CustomerSummary {
   }>;
 }
 
+// ─── Consolidated exposure ──────────────────────────────────────────────────
+
+/**
+ * One loan's line in the consolidated view.
+ *
+ * `counted` says whether this row is inside the totals. Rows that
+ * aren't — closed, restructured, written off, never granted — are still
+ * returned: an exposure report an officer cannot reconcile against the
+ * loan list is one they won't trust, and a write-off that quietly
+ * disappears is how the same borrower gets lent to twice.
+ */
+export interface ExposureLoanLine {
+  loanId: string;
+  loanNumber: string;
+  productCode: string;
+  /** Catalog display name, when the product still has one. */
+  productName: string | null;
+  status: LoanStatus;
+  /** Contracted principal — what the loan was written for. */
+  principal: number;
+  /** Principal still owed. */
+  principalOutstanding: number;
+  /** Principal plus scheduled interest still owed. */
+  outstanding: number;
+  /** Unpaid and past its due date, as of `CustomerExposure.asOf`. */
+  pastDue: number;
+  /** How many instalments make up `pastDue`. */
+  overdueInstallments: number;
+  counted: boolean;
+  /**
+   * False when the loan has no schedule yet (approved, not disbursed)
+   * and the figures stand in at the contracted principal. A commitment,
+   * not a receivable.
+   */
+  fromSchedule: boolean;
+}
+
+export interface ExposureTotals {
+  /** The headline: total principal this borrower still owes. */
+  principalOutstanding: number;
+  /** The same debt including scheduled interest. */
+  outstanding: number;
+  pastDue: number;
+  /** How many loans the totals are made of. */
+  activeLoans: number;
+}
+
+/** Loans deliberately outside the totals, reported rather than dropped. */
+export interface ExposureExcluded {
+  loans: number;
+  closedLoans: number;
+  writtenOffLoans: number;
+  /** Principal the lender already expensed to Bad Debt. */
+  writtenOffPrincipal: number;
+}
+
+/**
+ * Response shape of GET /customers/:idOrNumber/exposure — everything one
+ * borrower owes, across every loan they hold. The figure credit
+ * decisioning, DTI and concentration limits are all asking for.
+ *
+ * Derived on every read from loans and their schedules; nothing about
+ * it is stored, so it can't go stale.
+ */
+export interface CustomerExposure {
+  customerId: string;
+  customerNumber: string;
+  /** When arrears were measured. "Past due" means nothing without it. */
+  asOf: string;
+  loans: ExposureLoanLine[];
+  total: ExposureTotals;
+  excluded: ExposureExcluded;
+}
+
 /**
  * Returned by GET /customers/:id/repeat-eligibility., a
  * customer qualifies for the repeat-borrower fast path when at least one

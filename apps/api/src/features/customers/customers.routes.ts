@@ -47,6 +47,19 @@ export function registerCustomerHttp(
     { preHandler: app.requirePermission("customers.read") },
     controller.summary,
   );
+  /*
+   * Consolidated exposure across every loan this customer holds.
+   *
+   * `customers.read` rather than a key of its own: the response is a
+   * rollup of loans the same roles already read one at a time, and
+   * inventing a permission nobody is granted would leave the panel
+   * 403ing for the officers it exists for.
+   */
+  app.get<{ Params: { id: string } }>(
+    "/:id/exposure",
+    { preHandler: app.requirePermission("customers.read") },
+    controller.exposure,
+  );
   app.get<{ Params: { id: string } }>(
     "/:id/repeat-eligibility",
     { preHandler: app.requirePermission("customers.read") },

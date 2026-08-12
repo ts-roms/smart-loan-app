@@ -41,6 +41,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { downloadPdf } from "../../../lib/download-pdf";
+import { StatTile } from "./StatTile";
 
 /**
  * Statement-of-account view for a single customer. Aggregates loan
@@ -262,14 +263,14 @@ function SummaryStats({
 }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
-      <Stat
+      <StatTile
         label="Outstanding"
         value={formatMoney(summary.outstandingPrincipal)}
         accent={summary.outstandingPrincipal > 0 ? "warning" : "success"}
         icon={Wallet}
         sub={`${formatMoney(summary.totalDisbursed)} disbursed`}
       />
-      <Stat
+      <StatTile
         label="Total repaid"
         value={formatMoney(summary.totalRepaid)}
         accent="success"
@@ -280,14 +281,14 @@ function SummaryStats({
             : undefined
         }
       />
-      <Stat
+      <StatTile
         label="Savings balance"
         value={formatMoney(summary.savingsBalance)}
         accent={summary.savingsBalance > 0 ? "success" : "muted"}
         icon={PiggyBank}
         sub={`${formatMoney(summary.savingsDeposits)} in · ${formatMoney(summary.savingsWithdrawals)} out`}
       />
-      <Stat
+      <StatTile
         label="Contributions"
         value={formatMoney(summary.contributionsTotal)}
         accent="info"
@@ -307,7 +308,7 @@ function SummaryStats({
         they owe and are owed, and either can be called without the
         other. One number said zero.
       */}
-      <Stat
+      <StatTile
         label="Owes the coop"
         value={formatMoney(summary.amountOwed)}
         accent={summary.amountOwed > 0 ? "warning" : "success"}
@@ -318,61 +319,13 @@ function SummaryStats({
             : "Nothing outstanding"
         }
       />
-      <Stat
+      <StatTile
         label="Coop holds"
         value={formatMoney(summary.amountHeld)}
         accent="info"
         icon={PiggyBank}
         sub="Savings + capital build-up"
       />
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  icon: Icon,
-  accent,
-  sub,
-}: {
-  label: string;
-  value: string;
-  icon: typeof Wallet;
-  accent: "primary" | "success" | "warning" | "danger" | "info" | "muted";
-  sub?: string;
-}) {
-  const accentClass: Record<typeof accent, string> = {
-    primary: "text-primary bg-primary-soft",
-    success: "text-success bg-success-soft",
-    warning: "text-warning bg-warning-soft",
-    danger: "text-danger bg-danger-soft",
-    info: "text-info bg-info-soft",
-    muted: "text-fg-muted bg-surface-3",
-  };
-  return (
-    <div className="rounded-md border border-default bg-surface-2 p-2.5">
-      <div className="flex items-center gap-2">
-        <span
-          className={cn(
-            "h-7 w-7 rounded-md border border-default flex items-center justify-center shrink-0",
-            accentClass[accent],
-          )}
-        >
-          <Icon className="h-3.5 w-3.5" />
-        </span>
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wider text-fg-subtle truncate">
-            {label}
-          </div>
-          <div className="text-sm font-semibold tabular truncate">{value}</div>
-        </div>
-      </div>
-      {sub && (
-        <div className="text-[10px] text-fg-subtle tabular mt-1 truncate">
-          {sub}
-        </div>
-      )}
     </div>
   );
 }

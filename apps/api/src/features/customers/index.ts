@@ -1,5 +1,6 @@
 import {
   AuditLogRepository,
+  CustomerExposureRepository,
   CustomerLedgerRepository,
   CustomerRepository,
 } from "@loan/db";
@@ -101,6 +102,7 @@ function buildCustomerServices(app: FastifyInstance) {
         prisma,
         screening,
         new AuditLogRepository(prisma, req.user?.impersonatedBy),
+        new CustomerExposureRepository(prisma),
       ),
       bulkImport: new BulkImportService(customerRepo, screening),
       ledger: new CustomerLedgerService(

@@ -3,6 +3,8 @@ import { phoneChangeError } from "@loan/shared-utils";
 import type {
   AuditLogRepository,
   Customer,
+  CustomerExposure,
+  CustomerExposureRepository,
   CustomerListFilter,
   CustomerListItem,
   CustomerRepository,
@@ -76,6 +78,7 @@ export class CustomerService {
     private readonly prisma: PrismaClient,
     private readonly screening: ScreeningRepository,
     private readonly audit: AuditLogRepository,
+    private readonly exposureRepo: CustomerExposureRepository,
   ) {}
 
   /**
@@ -312,6 +315,27 @@ export class CustomerService {
         disbursedAt: l.disbursedAt,
       })),
     };
+  }
+
+  /**
+   * Consolidated exposure — what this borrower owes across every loan
+   * they hold, plus the per-loan breakdown it is made of.
+   *
+   * Distinct from {@link summary}, which answers "is there anything
+   * live here" for a side-drawer and only ever looks at DISBURSED /
+   * ACTIVE / DEFAULTED. Exposure is the decisioning figure: it sees
+   * approved-but-undrawn commitments, reports arrears separately from
+   * the balance, and names the terminal loans it deliberately left out
+   * instead of dropping them. Which loans count and why lives in
+   * `consolidatedExposure` in @loan/loans, not here.
+   *
+   * Returns null when the lookup fails so the controller can map to 404
+   * without us coupling to FastifyReply.
+   */
+  async exposure(idOrNumber: string): Promise<CustomerExposure | null> {
+    const customer = await this.customers.findByIdOrNumber(idOrNumber);
+    if (!customer) return null;
+    return this.exposureRepo.build(customer.id, customer.number);
   }
 
   /**

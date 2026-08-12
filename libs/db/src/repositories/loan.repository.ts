@@ -461,12 +461,22 @@ export class LoanRepository {
    * Loans with no schedule are absent from the result rather than
    * present with zeros, so callers can tell "not disbursed" from
    * "nothing left to pay".
+   *
+   * `scheduleWhere` narrows which instalments are folded. Left empty it
+   * is the whole schedule — the loan's position. Narrowed to the rows
+   * already past due it is the arrears, which is why {@link pastDueFor}
+   * is a one-liner on top of this rather than a second query with its
+   * own arithmetic: the two figures can then never disagree about how a
+   * partly-settled instalment counts.
    */
-  async balancesFor(loanIds: string[]): Promise<Map<string, LoanBalance>> {
+  async balancesFor(
+    loanIds: string[],
+    scheduleWhere: Prisma.LoanScheduleWhereInput = {},
+  ): Promise<Map<string, LoanBalance>> {
     if (loanIds.length === 0) return new Map();
     const groups = await this.prisma.loanSchedule.groupBy({
       by: ["loanId"],
-      where: { loanId: { in: loanIds } },
+      where: { ...scheduleWhere, loanId: { in: loanIds } },
       _sum: {
         totalDue: true,
         principalDue: true,
@@ -492,6 +502,26 @@ export class LoanRepository {
         ];
       }),
     );
+  }
+
+  /**
+   * Arrears for each of the given loans: the same fold as
+   * {@link balancesFor}, restricted to instalments that are unpaid and
+   * whose due date has passed.
+   *
+   * `outstanding` on the result is the amount in arrears and
+   * `totalInstallments` is how many instalments make it up. Unsettled
+   * rather than merely overdue — an instalment paid in full last month
+   * is not arrears, however long ago it fell due.
+   */
+  pastDueFor(
+    loanIds: string[],
+    asOf: Date = new Date(),
+  ): Promise<Map<string, LoanBalance>> {
+    return this.balancesFor(loanIds, {
+      paidInFullAt: null,
+      dueDate: { lt: asOf },
+    });
   }
 
   findById(id: string) {
