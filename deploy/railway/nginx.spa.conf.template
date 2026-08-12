@@ -88,6 +88,7 @@ server {
     location /assets/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
+        add_header X-Content-Type-Options "nosniff" always;
         try_files $uri =404;
     }
 
@@ -109,6 +110,33 @@ server {
     # JavaScript and they see stale code until the cache expires.
     location / {
         add_header Cache-Control "no-store, must-revalidate";
+
+        # Security headers for the app shell.
+        #
+        # They live in this location rather than at server level
+        # because nginx does not merge add_header across levels: a
+        # location declaring even one add_header inherits none from
+        # above, and this one already declares Cache-Control. Putting
+        # them at server level would look right and reach everything
+        # EXCEPT the HTML they exist for.
+        #
+        # Content-Security-Policy carries only frame-ancestors. The
+        # rest of the SPA's policy is a <meta> baked into index.html by
+        # apps/web/vite.config.ts, so it survives being served by
+        # anything — this file, deploy/docker, bare metal, or a static
+        # host nobody configured. frame-ancestors is here because a
+        # <meta> cannot express it; the HTML parser ignores it there.
+        # Two policies on one response intersect, so nothing is
+        # loosened by the split.
+        #
+        # NOTE: this template is shared by web, platform and marketing.
+        # Only the web app currently ships the <meta> half — the other
+        # two get framing protection from this header and nothing more.
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "frame-ancestors 'none'" always;
+
         try_files $uri $uri/ /index.html;
     }
 }

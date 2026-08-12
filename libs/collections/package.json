@@ -1,5 +1,5 @@
 {
-  "name": "@loan/kyc",
+  "name": "@loan/collections",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@loan/accounting": "workspace:*",
     "@types/node": "^22.20.1",
     "typescript": "~5.7.3",
     "vitest": "^4.1.10"

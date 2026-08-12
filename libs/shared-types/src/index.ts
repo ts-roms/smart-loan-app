@@ -2471,6 +2471,66 @@ export interface OverdueRow {
   overdueCount: number;
   /** Null when the account is still in the unassigned pool. */
   assignee: QueueAssignee | null;
+  /**
+   * §29 collection priority — the score the queue is now ordered by,
+   * with the per-factor breakdown that justifies the position.
+   *
+   * Rows arrive sorted by `priority.score` descending, NOT by
+   * `daysOverdue`. Both numbers are returned, so a client that wants
+   * the old ordering can still produce it.
+   */
+  priority: CollectionPriority;
+}
+
+/** One weighted factor's contribution to a collection priority score. */
+export interface CollectionPriorityFactor {
+  factorId: string;
+  label: string;
+  /** Share of the total score this factor can contribute (0..1). */
+  weight: number;
+  /** How strongly it fired, 0..1. */
+  strength: number;
+  /** Its actual contribution to the score. */
+  points: number;
+  /** Plain-language reason — what makes the ordering arguable. */
+  source: string;
+}
+
+/**
+ * The §29 score and what to do about it.
+ *
+ * The weights behind `score` are an uncalibrated starting policy, not a
+ * fitted model, and two of §29's eight named inputs have no source in
+ * this schema — both facts are carried in `missingFactors` rather than
+ * left for the reader to discover.
+ */
+export interface CollectionPriority {
+  /** 0–100. Higher means work it sooner. */
+  score: number;
+  band: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  /** §28 aging band this account falls in. */
+  agingBucket: string;
+  factors: CollectionPriorityFactor[];
+  action:
+    | "AWAIT_PROMISE"
+    | "SEND_REMINDER"
+    | "CALL_BORROWER"
+    | "FIELD_VISIT"
+    | "ISSUE_DEMAND_LETTER"
+    | "FINAL_DEMAND"
+    | "INITIATE_REPOSSESSION"
+    | "ESCALATE_LEGAL"
+    | "MONITOR_RECOVERY_ONLY";
+  actionReason: string;
+  channel: "SMS" | "EMAIL" | "PHONE" | "FIELD" | "LETTER";
+  channelReason: string;
+  /** ISO date — serialized over the wire. */
+  nextFollowUpDate: string;
+  followUpReason: string;
+  /** True when the loan is terminal and pushed down the queue. */
+  suppressed: boolean;
+  /** §29 inputs with no source in this schema. */
+  missingFactors: Array<{ requirement: string; reason: string }>;
 }
 
 /** Result of POST /collections/assignees/bulk. */
