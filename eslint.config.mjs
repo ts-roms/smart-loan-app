@@ -16,11 +16,14 @@
  *   • no-unnecessary-condition — flags checks that can never be false,
  *     which in strict-null code usually means a misunderstood nullable.
  *   • require-await / await-thenable — the other half of the same class.
+ *   • @nx/enforce-module-boundaries — layering rot is silent by nature:
+ *     each individual shortcut import looks reasonable in review.
  *
  * Stylistic rules are deliberately absent: Prettier owns formatting and
  * runs on the pre-commit hook. Rules here should find bugs, not opinions.
  */
 import js from "@eslint/js";
+import nx from "@nx/eslint-plugin";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import globals from "globals";
@@ -119,9 +122,129 @@ export default tseslint.config(
     },
   },
 
+  // ── Module boundaries ───────────────────────────────────────────
+  /**
+   * Roadmap §4.1. Until this rule existed, nothing stopped `libs/ui` from
+   * importing `@loan/db` — the layering held only because reviewers
+   * happened to notice. Tags live in each project's `package.json` under
+   * `nx.tags`; Nx 23 reads them from there (there are no `project.json`
+   * files in this workspace).
+   *
+   * Two independent axes, both of which must hold:
+   *
+   *   type:   which layer the code is — app · repository · domain ·
+   *           client · ui · util. Enforces direction: an app may reach
+   *           down to anything, a repository reaches down to domain and
+   *           util, and util reaches nothing. Nothing reaches back up.
+   *
+   *   scope:  which runtime the code is permitted to execute in —
+   *           server · browser · shared. This is the axis with teeth:
+   *           `@loan/db` (Prisma) and `@loan/auth` (argon2) must never
+   *           reach a browser bundle.
+   *
+   * The scope rules are stated as three bans rather than three allow
+   * lists because the third one is what closes the loophole:
+   * `scope:shared` may depend on neither server nor browser, which makes
+   * the shared set closed under dependency. Browser code reaches browser
+   * and shared; shared reaches only shared; so no chain of legal edges
+   * gets from `apps/web` to Prisma. The guarantee is inductive over
+   * single edges — it does not rely on the linter walking the graph.
+   *
+   * The two catch-alls come first: any project a dependency points at
+   * must carry both a `type:` and a `scope:` tag. A new library that
+   * arrives untagged therefore fails lint rather than quietly landing
+   * outside the boundary system. The fix is six lines in its
+   * `package.json`, not an edit to these rules — every constraint below
+   * is written against tag patterns, never project names, so a new
+   * library inherits its layer's rules the moment it is tagged.
+   *
+   * Documented in `docs/modernization/architecture.md`.
+   */
+  {
+    files: ["apps/**/*.{ts,tsx}", "libs/**/*.{ts,tsx}"],
+    plugins: { "@nx": nx },
+    rules: {
+      "@nx/enforce-module-boundaries": [
+        "error",
+        {
+          // No escape hatches. An exception here would be invisible at
+          // the import site, which is the whole problem this rule solves.
+          allow: [],
+          // No exemptions for dynamic imports either: the lazy
+          // `await import("@loan/accounting")` calls in the repositories
+          // are real edges and are checked like any other. Leaving that
+          // list empty is what stops `await import(…)` being a
+          // one-keyword bypass of everything below.
+          checkDynamicDependenciesExceptions: [],
+          // Libraries here are consumed as TypeScript source (`main`
+          // points at `src/index.ts`); none has a build target, so there
+          // is no buildable/non-buildable distinction to enforce.
+          enforceBuildableLibDependency: false,
+          depConstraints: [
+            // ── Every project must be placed on both axes ──────────
+            { sourceTag: "*", onlyDependOnLibsWithTags: ["type:*"] },
+            { sourceTag: "*", onlyDependOnLibsWithTags: ["scope:*"] },
+
+            // ── Layer: which way dependencies may point ────────────
+            {
+              sourceTag: "type:app",
+              onlyDependOnLibsWithTags: [
+                "type:repository",
+                "type:domain",
+                "type:client",
+                "type:ui",
+                "type:util",
+              ],
+            },
+            {
+              sourceTag: "type:repository",
+              onlyDependOnLibsWithTags: ["type:domain", "type:util"],
+            },
+            {
+              sourceTag: "type:domain",
+              onlyDependOnLibsWithTags: ["type:domain", "type:util"],
+            },
+            // The API client speaks in transport DTOs and nothing else.
+            // If it needed a domain type, the type belongs in
+            // `shared-types` — that is what makes the contract shared.
+            {
+              sourceTag: "type:client",
+              onlyDependOnLibsWithTags: ["type:util"],
+            },
+            {
+              sourceTag: "type:ui",
+              onlyDependOnLibsWithTags: ["type:ui", "type:util"],
+            },
+            { sourceTag: "type:util", onlyDependOnLibsWithTags: ["type:util"] },
+
+            // ── Runtime: what may end up in which bundle ───────────
+            {
+              sourceTag: "scope:browser",
+              notDependOnLibsWithTags: ["scope:server"],
+            },
+            {
+              sourceTag: "scope:server",
+              notDependOnLibsWithTags: ["scope:browser"],
+            },
+            {
+              sourceTag: "scope:shared",
+              notDependOnLibsWithTags: ["scope:server", "scope:browser"],
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // ── Browser code ────────────────────────────────────────────────
   {
-    files: ["apps/web/**/*.{ts,tsx}", "apps/platform/**/*.{ts,tsx}", "apps/marketing/**/*.{ts,tsx}", "libs/ui/**/*.{ts,tsx}", "libs/api-client/**/*.ts"],
+    files: [
+      "apps/web/**/*.{ts,tsx}",
+      "apps/platform/**/*.{ts,tsx}",
+      "apps/marketing/**/*.{ts,tsx}",
+      "libs/ui/**/*.{ts,tsx}",
+      "libs/api-client/**/*.ts",
+    ],
     languageOptions: {
       globals: { ...globals.browser },
     },

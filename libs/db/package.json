@@ -59,5 +59,11 @@
   },
   "prisma": {
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts"
+  },
+  "nx": {
+    "tags": [
+      "type:repository",
+      "scope:server"
+    ]
   }
 }
