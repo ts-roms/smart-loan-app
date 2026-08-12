@@ -17,6 +17,7 @@ import {
   LeaseRepository,
   NotificationRepository,
   ScreeningRepository,
+  runReconciliation,
   type PrismaClient,
 } from "@loan/db";
 import type { JobDefinition } from "@loan/jobs";
@@ -106,6 +107,32 @@ export function buildJobDefinitions(
         "when a non-employee lease has missed-payment streak >= threshold-1, fire a pre-pull-out warning so they can cure before the next missed payment triggers vehicle recovery.",
       defaultCron: "0 13 * * *", // 13:00 every day
       fn: async () => sendLeasePullOutWarnings(prisma, notifications, leases),
+    },
+    {
+      name: "ledger-reconciliation",
+      description:
+        "Assert the ledger against itself: trial balance ties, every entry balances, no duplicate auto-posts, instalment progress within bounds, and Loans Receivable agrees with outstanding principal plus accrued fees. THROWS on a finding, so the run shows as FAILED in /jobs rather than passing quietly with a note nobody reads.",
+      // 04:30 — after the retention purge and the overnight accruals,
+      // so it reconciles the state the operators will actually see when
+      // they arrive, not a mid-maintenance snapshot.
+      defaultCron: "30 4 * * *",
+      fn: async () => {
+        const result = await runReconciliation(prisma);
+        if (!result.ok) {
+          const failed = result.checks.filter((c) => !c.ok);
+          /*
+           * Throwing rather than returning is deliberate. A JobRun that
+           * SUCCEEDED with a warning in its result payload is a warning
+           * nobody sees; a FAILED run is visible on the jobs page and in
+           * whatever watches it. A ledger that disagrees with itself is
+           * exactly the thing that should page someone.
+           */
+          throw new Error(
+            `Reconciliation failed: ${failed.map((c) => c.summary).join(" | ")}`,
+          );
+        }
+        return result;
+      },
     },
     {
       name: "data-retention-purge",

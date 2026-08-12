@@ -13,10 +13,19 @@
  * Point values are deliberately NOT stored. They're derived from
  * relative weights against a fixed total at read time, so the scale
  * can't drift out of sync with the rows.
+ *
+ * Every write mints a ScoringCatalogVersion — a snapshot of the WHOLE
+ * catalog, not of the row that changed. That is not laziness: points are
+ * normalized against a fixed total, so raising one factor's weight
+ * lowers every other factor's points. There is no such thing as an edit
+ * that touches one factor, and a per-row history would describe a change
+ * that did not happen while hiding the one that did.
  */
 
 import type {
+  Prisma,
   PrismaClient,
+  ScoringCatalogVersion,
   SurveyFactor,
   SurveyQuestionDef,
   SurveyQuestionKind,
@@ -52,6 +61,22 @@ export type SurveyQuestionInput = {
 export type CatalogFactorRow = SurveyFactor & {
   questions: SurveyQuestionDef[];
 };
+
+/** Who changed the scorecard and why. Both optional. */
+export interface CatalogChangeMeta {
+  changedById?: string;
+  changeNote?: string;
+}
+
+type ChangeType =
+  | "BASELINE"
+  | "FACTOR_ADDED"
+  | "FACTOR_CHANGED"
+  | "FACTOR_REMOVED"
+  | "QUESTION_ADDED"
+  | "QUESTION_CHANGED"
+  | "QUESTION_REMOVED"
+  | "REORDERED";
 
 export class ScoringCatalogRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -104,16 +129,23 @@ export class ScoringCatalogRepository {
     };
   }
 
-  createFactor(input: SurveyFactorInput): Promise<SurveyFactor> {
-    return this.prisma.surveyFactor.create({
-      data: {
-        key: input.key,
-        label: input.label,
-        weight: input.weight,
-        computed: input.computed ?? false,
-        order: input.order ?? 0,
-        active: input.active ?? true,
-      },
+  createFactor(
+    input: SurveyFactorInput,
+    meta: CatalogChangeMeta = {},
+  ): Promise<SurveyFactor> {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.surveyFactor.create({
+        data: {
+          key: input.key,
+          label: input.label,
+          weight: input.weight,
+          computed: input.computed ?? false,
+          order: input.order ?? 0,
+          active: input.active ?? true,
+        },
+      });
+      await this.mint(tx, "FACTOR_ADDED", `added factor "${row.key}"`, meta);
+      return row;
     });
   }
 
@@ -121,8 +153,23 @@ export class ScoringCatalogRepository {
   updateFactor(
     id: string,
     input: Partial<Omit<SurveyFactorInput, "key">>,
+    meta: CatalogChangeMeta = {},
   ): Promise<SurveyFactor> {
-    return this.prisma.surveyFactor.update({ where: { id }, data: input });
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.surveyFactor.update({ where: { id }, data: input });
+      /*
+       * The summary names the WEIGHT specifically when it moved, because
+       * that is the edit that silently restates every other factor's
+       * points. A label change is worth recording and worth reading
+       * differently.
+       */
+      const what =
+        input.weight !== undefined
+          ? `weight changed on "${row.key}"`
+          : `changed factor "${row.key}"`;
+      await this.mint(tx, "FACTOR_CHANGED", what, meta);
+      return row;
+    });
   }
 
   /**
@@ -132,28 +179,49 @@ export class ScoringCatalogRepository {
    */
   async deleteFactor(
     id: string,
+    meta: CatalogChangeMeta = {},
   ): Promise<{ ok: true } | { ok: false; questionCount: number }> {
     const questionCount = await this.prisma.surveyQuestionDef.count({
       where: { factorId: id },
     });
     if (questionCount > 0) return { ok: false, questionCount };
-    await this.prisma.surveyFactor.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      const row = await tx.surveyFactor.delete({ where: { id } });
+      await this.mint(
+        tx,
+        "FACTOR_REMOVED",
+        `removed factor "${row.key}"`,
+        meta,
+      );
+    });
     return { ok: true };
   }
 
-  createQuestion(input: SurveyQuestionInput): Promise<SurveyQuestionDef> {
-    return this.prisma.surveyQuestionDef.create({
-      data: {
-        key: input.key,
-        kind: input.kind,
-        label: input.label,
-        help: input.help ?? null,
-        category: input.category ?? null,
-        order: input.order ?? 0,
-        active: input.active ?? true,
-        config: input.config as never,
-        factorId: input.factorId,
-      },
+  createQuestion(
+    input: SurveyQuestionInput,
+    meta: CatalogChangeMeta = {},
+  ): Promise<SurveyQuestionDef> {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.surveyQuestionDef.create({
+        data: {
+          key: input.key,
+          kind: input.kind,
+          label: input.label,
+          help: input.help ?? null,
+          category: input.category ?? null,
+          order: input.order ?? 0,
+          active: input.active ?? true,
+          config: input.config as never,
+          factorId: input.factorId,
+        },
+      });
+      await this.mint(
+        tx,
+        "QUESTION_ADDED",
+        `added question "${row.key}"`,
+        meta,
+      );
+      return row;
     });
   }
 
@@ -166,43 +234,233 @@ export class ScoringCatalogRepository {
   updateQuestion(
     id: string,
     input: Partial<Omit<SurveyQuestionInput, "key">>,
+    meta: CatalogChangeMeta = {},
   ): Promise<SurveyQuestionDef> {
     const { config, ...rest } = input;
-    return this.prisma.surveyQuestionDef.update({
-      where: { id },
-      data: {
-        ...rest,
-        ...(config !== undefined ? { config: config as never } : {}),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.surveyQuestionDef.update({
+        where: { id },
+        data: {
+          ...rest,
+          ...(config !== undefined ? { config: config as never } : {}),
+        },
+      });
+      /*
+       * A config edit is the one that matters most and shows least. It
+       * is what moves a CHOICE option's weight, and once it lands, "why
+       * did answering X score 0.6?" has no answer from the stored
+       * breakdown alone — which records the factor, not the question.
+       */
+      const what =
+        config !== undefined
+          ? `answer weights changed on "${row.key}"`
+          : `changed question "${row.key}"`;
+      await this.mint(tx, "QUESTION_CHANGED", what, meta);
+      return row;
     });
   }
 
-  async deleteQuestion(id: string): Promise<void> {
-    await this.prisma.surveyQuestionDef.delete({ where: { id } });
+  async deleteQuestion(
+    id: string,
+    meta: CatalogChangeMeta = {},
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const row = await tx.surveyQuestionDef.delete({ where: { id } });
+      await this.mint(
+        tx,
+        "QUESTION_REMOVED",
+        `removed question "${row.key}"`,
+        meta,
+      );
+    });
   }
 
-  /** Persist a new ordering in one transaction. */
-  async reorderQuestions(ids: string[]): Promise<void> {
-    await this.prisma.$transaction(
-      ids.map((id, index) =>
-        this.prisma.surveyQuestionDef.update({
+  /**
+   * Persist a new ordering in one transaction.
+   *
+   * Order changes nothing about a score — points come from weights, and
+   * every active question is evaluated regardless. It is still versioned,
+   * because the order is what the BORROWER saw, and "the questions were
+   * asked in this sequence" is part of what a survey response means.
+   */
+  async reorderQuestions(
+    ids: string[],
+    meta: CatalogChangeMeta = {},
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      for (const [index, id] of ids.entries()) {
+        await tx.surveyQuestionDef.update({
           where: { id },
           data: { order: index },
-        }),
-      ),
-    );
+        });
+      }
+      await this.mint(tx, "REORDERED", "reordered questions", meta);
+    });
   }
 
-  async reorderFactors(ids: string[]): Promise<void> {
-    await this.prisma.$transaction(
-      ids.map((id, index) =>
-        this.prisma.surveyFactor.update({
-          where: { id },
-          data: { order: index },
-        }),
-      ),
-    );
+  async reorderFactors(
+    ids: string[],
+    meta: CatalogChangeMeta = {},
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      for (const [index, id] of ids.entries()) {
+        await tx.surveyFactor.update({ where: { id }, data: { order: index } });
+      }
+      await this.mint(tx, "REORDERED", "reordered factors", meta);
+    });
   }
+
+  // ── Versioning ──────────────────────────────────────────────────────
+
+  /** The scorecard in force now, or null before the baseline is minted. */
+  currentVersion(): Promise<ScoringCatalogVersion | null> {
+    return this.prisma.scoringCatalogVersion.findFirst({
+      where: { effectiveTo: null },
+      orderBy: { version: "desc" },
+    });
+  }
+
+  /** Newest first. */
+  history(): Promise<ScoringCatalogVersion[]> {
+    return this.prisma.scoringCatalogVersion.findMany({
+      orderBy: { version: "desc" },
+    });
+  }
+
+  findVersion(version: number): Promise<ScoringCatalogVersion | null> {
+    return this.prisma.scoringCatalogVersion.findUnique({ where: { version } });
+  }
+
+  /**
+   * The scorecard as it stood at a moment — the half-open window
+   * [effectiveFrom, effectiveTo), same convention as decision rules.
+   */
+  versionAt(at: Date): Promise<ScoringCatalogVersion | null> {
+    return this.prisma.scoringCatalogVersion.findFirst({
+      where: {
+        effectiveFrom: { lte: at },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gt: at } }],
+      },
+      orderBy: { version: "desc" },
+    });
+  }
+
+  /**
+   * Make a stored snapshot runnable.
+   *
+   * The whole reason the snapshot is the lib's own shape: rescoring a
+   * borrower under the scorecard that scored them is a function call,
+   * not a reconstruction. A reconstruction would be a second mapping to
+   * keep true, and the second copy is the one that goes stale.
+   */
+  static toCatalog(v: ScoringCatalogVersion): ScoringCatalog {
+    return v.snapshot as unknown as ScoringCatalog;
+  }
+
+  /**
+   * Mint version 1 if the history is empty. Called at boot, beside the
+   * other reconcile steps.
+   *
+   * Not done in the migration: the snapshot has to be the shape
+   * @loan/credit-scoring consumes, INCLUDING the DEFAULT_CATALOG
+   * fallback for a tenant whose tables are still empty. Reproducing that
+   * mapping in SQL would duplicate it, and duplicated mappings drift.
+   */
+  async ensureBaseline(): Promise<{ created: boolean; version: number }> {
+    const existing = await this.currentVersion();
+    if (existing) return { created: false, version: existing.version };
+    await this.prisma.$transaction(async (tx) => {
+      await this.mint(tx, "BASELINE", "the scorecard as first recorded", {});
+    });
+    return { created: true, version: 1 };
+  }
+
+  /**
+   * Close the standing version and open the next, holding a snapshot of
+   * the catalog as it stands AFTER the caller's write.
+   *
+   * Runs inside the caller's transaction, so a mutation that fails takes
+   * its version with it — a history entry describing a change that never
+   * landed is worse than no entry.
+   *
+   * The unique index on `version` is what makes two concurrent editors
+   * safe: both read version N, both try to write N + 1, and the loser's
+   * whole transaction rolls back rather than leaving two rows claiming
+   * to be current.
+   */
+  private async mint(
+    tx: Prisma.TransactionClient,
+    changeType: ChangeType,
+    summary: string,
+    meta: CatalogChangeMeta,
+  ): Promise<void> {
+    const snapshot = await catalogFromTx(tx);
+    const now = new Date();
+
+    const latest = await tx.scoringCatalogVersion.findFirst({
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
+    const next = (latest?.version ?? 0) + 1;
+
+    await tx.scoringCatalogVersion.updateMany({
+      where: { effectiveTo: null },
+      data: { effectiveTo: now },
+    });
+    await tx.scoringCatalogVersion.create({
+      data: {
+        version: next,
+        snapshot: snapshot as never,
+        factorCount: snapshot.factors.length,
+        questionCount: snapshot.questions.length,
+        effectiveFrom: now,
+        changeType,
+        changeSummary: summary,
+        changeNote: meta.changeNote,
+        changedById: meta.changedById,
+      },
+    });
+  }
+}
+
+/**
+ * The active catalog, read through a transaction client.
+ *
+ * Same query as `activeCatalog`, fallback included, but bound to the
+ * caller's transaction so the snapshot sees the write that just happened
+ * rather than the state before it.
+ */
+async function catalogFromTx(
+  tx: Prisma.TransactionClient,
+): Promise<ScoringCatalog> {
+  const factors = await tx.surveyFactor.findMany({
+    where: { active: true },
+    orderBy: [{ order: "asc" }, { key: "asc" }],
+    include: {
+      questions: {
+        where: { active: true },
+        orderBy: [{ order: "asc" }, { key: "asc" }],
+      },
+    },
+  });
+  if (factors.length === 0) return DEFAULT_CATALOG;
+
+  const questions: SurveyQuestion[] = [];
+  for (const f of factors) {
+    for (const q of f.questions) {
+      const built = toLibQuestion(q, f.key);
+      if (built) questions.push(built);
+    }
+  }
+  return {
+    factors: factors.map((f) => ({
+      id: f.key,
+      label: f.label,
+      weight: f.weight,
+      computed: f.computed,
+    })),
+    questions,
+  };
 }
 
 /**

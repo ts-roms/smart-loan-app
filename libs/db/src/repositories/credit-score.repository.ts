@@ -15,6 +15,16 @@ export interface UpsertLatestInput {
   tier: CreditTier;
   breakdown: unknown;
   sourceSurveyId?: string;
+  /**
+   * Which scorecard produced this score.
+   *
+   * `breakdown` already says what the score was MADE of — each factor's
+   * label, its resolved maxPoints, the weight achieved. This says what
+   * it was made BY, which is what makes two scores known to be
+   * comparable and a cohort re-runnable under the catalog that scored
+   * it. Null on scores computed before versioning existed.
+   */
+  catalogVersion?: number | null;
 }
 
 /**
@@ -44,6 +54,7 @@ export class CreditScoreRepository {
         tier: input.tier,
         breakdown: input.breakdown as never,
         sourceSurveyId: input.sourceSurveyId ?? null,
+        catalogVersion: input.catalogVersion ?? null,
       },
     });
   }

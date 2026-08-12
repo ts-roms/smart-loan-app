@@ -78,8 +78,54 @@ export async function buildApp() {
         },
   });
 
+  /*
+   * Keep the 400 body the controllers already produce.
+   *
+   * Attaching a request schema to a route for the OpenAPI spec has a
+   * side effect that is easy to miss and was missed here first: Fastify
+   * VALIDATES against it, and its default rejection is a bare
+   * `{ "error": "Bad Request" }`. Every controller in this codebase
+   * instead returns `{ error: "ValidationError", issues: [...] }` from
+   * its own zod parse, which tells the caller WHICH field was wrong.
+   *
+   * Documenting a request must not make the API less useful to the
+   * people reading the documentation. So the formatter below re-shapes
+   * Fastify's rejection into the body callers already get, mapping
+   * AJV's `instancePath` onto zod's `path`. The controller's parse still
+   * runs for everything Fastify lets through, and remains the real gate
+   * — this only covers the requests it now rejects earlier.
+   */
+  app.setSchemaErrorFormatter((errors, dataVar) => {
+    const err = new Error("Validation failed") as FastifyError & {
+      validationBody?: unknown;
+    };
+    err.statusCode = 400;
+    err.validationBody = {
+      error: "ValidationError",
+      issues: errors.map((e) => ({
+        path: (e.instancePath || "")
+          .split("/")
+          .filter(Boolean)
+          .map((p) => (/^\d+$/.test(p) ? Number(p) : p)),
+        message: e.message ?? "Invalid value",
+        // Which part of the request failed: body, querystring, params.
+        in: dataVar,
+      })),
+    };
+    return err;
+  });
+
+  /*
+   * One handler, not two. `setErrorHandler` REPLACES rather than chains,
+   * so a second registration for the validation body would silently
+   * disable Sentry reporting on any deployment that has it configured.
+   * The validation branch lives inside the one handler instead, and the
+   * no-Sentry path gets its own minimal registration below.
+   */
   if (sentry) {
     app.setErrorHandler((err: FastifyError, req, reply) => {
+      const body = (err as { validationBody?: unknown }).validationBody;
+      if (body) return reply.code(400).send(body);
       // Don't ship validation/expected 4xx noise to Sentry — only the
       // genuine 5xx-class problems are useful signal.
       if (!err.statusCode || err.statusCode >= 500) {
@@ -121,9 +167,50 @@ export async function buildApp() {
       }
       reply.send(err);
     });
+  } else {
+    // Same validation branch, without the Sentry reporting. Everything
+    // else falls through to Fastify's default serialisation.
+    app.setErrorHandler((err: FastifyError, _req, reply) => {
+      const body = (err as { validationBody?: unknown }).validationBody;
+      if (body) return reply.code(400).send(body);
+      return reply.send(err);
+    });
   }
 
+  /*
+   * CSP off in helmet, set by the hook below instead.
+   *
+   * helmet applies one policy to every route, and this API has three
+   * kinds of response that need three different answers: JSON (which
+   * needs nothing at all), Swagger UI at /docs (which is a real HTML app
+   * and needs scripts), and /uploads/ (which must never execute —
+   * handled in its own plugin, next to the signature check it belongs
+   * with). A single global policy would have to be loose enough for
+   * /docs, which is the same as having none where it matters.
+   */
   await app.register(helmet, { contentSecurityPolicy: false });
+
+  /*
+   * Everything this API returns is JSON, so it needs no sources at all.
+   *
+   * `default-src 'none'` costs nothing on a JSON response and closes the
+   * case where one is rendered as a document — an error page, a
+   * content-type slip, a browser sniffing an unexpected body.
+   * `frame-ancestors 'none'` is the modern X-Frame-Options and stops
+   * this API being framed.
+   *
+   * /docs is exempt because Swagger UI is a genuine HTML application;
+   * /uploads/ is exempt here because it sets its own, stricter policy.
+   * Both exemptions are by prefix rather than by route so a new path
+   * under either inherits the right answer.
+   */
+  app.addHook("onSend", async (req, reply) => {
+    if (req.url.startsWith("/docs") || req.url.startsWith("/uploads/")) return;
+    reply.header(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    );
+  });
   await app.register(cors, { origin: config.webOrigin, credentials: true });
   await app.register(sensible);
   await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } });
@@ -245,9 +332,49 @@ export async function buildApp() {
   await mkdir(uploadsDir, { recursive: true });
   await app.register(uploadStaticPlugin, { root: uploadsDir });
 
+  /*
+   * The spec described 336 operations and said nothing about how to
+   * authenticate for any of them. Every route but /health and the
+   * public consent links needs a bearer token, and a reader had no way
+   * to learn that from the document — /docs rendered a "Try it out"
+   * button that could only ever return 401.
+   *
+   * Declared once and applied globally rather than per route, because
+   * bearer auth IS the default here: `app.authenticate` is a preHandler
+   * on essentially every route group. The handful of genuinely public
+   * ones are the exception and should say so on themselves; a spec that
+   * required each of 336 routes to repeat the rule would be wrong on the
+   * first one somebody forgot.
+   */
   await app.register(swagger, {
     openapi: {
-      info: { title: "Smart Loan API", version: "0.1.0" },
+      info: {
+        title: "Smart Loan API",
+        version: "0.1.0",
+        description:
+          "Lending operations for Philippine cooperatives.\n\n" +
+          "**Status codes.** 409 means the request was well-formed and you " +
+          "were entitled to make it — the target's STATE refused. Retrying " +
+          "it unchanged will fail the same way; something else has to move " +
+          "first. 402 means the tenant's licence does not include the " +
+          "feature, which is not an authorisation problem and is not fixed " +
+          "by a different token.\n\n" +
+          "**Money** is returned as a decimal string, not a float, so it " +
+          "survives the round trip without a rounding error.",
+      },
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "JWT",
+            description:
+              "Access token from POST /auth/login. Short-lived; refresh " +
+              "with POST /auth/refresh.",
+          },
+        },
+      },
+      security: [{ bearerAuth: [] }],
     },
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });

@@ -24,10 +24,11 @@ import {
   type DecisioningContext,
 } from "./index";
 
-/** DEFAULT_RULES minus the `id` the DB assigns. */
+/** DEFAULT_RULES minus the `id` and `version` the catalog assigns. */
 const rules: DecisionRule[] = DEFAULT_RULES.map((r, i) => ({
   ...r,
   id: `rule-${i}`,
+  version: 1,
 }));
 
 const baseCtx: DecisioningContext = {
@@ -163,6 +164,7 @@ describe("fail-safe defaults", () => {
     const malformed: DecisionRule[] = [
       {
         id: "bad",
+        version: 1,
         name: "malformed",
         priority: 1,
         // `in` expects an array; a bare string is a config error.
@@ -198,6 +200,7 @@ describe("rule ordering", () => {
     const tied: DecisionRule[] = [
       {
         id: "first",
+        version: 1,
         name: "first",
         priority: 50,
         conditions: [],
@@ -207,6 +210,7 @@ describe("rule ordering", () => {
       },
       {
         id: "second",
+        version: 1,
         name: "second",
         priority: 50,
         conditions: [],

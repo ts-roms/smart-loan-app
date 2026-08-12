@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@loan/accounting": "workspace:*",
+    "@loan/collections": "workspace:*",
     "@loan/credit-scoring": "workspace:*",
     "@loan/decisioning": "workspace:*",
     "@loan/jobs": "workspace:*",
@@ -59,5 +60,11 @@
   },
   "prisma": {
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts"
+  },
+  "nx": {
+    "tags": [
+      "type:repository",
+      "scope:server"
+    ]
   }
 }

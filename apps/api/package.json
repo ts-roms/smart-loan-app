@@ -49,6 +49,13 @@
   "devDependencies": {
     "@types/node": "^22.20.1",
     "typescript": "~5.7.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zod-to-json-schema": "^3.25.2"
+  },
+  "nx": {
+    "tags": [
+      "type:app",
+      "scope:server"
+    ]
   }
 }

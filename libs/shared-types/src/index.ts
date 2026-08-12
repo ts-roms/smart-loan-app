@@ -1015,8 +1015,47 @@ export interface DecisionRule {
   action: RuleAction;
   reason: string | null;
   active: boolean;
+  /**
+   * Which revision this is. Bumped only by changes that alter an
+   * OUTCOME — conditions, action, priority, reason, active. Renaming a
+   * rule leaves it alone, so the history stays worth reading.
+   */
+  version: number;
+  /** When the current version took effect. */
+  effectiveFrom: string;
+  /** Set when the rule was withdrawn. Retired rules never appear in
+   * listings; the field is here because a version row can name one. */
+  retiredAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type DecisionRuleChangeType = "CREATE" | "UPDATE" | "RETIRE";
+
+/**
+ * One frozen revision of a rule.
+ *
+ * The window [effectiveFrom, effectiveTo) is when this text of the rule
+ * was the one in force. `effectiveTo` is null on the current version,
+ * and equal to `effectiveFrom` on a RETIRE row — a zero-width window,
+ * because that row records a withdrawal rather than a period.
+ */
+export interface DecisionRuleVersion {
+  id: string;
+  ruleId: string;
+  version: number;
+  ruleName: string;
+  description: string | null;
+  priority: number;
+  conditions: DecisioningCondition[];
+  action: RuleAction;
+  reason: string | null;
+  active: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  changeType: DecisionRuleChangeType;
+  changeNote: string | null;
+  changedById: string | null;
 }
 
 export interface DecisionRuleInput {
@@ -1876,6 +1915,90 @@ export interface CustomerSummary {
   }>;
 }
 
+// ─── Consolidated exposure ──────────────────────────────────────────────────
+
+/**
+ * One loan's line in the consolidated view.
+ *
+ * `counted` says whether this row is inside the totals. Rows that
+ * aren't — closed, restructured, written off, never granted — are still
+ * returned: an exposure report an officer cannot reconcile against the
+ * loan list is one they won't trust, and a write-off that quietly
+ * disappears is how the same borrower gets lent to twice.
+ */
+export interface ExposureLoanLine {
+  loanId: string;
+  loanNumber: string;
+  productCode: string;
+  /** Catalog display name, when the product still has one. */
+  productName: string | null;
+  status: LoanStatus;
+  /** Contracted principal — what the loan was written for. */
+  principal: number;
+  /** Principal still owed. */
+  principalOutstanding: number;
+  /** Principal plus scheduled interest still owed. */
+  outstanding: number;
+  /** Unpaid and past its due date, as of `CustomerExposure.asOf`. */
+  pastDue: number;
+  /** How many instalments make up `pastDue`. */
+  overdueInstallments: number;
+  counted: boolean;
+  /**
+   * False when the loan has no schedule yet (approved, not disbursed)
+   * and the figures stand in at the contracted principal. A commitment,
+   * not a receivable.
+   */
+  fromSchedule: boolean;
+  /**
+   * What actually went to Bad Debt on a WRITTEN_OFF loan — the balance
+   * at write-off, not the contracted principal. Zero on every other
+   * status.
+   */
+  writtenOff: number;
+}
+
+export interface ExposureTotals {
+  /** The headline: total principal this borrower still owes. */
+  principalOutstanding: number;
+  /** The same debt including scheduled interest. */
+  outstanding: number;
+  pastDue: number;
+  /** How many loans the totals are made of. */
+  activeLoans: number;
+}
+
+/** Loans deliberately outside the totals, reported rather than dropped. */
+export interface ExposureExcluded {
+  loans: number;
+  closedLoans: number;
+  writtenOffLoans: number;
+  /** Principal the lender already expensed to Bad Debt. */
+  /**
+   * What the lender expensed to Bad Debt: the balance at write-off, not
+   * the sum of the contracted amounts.
+   */
+  writtenOffPrincipal: number;
+}
+
+/**
+ * Response shape of GET /customers/:idOrNumber/exposure — everything one
+ * borrower owes, across every loan they hold. The figure credit
+ * decisioning, DTI and concentration limits are all asking for.
+ *
+ * Derived on every read from loans and their schedules; nothing about
+ * it is stored, so it can't go stale.
+ */
+export interface CustomerExposure {
+  customerId: string;
+  customerNumber: string;
+  /** When arrears were measured. "Past due" means nothing without it. */
+  asOf: string;
+  loans: ExposureLoanLine[];
+  total: ExposureTotals;
+  excluded: ExposureExcluded;
+}
+
 /**
  * Returned by GET /customers/:id/repeat-eligibility., a
  * customer qualifies for the repeat-borrower fast path when at least one
@@ -2176,6 +2299,13 @@ export interface PreAssessment {
   matchedRuleId: string | null;
   /** Snapshotted — the rule itself may since have been edited or deleted. */
   matchedRuleName: string | null;
+  /**
+   * Which revision of that rule fired. The name alone does not settle
+   * what was required — rules get retuned, and a rule reading "A-tier
+   * fast-track" today may demand a score this applicant never had. Null
+   * on assessments run before rules were versioned.
+   */
+  matchedRuleVersion: number | null;
 
   /**
    * How much the engine actually knew. `FULL` means score, AML and KYC
@@ -2341,6 +2471,66 @@ export interface OverdueRow {
   overdueCount: number;
   /** Null when the account is still in the unassigned pool. */
   assignee: QueueAssignee | null;
+  /**
+   * §29 collection priority — the score the queue is now ordered by,
+   * with the per-factor breakdown that justifies the position.
+   *
+   * Rows arrive sorted by `priority.score` descending, NOT by
+   * `daysOverdue`. Both numbers are returned, so a client that wants
+   * the old ordering can still produce it.
+   */
+  priority: CollectionPriority;
+}
+
+/** One weighted factor's contribution to a collection priority score. */
+export interface CollectionPriorityFactor {
+  factorId: string;
+  label: string;
+  /** Share of the total score this factor can contribute (0..1). */
+  weight: number;
+  /** How strongly it fired, 0..1. */
+  strength: number;
+  /** Its actual contribution to the score. */
+  points: number;
+  /** Plain-language reason — what makes the ordering arguable. */
+  source: string;
+}
+
+/**
+ * The §29 score and what to do about it.
+ *
+ * The weights behind `score` are an uncalibrated starting policy, not a
+ * fitted model, and two of §29's eight named inputs have no source in
+ * this schema — both facts are carried in `missingFactors` rather than
+ * left for the reader to discover.
+ */
+export interface CollectionPriority {
+  /** 0–100. Higher means work it sooner. */
+  score: number;
+  band: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  /** §28 aging band this account falls in. */
+  agingBucket: string;
+  factors: CollectionPriorityFactor[];
+  action:
+    | "AWAIT_PROMISE"
+    | "SEND_REMINDER"
+    | "CALL_BORROWER"
+    | "FIELD_VISIT"
+    | "ISSUE_DEMAND_LETTER"
+    | "FINAL_DEMAND"
+    | "INITIATE_REPOSSESSION"
+    | "ESCALATE_LEGAL"
+    | "MONITOR_RECOVERY_ONLY";
+  actionReason: string;
+  channel: "SMS" | "EMAIL" | "PHONE" | "FIELD" | "LETTER";
+  channelReason: string;
+  /** ISO date — serialized over the wire. */
+  nextFollowUpDate: string;
+  followUpReason: string;
+  /** True when the loan is terminal and pushed down the queue. */
+  suppressed: boolean;
+  /** §29 inputs with no source in this schema. */
+  missingFactors: Array<{ requirement: string; reason: string }>;
 }
 
 /** Result of POST /collections/assignees/bulk. */

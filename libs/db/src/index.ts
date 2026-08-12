@@ -174,3 +174,5 @@ export * from "./repositories/dorsi.repository";
 export * from "./repositories/lease.repository";
 export * from "./repositories/loan-approval.repository";
 export * from "./repositories/customer-ledger.repository";
+export * from "./lib/reconciliation";
+export * from "./repositories/customer-exposure.repository";

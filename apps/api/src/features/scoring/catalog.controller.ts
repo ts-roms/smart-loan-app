@@ -22,6 +22,43 @@ import {
  * to disagree about what a factor is worth.
  */
 export class ScoringCatalogController {
+  /**
+   * Every revision of the scorecard, newest first.
+   *
+   * The whole catalog is one version, not one per factor: points are
+   * normalized against a fixed total, so raising one factor's weight
+   * lowers every other factor's points. There is no edit that touches
+   * one factor.
+   *
+   * `snapshot` is omitted from the list — it is the full catalog, and
+   * sending a dozen of them to render a change log would be several
+   * hundred kilobytes for a table of one-line summaries. Fetch a single
+   * version to get it.
+   */
+  history = async (req: FastifyRequest) => {
+    const rows = await req.scoringServices!.catalog.history();
+    return rows.map(({ snapshot: _snapshot, ...rest }) => rest);
+  };
+
+  /** One revision, snapshot included — this is the replayable payload. */
+  version = async (
+    req: FastifyRequest<{ Params: { version: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const n = Number(req.params.version);
+    if (!Number.isInteger(n) || n < 1) {
+      return reply
+        .code(400)
+        .send({
+          error: "ValidationError",
+          message: "Version must be a positive integer.",
+        });
+    }
+    const found = await req.scoringServices!.catalog.findVersion(n);
+    if (!found) return reply.code(404).send({ error: "NotFound" });
+    return found;
+  };
+
   list = async (req: FastifyRequest) => {
     const repo = req.scoringServices!.catalog;
     const factors = await repo.listFactors();
@@ -71,6 +108,7 @@ export class ScoringCatalogController {
     try {
       const created = await req.scoringServices!.catalog.createFactor(
         parsed.data,
+        { changedById: req.user.sub },
       );
       return reply.code(201).send(created);
     } catch {
@@ -96,6 +134,7 @@ export class ScoringCatalogController {
       return await req.scoringServices!.catalog.updateFactor(
         req.params.id,
         parsed.data,
+        { changedById: req.user.sub },
       );
     } catch {
       return reply.code(404).send({ error: "NotFound" });
@@ -108,6 +147,7 @@ export class ScoringCatalogController {
   ) => {
     const result = await req.scoringServices!.catalog.deleteFactor(
       req.params.id,
+      { changedById: req.user.sub },
     );
     if (!result.ok) {
       // The FK cascades, so deleting a factor would silently take its
@@ -132,10 +172,10 @@ export class ScoringCatalogController {
     try {
       // `config` is spelled out rather than spread: zod types an
       // unknown as an OPTIONAL property, and the repository requires it.
-      const created = await req.scoringServices!.catalog.createQuestion({
-        ...input,
-        config: input.config,
-      });
+      const created = await req.scoringServices!.catalog.createQuestion(
+        { ...input, config: input.config },
+        { changedById: req.user.sub },
+      );
       return reply.code(201).send(created);
     } catch {
       return reply.code(409).send({
@@ -185,6 +225,7 @@ export class ScoringCatalogController {
       return await req.scoringServices!.catalog.updateQuestion(
         req.params.id,
         patch,
+        { changedById: req.user.sub },
       );
     } catch {
       return reply.code(404).send({ error: "NotFound" });
@@ -196,7 +237,9 @@ export class ScoringCatalogController {
     reply: FastifyReply,
   ) => {
     try {
-      await req.scoringServices!.catalog.deleteQuestion(req.params.id);
+      await req.scoringServices!.catalog.deleteQuestion(req.params.id, {
+        changedById: req.user.sub,
+      });
       return reply.code(204).send();
     } catch {
       return reply.code(404).send({ error: "NotFound" });
@@ -210,7 +253,9 @@ export class ScoringCatalogController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    await req.scoringServices!.catalog.reorderFactors(parsed.data.ids);
+    await req.scoringServices!.catalog.reorderFactors(parsed.data.ids, {
+      changedById: req.user.sub,
+    });
     return reply.code(204).send();
   };
 
@@ -221,7 +266,9 @@ export class ScoringCatalogController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    await req.scoringServices!.catalog.reorderQuestions(parsed.data.ids);
+    await req.scoringServices!.catalog.reorderQuestions(parsed.data.ids, {
+      changedById: req.user.sub,
+    });
     return reply.code(204).send();
   };
 }

@@ -6,20 +6,32 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
-    "types": ["vite/client"],
+    // "node" for the e2e/ files below: Playwright config and specs read
+    // process.env. The browser bundle under src/ never touches it, and
+    // Vite would fail the build if it did.
+    "types": ["vite/client", "node"],
     "paths": {
-      "@loan/db":             ["../../libs/db/src/index.ts"],
-      "@loan/auth":           ["../../libs/auth/src/index.ts"],
+      "@loan/db": ["../../libs/db/src/index.ts"],
+      "@loan/auth": ["../../libs/auth/src/index.ts"],
       "@loan/credit-scoring": ["../../libs/credit-scoring/src/index.ts"],
-      "@loan/loans":          ["../../libs/loans/src/index.ts"],
-      "@loan/kyc":            ["../../libs/kyc/src/index.ts"],
-      "@loan/api-client":     ["../../libs/api-client/src/index.ts"],
-      "@loan/ui":             ["../../libs/ui/src/index.ts"],
-      "@loan/features":       ["../../libs/features/src/index.ts"],
-      "@loan/shared-types":   ["../../libs/shared-types/src/index.ts"],
-      "@loan/shared-utils":   ["../../libs/shared-utils/src/index.ts"],
-      "@/*":                  ["src/*"]
+      "@loan/loans": ["../../libs/loans/src/index.ts"],
+      "@loan/kyc": ["../../libs/kyc/src/index.ts"],
+      "@loan/api-client": ["../../libs/api-client/src/index.ts"],
+      "@loan/ui": ["../../libs/ui/src/index.ts"],
+      "@loan/features": ["../../libs/features/src/index.ts"],
+      "@loan/shared-types": ["../../libs/shared-types/src/index.ts"],
+      "@loan/shared-utils": ["../../libs/shared-utils/src/index.ts"],
+      "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  // e2e/ is here so the Playwright specs are typechecked and lintable
+  // like everything else. Left out, they parse as JavaScript to ESLint
+  // and are invisible to `tsc` — a test suite nothing checks is a test
+  // suite that rots quietly.
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "e2e/**/*.ts",
+    "playwright.config.ts"
+  ]
 }

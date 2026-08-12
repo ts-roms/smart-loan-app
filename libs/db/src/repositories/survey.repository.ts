@@ -7,6 +7,13 @@ export interface SaveResponseInput {
   tier: CreditTier;
   breakdown: unknown;
   computedById: string;
+  /**
+   * Which scorecard scored these answers. Matters more here than on
+   * CreditScore: `answers` is keyed by QUESTION, and the questions are
+   * what the catalog owns — so without this, an edited question leaves
+   * an answer nobody can interpret.
+   */
+  catalogVersion?: number | null;
 }
 
 export class SurveyRepository {
@@ -27,6 +34,7 @@ export class SurveyRepository {
         score: input.score,
         tier: input.tier,
         breakdown: input.breakdown as never,
+        catalogVersion: input.catalogVersion ?? null,
         computedById: input.computedById,
       },
     });

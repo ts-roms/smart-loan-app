@@ -28,6 +28,10 @@
 #
 # Optional env:
 #   BACKUP_DIR            local directory (default /var/backups/smart-loan)
+#   UPLOADS_DIR           directory holding uploaded files. When set and
+#                          present, each run also archives it. Leave unset
+#                          if uploads live in object storage, which has its
+#                          own durability story.
 #   BACKUP_KEEP_DAYS      daily retention (default 14)
 #   BACKUP_KEEP_WEEKS     weekly retention (default 8) — Sunday dumps
 #                          are also tagged "weekly" and kept longer
@@ -67,6 +71,7 @@ MULTI_TENANT="${MULTI_TENANT:-false}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/smart-loan}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
 KEEP_WEEKS="${BACKUP_KEEP_WEEKS:-8}"
+UPLOADS_DIR="${UPLOADS_DIR:-}"
 S3_BUCKET="${BACKUP_S3_BUCKET:-}"
 S3_ENDPOINT="${BACKUP_S3_ENDPOINT:-}"
 
@@ -85,6 +90,34 @@ list_tenant_slugs() {
   psql "$DATABASE_URL" -At -c \
     'SELECT slug FROM public."Tenant" WHERE status != '\''ARCHIVED'\'';' 2>/dev/null \
     || true
+}
+
+# Warn when pg_dump is a newer major than the server it is dumping.
+#
+# Found by the restore drill on 12 Aug 2026, and it is a nastier failure
+# than it sounds: pg_dump 18 dumping a 16 server emits a header
+# containing `SET transaction_timeout = 0;`, a GUC that did not exist
+# before 17. The dump completes, the file looks right, gzip is happy —
+# and every attempt to replay it into a 16 server dies on line 9 with
+# "unrecognized configuration parameter". A backup that cannot be
+# restored into a server of the version you are running is not a backup,
+# and nothing in the backup path noticed for as long as nobody tried.
+#
+# A warning rather than a hard failure: a dump taken with a mismatched
+# client is still worth more than no dump at all, and refusing here
+# would silently take out a nightly job over what is usually a packaging
+# untidiness. Fix it by installing client tools matching the server's
+# major version, then re-run drill.sh to confirm.
+warn_on_version_skew() {
+  local client server
+  client="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+  server="$(psql "$DATABASE_URL" -At -c 'SHOW server_version_num;' 2>/dev/null || echo '')"
+  [[ -z "$server" ]] && return 0
+  server=$((server / 10000))
+  if [[ "$client" != "$server" ]]; then
+    log "!! pg_dump is ${client}.x but the server is ${server}.x"
+    log "!! a dump from a NEWER client may not replay into a ${server}.x server — see docs/modernization/disaster-recovery.md"
+  fi
 }
 
 # Run pg_dump for one Postgres schema → one file under daily/. Returns
@@ -107,6 +140,8 @@ dump_schema() {
 START="$(date +%s)"
 PRODUCED=()
 
+warn_on_version_skew
+
 if [[ -n "$SLUG_ONLY" ]]; then
   log "ad-hoc dump for tenant ${SLUG_ONLY}"
   PRODUCED+=("$(dump_schema "tenant_${SLUG_ONLY}" "tenant-${SLUG_ONLY}")")
@@ -124,6 +159,33 @@ else
   pg_dump --no-owner --no-acl --clean --if-exists "$DATABASE_URL" \
     | gzip -c > "$target"
   PRODUCED+=("$target")
+fi
+
+# ── Uploaded files ──────────────────────────────────────────────────────
+#
+# The dumps above cover Postgres. Uploaded files do NOT live in Postgres —
+# KYC documents, signed loan agreements and collateral photographs are on
+# a filesystem, and the database only holds their paths. Without this
+# step a restore produces a database referencing documents that no longer
+# exist: every row intact, every file gone.
+#
+# Skipped silently when UPLOADS_DIR is unset or absent, which is the
+# correct behaviour once uploads move to object storage — that has its own
+# replication and does not want a nightly tar of the same bytes.
+if [[ -n "$UPLOADS_DIR" ]]; then
+  if [[ -d "$UPLOADS_DIR" ]]; then
+    uploads_target="$BACKUP_DIR/daily/${TS}-uploads.tar.gz"
+    log "→ archiving uploads from ${UPLOADS_DIR} to ${uploads_target}"
+    # -C so the archive holds paths relative to the uploads root, which
+    # makes it restorable into a directory of a different name.
+    tar -czf "$uploads_target" -C "$UPLOADS_DIR" .
+    PRODUCED+=("$uploads_target")
+  else
+    # Loud, not silent. A configured-but-missing uploads directory is far
+    # more likely to be a wrong path than a deliberate absence, and a
+    # backup that quietly skips the files is worse than one that fails.
+    log "!! UPLOADS_DIR is set to ${UPLOADS_DIR} but that directory does not exist — NOT backing up uploads"
+  fi
 fi
 
 # ── Promote Sunday → weekly ─────────────────────────────────────────────
@@ -145,12 +207,12 @@ if [[ -n "$S3_BUCKET" ]]; then
   aws s3 sync "$BACKUP_DIR" "$S3_BUCKET" \
     "${endpoint_args[@]}" \
     --no-progress \
-    --exclude "*" --include "*.sql.gz"
+    --exclude "*" --include "*.sql.gz" --include "*.tar.gz"
 fi
 
 # ── Rotate ──────────────────────────────────────────────────────────────
 log "rotating daily/ (keep ${KEEP_DAYS} days)"
-find "$BACKUP_DIR/daily" -name "*.sql.gz" -type f -mtime "+${KEEP_DAYS}" -delete
+find "$BACKUP_DIR/daily" \( -name "*.sql.gz" -o -name "*.tar.gz" \)   -type f -mtime "+${KEEP_DAYS}" -delete
 
 log "rotating weekly/ (keep ${KEEP_WEEKS} weeks)"
 # Weeks → ${KEEP_WEEKS} × 7 days. Conservative upper bound on disk use:

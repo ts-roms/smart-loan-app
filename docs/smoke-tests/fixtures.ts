@@ -440,6 +440,35 @@ async function seedPostReleaseState(
       }),
       { postedById: officerId },
     );
+
+    /*
+     * Settle the schedule, the way the real `writeOff` does.
+     *
+     * The entry above credits Loans Receivable for the full principal —
+     * the receivable is gone from the books. Leaving the instalments
+     * open said the opposite: the loan book still showed the principal
+     * outstanding, so the GL and the subledger disagreed by exactly this
+     * loan's balance. The reconciliation job caught it on its first run
+     * against this database (₱46,272.02 out).
+     *
+     * `isPaid` above is about what the BORROWER paid, which for a
+     * written-off loan is nothing, and that is correct. Settlement is a
+     * different fact, and it belongs here with the entry that causes it.
+     */
+    await prisma.loanSchedule.updateMany({
+      where: { loanId },
+      data: { paidInFullAt: writtenOffAt },
+    });
+    const openRows = await prisma.loanSchedule.findMany({ where: { loanId } });
+    for (const row of openRows) {
+      await prisma.loanSchedule.update({
+        where: { id: row.id },
+        data: {
+          principalPaid: row.principalDue,
+          interestPaid: row.interestDue,
+        },
+      });
+    }
   }
 
   const lastDue = dueDateOf(rows.length);

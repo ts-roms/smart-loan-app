@@ -1,6 +1,7 @@
 import {
   agentCommissionEntry,
   allocatePayment,
+  badDebtRecoveryEntry,
   loanDisbursementEntry,
   loanPaymentEntry,
   preTerminationFeeEntry,
@@ -29,6 +30,7 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
+import { isUniqueViolation } from "../lib/prisma-errors";
 import { AccountingRepository } from "./accounting.repository";
 import {
   idOrNumberWhere,
@@ -155,6 +157,22 @@ export interface LoanApplyInput {
   initialStatus?: "SUBMITTED" | "APPROVED" | "REJECTED";
   /** Reason recorded with the decision when not SUBMITTED. */
   initialDecisionReason?: string;
+  /**
+   * Which rule version the engine landed on, and what it was looking at.
+   *
+   * Recorded regardless of outcome — including when the loan merely goes
+   * to manual review, because "the engine had nothing to say about this"
+   * is itself a finding an auditor may need to see was reached against
+   * the rules in force that day rather than against a gap in them.
+   * Absent when no rule matched, since there is no version to name.
+   */
+  decisionRule?: {
+    id: string;
+    name: string;
+    version: number;
+  } | null;
+  /** DecisioningContext as evaluated, stored verbatim. */
+  decisionContext?: unknown;
   /** If this loan replaces an older one, the original's id. */
   restructuredFromId?: string;
   /**
@@ -168,6 +186,45 @@ export interface LoanApplyInput {
   renewedFromId?: string;
 }
 
+/**
+ * Statuses a loan may be decided FROM.
+ *
+ * DRAFT is absent: an application is submitted before it is judged.
+ * Everything past APPROVED is absent because money has moved — a
+ * disbursed loan is not a pending decision, and re-deciding one would
+ * contradict a schedule and a journal entry that already exist.
+ *
+ * REJECTED is present on purpose: reconsidering a declined applicant by
+ * hand is a documented part of this workflow.
+ */
+const DECIDABLE_STATUSES = [
+  "SUBMITTED",
+  "UNDER_REVIEW",
+  "REJECTED",
+  "APPROVED",
+] as const;
+
+/**
+ * Thrown when a loan's current status forbids a decision. Typed so the
+ * API can map it to 409 — the request is well-formed and the refusal is
+ * about the loan's state — rather than letting it surface as a 500.
+ */
+export class LoanNotDecidableError extends Error {
+  readonly code = "LoanNotDecidable";
+  constructor(
+    readonly loanRef: string,
+    readonly status: string,
+  ) {
+    super(
+      `Loan ${loanRef} cannot be decided from status ${status}.` +
+        (status === "APPROVED" || status === "REJECTED"
+          ? " It has already been decided; a second identical decision is not applied."
+          : " Deciding a loan that has been disbursed would contradict its schedule and journal entries."),
+    );
+    this.name = "LoanNotDecidableError";
+  }
+}
+
 export interface LoanDecideInput {
   status: "APPROVED" | "REJECTED";
   reason?: string;
@@ -179,6 +236,12 @@ export interface RecordPaymentInput {
   paidOn: Date;
   reference?: string;
   recordedById: string;
+  /**
+   * Opt-in idempotency. Two requests carrying the same key produce one
+   * payment; the second gets the first one back. Omit it and behaviour
+   * is unchanged — which is why every existing caller still compiles.
+   */
+  idempotencyKey?: string;
 }
 
 export interface BulkPaymentRow {
@@ -461,12 +524,22 @@ export class LoanRepository {
    * Loans with no schedule are absent from the result rather than
    * present with zeros, so callers can tell "not disbursed" from
    * "nothing left to pay".
+   *
+   * `scheduleWhere` narrows which instalments are folded. Left empty it
+   * is the whole schedule — the loan's position. Narrowed to the rows
+   * already past due it is the arrears, which is why {@link pastDueFor}
+   * is a one-liner on top of this rather than a second query with its
+   * own arithmetic: the two figures can then never disagree about how a
+   * partly-settled instalment counts.
    */
-  async balancesFor(loanIds: string[]): Promise<Map<string, LoanBalance>> {
+  async balancesFor(
+    loanIds: string[],
+    scheduleWhere: Prisma.LoanScheduleWhereInput = {},
+  ): Promise<Map<string, LoanBalance>> {
     if (loanIds.length === 0) return new Map();
     const groups = await this.prisma.loanSchedule.groupBy({
       by: ["loanId"],
-      where: { loanId: { in: loanIds } },
+      where: { ...scheduleWhere, loanId: { in: loanIds } },
       _sum: {
         totalDue: true,
         principalDue: true,
@@ -492,6 +565,26 @@ export class LoanRepository {
         ];
       }),
     );
+  }
+
+  /**
+   * Arrears for each of the given loans: the same fold as
+   * {@link balancesFor}, restricted to instalments that are unpaid and
+   * whose due date has passed.
+   *
+   * `outstanding` on the result is the amount in arrears and
+   * `totalInstallments` is how many instalments make it up. Unsettled
+   * rather than merely overdue — an instalment paid in full last month
+   * is not arrears, however long ago it fell due.
+   */
+  pastDueFor(
+    loanIds: string[],
+    asOf: Date = new Date(),
+  ): Promise<Map<string, LoanBalance>> {
+    return this.balancesFor(loanIds, {
+      paidInFullAt: null,
+      dueDate: { lt: asOf },
+    });
   }
 
   findById(id: string) {
@@ -759,6 +852,10 @@ export class LoanRepository {
           tierAtApply: input.tierAtApply,
           status: initialStatus,
           decisionReason: input.initialDecisionReason,
+          decisionRuleId: input.decisionRule?.id ?? null,
+          decisionRuleName: input.decisionRule?.name ?? null,
+          decisionRuleVersion: input.decisionRule?.version ?? null,
+          decisionContext: (input.decisionContext ?? undefined) as never,
           decidedAt: initialStatus === "SUBMITTED" ? null : new Date(),
           decidedById:
             initialStatus === "SUBMITTED" ? null : input.submittedById,
@@ -867,14 +964,53 @@ export class LoanRepository {
       select: { id: true },
     });
     if (!found) throw new Error("Loan not found");
-    return this.prisma.loanApplication.update({
-      where: { id: found.id },
+
+    /*
+     * Claim the decision, same pattern as `disburse`. This one had no
+     * status guard at ALL — it wrote the caller's status over whatever
+     * was there — which left two holes:
+     *
+     *   1. Two concurrent approvals both succeeded. Last writer won and
+     *      both callers got a 200, so a four-eyes control could be
+     *      satisfied twice by one click.
+     *   2. Worse, and needing no concurrency: a DISBURSED, ACTIVE or
+     *      CLOSED loan could be decided again, silently rewinding a
+     *      funded loan to APPROVED — or to REJECTED, with the money
+     *      already out and the schedule already posted.
+     *
+     * `not: input.status` is what closes the race while leaving the
+     * legitimate flows alone. Two racing APPROVEs: the first moves the
+     * row to APPROVED, and the second no longer matches, so exactly one
+     * wins. But REJECTED -> APPROVED still works, because reconsidering
+     * a rejected applicant by hand is a real part of this workflow (see
+     * the AUTO_REJECT note in loans.service.ts), and so does
+     * APPROVED -> REJECTED, which is how an approval is pulled back
+     * before any money moves.
+     */
+    const claimed = await this.prisma.loanApplication.updateMany({
+      where: {
+        id: found.id,
+        status: { in: [...DECIDABLE_STATUSES], not: input.status },
+      },
       data: {
         status: input.status,
         decisionReason: input.reason,
         decidedAt: new Date(),
         decidedById: input.decidedById,
       },
+    });
+
+    if (claimed.count === 0) {
+      const current = await this.prisma.loanApplication.findUnique({
+        where: { id: found.id },
+        select: { status: true },
+      });
+      throw new LoanNotDecidableError(idOrNumber, current?.status ?? "UNKNOWN");
+    }
+
+    // The row is ours; re-read it for the caller.
+    return this.prisma.loanApplication.findUniqueOrThrow({
+      where: { id: found.id },
     });
   }
 
@@ -932,9 +1068,47 @@ export class LoanRepository {
        * would leave them matching a number against a uuid column.
        */
       const id = loan.id;
-      if (loan.status !== "APPROVED") {
-        throw new Error(`Cannot disburse from status ${loan.status}`);
+
+      /*
+       * Claim the transition before doing any of the work, and let the
+       * WHERE clause be the lock.
+       *
+       * Reading the status and then acting on it is a check-then-act:
+       * Prisma runs this transaction at Postgres' default READ COMMITTED
+       * and nothing here holds a row lock, so two concurrent disbursements
+       * both read APPROVED, both pass the guard, and both go on to post
+       * cash movements. That is money out of the door twice.
+       *
+       * `updateMany` with the status in the WHERE is atomic: exactly one
+       * caller can move the row off APPROVED, and the loser matches zero
+       * rows and refuses. The claim happens first so that everything below
+       * — the schedule, the journal entries, the commission, the renewal
+       * settlement — runs only for the winner, and rolls back with the
+       * transaction if any of it fails.
+       *
+       * It writes the status and nothing else. The real state write is the
+       * `update` at the end of this method, which lands the loan on ACTIVE
+       * along with disbursedAt/By; DISBURSED here is a transient marker
+       * that never escapes the transaction. One field, one purpose: to be
+       * the thing a second caller cannot also claim.
+       */
+      const claimed = await tx.loanApplication.updateMany({
+        where: { id, status: "APPROVED" },
+        data: { status: "DISBURSED" },
+      });
+      if (claimed.count === 0) {
+        // Re-read rather than reporting the stale status: by now another
+        // caller has almost certainly moved it to DISBURSED, and naming
+        // the status the operator can actually see is the useful message.
+        const current = await tx.loanApplication.findUnique({
+          where: { id },
+          select: { status: true },
+        });
+        throw new Error(
+          `Cannot disburse from status ${current?.status ?? loan.status}`,
+        );
       }
+
       const product = loan.product;
       const principal = Number(loan.principal);
       const annual = Number(loan.annualInterestRate);
@@ -1180,6 +1354,48 @@ export class LoanRepository {
     loanIdOrNumber: string,
     input: RecordPaymentInput,
   ): Promise<LoanPayment> {
+    /*
+     * Replay before doing anything. A retry is the common case for a key
+     * that already exists — the caller timed out and asked again — and
+     * answering from the existing row costs one indexed lookup.
+     *
+     * This is NOT the guarantee; the unique index is. Between this read
+     * and the insert below another request can commit the same key, so
+     * the write path catches P2002 and replays there too. A payment is
+     * unlike a disbursement: it is a legitimately repeatable event, so
+     * it cannot be protected by a state claim — a borrower may really
+     * pay twice in a day. Only the key can tell "again" from "twice".
+     */
+    if (input.idempotencyKey) {
+      const replay = await this.prisma.loanPayment.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (replay) return replay;
+    }
+
+    try {
+      return await this.recordPaymentUnsafe(loanIdOrNumber, input);
+    } catch (err) {
+      if (!input.idempotencyKey || !isUniqueViolation(err)) throw err;
+      const winner = await this.prisma.loanPayment.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      // A unique violation with no matching key afterwards came from a
+      // different constraint and must not be swallowed as idempotency.
+      if (!winner) throw err;
+      return winner;
+    }
+  }
+
+  /**
+   * The actual posting. Split out so `recordPayment` can wrap it with
+   * replay handling without the transaction body growing a second
+   * concern.
+   */
+  private async recordPaymentUnsafe(
+    loanIdOrNumber: string,
+    input: RecordPaymentInput,
+  ): Promise<LoanPayment> {
     return this.prisma.$transaction(async (tx) => {
       const loan = await tx.loanApplication.findFirst({
         where: idOrNumberWhere(loanIdOrNumber),
@@ -1209,6 +1425,7 @@ export class LoanRepository {
           paidOn: input.paidOn,
           reference: input.reference,
           recordedById: input.recordedById,
+          idempotencyKey: input.idempotencyKey,
         },
       });
 
@@ -1250,16 +1467,40 @@ export class LoanRepository {
       }
 
       await this.accounting.postIfAbsent(
-        loanPaymentEntry({
-          loanId,
-          loanNumber: loan.number,
-          paymentId: payment.id,
-          amount: Number(input.amount),
-          interestPortion: allocation.interest,
-          principalPortion: allocation.principal,
-          advancePortion: allocation.overpayment,
-          paidOn: input.paidOn,
-        }),
+        /*
+         * A recovery on a written-off loan is income, not a liability.
+         *
+         * `writeOff` marks every instalment paid in full and credits
+         * Loans Receivable down to nothing, so a later payment finds no
+         * open instalment. Allocation therefore returns 0 interest, 0
+         * principal and the whole amount as overpayment, and the normal
+         * payment entry books overpayment to Customer Advances — which
+         * recorded the borrower who defaulted as a CREDITOR of the
+         * lender, for the money the lender had just clawed back.
+         *
+         * Branching on the loan's status rather than on "no open
+         * instalments", because those are different situations: a
+         * genuinely overpaid live loan DOES owe the borrower their
+         * excess back, and must keep booking to Customer Advances.
+         */
+        loan.status === "WRITTEN_OFF"
+          ? badDebtRecoveryEntry({
+              loanId,
+              loanNumber: loan.number,
+              paymentId: payment.id,
+              amount: Number(input.amount),
+              paidOn: input.paidOn,
+            })!
+          : loanPaymentEntry({
+              loanId,
+              loanNumber: loan.number,
+              paymentId: payment.id,
+              amount: Number(input.amount),
+              interestPortion: allocation.interest,
+              principalPortion: allocation.principal,
+              advancePortion: allocation.overpayment,
+              paidOn: input.paidOn,
+            }),
         { postedById: input.recordedById, tx },
       );
 
@@ -1365,8 +1606,24 @@ export class LoanRepository {
         },
       });
       if (!loan) throw new Error("Loan not found");
-      if (loan.status !== "ACTIVE" && loan.status !== "DISBURSED") {
-        throw new Error(`Cannot close early from status ${loan.status}`);
+      /*
+       * Claim the transition — same reasoning as `disburse`. An early
+       * closure posts a payoff; running it twice posts it twice. The
+       * WHERE clause is the lock, and only one caller can move the loan
+       * off ACTIVE/DISBURSED.
+       */
+      const closeClaim = await tx.loanApplication.updateMany({
+        where: { id: loan.id, status: { in: ["ACTIVE", "DISBURSED"] } },
+        data: { status: "CLOSED" },
+      });
+      if (closeClaim.count === 0) {
+        const current = await tx.loanApplication.findUnique({
+          where: { id: loan.id },
+          select: { status: true },
+        });
+        throw new Error(
+          `Cannot close early from status ${current?.status ?? loan.status}`,
+        );
       }
       /*
        * Rebound to the row's real id. Everything below keys on `loanId`
@@ -1613,8 +1870,27 @@ export class LoanRepository {
        * a loan number would not match the uuid column.
        */
       const id = loan.id;
-      if (loan.status === "WRITTEN_OFF" || loan.status === "CLOSED") {
-        throw new Error(`Cannot write off from status ${loan.status}`);
+      /*
+       * Claim the transition — same reasoning as `disburse`. A write-off
+       * books principal to Bad Debt; running it twice books it twice.
+       * Expressed as "not already terminal" to match the original guard,
+       * so the set of statuses accepted here is unchanged.
+       */
+      const writeOffClaim = await tx.loanApplication.updateMany({
+        where: {
+          id: loan.id,
+          status: { notIn: ["WRITTEN_OFF", "CLOSED"] },
+        },
+        data: { status: "WRITTEN_OFF" },
+      });
+      if (writeOffClaim.count === 0) {
+        const current = await tx.loanApplication.findUnique({
+          where: { id: loan.id },
+          select: { status: true },
+        });
+        throw new Error(
+          `Cannot write off from status ${current?.status ?? loan.status}`,
+        );
       }
 
       const remaining = loan.schedule.reduce(
@@ -1898,6 +2174,10 @@ export class LoanRepository {
         tierAtApply: input.tierAtApply,
         status: initialStatus,
         decisionReason: input.initialDecisionReason,
+        decisionRuleId: input.decisionRule?.id ?? null,
+        decisionRuleName: input.decisionRule?.name ?? null,
+        decisionRuleVersion: input.decisionRule?.version ?? null,
+        decisionContext: (input.decisionContext ?? undefined) as never,
         decidedAt: initialStatus === "SUBMITTED" ? null : new Date(),
         decidedById: initialStatus === "SUBMITTED" ? null : input.submittedById,
         submittedById: input.submittedById,

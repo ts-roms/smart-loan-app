@@ -62,6 +62,15 @@ export class CustomerController {
     return result;
   };
 
+  exposure = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const result = await req.customerServices!.customer.exposure(req.params.id);
+    if (!result) return reply.code(404).send({ error: "NotFound" });
+    return result;
+  };
+
   repeatEligibility = async (
     req: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,

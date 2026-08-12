@@ -549,6 +549,13 @@ model CreditScore {
   breakdown      Json
   /// Link to the survey that produced this score, when one applies
   sourceSurveyId String?
+  /// Which scorecard produced it — see ScoringCatalogVersion.
+  ///
+  /// The breakdown already says what the score was MADE of. This says
+  /// what it was made BY, which is what makes two scores comparable and
+  /// a cohort re-runnable. Null on scores computed before versioning,
+  /// which is honest: the catalog of the day was never recorded.
+  catalogVersion Int?
   computedAt     DateTime   @default(now())
 
   customer Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -564,17 +571,21 @@ model CreditScore {
 // it's typed and easy to evolve; only the answers are persisted.
 
 model SurveyResponse {
-  id           String     @id @default(uuid())
-  customerId   String
+  id             String     @id @default(uuid())
+  customerId     String
   /// `{ questionId: answer, … }` — values are string|number|boolean
-  answers      Json
+  answers        Json
   /// Computed score from these answers at submission time
-  score        Int
-  tier         CreditTier
+  score          Int
+  tier           CreditTier
   /// Per-factor explanation (same shape as CreditScore.breakdown)
-  breakdown    Json
-  computedAt   DateTime   @default(now())
-  computedById String
+  breakdown      Json
+  /// The scorecard these answers were scored against. Matters more here
+  /// than on CreditScore: the ANSWERS are keyed by question, and the
+  /// questions are what the catalog owns.
+  catalogVersion Int?
+  computedAt     DateTime   @default(now())
+  computedById   String
 
   customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   computedBy   User          @relation("SurveyComputedBy", fields: [computedById], references: [id])
@@ -628,6 +639,78 @@ model SurveyFactor {
   questions SurveyQuestionDef[]
 
   @@index([order])
+}
+
+/**
+ * Append-only history of the scoring catalog.
+ * The counterpart to DecisionRuleVersion, and deliberately shaped
+ * differently. A decision rule is versioned individually because rules
+ * are independent — editing one says nothing about the others. The
+ * scorecard is not like that: factor points are DERIVED from relative
+ * weights against a fixed 150-point total, so raising one factor's
+ * weight lowers every other factor's points. There is no such thing as
+ * a change to one factor. The versioned unit is the whole catalog.
+ * What this adds over what was already there. `CreditScore.breakdown`
+ * is genuinely explanatory — it freezes each factor's label, its
+ * resolved maxPoints, the 0..1 weight achieved, and a human-readable
+ * source line. A stored score already says what it was made of. What it
+ * cannot say is:
+ * • which scorecard produced it, so two scores cannot be known to be
+ * comparable, and a cohort cannot be re-run under the catalog that
+ * scored it;
+ * • what the QUESTIONS offered. The breakdown records the factor, not
+ * the question, so once someone edits a CHOICE option's weight,
+ * "why did answering 'employed 2 years' score 0.6?" has no answer;
+ * • which factors were switched OFF. An inactive factor is absent
+ * from the breakdown, indistinguishable from one that scored zero;
+ * • who changed the scorecard, when, or why.
+ * `snapshot` is the full ScoringCatalog the lib consumes — factors and
+ * questions, in its own shapes — so a version is replayable through
+ * `computeCreditScore` rather than merely readable.
+ */
+model ScoringCatalogVersion {
+  id      String @id @default(uuid())
+  /// 1-based and dense. Stamped onto CreditScore and SurveyResponse.
+  version Int    @unique
+
+  /// `{ factors: [...], questions: [...] }` — exactly the shape
+  /// `computeCreditScore` takes, so replaying a historical scorecard is
+  /// a function call and not a reconstruction.
+  snapshot Json
+
+  /// Denormalised for the history list, which would otherwise have to
+  /// parse every snapshot to render a row.
+  factorCount   Int
+  questionCount Int
+
+  effectiveFrom DateTime  @default(now())
+  /// Null on the current version.
+  effectiveTo   DateTime?
+
+  /// What the edit touched. Coarse on purpose — the snapshot holds the
+  /// detail, and a finer taxonomy would be a second thing to keep true.
+  changeType    ScoringCatalogChangeType
+  /// One line, generated: "weight changed on 'income'". Saves an
+  /// operator from diffing two JSON blobs to see what moved.
+  changeSummary String?
+  /// Free text from whoever made the change.
+  changeNote    String?
+  /// Not a foreign key: staff leave, the history outlives them.
+  changedById   String?
+
+  @@index([effectiveFrom(sort: Desc)])
+}
+
+enum ScoringCatalogChangeType {
+  /// The first version — seeded, or backfilled by the migration.
+  BASELINE
+  FACTOR_ADDED
+  FACTOR_CHANGED
+  FACTOR_REMOVED
+  QUESTION_ADDED
+  QUESTION_CHANGED
+  QUESTION_REMOVED
+  REORDERED
 }
 
 model SurveyQuestionDef {
@@ -1117,6 +1200,30 @@ model LoanApplication {
   status         LoanStatus @default(SUBMITTED)
   decisionReason String?
 
+  /// Which rule decided this loan, and WHICH VERSION OF IT.
+  ///
+  /// `decisionReason` alone is prose: it says "A-tier fast-track" but not
+  /// what that rule required on the day it fired. Rules get retuned —
+  /// that is the point of having them in a table — so a year later the
+  /// row named "A-tier fast-track" may demand a score this borrower
+  /// never had. Reading today's rule to explain yesterday's decision is
+  /// the error this closes.
+  ///
+  /// Snapshotted, not a foreign key, for the same reason
+  /// PreAssessment.matchedRuleId is: a rule can be retired, and the
+  /// decision still has to be explainable afterwards. `decisionRuleVersion`
+  /// resolves against DecisionRuleVersion, which is append-only.
+  ///
+  /// All three are null when no rule matched (routed to manual review),
+  /// and on loans decided before this was recorded.
+  decisionRuleId      String?
+  decisionRuleName    String?
+  decisionRuleVersion Int?
+  /// The DecisioningContext exactly as the engine saw it. The other half
+  /// of the answer: the rule explains the threshold, this explains the
+  /// figures it was applied to. Same shape as PreAssessment.context.
+  decisionContext     Json?
+
   /// Current step in the approval chain (1-indexed). Null when:
   ///   • the product has no chain configured (legacy single-decide),
   ///   • or all steps have completed and loan.status flipped past SUBMITTED.
@@ -1238,14 +1345,24 @@ model LoanSchedule {
 }
 
 model LoanPayment {
-  id           String   @id @default(uuid())
-  loanId       String
-  amount       Decimal  @db.Decimal(14, 2)
-  paidOn       DateTime @default(now())
-  reference    String?
+  id             String   @id @default(uuid())
+  loanId         String
+  amount         Decimal  @db.Decimal(14, 2)
+  paidOn         DateTime @default(now())
+  reference      String?
   /// Free-form note (e.g. "settled via GCash REF abc123")
-  notes        String?
-  recordedById String
+  notes          String?
+  /// Client-supplied idempotency key. A retried request — a timeout the
+  /// caller never saw, a double-submitted form, an at-least-once provider
+  /// callback — carries the same key, and the unique index turns the
+  /// second attempt into a replay of the first rather than a second real
+  /// payment against the borrower's balance.
+  ///
+  /// Nullable because it is opt-in: callers that send no key behave
+  /// exactly as before, and Postgres treats NULLs as distinct so they
+  /// never collide with each other.
+  idempotencyKey String?  @unique
+  recordedById   String
 
   loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
   recordedBy User            @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
@@ -1388,6 +1505,15 @@ model JournalEntry {
   repossessionCases RepossessionCase[]
   leaseAgreements   LeaseAgreement[]
 
+  /// Auto-posting is idempotent on this tuple, and the guarantee lives
+  /// here rather than in application code. `postIfAbsent` used to read for
+  /// an existing entry and post if it found none; two concurrent callers
+  /// both found none and both posted, and because each entry balances on
+  /// its own the trial balance still tied — a duplicate no check could see.
+  ///
+  /// Postgres treats NULLs as distinct, so manual entries (sourceRefId
+  /// null) are untouched and may repeat freely, which is correct.
+  @@unique([source, sourceRefType, sourceRefId], name: "journal_source_ref_unique")
   @@index([entryDate])
   @@index([source, sourceRefId])
   @@index([sourceRefType, sourceRefId])
@@ -1951,7 +2077,105 @@ model DecisionRule {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
+  /// Bumped on every change to what this rule DOES. Starts at 1.
+  ///
+  /// Only the decisive fields bump it — conditions, action, priority,
+  /// reason, active. Renaming a rule or fixing a typo in its description
+  /// changes no outcome, so it does not mint a version; if it did, the
+  /// history would fill with entries an auditor has to read and discard.
+  version       Int       @default(1)
+  /// When the CURRENT version took effect. The matching row in
+  /// DecisionRuleVersion is the one whose `effectiveTo` is null.
+  effectiveFrom DateTime  @default(now())
+  /// Set when the rule is retired instead of deleted. A retired rule
+  /// evaluates against nothing and shows nowhere, but its history — and
+  /// every loan pointing at it — survives.
+  retiredAt     DateTime?
+
+  versions DecisionRuleVersion[]
+
   @@index([priority, active])
+}
+
+/**
+ * Append-only history of every decision rule.
+ * The question this exists to answer: *which rules approved this loan in
+ * March?* Without it there is one mutable row per rule, so the only
+ * available answer is what the rule says NOW — and a lender that retunes
+ * its criteria (which is the entire reason the criteria live in a table)
+ * cannot reconstruct the basis of any decision it has already made. The
+ * BSP asks this. So does anyone contesting a rejection.
+ * Rows are written, never modified, with one exception: `effectiveTo` is
+ * stamped once, when the next version supersedes this one. The
+ * *current* version of a rule is the row with `effectiveTo = null`, and
+ * exactly one such row exists per rule — enforced below.
+ * `ruleName` is duplicated rather than joined for the same reason
+ * PreAssessment snapshots it: the name is part of what was true then. A
+ * rule renamed from "High-risk block" to "AML hard block" must still
+ * read as the former on the decisions it made under that name.
+ */
+model DecisionRuleVersion {
+  id      String @id @default(uuid())
+  ruleId  String
+  /// 1-based, dense, per rule.
+  version Int
+
+  // ── The rule, frozen ────────────────────────────────────────────────
+  ruleName    String
+  description String?
+  priority    Int
+  conditions  Json
+  action      RuleAction
+  reason      String?
+  active      Boolean
+
+  // ── When it applied ─────────────────────────────────────────────────
+  effectiveFrom DateTime  @default(now())
+  /// Null on the current version. Set to the moment the next version
+  /// took over, so [effectiveFrom, effectiveTo) is the window in which
+  /// this text of the rule was the one in force.
+  effectiveTo   DateTime?
+
+  // ── Who and why ─────────────────────────────────────────────────────
+  /// CREATE for version 1, UPDATE for a retune, RETIRE for the closing
+  /// row written when a rule is withdrawn.
+  changeType  DecisionRuleChangeType
+  /// Free text from the admin who made the change. Optional, because
+  /// requiring it produces "update" a hundred times, which is worse than
+  /// nothing — an empty note at least does not read as an explanation.
+  changeNote  String?
+  /// Not a foreign key: staff leave, and the history outlives them. Same
+  /// reasoning as Customer.erasedById.
+  changedById String?
+
+  rule DecisionRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  /// Two jobs at once, and the second is the important one.
+  ///
+  /// It makes LoanApplication.decisionRuleVersion resolvable — one row
+  /// per (rule, version), so a stamped decision points somewhere exact.
+  ///
+  /// And it is what serialises minting a version. "Close the open row,
+  /// insert the next" is two writes, and two admins saving the same rule
+  /// at once would both read version 2 and both try to write version 3 —
+  /// the check-then-act shape behind every P0 this modernization has
+  /// closed. Here the second insert violates this index and loses,
+  /// inside its own transaction, so it cannot half-apply. A rule can
+  /// therefore never have two open versions, because it can never have
+  /// two rows numbered the same.
+  ///
+  /// `DecisionRule.version` is the authoritative pointer at the current
+  /// one; `effectiveTo IS NULL` agrees with it and is there to make the
+  /// history readable without a join.
+  @@unique([ruleId, version])
+  @@index([ruleId, effectiveFrom(sort: Desc)])
+  @@index([effectiveFrom])
+}
+
+enum DecisionRuleChangeType {
+  CREATE
+  UPDATE
+  RETIRE
 }
 
 // ─── Pre-assessment (pre-application eligibility check) ──────────────────────
@@ -2016,21 +2240,24 @@ model PreAssessment {
   applicantAge       Int
 
   // ── Outcome ─────────────────────────────────────────────────────────
-  verdict         PreAssessmentVerdict
-  reason          String
+  verdict            PreAssessmentVerdict
+  reason             String
   /// The rule that fired. Not a foreign key: rules get edited and deleted,
   /// and the verdict still has to be explainable afterwards, so the name is
   /// snapshotted alongside the id.
-  matchedRuleId   String?
-  matchedRuleName String?
+  matchedRuleId      String?
+  matchedRuleName    String?
+  /// Version of that rule, resolving against DecisionRuleVersion. Null on
+  /// assessments run before rules were versioned.
+  matchedRuleVersion Int?
   /// Full DecisioningContext as evaluated. The rules can change tomorrow;
   /// this is what they saw today.
-  context         Json
+  context            Json
   /// AML / KYC pre-flight gates. Null on prospect rows — no customer, no
   /// gates to check.
-  gates           Json?
+  gates              Json?
   /// Statistical anomaly flags, same shape as the dry-run's.
-  anomalies       Json?
+  anomalies          Json?
 
   // ── Conversion ──────────────────────────────────────────────────────
   /// Set when this assessment turned into a real application.
@@ -2437,7 +2664,13 @@ model Contribution {
   /// Journal entry that booked this contribution. Null = posting deferred.
   journalEntryId String?
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. A member's capital build-up is money the
+  /// cooperative holds for them; deleting the member must never take it
+  /// with them. The service layer already refuses to delete customers at
+  /// all — archiving replaced deletion — but the schema is what makes
+  /// that true for a code path nobody has written yet, or a hand-typed
+  /// DELETE at 2am.
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([customerId, contributedAt])
   @@index([contributedAt])
@@ -2458,7 +2691,10 @@ model SavingsTransaction {
   recordedById   String?
   journalEntryId String?
 
-  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade — same reasoning as Contribution. A savings
+  /// movement is the member's money, and a cascade would erase the
+  /// record of it while the cash stayed in the coop's account.
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([customerId, txnDate])
   @@index([txnDate])

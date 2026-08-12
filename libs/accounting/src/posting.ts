@@ -328,6 +328,57 @@ export function loanPaymentEntry(args: {
 }
 
 /**
+ * Cash recovered on a loan that was previously written off.
+ *
+ *   Dr Cash                   amount
+ *     Cr Bad Debt Recovery    amount
+ *
+ * Why this is not `loanPaymentEntry`. A write-off marks every
+ * instalment paid in full and credits Loans Receivable down to nothing,
+ * so a later payment finds no open instalment to allocate against. It
+ * therefore fell through to the overpayment branch and was booked as
+ * Cr Customer Advances — recording the borrower who defaulted as a
+ * CREDITOR of the lender, for the money the lender just clawed back.
+ *
+ * The write-off itself is not reversed. The expense belonged to the
+ * period the loan was given up on; the recovery belongs to the period
+ * the cash arrived. Reversing would restate a closed period and imply
+ * the original judgement was wrong, which it was not — it was correct
+ * on the information available then.
+ */
+export function badDebtRecoveryEntry(args: {
+  loanId: string;
+  loanNumber: string;
+  paymentId: string;
+  amount: number;
+  paidOn: Date;
+}): JournalEntryInput | null {
+  const amount = round2(args.amount);
+  if (amount <= 0) return null;
+  return buildEntry({
+    entryDate: args.paidOn,
+    source: "LOAN_PAYMENT",
+    sourceRefType: "LoanPayment",
+    sourceRefId: args.paymentId,
+    memo: `Recovery on written-off ${args.loanNumber}`,
+    lines: [
+      {
+        accountCode: ACCOUNT_CODES.CASH,
+        debit: amount,
+        credit: 0,
+        memo: `Recovery on ${args.loanNumber}`,
+      },
+      {
+        accountCode: ACCOUNT_CODES.BAD_DEBT_RECOVERY,
+        debit: 0,
+        credit: amount,
+        memo: `Recovery of written-off ${args.loanNumber}`,
+      },
+    ],
+  });
+}
+
+/**
  * Monthly interest accrual for one scheduled installment.
  *   Dr Interest Receivable   interest
  *     Cr Interest Income     interest

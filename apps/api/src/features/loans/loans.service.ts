@@ -411,6 +411,23 @@ export class LoanWorkflowService {
           : initialStatus === "SUBMITTED"
             ? undefined
             : decision.reason,
+        /*
+         * Which rule version decided this, and on what figures.
+         *
+         * Stamped on every path, not just the decided ones. A loan routed
+         * to manual review was still evaluated, and "the rules in force
+         * that day had nothing to say about this application" is a
+         * different — and materially better — record than silence, which
+         * is indistinguishable from the engine never having run.
+         */
+        decisionRule: decision.matched
+          ? {
+              id: decision.matched.id,
+              name: decision.matched.name,
+              version: decision.matched.version,
+            }
+          : null,
+        decisionContext: ctx,
       });
     } catch (err) {
       /*

@@ -206,6 +206,18 @@ interface StaffRoute {
   url: string;
   permission: string;
   roles: Array<keyof typeof PERMS>;
+  /**
+   * Body to send, for a route that now publishes a request schema.
+   *
+   * Fastify validates a declared body in `preValidation`, which runs
+   * BEFORE the `preHandler` that checks the permission — so an empty
+   * `{}` on such a route comes back 400 and the permission gate is
+   * never reached, which would make this test pass or fail for a reason
+   * that has nothing to do with authorization. Sending a well-formed
+   * body puts the gate back in the path. Defaults to `{}` for the
+   * routes that declare no body schema.
+   */
+  payload?: Record<string, unknown>;
 }
 
 const LOAN_ID = "11111111-1111-4111-8111-111111111111";
@@ -501,6 +513,7 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: "/api/v1/scoring/survey/submit",
     permission: "customers.write",
     roles: ["LOAN_OFFICER", "ADMIN"],
+    payload: { customerId: CUSTOMER_ID, answers: {} },
   },
   {
     group: "scoring",
@@ -597,7 +610,7 @@ describe("staff routes reject a CUSTOMER token", () => {
         method: route.method,
         url: route.url,
         headers: auth(h.token("CUSTOMER")),
-        payload: route.method === "GET" ? undefined : {},
+        payload: route.method === "GET" ? undefined : (route.payload ?? {}),
       });
       expect(res.statusCode).toBe(403);
       expect(res.json()).toMatchObject({ error: "Forbidden" });
@@ -627,7 +640,7 @@ describe("staff routes admit the roles that hold the permission", () => {
         method: route.method,
         url: route.url,
         headers: auth(h.token(route.role)),
-        payload: route.method === "GET" ? undefined : {},
+        payload: route.method === "GET" ? undefined : (route.payload ?? {}),
       });
       expect(res.statusCode).not.toBe(403);
       expect(res.statusCode).not.toBe(401);

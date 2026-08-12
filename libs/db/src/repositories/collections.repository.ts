@@ -13,9 +13,15 @@ import {
   DEFAULT_LATE_FEE_POLICY,
   type LateFeePolicy,
   lateFeeFor,
+  loanBalance,
   policyFromProduct,
 } from "@loan/loans";
 import { lateFeeAccrualEntry } from "@loan/accounting";
+import {
+  computeCollectionPriority,
+  type PriorityResult,
+  type RiskGrade,
+} from "@loan/collections";
 import type {
   CollectionNote,
   CollectionNoteType,
@@ -117,6 +123,24 @@ export class CollectionsRepository {
    * keeps a collector's queue from ever being assembled client-side out
    * of the full list, which would ship every borrower's delinquency to
    * someone who may only see their own.
+   *
+   * ─── Ordering ──────────────────────────────────────────────────────
+   *
+   * Sorted by §29 collection priority, NOT by days overdue.
+   *
+   * The old ordering was `daysOverdue` descending, which reliably put
+   * the least collectible accounts at the top: the longest-failing ones.
+   * A collector working it in order spent the morning on ancient small
+   * balances with dead phone numbers and reached the large, recent,
+   * secured, still-curable accounts last. The priority score
+   * (`@loan/collections`) weighs balance, aging band, promise history,
+   * contactability, customer history, risk grade and collateral
+   * together, and every row carries its own factor breakdown so the
+   * position is arguable rather than asserted.
+   *
+   * `daysOverdue` is still returned and is still exact — the UI can
+   * re-sort by it, and the delinquency report reads it straight. What
+   * changed is only which account is row one.
    */
   async overdueQueue(
     asOf: Date = new Date(),
@@ -132,6 +156,8 @@ export class CollectionsRepository {
         outstanding: number;
         overdueCount: number;
         assignee: QueueAssignee | null;
+        /** §29 score, breakdown and recommendation. */
+        priority: PriorityResult;
       }
     >
   > {
@@ -151,6 +177,17 @@ export class CollectionsRepository {
             lastName: true,
             city: true,
             province: true,
+            // Contactability inputs — which channels exist for this
+            // borrower at all.
+            phone: true,
+            secondaryPhone: true,
+            email: true,
+            // Risk grade: the most recent scorecard result, if ever run.
+            creditScores: {
+              select: { tier: true },
+              orderBy: { computedAt: "desc" },
+              take: 1,
+            },
           },
         },
         schedule: {
@@ -160,8 +197,56 @@ export class CollectionsRepository {
         collectionAssignment: {
           include: { collector: { select: { name: true } } },
         },
+        // Promise reliability — kept vs broken, and any open commitment.
+        promisesToPay: { select: { status: true, promisedDate: true } },
+        // Contact recency. Only the newest is needed: the score asks
+        // "how long since anyone tried", not for the whole log.
+        collectionNotes: {
+          select: { createdAt: true },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        // Collateral, at most one of the two by construction.
+        vehicle: { select: { appraisedValue: true } },
+        property: { select: { appraisedValue: true } },
       },
     });
+
+    /*
+     * Customer repayment history, in ONE query rather than per row.
+     *
+     * `notIn` the loans already on the queue so an account cannot count
+     * itself as its own bad history — a DEFAULTED loan is eligible for
+     * the queue, and without this exclusion it would score itself worse
+     * for being the very loan being ranked.
+     */
+    const queueLoanIds = rows.map((l) => l.id);
+    const priorLoans =
+      queueLoanIds.length === 0
+        ? []
+        : await this.prisma.loanApplication.groupBy({
+            by: ["customerId", "status"],
+            where: {
+              customerId: { in: rows.map((l) => l.customerId) },
+              id: { notIn: queueLoanIds },
+              status: { in: ["CLOSED", "DEFAULTED", "WRITTEN_OFF"] },
+            },
+            _count: { _all: true },
+          });
+
+    const historyByCustomer = new Map<
+      string,
+      { priorLoansClosed: number; priorLoansDefaulted: number }
+    >();
+    for (const group of priorLoans) {
+      const acc = historyByCustomer.get(group.customerId) ?? {
+        priorLoansClosed: 0,
+        priorLoansDefaulted: 0,
+      };
+      if (group.status === "CLOSED") acc.priorLoansClosed += group._count._all;
+      else acc.priorLoansDefaulted += group._count._all;
+      historyByCustomer.set(group.customerId, acc);
+    }
 
     const out = rows.map((l) => {
       const earliest = l.schedule[0];
@@ -173,21 +258,62 @@ export class CollectionsRepository {
             ),
           )
         : 0;
-      const outstanding = l.schedule.reduce(
-        (s, x) =>
-          s +
-          (Number(x.totalDue) -
-            Number(x.principalPaid) -
-            Number(x.interestPaid)),
-        0,
-      );
+      /*
+       * Balance via @loan/loans rather than a reduce written here.
+       * `loanBalance` over the open instalments is the same arithmetic
+       * this used to inline, minus the risk of the queue and the rest of
+       * the system disagreeing about what a borrower owes.
+       *
+       * Decimal columns are coerced at this boundary, as elsewhere in
+       * the repositories — the lib takes numbers, not Prisma types.
+       */
+      const outstanding = loanBalance(
+        l.schedule.map((s) => ({
+          principalDue: Number(s.principalDue),
+          interestDue: Number(s.interestDue),
+          totalDue: Number(s.totalDue),
+          principalPaid: Number(s.principalPaid),
+          interestPaid: Number(s.interestPaid),
+          paidInFullAt: s.paidInFullAt,
+        })),
+      ).outstanding;
       const overdueCount = l.schedule.filter((s) => s.dueDate < asOf).length;
       const {
         schedule: _schedule,
         customer,
         collectionAssignment,
+        promisesToPay,
+        collectionNotes,
+        vehicle,
+        property,
         ...rest
       } = l;
+
+      const collateral = vehicle?.appraisedValue ?? property?.appraisedValue;
+
+      const priority = computeCollectionPriority({
+        asOf,
+        loanStatus: l.status,
+        daysOverdue,
+        outstanding,
+        riskGrade: (customer.creditScores[0]?.tier as RiskGrade) ?? null,
+        promises: promisesToPay.map((p) => ({
+          status: p.status,
+          promisedDate: p.promisedDate,
+        })),
+        contact: {
+          phone: customer.phone,
+          secondaryPhone: customer.secondaryPhone,
+          email: customer.email,
+          lastContactAt: collectionNotes[0]?.createdAt ?? null,
+        },
+        history: historyByCustomer.get(l.customerId) ?? {
+          priorLoansClosed: 0,
+          priorLoansDefaulted: 0,
+        },
+        collateralValue: collateral === undefined ? null : Number(collateral),
+      });
+
       return {
         ...rest,
         customerName: `${customer.firstName} ${customer.lastName}`,
@@ -204,10 +330,16 @@ export class CollectionsRepository {
               note: collectionAssignment.note,
             }
           : null,
+        priority,
       };
     });
 
-    out.sort((a, b) => b.daysOverdue - a.daysOverdue);
+    // Priority first; days overdue only to break exact ties, so the
+    // order stays deterministic across requests.
+    out.sort(
+      (a, b) =>
+        b.priority.score - a.priority.score || b.daysOverdue - a.daysOverdue,
+    );
     return out;
   }
 

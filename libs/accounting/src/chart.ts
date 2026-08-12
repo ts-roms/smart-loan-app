@@ -58,6 +58,15 @@ export const ACCOUNT_CODES = {
   /** Non-loan income (dividends, donations, fees other than processing). */
   OTHER_INCOME: "4200",
   /**
+   * Recovery of a loan previously written off.
+   *
+   * Kept apart from OTHER_INCOME because it answers a question the
+   * others cannot: how much of what we gave up on did we get back.
+   * That ratio is the whole measure of a collections function, and
+   * folding it into miscellaneous receipts loses it.
+   */
+  BAD_DEBT_RECOVERY: "4300",
+  /**
    * Commission owed to a field agent for a loan they originated. A
    * liability from the moment the loan is disbursed until the agent is
    * actually paid — the expense is recognized at disbursement, the cash
@@ -230,6 +239,15 @@ export const DEFAULT_CHART_OF_ACCOUNTS: ChartAccount[] = [
     normalBalance: "CREDIT",
     description:
       "Non-loan, non-processing income: dividends, donations, misc receipts.",
+    system: true,
+  },
+  {
+    code: ACCOUNT_CODES.BAD_DEBT_RECOVERY,
+    name: "Bad Debt Recovery",
+    type: "INCOME",
+    normalBalance: "CREDIT",
+    description:
+      "Cash recovered on loans previously written off. Recognised in the period recovered; the original write-off is not reversed.",
     system: true,
   },
 ];

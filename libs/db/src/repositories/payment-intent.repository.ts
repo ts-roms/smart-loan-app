@@ -151,12 +151,34 @@ export class PaymentIntentRepository {
       return { intent: updated, payment: null };
     }
 
-    // PAID — record the loan payment + link.
+    /*
+     * PAID — record the loan payment + link.
+     *
+     * The terminal check above is a check-then-act, and payment
+     * providers deliver at-least-once: two copies of the same webhook
+     * both read a PENDING intent, both pass that check, and both reach
+     * here. Without a key that is two real payments for one settlement,
+     * and the borrower's balance moves twice for money that arrived
+     * once.
+     *
+     * The key is derived from the intent rather than from the request,
+     * because a retry is a *redelivery of the same event* and must
+     * produce the same key however the provider varies its payload. An
+     * intent settles exactly once — the terminal check is what makes
+     * that true — so intent id is the natural identity of the payment
+     * it produces.
+     *
+     * The unique index on LoanPayment.idempotencyKey is what actually
+     * arbitrates: the loser's insert is rejected and replays the
+     * winner's payment, so both deliveries converge on one row and both
+     * then link the intent to the same paymentId.
+     */
     const payment = await this.loans.recordPayment(intent.loanId, {
       amount: args.amount ?? Number(intent.amount),
       paidOn: new Date(),
       reference: args.reference ?? intent.externalId,
       recordedById: intent.createdById,
+      idempotencyKey: `intent:${intent.id}`,
     });
     const updated = await this.prisma.paymentIntent.update({
       where: { id: intent.id },

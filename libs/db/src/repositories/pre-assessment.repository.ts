@@ -39,6 +39,7 @@ export interface PreAssessmentCreateInput {
   reason: string;
   matchedRuleId?: string | null;
   matchedRuleName?: string | null;
+  matchedRuleVersion?: number | null;
   /** DecisioningContext as evaluated. */
   context: unknown;
   /** AML / KYC gates. Omit for prospect rows — there's nothing to gate. */
@@ -81,6 +82,7 @@ export class PreAssessmentRepository {
         reason: input.reason,
         matchedRuleId: input.matchedRuleId ?? null,
         matchedRuleName: input.matchedRuleName ?? null,
+        matchedRuleVersion: input.matchedRuleVersion ?? null,
         context: input.context as never,
         gates: (input.gates ?? null) as never,
         anomalies: (input.anomalies ?? null) as never,

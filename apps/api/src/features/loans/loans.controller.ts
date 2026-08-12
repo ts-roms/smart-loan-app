@@ -1,3 +1,4 @@
+import { LoanNotDecidableError } from "@loan/db";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { applySchema, decideSchema, declarationAnswersSchema } from "./schemas";
@@ -91,11 +92,30 @@ export class LoanWorkflowController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    const result = await req.loanCtx!.workflowService.decide(
-      req.params.id,
-      parsed.data,
-      req.user.sub,
-    );
+    let result;
+    try {
+      result = await req.loanCtx!.workflowService.decide(
+        req.params.id,
+        parsed.data,
+        req.user.sub,
+      );
+    } catch (err) {
+      /*
+       * 409, not 500: the body is fine and the caller is authorised —
+       * the loan's state is what forbids the decision. Raised when a
+       * loan has already been decided (the concurrent-approval case, in
+       * which exactly one caller wins) or has moved past deciding
+       * altogether, e.g. a disbursed loan.
+       */
+      if (err instanceof LoanNotDecidableError) {
+        return reply.code(409).send({
+          error: err.code,
+          message: err.message,
+          status: err.status,
+        });
+      }
+      throw err;
+    }
     if (result.ok) return result.loan;
     if (result.kind === "NotFound") {
       return reply.code(404).send({ error: "NotFound" });

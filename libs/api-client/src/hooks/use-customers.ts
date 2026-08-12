@@ -1,6 +1,7 @@
 import type {
   Customer,
   CustomerCreateInput,
+  CustomerExposure,
   CustomerListItem,
   CustomerListQuery,
   CustomerSummary,
@@ -23,6 +24,7 @@ export const customerKeys = {
   detail: (id: string) => [...customerKeys.all, "detail", id] as const,
   summary: (id: string) => [...customerKeys.all, "summary", id] as const,
   repeat: (id: string) => [...customerKeys.all, "repeat", id] as const,
+  exposure: (id: string) => [...customerKeys.all, "exposure", id] as const,
 };
 
 /**
@@ -115,6 +117,27 @@ export function useCustomerSummary(id: string | null) {
       getApiClient().get<CustomerSummary>(`/customers/${id}/summary`),
     enabled: Boolean(id),
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Consolidated exposure — everything this borrower owes across every
+ * loan they hold, with the per-loan breakdown behind it.
+ *
+ * Takes the customer UUID or the human "CUST-..." number; the endpoint
+ * resolves either.
+ *
+ * Short staleTime because a payment posted a minute ago changes the
+ * answer, and this is the number an officer approves against — a stale
+ * exposure is the one kind of wrong here that costs money.
+ */
+export function useCustomerExposure(idOrNumber: string | null) {
+  return useQuery({
+    queryKey: customerKeys.exposure(idOrNumber ?? ""),
+    queryFn: () =>
+      getApiClient().get<CustomerExposure>(`/customers/${idOrNumber}/exposure`),
+    enabled: Boolean(idOrNumber),
+    staleTime: 10_000,
   });
 }
 

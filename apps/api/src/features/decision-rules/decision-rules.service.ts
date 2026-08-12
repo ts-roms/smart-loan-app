@@ -21,20 +21,51 @@ export class DecisionRuleService {
     return this.repo.list();
   }
 
-  async create(input: CreateRuleInput): Promise<CreateResult> {
+  history(ruleId: string) {
+    return this.repo.historyFor(ruleId);
+  }
+
+  /** The rule set in force at a moment; defaults to now. */
+  asOf(at?: Date) {
+    return this.repo.asOf(at ?? new Date());
+  }
+
+  async create(
+    input: CreateRuleInput,
+    actorId?: string,
+  ): Promise<CreateResult> {
     try {
-      return { ok: true, rule: await this.repo.create(input) };
+      return {
+        ok: true,
+        rule: await this.repo.create(input, { changedById: actorId }),
+      };
     } catch (err) {
       return { ok: false, kind: "Conflict", message: (err as Error).message };
     }
   }
 
-  update(id: string, input: UpdateRuleInput) {
-    return this.repo.update(id, input);
+  update(id: string, input: UpdateRuleInput, actorId?: string) {
+    const { changeNote, ...fields } = input;
+    return this.repo.update(id, fields, {
+      changedById: actorId,
+      changeNote,
+    });
   }
 
-  delete(id: string) {
-    return this.repo.delete(id);
+  /**
+   * DELETE retires rather than erases.
+   *
+   * Dropping the row would cascade its history away and leave every loan
+   * whose approval cites it pointing at nothing — the decisions would
+   * not become wrong, they would become unexplainable, which for a
+   * lender is the worse of the two. Same call the customer records made:
+   * withdraw it from use, keep what it did.
+   *
+   * From the operator's side nothing changes: the rule leaves the list
+   * and stops firing.
+   */
+  retire(id: string, actorId?: string, changeNote?: string) {
+    return this.repo.retire(id, { changedById: actorId, changeNote });
   }
 
   seedDefaults() {
