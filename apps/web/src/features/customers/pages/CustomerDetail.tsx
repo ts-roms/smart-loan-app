@@ -52,6 +52,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useCrumbTitle } from "../../../providers/breadcrumb-titles";
 
+import { CustomerExposurePanel } from "../components/CustomerExposurePanel";
 import { CustomerLedgerPanel } from "../components/CustomerLedgerPanel";
 import { CustomerLoansPanel } from "../components/CustomerLoansPanel";
 import { DorsiScreenBanner } from "../components/DorsiScreenBanner";
@@ -333,6 +334,14 @@ export function CustomerDetailPage() {
         many loans it spans.
       */}
       {customerId && <CustomerLoansPanel customerId={customerId} />}
+
+      {/*
+        Then what all of it adds up to. Directly under the loans table
+        because the totals are a fold of exactly those rows — separated,
+        the two read as unrelated numbers and an officer has no way to
+        check one against the other.
+      */}
+      <CustomerExposurePanel idOrNumber={id} />
 
       {/* Unified statement of account — loans + cooperative activity. */}
       <CustomerLedgerPanel idOrNumber={id} />

@@ -237,6 +237,20 @@ export {
   type RenewalCheckInput,
 } from "./renewal";
 
+// One borrower's whole book, folded into a single obligation. Built on
+// schedule-balance above rather than beside it.
+export {
+  consolidatedExposure,
+  loanExposure,
+  EXPOSURE_STATUSES,
+  type ConsolidatedExposure,
+  type ExposureExcluded,
+  type ExposureLoan,
+  type ExposureLoanInput,
+  type ExposureStatus,
+  type ExposureTotals,
+} from "./exposure";
+
 export {
   ledgerPositions,
   type LedgerPositionKind,
