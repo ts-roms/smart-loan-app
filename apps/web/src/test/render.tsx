@@ -1,6 +1,9 @@
 import { ConfirmDialogProvider, Toaster } from "@loan/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, type RenderOptions } from "@testing-library/react";
+import {
+  render as rtlRender,
+  type RenderOptions,
+} from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi } from "vitest";
@@ -66,7 +69,7 @@ export function renderWithProviders(
     );
   }
 
-  return render(ui, { wrapper: Wrapper, ...rest });
+  return rtlRender(ui, { wrapper: Wrapper, ...rest });
 }
 
 /**
@@ -132,3 +135,21 @@ export function mutation(impl?: (input: unknown) => unknown) {
     reset: () => {},
   };
 }
+
+/**
+ * The no-provider render, kept from main.
+ *
+ * Presentational units — Field and friends — need none of the stack
+ * above, and a test that mounts a router and a query client to assert
+ * on a label is a test that fails for reasons it does not care about.
+ * Both helpers exist because both kinds of test exist.
+ */
+function Providers({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+export function render(ui: ReactElement) {
+  return rtlRender(ui, { wrapper: Providers });
+}
+
+export * from "@testing-library/react";

@@ -14,8 +14,9 @@ import {
 } from "@loan/shared-utils";
 import {
   Button,
-  DialogBody,
   DatePicker,
+  DialogBody,
+  Field,
   Input,
   SearchInput,
   Select,
@@ -612,45 +613,26 @@ function Grid({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Field({
-  label,
-  children,
-  className,
-  required,
-}: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-  required?: boolean;
-}) {
-  return (
-    <div className={`space-y-1 ${className ?? ""}`}>
-      <label className="text-xs text-fg-muted flex items-center gap-1">
-        {label}
-        {required && <span className="text-danger">*</span>}
-      </label>
-      {children}
-    </div>
-  );
-}
-
 function EnumSelect<T extends string>({
   value,
   onChange,
   options,
   placeholder,
+  /** Forwarded to the trigger so a `Field` label can name it. */
+  id,
 }: {
   value: T | undefined | null;
   onChange: (v: T | undefined) => void;
   options: Array<{ value: T; label: string }>;
   placeholder?: string;
+  id?: string;
 }) {
   return (
     <Select
       value={value ?? ""}
       onValueChange={(v) => onChange(v ? (v as T) : undefined)}
     >
-      <SelectTrigger>
+      <SelectTrigger id={id}>
         <SelectValue placeholder={placeholder ?? "— select —"} />
       </SelectTrigger>
       <SelectContent>

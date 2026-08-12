@@ -25,6 +25,7 @@ export {
   type PasswordInputProps,
 } from "./components/password-input";
 export { Label } from "./components/label";
+export { Field, type FieldProps } from "./components/field";
 export { Avatar, type AvatarProps } from "./components/avatar";
 export { Badge, badgeVariants } from "./components/badge";
 export { SkeletonCard, SkeletonLine } from "./components/skeleton";

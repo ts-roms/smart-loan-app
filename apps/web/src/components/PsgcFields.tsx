@@ -42,6 +42,8 @@ export function SuggestInput({
   placeholder,
   required,
   disabled,
+  /** Forwarded to the inner input so a `Field` label can name it. */
+  id,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -49,6 +51,7 @@ export function SuggestInput({
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
+  id?: string;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -72,6 +75,7 @@ export function SuggestInput({
   return (
     <div ref={containerRef} className="relative">
       <Input
+        id={id}
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
@@ -110,10 +114,13 @@ export function RegionPicker({
   value,
   onChange,
   disabled,
+  /** Forwarded to the inner input so a `Field` label can name it. */
+  id,
 }: {
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
+  id?: string;
 }) {
   return (
     <SuggestInput
@@ -125,6 +132,7 @@ export function RegionPicker({
       }))}
       placeholder="Region — e.g. NCR, Region VII"
       disabled={disabled}
+      id={id}
     />
   );
 }
@@ -141,11 +149,14 @@ export function ProvincePicker({
   value,
   onChange,
   disabled,
+  /** Forwarded to the inner input so a `Field` label can name it. */
+  id,
 }: {
   region?: string | null;
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
+  id?: string;
 }) {
   const noProvinces = Boolean(region) && !regionHasProvinces(region!);
   const options = useMemo(() => {
@@ -158,6 +169,7 @@ export function ProvincePicker({
   if (noProvinces) {
     return (
       <Input
+        id={id}
         value=""
         disabled
         placeholder={`${region} has no provinces`}
@@ -173,6 +185,7 @@ export function ProvincePicker({
       suggestions={options.map((p) => ({ key: p.code, label: p.name }))}
       placeholder="Province"
       disabled={disabled}
+      id={id}
     />
   );
 }
@@ -190,6 +203,8 @@ export function CityPicker({
   onChange,
   required,
   disabled,
+  /** Forwarded to the inner input so a `Field` label can name it. */
+  id,
 }: {
   region?: string | null;
   province?: string | null;
@@ -197,6 +212,7 @@ export function CityPicker({
   onChange: (v: string) => void;
   required?: boolean;
   disabled?: boolean;
+  id?: string;
 }) {
   const options = useMemo(
     () => citiesFor(region, province),
@@ -213,6 +229,7 @@ export function CityPicker({
       placeholder="City or municipality"
       required={required}
       disabled={disabled}
+      id={id}
     />
   );
 }
@@ -237,6 +254,8 @@ export function BarangayPicker({
   value,
   onChange,
   disabled,
+  /** Forwarded to the inner input so a `Field` label can name it. */
+  id,
 }: {
   region?: string | null;
   province?: string | null;
@@ -244,6 +263,7 @@ export function BarangayPicker({
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
+  id?: string;
 }) {
   const resolved = useMemo(
     () => findCity(city, region, province),
@@ -275,6 +295,7 @@ export function BarangayPicker({
       suggestions={options.map((name) => ({ key: name, label: name }))}
       placeholder={city ? "Barangay" : "Barangay — pick a city for suggestions"}
       disabled={disabled}
+      id={id}
     />
   );
 }

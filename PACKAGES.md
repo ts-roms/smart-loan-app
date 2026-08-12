@@ -15,37 +15,37 @@ For request-flow diagrams see **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 
 **Routes**
 
-| Path | Method | Auth | Notes |
-| --- | --- | --- | --- |
-| `/auth/login` | POST | public | Returns `{ token, user }` |
-| `/auth/register` | POST | public | Self-signup as `CUSTOMER` |
-| `/auth/me` | GET | bearer | Current user |
-| `/customers` | GET/POST | bearer | List / create |
-| `/customers/:id` | GET/PATCH | bearer | Detail / update |
-| `/kyc` | GET/POST | bearer | List per `?customerId`, submit doc |
-| `/kyc/:id/decide` | POST | LOAN_OFFICER+ | Approve / reject one doc |
-| `/kyc/customers/:id/status` | GET | bearer | Rollup status |
-| `/scoring/survey/questions` | GET | bearer | Question catalog |
-| `/scoring/survey/submit` | POST | bearer | Compute + persist |
-| `/scoring/customers/:id/score` | GET | bearer | Latest snapshot |
-| `/scoring/tier` | GET | bearer | Tier metadata lookup |
-| `/loans` | GET | bearer | List |
-| `/loans/quote` | POST | bearer | Pre-apply amortization preview |
-| `/loans/apply` | POST | bearer | Snapshot score + insert |
-| `/loans/:id` | GET | bearer | Detail incl. schedule |
-| `/loans/:id/decide` | POST | LOAN_OFFICER+ | APPROVE / REJECT |
-| `/loans/:id/disburse` | POST | LOAN_OFFICER+ | Materialize schedule |
-| `/loans/:id/payments` | POST | ACCOUNTANT+ | Record + apply payment |
-| `/accounting/accounts` | GET | bearer | Chart of accounts |
-| `/accounting/accounts` | POST | ADMIN/ACCOUNTANT | Create account |
-| `/accounting/accounts/seed` | POST | ADMIN | Idempotent default chart upsert |
-| `/accounting/journal` | GET/POST | bearer / ACCOUNTANT+ | List + post manual entries |
-| `/accounting/journal/:id` | GET | bearer | Entry detail incl. lines |
-| `/accounting/ledger/:accountId` | GET | bearer | Per-account ledger with running balance |
-| `/accounting/reports/trial-balance` | GET | bearer | Trial balance as-of date |
-| `/accounting/reports/income-statement` | GET | bearer | P&L for `from..to` |
-| `/accounting/reports/balance-sheet` | GET | bearer | Balance sheet as-of date |
-| `/accounting/reports/loan-portfolio` | GET | bearer | Aging buckets + outstanding |
+| Path                                   | Method    | Auth                 | Notes                                   |
+| -------------------------------------- | --------- | -------------------- | --------------------------------------- |
+| `/auth/login`                          | POST      | public               | Returns `{ token, user }`               |
+| `/auth/register`                       | POST      | public               | Self-signup as `CUSTOMER`               |
+| `/auth/me`                             | GET       | bearer               | Current user                            |
+| `/customers`                           | GET/POST  | bearer               | List / create                           |
+| `/customers/:id`                       | GET/PATCH | bearer               | Detail / update                         |
+| `/kyc`                                 | GET/POST  | bearer               | List per `?customerId`, submit doc      |
+| `/kyc/:id/decide`                      | POST      | LOAN_OFFICER+        | Approve / reject one doc                |
+| `/kyc/customers/:id/status`            | GET       | bearer               | Rollup status                           |
+| `/scoring/survey/questions`            | GET       | bearer               | Question catalog                        |
+| `/scoring/survey/submit`               | POST      | bearer               | Compute + persist                       |
+| `/scoring/customers/:id/score`         | GET       | bearer               | Latest snapshot                         |
+| `/scoring/tier`                        | GET       | bearer               | Tier metadata lookup                    |
+| `/loans`                               | GET       | bearer               | List                                    |
+| `/loans/quote`                         | POST      | bearer               | Pre-apply amortization preview          |
+| `/loans/apply`                         | POST      | bearer               | Snapshot score + insert                 |
+| `/loans/:id`                           | GET       | bearer               | Detail incl. schedule                   |
+| `/loans/:id/decide`                    | POST      | LOAN_OFFICER+        | APPROVE / REJECT                        |
+| `/loans/:id/disburse`                  | POST      | LOAN_OFFICER+        | Materialize schedule                    |
+| `/loans/:id/payments`                  | POST      | ACCOUNTANT+          | Record + apply payment                  |
+| `/accounting/accounts`                 | GET       | bearer               | Chart of accounts                       |
+| `/accounting/accounts`                 | POST      | ADMIN/ACCOUNTANT     | Create account                          |
+| `/accounting/accounts/seed`            | POST      | ADMIN                | Idempotent default chart upsert         |
+| `/accounting/journal`                  | GET/POST  | bearer / ACCOUNTANT+ | List + post manual entries              |
+| `/accounting/journal/:id`              | GET       | bearer               | Entry detail incl. lines                |
+| `/accounting/ledger/:accountId`        | GET       | bearer               | Per-account ledger with running balance |
+| `/accounting/reports/trial-balance`    | GET       | bearer               | Trial balance as-of date                |
+| `/accounting/reports/income-statement` | GET       | bearer               | P&L for `from..to`                      |
+| `/accounting/reports/balance-sheet`    | GET       | bearer               | Balance sheet as-of date                |
+| `/accounting/reports/loan-portfolio`   | GET       | bearer               | Aging buckets + outstanding             |
 
 **Deps** · `@loan/db`, `@loan/auth`, `@loan/credit-scoring`,
 `@loan/loans`, `@loan/kyc`, `@loan/accounting`, `@loan/shared-types`,
@@ -61,23 +61,23 @@ For request-flow diagrams see **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 
 **Routes**
 
-| Path | Page | Roles |
-| --- | --- | --- |
-| `/` | DashboardPage | all |
-| `/customers` | CustomersPage | all |
-| `/customers/:id` | CustomerDetailPage | all |
-| `/customers/:id/survey` | CreditSurveyPage | all |
-| `/loans` | LoansPage | all |
-| `/loans/:id` | LoanDetailPage | all |
-| `/kyc` | KycReviewPage | ADMIN, LOAN_OFFICER |
-| `/accounting` | AccountingDashboardPage | ADMIN, ACCOUNTANT |
-| `/accounting/accounts` | ChartOfAccountsPage | ADMIN, ACCOUNTANT |
-| `/accounting/journal` | JournalEntriesPage | ADMIN, ACCOUNTANT |
-| `/accounting/trial-balance` | TrialBalancePage | ADMIN, ACCOUNTANT |
-| `/accounting/income-statement` | IncomeStatementPage | ADMIN, ACCOUNTANT |
-| `/accounting/balance-sheet` | BalanceSheetPage | ADMIN, ACCOUNTANT |
-| `/accounting/portfolio` | LoanPortfolioPage | ADMIN, ACCOUNTANT |
-| `/login` | LoginPage | public |
+| Path                           | Page                    | Roles               |
+| ------------------------------ | ----------------------- | ------------------- |
+| `/`                            | DashboardPage           | all                 |
+| `/customers`                   | CustomersPage           | all                 |
+| `/customers/:id`               | CustomerDetailPage      | all                 |
+| `/customers/:id/survey`        | CreditSurveyPage        | all                 |
+| `/loans`                       | LoansPage               | all                 |
+| `/loans/:id`                   | LoanDetailPage          | all                 |
+| `/kyc`                         | KycReviewPage           | ADMIN, LOAN_OFFICER |
+| `/accounting`                  | AccountingDashboardPage | ADMIN, ACCOUNTANT   |
+| `/accounting/accounts`         | ChartOfAccountsPage     | ADMIN, ACCOUNTANT   |
+| `/accounting/journal`          | JournalEntriesPage      | ADMIN, ACCOUNTANT   |
+| `/accounting/trial-balance`    | TrialBalancePage        | ADMIN, ACCOUNTANT   |
+| `/accounting/income-statement` | IncomeStatementPage     | ADMIN, ACCOUNTANT   |
+| `/accounting/balance-sheet`    | BalanceSheetPage        | ADMIN, ACCOUNTANT   |
+| `/accounting/portfolio`        | LoanPortfolioPage       | ADMIN, ACCOUNTANT   |
+| `/login`                       | LoginPage               | public              |
 
 Dev proxies `/api` and `/uploads` to `http://localhost:3001`.
 
@@ -127,18 +127,18 @@ script.
 **Factor catalog** (`factors.ts`) — survey factors total 100 weighted
 points, behavior factors total 50:
 
-| Factor | Source | Max | Notes |
-| --- | --- | --- | --- |
-| `income` | survey | 25 | Monthly income tier |
-| `employment` | survey | 15 | Stability + tenure |
-| `debt_ratio` | survey | 15 | Reverse-scored |
-| `housing` | survey | 10 | Own / rent / live-in |
-| `dependents` | survey | 5 | Reverse-scored |
-| `education` | survey | 10 | Highest attainment |
-| `savings` | survey | 20 | Liquid buffer in months |
-| `prior_loans` | behavior | 15 | Count, capped |
-| `defaults` | behavior | 15 | Reverse-scored |
-| `on_time_rate` | behavior | 20 | % installments paid on/before due |
+| Factor         | Source   | Max | Notes                             |
+| -------------- | -------- | --- | --------------------------------- |
+| `income`       | survey   | 25  | Monthly income tier               |
+| `employment`   | survey   | 15  | Stability + tenure                |
+| `debt_ratio`   | survey   | 15  | Reverse-scored                    |
+| `housing`      | survey   | 10  | Own / rent / live-in              |
+| `dependents`   | survey   | 5   | Reverse-scored                    |
+| `education`    | survey   | 10  | Highest attainment                |
+| `savings`      | survey   | 20  | Liquid buffer in months           |
+| `prior_loans`  | behavior | 15  | Count, capped                     |
+| `defaults`     | behavior | 15  | Reverse-scored                    |
+| `on_time_rate` | behavior | 20  | % installments paid on/before due |
 
 **Exports**
 
@@ -168,17 +168,17 @@ final installment so the closing balance is exactly `0`.
 
 **Chart of accounts** (`chart.ts`) — system codes referenced by auto-posting:
 
-| Code | Account | Type | Normal |
-| --- | --- | --- | --- |
-| `1000` | Cash | ASSET | DEBIT |
-| `1100` | Loans Receivable | ASSET | DEBIT |
-| `1190` | Allowance for Doubtful Accounts | ASSET | CREDIT |
-| `1200` | Interest Receivable | ASSET | DEBIT |
-| `3000` | Owner's Equity | EQUITY | CREDIT |
-| `4000` | Interest Income | INCOME | CREDIT |
-| `4100` | Fee Income | INCOME | CREDIT |
-| `5000` | Bad Debt Expense | EXPENSE | DEBIT |
-| `5100` | Operating Expense | EXPENSE | DEBIT |
+| Code   | Account                         | Type    | Normal |
+| ------ | ------------------------------- | ------- | ------ |
+| `1000` | Cash                            | ASSET   | DEBIT  |
+| `1100` | Loans Receivable                | ASSET   | DEBIT  |
+| `1190` | Allowance for Doubtful Accounts | ASSET   | CREDIT |
+| `1200` | Interest Receivable             | ASSET   | DEBIT  |
+| `3000` | Owner's Equity                  | EQUITY  | CREDIT |
+| `4000` | Interest Income                 | INCOME  | CREDIT |
+| `4100` | Fee Income                      | INCOME  | CREDIT |
+| `5000` | Bad Debt Expense                | EXPENSE | DEBIT  |
+| `5100` | Operating Expense               | EXPENSE | DEBIT  |
 
 **Auto-posting** (`posting.ts`):
 
@@ -193,7 +193,19 @@ final installment so the closing balance is exactly `0`.
 - `buildTrialBalance`
 - `buildIncomeStatement`
 - `buildBalanceSheet` (computes retained earnings from income/expense)
-- `buildAgingReport` (CURRENT / 1–30 / 31–60 / 61–90 / 90+)
+- `buildAgingReport` — per-loan rows plus totals keyed by `AgingBucket`
+- `agingBucketFor` — days past due → `CURRENT` | `D_1_30` | `D_31_60` |
+  `D_61_90` | `D_91_120` | `D_121_180` | `D_180_PLUS`, each band
+  inclusive of its upper bound. Exported so callers outside the lib
+  share one derivation of a band instead of restating the thresholds;
+  `apps/api → reports.service.ts` uses it for the collections-aging
+  export.
+- `AGING_BUCKETS` — the report order. Exported so the UI cannot invent
+  a different one.
+- `OVERDUE_BUCKETS` — everything except `CURRENT`, derived from
+  `AGING_BUCKETS` rather than listed, so a band added later cannot
+  render in the table while quietly dropping out of the
+  portfolio-at-risk total above it.
 
 Persistence lives in `@loan/db → AccountingRepository`, which resolves
 account codes, allocates `JE-YYYY-NNNNNN` numbers, and posts entries

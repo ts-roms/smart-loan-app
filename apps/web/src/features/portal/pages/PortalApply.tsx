@@ -15,6 +15,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -156,20 +157,22 @@ export function PortalApply() {
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-3">
           <Field label="Product">
-            <Select value={productCode} onValueChange={setProductCode}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(products.data ?? [])
-                  .filter((p) => p.active)
-                  .map((p) => (
-                    <SelectItem key={p.id} value={p.code}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            {(id) => (
+              <Select value={productCode} onValueChange={setProductCode}>
+                <SelectTrigger id={id}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(products.data ?? [])
+                    .filter((p) => p.active)
+                    .map((p) => (
+                      <SelectItem key={p.id} value={p.code}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            )}
           </Field>
 
           {product && (
@@ -405,20 +408,6 @@ export function PortalApply() {
 function clamp(n: number, lo: number, hi: number): number {
   if (Number.isNaN(n)) return lo;
   return Math.min(hi, Math.max(lo, n));
-}
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
-    </div>
-  );
 }
 function Stat({ label, value }: { label: string; value: string }) {
   return (

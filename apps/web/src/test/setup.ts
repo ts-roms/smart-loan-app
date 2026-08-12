@@ -6,6 +6,14 @@ import { afterEach, vi } from "vitest";
 /**
  * Shared setup for component tests.
  *
+ * Vitest's `globals` are off in this workspace, so jest-dom is pulled in
+ * via its `/vitest` entrypoint — that variant registers the matchers on
+ * the `expect` Vitest exports rather than on a global. The explicit
+ * cleanup matters for the same reason: without `globals`,
+ * @testing-library/react cannot auto-register its afterEach hook, so
+ * mounted trees would leak into the next test and duplicate every query
+ * result.
+ *
  * jsdom implements the DOM but not the browser around it. Everything
  * stubbed below is something jsdom genuinely does not have — not
  * something the app should be avoiding. A stub that hides real

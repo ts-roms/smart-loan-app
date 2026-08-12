@@ -14,8 +14,10 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Field as UiField,
   Input,
   useToast,
+  type FieldProps,
 } from "@loan/ui";
 import { Briefcase, IdCard, LogOut, MapPin, User } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
@@ -364,26 +366,23 @@ function Section({
   );
 }
 
-function Field({
-  label,
-  required,
-  hint,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  hint?: string;
-  children: ReactNode;
-}) {
+/**
+ * The shared `Field` in this page's typography.
+ *
+ * Not a reimplementation — every accessible-name concern lives in
+ * @loan/ui. This only carries the three style choices that make the
+ * borrower-facing onboarding form look unlike the staff screens: a
+ * larger label, the inherited foreground colour rather than the muted
+ * one, and an informational rather than alarming required marker.
+ * Setting them here beats repeating them at all 21 call sites.
+ */
+function Field(props: FieldProps) {
   return (
-    <label className="space-y-1 block">
-      <span className="text-sm">
-        {label}
-        {required && <span className="text-info"> *</span>}
-      </span>
-      {children}
-      {hint && <span className="text-[11px] text-fg-subtle block">{hint}</span>}
-    </label>
+    <UiField
+      {...props}
+      labelClassName={props.labelClassName ?? "text-sm text-fg"}
+      requiredClassName="text-info"
+    />
   );
 }
 
@@ -396,13 +395,17 @@ function SelectField({
   value,
   onChange,
   options,
+  /** Forwarded so a `Field` label can name the select. */
+  id,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: Array<[string, string]>;
+  id?: string;
 }) {
   return (
     <select
+      id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="w-full bg-surface-2 border border-default rounded-md px-3 py-2 text-sm"

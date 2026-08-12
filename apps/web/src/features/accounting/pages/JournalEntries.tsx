@@ -13,12 +13,13 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  DatePicker,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DatePicker,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -506,19 +507,4 @@ function updateLine(
   patch: Partial<LineDraft>,
 ) {
   setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
-    </div>
-  );
 }

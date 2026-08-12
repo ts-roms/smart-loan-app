@@ -25,6 +25,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -36,7 +37,7 @@ import {
   useToast,
 } from "@loan/ui";
 import { History, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
-import { useId, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { usePermission } from "../../../hooks/use-permission";
 
@@ -357,33 +358,37 @@ function RuleDialog({
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Action">
-              <Select
-                value={action}
-                onValueChange={(v) => setAction(v as RuleAction)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AUTO_APPROVE">Auto-approve</SelectItem>
-                  <SelectItem value="AUTO_REJECT">Auto-reject</SelectItem>
-                  <SelectItem value="MANUAL_REVIEW">Manual review</SelectItem>
-                </SelectContent>
-              </Select>
+              {(id) => (
+                <Select
+                  value={action}
+                  onValueChange={(v) => setAction(v as RuleAction)}
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AUTO_APPROVE">Auto-approve</SelectItem>
+                    <SelectItem value="AUTO_REJECT">Auto-reject</SelectItem>
+                    <SelectItem value="MANUAL_REVIEW">Manual review</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </Field>
             <Field label="Status">
-              <Select
-                value={active ? "a" : "p"}
-                onValueChange={(v) => setActive(v === "a")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="a">Active</SelectItem>
-                  <SelectItem value="p">Paused</SelectItem>
-                </SelectContent>
-              </Select>
+              {(id) => (
+                <Select
+                  value={active ? "a" : "p"}
+                  onValueChange={(v) => setActive(v === "a")}
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="a">Active</SelectItem>
+                    <SelectItem value="p">Paused</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </Field>
           </div>
           <Field label="Reason (stored on loan when this rule fires)">
@@ -622,32 +627,4 @@ function fmt(iso: string) {
     dateStyle: "medium",
     timeStyle: "short",
   });
-}
-
-/**
- * The label was floating free — no `htmlFor`, no wrapping — so nothing
- * connected it to the control beneath it. Sighted users infer the pair
- * from position; a screen reader announces an unlabelled textbox, and
- * clicking the label does not focus the field.
- *
- * `aria-labelledby` rather than `htmlFor`, because the children here
- * are a mix of plain inputs and Radix Selects, and a Radix trigger is a
- * button whose real id the parent does not own.
- */
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  const id = useId();
-  return (
-    <div className="space-y-1">
-      <label id={id} className="text-xs text-fg-muted">
-        {label}
-      </label>
-      <div aria-labelledby={id}>{children}</div>
-    </div>
-  );
 }

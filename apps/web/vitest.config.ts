@@ -6,10 +6,16 @@ import { defineConfig } from "vitest/config";
  * plugin and a build-time HTML rewriter, neither of which a unit test
  * run needs, and both of which slow it down for nothing.
  *
+ * The React plugin IS needed here — component specs are .tsx and would
+ * otherwise reach the runner untransformed.
+ *
  * jsdom rather than node because the tests worth writing here are
  * component tests. The web app has almost no pure helpers — its logic
  * lives in what it decides to RENDER, which is exactly where the risk
- * is: a control that should be hidden and isn't.
+ * is: a control that should be hidden and isn't. The specs also assert
+ * on real accessible-name computation (see field.test.tsx), and the
+ * label/control association only exists once there is a DOM to
+ * associate in.
  */
 export default defineConfig({
   plugins: [react()],

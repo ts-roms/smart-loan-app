@@ -26,6 +26,8 @@ export function CustomerPicker({
   onChange,
   placeholder = "Search by name, email, ID, or reference",
   exclude,
+  /** Forwarded to the inner input so a `Field` label can name it. */
+  id,
 }: {
   value: string;
   onChange: (id: string) => void;
@@ -40,6 +42,7 @@ export function CustomerPicker({
    * than never offering it.
    */
   exclude?: string[];
+  id?: string;
 }) {
   const customers = useCustomers();
   // Memoized because `?? []` allocates a fresh array on every render while
@@ -84,6 +87,7 @@ export function CustomerPicker({
       suggestOnFocus
       maxResults={10}
       placeholder={placeholder}
+      id={id}
       emptyMessage={(q) => `No customers match “${q}”.`}
       renderSuggestion={(c) => (
         <span className="flex items-center justify-between gap-3 min-w-0">
