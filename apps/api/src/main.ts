@@ -3,6 +3,7 @@ import {
   AccountingRepository,
   PermissionRepository,
   RoleRepository,
+  ScoringCatalogRepository,
 } from "@loan/db";
 
 import { buildApp } from "./app";
@@ -47,6 +48,15 @@ validateConfig(app.log);
  * is missing and never deletes or renames what an accountant has
  * customised.
  *
+ * The scoring catalog's BASELINE version is minted here too, and for a
+ * reason particular to it: the snapshot has to be the shape
+ * @loan/credit-scoring consumes, fallback included, so it cannot be
+ * written by the migration without duplicating that mapping in SQL. A
+ * deployment that scored a borrower before the baseline existed would
+ * stamp a null version — recoverable, but a null nobody can later fill
+ * in, so it is worth minting before the first request rather than on
+ * the first edit.
+ *
  * Multi-tenant note: this reconciles the DEFAULT schema only, matching
  * what boot can know before any JWT names a tenant. Per-tenant schemas
  * still use POST /admin/rbac/sync and POST /accounting/chart/seed.
@@ -55,8 +65,11 @@ try {
   const perms = await new PermissionRepository(app.prisma).seed();
   const roles = await new RoleRepository(app.prisma).seedDefaults();
   const chart = await new AccountingRepository(app.prisma).seedDefaultChart();
+  const scorecard = await new ScoringCatalogRepository(
+    app.prisma,
+  ).ensureBaseline();
   app.log.info(
-    `RBAC catalog reconciled: ${perms.created} permission(s) created (${perms.existing} existing), ${roles.created} role(s) created (${roles.existing} reconciled); chart: ${chart.created} account(s) created (${chart.existing} existing)`,
+    `RBAC catalog reconciled: ${perms.created} permission(s) created (${perms.existing} existing), ${roles.created} role(s) created (${roles.existing} reconciled); chart: ${chart.created} account(s) created (${chart.existing} existing); scorecard at v${scorecard.version}${scorecard.created ? " (baseline minted)" : ""}`,
   );
 } catch (err) {
   app.log.error(

@@ -56,6 +56,14 @@ export class ScoringService {
     // the emphasis without moving the 300–850 scale.
     const catalog = await this.catalog.activeCatalog();
     const result = computeCreditScore({ answers, behavior, catalog });
+    /*
+     * Which scorecard did this. Read AFTER the catalog rather than
+     * derived from it, so the two cannot disagree — and null rather than
+     * a guess if the baseline has not been minted yet, because an
+     * invented version number is worse than an absent one.
+     */
+    const catalogVersion =
+      (await this.catalog.currentVersion())?.version ?? null;
 
     const saved = await this.survey.saveResponse({
       customerId,
@@ -63,6 +71,7 @@ export class ScoringService {
       score: result.score,
       tier: result.tier,
       breakdown: result.breakdown,
+      catalogVersion,
       computedById: args.actorId,
     });
     await this.scores.upsertLatest({
@@ -71,6 +80,7 @@ export class ScoringService {
       tier: result.tier,
       breakdown: result.breakdown,
       sourceSurveyId: saved.id,
+      catalogVersion,
     });
 
     return { ...result, surveyId: saved.id };

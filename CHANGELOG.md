@@ -128,6 +128,29 @@ doing that against the shared development database would drift the ledger a
 little on every run. That needs a disposable database per run, which is the
 next piece of work rather than something to fake with cleanup code.
 
+### Added — scorecard versioning
+
+The decision-rule question applied to credit scores, and narrower than the
+audit claimed. `CreditScore.breakdown` already froze each factor's label,
+resolved maxPoints, achieved weight and points — a stored score already said
+what it was made **of**. What it could not say was what it was made **by**:
+whether two scores are comparable, what the questions offered before someone
+edited an option's weight, which factors were switched off, or who changed the
+scorecard and when.
+
+`ScoringCatalogVersion` snapshots the **whole** catalog per version, not one
+row per factor. That difference is forced rather than chosen: points normalize
+against a fixed 150-point total, so raising one factor's weight lowers every
+other factor's points — there is no edit that touches one factor. The snapshot
+is stored in the shape `@loan/credit-scoring` consumes, so replaying a
+historical scorecard is a function call rather than a reconstruction.
+
+Baseline minted at boot rather than by the migration, because the snapshot has
+to include the shipped-catalog fallback. Read endpoints are `scoring.read`, not
+admin — an officer explaining a score needs the scorecard that produced it.
+
+No UI yet: the history is reachable by API only. (migration `20260812090000`)
+
 ### Added — documentation
 
 - Phase 0 audit: nine artifacts plus a gap matrix, recommended architecture and

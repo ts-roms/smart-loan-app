@@ -20,5 +20,16 @@ export default defineConfig({
     // Each file gets a clean DOM; testing-library's auto-cleanup runs
     // between tests within one.
     restoreMocks: true,
+    /*
+     * Three times the default, because these tests are three times the
+     * work: mounting a page, rendering Radix menus and dialogs into
+     * jsdom, and driving them with userEvent's real-ish event sequences.
+     *
+     * They pass comfortably on their own and were seen to time out under
+     * `nx run-many -t test`, where fourteen projects compete for the
+     * same cores. A suite that fails on a busy machine and passes on a
+     * quiet one is a suite people learn to re-run instead of read.
+     */
+    testTimeout: 15_000,
   },
 });

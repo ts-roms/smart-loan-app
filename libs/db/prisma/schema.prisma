@@ -549,6 +549,13 @@ model CreditScore {
   breakdown      Json
   /// Link to the survey that produced this score, when one applies
   sourceSurveyId String?
+  /// Which scorecard produced it — see ScoringCatalogVersion.
+  ///
+  /// The breakdown already says what the score was MADE of. This says
+  /// what it was made BY, which is what makes two scores comparable and
+  /// a cohort re-runnable. Null on scores computed before versioning,
+  /// which is honest: the catalog of the day was never recorded.
+  catalogVersion Int?
   computedAt     DateTime   @default(now())
 
   customer Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -573,6 +580,10 @@ model SurveyResponse {
   tier         CreditTier
   /// Per-factor explanation (same shape as CreditScore.breakdown)
   breakdown    Json
+  /// The scorecard these answers were scored against. Matters more here
+  /// than on CreditScore: the ANSWERS are keyed by question, and the
+  /// questions are what the catalog owns.
+  catalogVersion Int?
   computedAt   DateTime   @default(now())
   computedById String
 
@@ -628,6 +639,82 @@ model SurveyFactor {
   questions SurveyQuestionDef[]
 
   @@index([order])
+}
+
+/**
+ * Append-only history of the scoring catalog.
+ *
+ * The counterpart to DecisionRuleVersion, and deliberately shaped
+ * differently. A decision rule is versioned individually because rules
+ * are independent — editing one says nothing about the others. The
+ * scorecard is not like that: factor points are DERIVED from relative
+ * weights against a fixed 150-point total, so raising one factor's
+ * weight lowers every other factor's points. There is no such thing as
+ * a change to one factor. The versioned unit is the whole catalog.
+ *
+ * What this adds over what was already there. `CreditScore.breakdown`
+ * is genuinely explanatory — it freezes each factor's label, its
+ * resolved maxPoints, the 0..1 weight achieved, and a human-readable
+ * source line. A stored score already says what it was made of. What it
+ * cannot say is:
+ *
+ *   • which scorecard produced it, so two scores cannot be known to be
+ *     comparable, and a cohort cannot be re-run under the catalog that
+ *     scored it;
+ *   • what the QUESTIONS offered. The breakdown records the factor, not
+ *     the question, so once someone edits a CHOICE option's weight,
+ *     "why did answering 'employed 2 years' score 0.6?" has no answer;
+ *   • which factors were switched OFF. An inactive factor is absent
+ *     from the breakdown, indistinguishable from one that scored zero;
+ *   • who changed the scorecard, when, or why.
+ *
+ * `snapshot` is the full ScoringCatalog the lib consumes — factors and
+ * questions, in its own shapes — so a version is replayable through
+ * `computeCreditScore` rather than merely readable.
+ */
+model ScoringCatalogVersion {
+  id      String @id @default(uuid())
+  /// 1-based and dense. Stamped onto CreditScore and SurveyResponse.
+  version Int    @unique
+
+  /// `{ factors: [...], questions: [...] }` — exactly the shape
+  /// `computeCreditScore` takes, so replaying a historical scorecard is
+  /// a function call and not a reconstruction.
+  snapshot Json
+
+  /// Denormalised for the history list, which would otherwise have to
+  /// parse every snapshot to render a row.
+  factorCount   Int
+  questionCount Int
+
+  effectiveFrom DateTime  @default(now())
+  /// Null on the current version.
+  effectiveTo   DateTime?
+
+  /// What the edit touched. Coarse on purpose — the snapshot holds the
+  /// detail, and a finer taxonomy would be a second thing to keep true.
+  changeType ScoringCatalogChangeType
+  /// One line, generated: "weight changed on 'income'". Saves an
+  /// operator from diffing two JSON blobs to see what moved.
+  changeSummary String?
+  /// Free text from whoever made the change.
+  changeNote    String?
+  /// Not a foreign key: staff leave, the history outlives them.
+  changedById   String?
+
+  @@index([effectiveFrom(sort: Desc)])
+}
+
+enum ScoringCatalogChangeType {
+  /// The first version — seeded, or backfilled by the migration.
+  BASELINE
+  FACTOR_ADDED
+  FACTOR_CHANGED
+  FACTOR_REMOVED
+  QUESTION_ADDED
+  QUESTION_CHANGED
+  QUESTION_REMOVED
+  REORDERED
 }
 
 model SurveyQuestionDef {

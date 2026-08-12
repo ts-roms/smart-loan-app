@@ -7,6 +7,8 @@
  *   GET  /scoring/tier?score=720               any authenticated
  *
  *   GET    /scoring/catalog                    customers.read
+ *   GET    /scoring/catalog/versions          scoring.read
+ *   GET    /scoring/catalog/versions/:version scoring.read
  *   POST   /scoring/catalog/factors            admin.scoring_catalog
  *   PATCH  /scoring/catalog/factors/:id        admin.scoring_catalog
  *   DELETE /scoring/catalog/factors/:id        admin.scoring_catalog
@@ -97,6 +99,22 @@ export async function scoringRoutes(app: FastifyInstance) {
   };
 
   app.get("/catalog", read, cat.list);
+  /*
+   * Reading the history is the same permission as reading the catalog,
+   * not the admin one. An officer explaining a customer's score needs to
+   * know which scorecard produced it — and, if it was not the current
+   * one, what that scorecard said. Withholding that would leave them
+   * explaining a number with the wrong weights.
+   *
+   * Registered before any "/catalog/:something" pattern so "versions"
+   * is never mistaken for one.
+   */
+  app.get("/catalog/versions", read, cat.history);
+  app.get<{ Params: { version: string } }>(
+    "/catalog/versions/:version",
+    read,
+    cat.version,
+  );
   app.post("/catalog/factors", editCatalog, cat.createFactor);
   app.post("/catalog/factors/reorder", editCatalog, cat.reorderFactors);
   app.patch<{ Params: { id: string } }>(

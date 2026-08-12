@@ -81,16 +81,14 @@ Snapshotted onto the loan: `creditScoreAtApply`, `tierAtApply`,
 | Rule versioning                      | **EXISTS**             | `DecisionRule.version` + append-only `DecisionRuleVersion`. Only outcome-changing edits mint a version — a rename does not                                                              |
 | Effective dating                     | **EXISTS**             | `[effectiveFrom, effectiveTo)` per version; `GET /decision-rules/as-of?at=` rebuilds the whole set at a moment, paused rules included                                                   |
 | Decision reproducibility             | **EXISTS**             | `LoanApplication.decisionRuleId/Name/Version` + `decisionContext`; `versionsToEvaluable` replays a historical set through the same evaluator. Stamped even on manual review — see below |
-| Scorecard versioning                 | **MISSING**            | same problem for the catalog: an edited factor weight changes what a stored score _means_, though stored breakdowns retain their computed values                                        |
+| Scorecard versioning                 | **EXISTS**             | `ScoringCatalogVersion` — the WHOLE catalog per version, since points normalize against a fixed total. `CreditScore.catalogVersion` / `SurveyResponse.catalogVersion` stamp it          |
 | `CONDITIONAL_APPROVAL` as a decision | **MISSING**            | §19 lists four decisions; the system has three actions and a separate approval chain                                                                                                    |
 | Approval matrix by amount band       | **PARTIAL**            | `LoanApprovalStep` chain exists and is configurable, but amount-banded levels (§22) not confirmed                                                                                       |
 | Self-approval prevention             | **NEEDS VERIFICATION** | approval chain exists; whether an approver can approve their own submission was not traced                                                                                              |
 | DTI / LTV as first-class rules       | **PARTIAL**            | conditions can express them from context, but there is no DTI/LTV band in product config                                                                                                |
 
-**Closed 11 Aug 2026** (migration `20260811180000_decision_rule_versioning`).
-Scorecard versioning remains open — the same problem for
-`SurveyCatalog` factor weights, where an edited weight changes what a stored
-score _means_.
+**Closed 11 Aug 2026** (migration `20260811180000_decision_rule_versioning`),
+with the scorecard following on 12 Aug (`20260812090000`).
 
 ## How it works
 
@@ -119,9 +117,56 @@ SUBMITTED loan now names the rule that routed it — verified end to end, where 
 probe application came back stamped `KYC incomplete → manual v1` with the full
 context the engine saw.
 
+## Scorecard versioning
+
+Same question, different shape — and the audit's framing of it was too
+strong, which is worth recording because building on it would have
+produced the wrong thing.
+
+`CreditScore.breakdown` was already good. It freezes each factor's label,
+its resolved maxPoints, the 0..1 weight achieved, the points, and a
+human-readable source line. **A stored score already says what it was
+made of.** What it could not say was what it was made _by_, and hence:
+
+- whether two scores are comparable at all;
+- what the QUESTIONS offered — the breakdown records the factor, not the
+  question, so editing a `CHOICE` option's weight leaves "why did
+  answering 'employed 2 years' score 0.6?" unanswerable;
+- which factors were switched **off** — an inactive factor is simply
+  absent, indistinguishable from one that scored zero;
+- who changed the scorecard, when, or why.
+
+`ScoringCatalogVersion` closes those. The versioned unit is the **whole
+catalog**, unlike a decision rule, and that difference is forced rather
+than chosen: factor points are normalized against a fixed 150-point
+total, so raising one factor's weight lowers every other factor's
+points. There is no edit that touches one factor, and a per-factor
+history would describe a change that did not happen while hiding the one
+that did.
+
+The snapshot is stored in the shape `@loan/credit-scoring` consumes, so
+replaying a historical scorecard is a function call — verified against
+the dev database, where v1 (9 factors / 7 questions) rescored through
+`computeCreditScore` directly.
+
+The baseline is minted at **boot**, not by the migration, because the
+snapshot must include the `DEFAULT_CATALOG` fallback for a tenant whose
+tables are still empty. Reproducing that mapping in SQL would duplicate
+it, and duplicated mappings drift.
+
+Read paths are `scoring.read`, not the admin permission: an officer
+explaining a customer's score needs to know which scorecard produced it,
+and what that scorecard said if it was not the current one.
+
+    GET /scoring/catalog/versions           list, snapshots omitted
+    GET /scoring/catalog/versions/:version  one, snapshot included
+
 ### Still open
 
-- Scorecard (`SurveyCatalog`) versioning — same argument, different table.
+- **No UI yet.** The record and the API exist; the questionnaires admin
+  page shows no version badge and no history panel. Deliberate — the
+  audit gap was about the record, not the screen — but it means the
+  history is currently reachable only by API.
 - Scheduled activation. `effectiveFrom` records when a version **took** effect,
   not when it **will**; a rule that should start on the 1st still has to be
   switched on by hand. Different feature, and worth doing separately rather than
