@@ -92,6 +92,34 @@ list_tenant_slugs() {
     || true
 }
 
+# Warn when pg_dump is a newer major than the server it is dumping.
+#
+# Found by the restore drill on 12 Aug 2026, and it is a nastier failure
+# than it sounds: pg_dump 18 dumping a 16 server emits a header
+# containing `SET transaction_timeout = 0;`, a GUC that did not exist
+# before 17. The dump completes, the file looks right, gzip is happy —
+# and every attempt to replay it into a 16 server dies on line 9 with
+# "unrecognized configuration parameter". A backup that cannot be
+# restored into a server of the version you are running is not a backup,
+# and nothing in the backup path noticed for as long as nobody tried.
+#
+# A warning rather than a hard failure: a dump taken with a mismatched
+# client is still worth more than no dump at all, and refusing here
+# would silently take out a nightly job over what is usually a packaging
+# untidiness. Fix it by installing client tools matching the server's
+# major version, then re-run drill.sh to confirm.
+warn_on_version_skew() {
+  local client server
+  client="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+  server="$(psql "$DATABASE_URL" -At -c 'SHOW server_version_num;' 2>/dev/null || echo '')"
+  [[ -z "$server" ]] && return 0
+  server=$((server / 10000))
+  if [[ "$client" != "$server" ]]; then
+    log "!! pg_dump is ${client}.x but the server is ${server}.x"
+    log "!! a dump from a NEWER client may not replay into a ${server}.x server — see docs/modernization/disaster-recovery.md"
+  fi
+}
+
 # Run pg_dump for one Postgres schema → one file under daily/. Returns
 # the file path on stdout for the caller to pick up.
 dump_schema() {
@@ -111,6 +139,8 @@ dump_schema() {
 # ── Run ─────────────────────────────────────────────────────────────────
 START="$(date +%s)"
 PRODUCED=()
+
+warn_on_version_skew
 
 if [[ -n "$SLUG_ONLY" ]]; then
   log "ad-hoc dump for tenant ${SLUG_ONLY}"

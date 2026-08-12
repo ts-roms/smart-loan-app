@@ -1,14 +1,26 @@
 # Backup + restore
 
-Two scripts, both bash:
+Three scripts, all bash, plus a verifier:
 
-- **`backup.sh`** — `pg_dump`s the database per schema, rotates locally,
-  optionally pushes to S3. Designed to run from cron.
-- **`restore.sh`** — inverse. Restores from any dump produced by
-  `backup.sh`; refuses to run against a non-empty DB unless `--force`.
+- **`backup.sh`** — `pg_dump`s the database per schema, archives
+  `UPLOADS_DIR`, rotates locally, optionally pushes to S3. Runs from cron.
+- **`restore.sh`** — inverse. Restores dumps **and** the uploads archive
+  into an **explicitly named target**; refuses to touch the database in
+  `DATABASE_URL` without `--force`.
+- **`drill.sh`** — the whole restore drill as one command: baseline →
+  backup → restore into a scratch DB → migration status → verify.
+- **`libs/db/scripts/verify-restore.mjs`** — the verification. Row counts
+  against a pre-backup baseline, the five reconciliation checks re-run on
+  the restored database, and an uploads manifest digest.
 
-The pair are designed to work in both single-tenant and multi-tenant
+The scripts are designed to work in both single-tenant and multi-tenant
 modes — `backup.sh` reads `MULTI_TENANT` and adjusts what it dumps.
+
+> **Client tool versions matter.** `pg_dump` must match the server's
+> major version. A newer `pg_dump` writes a header the older server
+> rejects, producing a dump that looks fine and cannot be restored. The
+> drill found exactly this; see `docs/modernization/disaster-recovery.md`.
+> `backup.sh` now warns when it detects the skew.
 
 ## Daily backup setup
 
@@ -32,31 +44,46 @@ incremental uploads are cheap. AWS creds via the normal env vars.
 
 ## Restore drill (every quarter)
 
-You haven't tested a restore until you've restored. Run this drill
-quarterly against a non-production DB:
+You haven't tested a restore until you've restored. One command, from
+the repo root, against the live database as the source:
 
 ```bash
-# 1. Pick yesterday's dump
-DUMP=$(ls -t /var/backups/smart-loan/daily/*-full.sql.gz | head -1)
-
-# 2. Spin up a scratch DB
-createdb smart_loan_restore_test
-
-# 3. Restore into it
-DATABASE_URL=postgresql://app:pw@localhost/smart_loan_restore_test \
-  ./restore.sh "$DUMP"
-
-# 4. Verify row counts match production (rough sanity check)
-psql postgresql://app:pw@localhost/smart_loan_restore_test \
-  -c 'SELECT count(*) FROM "Customer"; SELECT count(*) FROM "LoanApplication";'
-
-# 5. Cleanup
-dropdb smart_loan_restore_test
+DATABASE_URL=postgresql://app:pw@db/production \
+UPLOADS_DIR=/srv/smart-loan/uploads \
+  bash deploy/backup/drill.sh
 ```
 
-If step 3 fails, the dump is corrupt. If step 4 returns wildly
-different numbers, the backup window or the dump scope is wrong.
-Either is a P0 you'd rather find now than during an actual outage.
+It records a baseline, runs the real `backup.sh`, restores into a
+throwaway `smart_loan_drill` database, checks `prisma migrate status`,
+then verifies row counts + reconciliation + the uploads manifest. Exit 0
+means the backup is a backup. It drops the scratch database afterwards
+unless you pass `--keep`.
+
+The drill needs the repo checked out with dependencies installed, since
+the verification imports `libs/db/src/lib/reconciliation.ts`. A backup
+host carrying only `psql` can restore but cannot verify.
+
+Last run and its findings: `docs/modernization/disaster-recovery.md`.
+
+## Restoring for real
+
+`restore.sh` never infers its target. Name it:
+
+```bash
+# into a scratch database (what the drill does)
+./restore.sh --target smart_loan_drill --create --uploads-dir /tmp/u \
+  /var/backups/smart-loan/daily/20260812T023000-full.sql.gz \
+  /var/backups/smart-loan/daily/20260812T023000-uploads.tar.gz
+
+# over the live database — the real thing, hence --force
+./restore.sh --target smart_loan --force --uploads-dir /srv/smart-loan/uploads \
+  /var/backups/smart-loan/daily/20260812T023000-full.sql.gz \
+  /var/backups/smart-loan/daily/20260812T023000-uploads.tar.gz
+```
+
+Without `--force` it refuses any target that resolves to `DATABASE_URL`,
+checked both textually and by cluster fingerprint — so
+`127.0.0.1` instead of `localhost` does not get past it.
 
 ## Per-tenant restore (multi-tenant mode)
 
@@ -64,8 +91,12 @@ When a single tenant's data is corrupted but the rest is fine:
 
 ```bash
 DATABASE_URL=postgresql://app:pw@db/production \
-  ./restore.sh /var/backups/smart-loan/daily/20260523T023000-tenant-acme.sql.gz
+  ./restore.sh --target smart_loan --force \
+    /var/backups/smart-loan/daily/20260523T023000-tenant-acme.sql.gz
 ```
 
 This drops + restores only `tenant_acme`; other tenants stay untouched.
-The `--clean --if-exists` flags in the dump ensure idempotency.
+The `--clean --if-exists` flags in the dump ensure idempotency. `--force`
+is required because the target _is_ the production database — that is
+the point of a per-tenant restore, and it should still be typed
+deliberately.
