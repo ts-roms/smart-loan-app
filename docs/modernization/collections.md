@@ -23,30 +23,41 @@ Delinquency, follow-up and recovery. Read from the code on 11 Aug 2026.
 repossession. Frontend: `/collections`, `/collections/my-accounts`,
 `/collections/demand-letters`, `/repossession`.
 
-## Aging buckets — a concrete gap
+## Aging buckets
 
-`buildAgingReport` (`libs/accounting/src/reports.ts`) classifies into **five**:
+`buildAgingReport` (`libs/accounting/src/reports.ts`) classifies into the
+**seven** §28 bands, as of 12 Aug 2026:
 
 ```
 CURRENT      daysOverdue <= 0
 D_1_30       <= 30
 D_31_60      <= 60
 D_61_90      <= 90
-D_90_PLUS    everything beyond
+D_91_120     <= 120
+D_121_180    <= 180
+D_180_PLUS   everything beyond
 ```
 
-§28 requires **seven**: Current, 1–30, 31–60, 61–90, **91–120**, **121–180**,
-**180+**.
+Upper bounds are inclusive, so a loan exactly 90 days overdue is still
+`D_61_90` and 91 is the first non-performing day — the direction that does
+_not_ flatter the book.
 
-The difference matters more than it looks. `D_90_PLUS` collapses a 91-day
-account and a three-year account into one number, and those are entirely
-different recovery propositions — one is still being worked, the other is a
-write-off candidate. Splitting the tail is a small change to `bucketFor` plus
-the report type, and it unlocks roll-rate analysis (§30), which needs the finer
-grain to be meaningful.
+It used to stop at `D_90_PLUS`, which collapsed a 91-day account and a
+three-year account into one number. Those are entirely different recovery
+propositions: one is still being worked, the other is a write-off candidate.
+The split also unlocks roll-rate analysis (§30), which needs the finer grain to
+mean anything.
 
-**Recommended:** extend `bucketFor` to the seven §28 buckets. Low risk — it is a
-pure function with an enumerated return, and the report consumers are typed.
+**Report-only, and that is why it was cheap.** Nothing persists a bucket and
+nothing computes money from one — ECL stages independently on days-past-due
+(`ecl.repository.ts`) — so this moved no provision, restated no ledger, and
+needed no migration.
+
+Two lists that used to be maintained by hand are now derived: the report order
+comes from the label `Record`, which the type makes exhaustive, and
+portfolio-at-risk sums by excluding `CURRENT` rather than by naming the overdue
+bands. Both were guarding the same failure — a band added later that renders in
+the table while quietly dropping out of the total above it.
 
 ## Gaps against §28–§30
 
@@ -64,7 +75,7 @@ pure function with an enumerated return, and the report consumers are typed.
 | Repossession                    | **EXISTS — GOOD**                                                                                                |
 | Recovery / write-off            | **EXISTS**                                                                                                       |
 | Recovery _after_ write-off      | **NEEDS VERIFICATION** — write-off is terminal; whether a later recovery can be posted against it was not traced |
-| Seven aging buckets             | **PARTIAL — five**                                                                                               |
+| Seven aging buckets             | **EXISTS** — §28's bands, 11 tests on the boundaries                                                             |
 | Collection priority score (§29) | **MISSING**                                                                                                      |
 | Roll-rate analysis (§30)        | **MISSING**                                                                                                      |
 

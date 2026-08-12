@@ -241,8 +241,33 @@ export interface ScheduleRowForAging {
   paidInFullAt: Date | null;
 }
 
+/**
+ * Seven bands, not five.
+ *
+ * `D_90_PLUS` put a loan 95 days late in the same row as one three years
+ * gone. Those are not the same asset: the first is a collections problem
+ * with a borrower still reachable, the second is a write-off argument,
+ * and they provision at different rates. A report that cannot tell them
+ * apart cannot support either decision — and roll-rate analysis (§30)
+ * needs the finer grain to mean anything at all.
+ *
+ * The boundaries are §28's: Current, 1–30, 31–60, 61–90, 91–120,
+ * 121–180, 180+. 90 days stays a boundary, so the non-performing line is
+ * still readable straight off the report; what changes is that
+ * everything past it is split rather than pooled.
+ *
+ * Report-only. Nothing persists a bucket and nothing computes money from
+ * one — ECL stages independently on days-past-due (`ecl.repository.ts`),
+ * so widening these moves no provision and restates no ledger.
+ */
 export type AgingBucket =
-  "CURRENT" | "D_1_30" | "D_31_60" | "D_61_90" | "D_90_PLUS";
+  | "CURRENT"
+  | "D_1_30"
+  | "D_31_60"
+  | "D_61_90"
+  | "D_91_120"
+  | "D_121_180"
+  | "D_180_PLUS";
 
 export interface AgingRow {
   loanId: string;
@@ -266,13 +291,45 @@ export interface AgingReport {
 
 const DAY_MS = 86_400_000;
 
+/**
+ * Bands are inclusive of their upper bound, so a loan exactly 90 days
+ * overdue is still `D_61_90` and 91 is the first day of the next band.
+ * That matches how "90 days past due" is read in practice — the 90th day
+ * has not yet passed the threshold.
+ */
 function bucketFor(daysOverdue: number): AgingBucket {
   if (daysOverdue <= 0) return "CURRENT";
   if (daysOverdue <= 30) return "D_1_30";
   if (daysOverdue <= 60) return "D_31_60";
   if (daysOverdue <= 90) return "D_61_90";
-  return "D_90_PLUS";
+  if (daysOverdue <= 120) return "D_91_120";
+  if (daysOverdue <= 180) return "D_121_180";
+  return "D_180_PLUS";
 }
+
+/** Report order. Exported so the UI cannot invent a different one. */
+export const AGING_BUCKETS: readonly AgingBucket[] = [
+  "CURRENT",
+  "D_1_30",
+  "D_31_60",
+  "D_61_90",
+  "D_91_120",
+  "D_121_180",
+  "D_180_PLUS",
+] as const;
+
+/**
+ * The bands that count toward portfolio at risk — everything except
+ * CURRENT.
+ *
+ * Derived rather than listed, so adding a band cannot silently leave it
+ * out of the PAR figure. That is the specific way a hand-maintained list
+ * goes wrong: the new band renders in the table and quietly stops being
+ * counted.
+ */
+export const OVERDUE_BUCKETS: readonly AgingBucket[] = AGING_BUCKETS.filter(
+  (b) => b !== "CURRENT",
+);
 
 export function buildAgingReport(
   rows: ScheduleRowForAging[],
@@ -330,13 +387,10 @@ export function buildAgingReport(
     };
   });
 
-  const totals: Record<AgingBucket, number> = {
-    CURRENT: 0,
-    D_1_30: 0,
-    D_31_60: 0,
-    D_61_90: 0,
-    D_90_PLUS: 0,
-  };
+  const totals = Object.fromEntries(AGING_BUCKETS.map((b) => [b, 0])) as Record<
+    AgingBucket,
+    number
+  >;
   for (const r of out)
     totals[r.bucket] = round2(totals[r.bucket] + r.outstandingBalance);
 

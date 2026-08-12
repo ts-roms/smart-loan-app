@@ -151,6 +151,26 @@ admin — an officer explaining a score needs the scorecard that produced it.
 
 No UI yet: the history is reachable by API only. (migration `20260812090000`)
 
+### Changed — seven aging buckets
+
+`buildAgingReport` stopped at `D_90_PLUS`, which put a loan 95 days late in the
+same row as one three years gone. Those are different assets with different
+provisioning and different collection decisions, and a report that cannot tell
+them apart supports neither. Now the §28 bands: Current, 1–30, 31–60, 61–90,
+91–120, 121–180, 180+. Upper bounds inclusive, so 90 days is still `D_61_90`
+and 91 is the first non-performing day — the direction that does not flatter
+the book.
+
+Report-only, which is why it needed no migration: nothing persists a bucket and
+nothing computes money from one. ECL stages independently on days-past-due, so
+this moved no provision and restated no ledger.
+
+Two hand-maintained lists became derived along the way — the report order now
+comes from the label `Record` the type makes exhaustive, and portfolio-at-risk
+sums by excluding `CURRENT` rather than by naming the overdue bands. Both were
+guarding the same failure: a band added later that renders in the table while
+dropping out of the total above it.
+
 ### Added — documentation
 
 - Phase 0 audit: nine artifacts plus a gap matrix, recommended architecture and
