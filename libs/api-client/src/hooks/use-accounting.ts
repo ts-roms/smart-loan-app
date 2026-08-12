@@ -8,6 +8,7 @@ import type {
   JournalEntry,
   JournalEntryCreateInput,
   LedgerLine,
+  RollRateReport,
   TrialBalanceReport,
 } from "@loan/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +36,8 @@ export const accountingKeys = {
     ["accounting", "reports", "balance-sheet", asOf ?? ""] as const,
   loanPortfolio: (asOf?: string) =>
     ["accounting", "reports", "loan-portfolio", asOf ?? ""] as const,
+  rollRate: (from?: string, to?: string) =>
+    ["reports", "roll-rate", from ?? "", to ?? ""] as const,
 };
 
 export function useAccounts() {
@@ -178,6 +181,31 @@ export function useLoanPortfolio(
       ),
     // See QueryToggle in use-ops: suppressed for callers without
     // accounting.read rather than firing and taking a 403.
+    enabled: opts.enabled ?? true,
+  });
+}
+
+/**
+ * Roll-rate matrix (§30) — `GET /reports/roll-rate`. Note the endpoint
+ * lives in the reports feature (permission `reports.read`), not under
+ * /accounting; the hook sits here because the page that renders it is
+ * the aging report's.
+ */
+export function useRollRate(
+  from?: string,
+  to?: string,
+  opts: { enabled?: boolean } = {},
+) {
+  const query = new URLSearchParams();
+  if (from) query.set("from", from);
+  if (to) query.set("to", to);
+  const qs = query.toString();
+  return useQuery({
+    queryKey: accountingKeys.rollRate(from, to),
+    queryFn: () =>
+      getApiClient().get<RollRateReport>(
+        `/reports/roll-rate${qs ? `?${qs}` : ""}`,
+      ),
     enabled: opts.enabled ?? true,
   });
 }
