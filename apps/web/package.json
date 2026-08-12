@@ -48,5 +48,11 @@
     "vite": "^6.4.3",
     "vite-plugin-pwa": "^0.21.2",
     "vitest": "^4.1.10"
+  },
+  "nx": {
+    "tags": [
+      "type:app",
+      "scope:browser"
+    ]
   }
 }

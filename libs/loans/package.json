@@ -15,5 +15,11 @@
     "@types/node": "^22.20.1",
     "typescript": "~5.7.3",
     "vitest": "^4.1.10"
+  },
+  "nx": {
+    "tags": [
+      "type:domain",
+      "scope:shared"
+    ]
   }
 }
