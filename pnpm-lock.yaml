@@ -380,6 +380,21 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(jsdom@25.0.1)(vite@6.4.3(@types/node@22.20.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
 
+  libs/collections:
+    devDependencies:
+      "@loan/accounting":
+        specifier: workspace:*
+        version: link:../accounting
+      "@types/node":
+        specifier: ^22.20.1
+        version: 22.20.1
+      typescript:
+        specifier: ~5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(jsdom@25.0.1)(vite@6.4.3(@types/node@22.20.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))
+
   libs/credit-scoring:
     devDependencies:
       "@types/node":
@@ -397,6 +412,9 @@ importers:
       "@loan/accounting":
         specifier: workspace:*
         version: link:../accounting
+      "@loan/collections":
+        specifier: workspace:*
+        version: link:../collections
       "@loan/credit-scoring":
         specifier: workspace:*
         version: link:../credit-scoring

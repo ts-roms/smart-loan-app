@@ -21,6 +21,7 @@
       "@loan/credit-scoring": ["libs/credit-scoring/src/index.ts"],
       "@loan/loans": ["libs/loans/src/index.ts"],
       "@loan/accounting": ["libs/accounting/src/index.ts"],
+      "@loan/collections": ["libs/collections/src/index.ts"],
       "@loan/payments": ["libs/payments/src/index.ts"],
       "@loan/jobs": ["libs/jobs/src/index.ts"],
       "@loan/notifications": ["libs/notifications/src/index.ts"],

@@ -296,8 +296,13 @@ const DAY_MS = 86_400_000;
  * overdue is still `D_61_90` and 91 is the first day of the next band.
  * That matches how "90 days past due" is read in practice — the 90th day
  * has not yet passed the threshold.
+ *
+ * Exported because the aging report is no longer the only caller: the
+ * collection priority score (§29) bands DPD too, and a second copy of
+ * these thresholds would let the queue and the report disagree about how
+ * overdue an account is. One definition, both readers.
  */
-function bucketFor(daysOverdue: number): AgingBucket {
+export function agingBucketFor(daysOverdue: number): AgingBucket {
   if (daysOverdue <= 0) return "CURRENT";
   if (daysOverdue <= 30) return "D_1_30";
   if (daysOverdue <= 60) return "D_31_60";
@@ -383,7 +388,7 @@ export function buildAgingReport(
       outstandingBalance: acc.outstandingBalance,
       installmentsOverdue: acc.installmentsOverdue,
       daysOverdue,
-      bucket: bucketFor(daysOverdue),
+      bucket: agingBucketFor(daysOverdue),
     };
   });
 
