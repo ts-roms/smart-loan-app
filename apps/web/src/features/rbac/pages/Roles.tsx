@@ -23,6 +23,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
   Input,
   SkeletonCard,
   useConfirm,
@@ -584,20 +585,5 @@ function ImpactConfirmDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
-    </div>
   );
 }

@@ -150,7 +150,13 @@ export default tseslint.config(
   // Assertions frequently produce intentionally-unused expressions and
   // deliberately-wrong types; the type-aware rules fight that.
   {
-    files: ["**/*.{test,spec}.{ts,tsx}", "**/*.d.ts"],
+    files: [
+      "**/*.{test,spec}.{ts,tsx}",
+      "**/*.d.ts",
+      // The test harness itself — setup file, render helper. Same
+      // relaxations apply: it exists to serve the specs.
+      "**/src/test/**/*.{ts,tsx}",
+    ],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
@@ -161,6 +167,10 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/no-unsafe-argument": "off",
       "@typescript-eslint/no-unsafe-call": "off",
+      // react-refresh guards hot-reload boundaries in the dev server.
+      // Test files are never hot-reloaded, so a helper that exports both
+      // a wrapper component and a `render` function is fine here.
+      "react-refresh/only-export-components": "off",
     },
   },
 );

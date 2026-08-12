@@ -12,6 +12,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -199,47 +200,51 @@ function NewAccountDialog({ onClose }: { onClose: () => void }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Type">
-              <Select
-                value={form.type}
-                onValueChange={(v) =>
-                  setForm({
-                    ...form,
-                    type: v as Account["type"],
-                    normalBalance:
-                      v === "ASSET" || v === "EXPENSE" ? "DEBIT" : "CREDIT",
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ASSET">Asset</SelectItem>
-                  <SelectItem value="LIABILITY">Liability</SelectItem>
-                  <SelectItem value="EQUITY">Equity</SelectItem>
-                  <SelectItem value="INCOME">Income</SelectItem>
-                  <SelectItem value="EXPENSE">Expense</SelectItem>
-                </SelectContent>
-              </Select>
+              {(id) => (
+                <Select
+                  value={form.type}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      type: v as Account["type"],
+                      normalBalance:
+                        v === "ASSET" || v === "EXPENSE" ? "DEBIT" : "CREDIT",
+                    })
+                  }
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ASSET">Asset</SelectItem>
+                    <SelectItem value="LIABILITY">Liability</SelectItem>
+                    <SelectItem value="EQUITY">Equity</SelectItem>
+                    <SelectItem value="INCOME">Income</SelectItem>
+                    <SelectItem value="EXPENSE">Expense</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </Field>
             <Field label="Normal balance">
-              <Select
-                value={form.normalBalance}
-                onValueChange={(v) =>
-                  setForm({
-                    ...form,
-                    normalBalance: v as Account["normalBalance"],
-                  })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DEBIT">Debit</SelectItem>
-                  <SelectItem value="CREDIT">Credit</SelectItem>
-                </SelectContent>
-              </Select>
+              {(id) => (
+                <Select
+                  value={form.normalBalance}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      normalBalance: v as Account["normalBalance"],
+                    })
+                  }
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DEBIT">Debit</SelectItem>
+                    <SelectItem value="CREDIT">Credit</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </Field>
           </div>
           <Field label="Description (optional)">
@@ -261,20 +266,5 @@ function NewAccountDialog({ onClose }: { onClose: () => void }) {
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
-    </div>
   );
 }

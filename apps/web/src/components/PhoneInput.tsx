@@ -30,6 +30,8 @@ export function PhoneInput({
   placeholder = "09171234567",
   /** Blank is fine — for secondary numbers and other optional fields. */
   optional,
+  /** Forwarded to the inner input so a `Field` label can name it. */
+  id,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -37,6 +39,7 @@ export function PhoneInput({
   disabled?: boolean;
   placeholder?: string;
   optional?: boolean;
+  id?: string;
 }) {
   const [touched, setTouched] = useState(false);
 
@@ -54,6 +57,7 @@ export function PhoneInput({
   return (
     <div className="space-y-1">
       <Input
+        id={id}
         type="tel"
         inputMode="numeric"
         autoComplete="tel"

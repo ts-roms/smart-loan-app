@@ -45,6 +45,13 @@ export interface DatePickerProps {
   className?: string;
   /** Display format for the trigger label (date-fns format string). */
   displayFormat?: string;
+  /**
+   * Id for the trigger button, so an external `<label htmlFor>` can
+   * name it — this is what `Field` passes down. The trigger is the
+   * focusable element here, so the id belongs on it rather than on the
+   * popover or any wrapper.
+   */
+  id?: string;
 }
 
 export function DatePicker({
@@ -57,6 +64,7 @@ export function DatePicker({
   clearable,
   className,
   displayFormat = "PP",
+  id,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const selected = isoToDate(value);
@@ -68,6 +76,7 @@ export function DatePicker({
       <PopoverTrigger asChild>
         <button
           type="button"
+          id={id}
           disabled={disabled}
           className={cn(
             "field-chrome flex h-10 w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-sm text-left",

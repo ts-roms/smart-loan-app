@@ -95,9 +95,22 @@ export interface SearchInputProps<T> {
   emptyMessage?: (query: string) => ReactNode;
   /**
    * Optional aria-label for the input. If omitted we fall back to the
-   * placeholder so screen readers always announce something.
+   * placeholder so screen readers always announce something — but only
+   * when nothing else names the field. See `id`.
    */
   ariaLabel?: string;
+  /**
+   * Id for the inner input, so an external `<label htmlFor>` can name
+   * it — this is what `Field` passes down.
+   *
+   * Supplying it also suppresses the placeholder-derived `aria-label`
+   * fallback. That fallback is not additive: `aria-label` outranks a
+   * `<label>` element in the accessible name algorithm, so leaving it
+   * on would mean a field labelled "Borrower" announcing itself as
+   * "Search…". An explicitly passed `ariaLabel` still wins, since that
+   * is a deliberate choice by the caller.
+   */
+  id?: string;
 }
 
 export function SearchInput<T>({
@@ -116,6 +129,7 @@ export function SearchInput<T>({
   disabled = false,
   emptyMessage,
   ariaLabel,
+  id,
 }: SearchInputProps<T>) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -211,12 +225,13 @@ export function SearchInput<T>({
         <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-subtle" />
         <input
           ref={inputRef}
+          id={id}
           type="text"
           role="combobox"
           aria-expanded={showSuggestions}
           aria-controls={listboxId}
           aria-autocomplete="list"
-          aria-label={ariaLabel ?? placeholder}
+          aria-label={ariaLabel ?? (id ? undefined : placeholder)}
           placeholder={placeholder}
           value={displayValue}
           disabled={disabled}

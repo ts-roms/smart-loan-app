@@ -14,12 +14,13 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  DatePicker,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DatePicker,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -590,21 +591,6 @@ function Info({
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
-    </div>
-  );
-}
-
 function KycChecklist({ status }: { status: KycValidationResult }) {
   const isComplete = status.complete;
   return (
@@ -880,20 +866,22 @@ function RestructureButton({
                 write-down.
               </p>
               <Field label="Product">
-                <Select value={productCode} onValueChange={setProductCode}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(products.data ?? [])
-                      .filter((p) => p.active)
-                      .map((p) => (
-                        <SelectItem key={p.id} value={p.code}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                {(id) => (
+                  <Select value={productCode} onValueChange={setProductCode}>
+                    <SelectTrigger id={id}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(products.data ?? [])
+                        .filter((p) => p.active)
+                        .map((p) => (
+                          <SelectItem key={p.id} value={p.code}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </Field>
               <div className="grid grid-cols-3 gap-2">
                 <Field label="New principal (₱)">

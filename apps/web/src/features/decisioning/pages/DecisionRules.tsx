@@ -23,6 +23,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Field,
   Input,
   Select,
   SelectContent,
@@ -315,33 +316,37 @@ function RuleDialog({
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Action">
-              <Select
-                value={action}
-                onValueChange={(v) => setAction(v as RuleAction)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AUTO_APPROVE">Auto-approve</SelectItem>
-                  <SelectItem value="AUTO_REJECT">Auto-reject</SelectItem>
-                  <SelectItem value="MANUAL_REVIEW">Manual review</SelectItem>
-                </SelectContent>
-              </Select>
+              {(id) => (
+                <Select
+                  value={action}
+                  onValueChange={(v) => setAction(v as RuleAction)}
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AUTO_APPROVE">Auto-approve</SelectItem>
+                    <SelectItem value="AUTO_REJECT">Auto-reject</SelectItem>
+                    <SelectItem value="MANUAL_REVIEW">Manual review</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </Field>
             <Field label="Status">
-              <Select
-                value={active ? "a" : "p"}
-                onValueChange={(v) => setActive(v === "a")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="a">Active</SelectItem>
-                  <SelectItem value="p">Paused</SelectItem>
-                </SelectContent>
-              </Select>
+              {(id) => (
+                <Select
+                  value={active ? "a" : "p"}
+                  onValueChange={(v) => setActive(v === "a")}
+                >
+                  <SelectTrigger id={id}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="a">Active</SelectItem>
+                    <SelectItem value="p">Paused</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </Field>
           </div>
           <Field label="Reason (stored on loan when this rule fires)">
@@ -454,20 +459,5 @@ function RuleDialog({
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-fg-muted">{label}</label>
-      {children}
-    </div>
   );
 }
