@@ -53,10 +53,61 @@ import { zodToJsonSchema } from "zod-to-json-schema";
  * accepts.
  */
 export function jsonSchema(schema: z.ZodType): Record<string, unknown> {
-  return zodToJsonSchema(schema, {
-    target: "openApi3",
-    $refStrategy: "none",
-  });
+  return numericExclusiveBounds(
+    zodToJsonSchema(schema, {
+      target: "openApi3",
+      $refStrategy: "none",
+    }),
+  );
+}
+
+/**
+ * Rewrite OpenAPI 3.0's boolean exclusive bounds into the numeric form.
+ *
+ * This one takes the server down, which is why it is here rather than
+ * in a caller. `target: "openApi3"` renders `z.number().positive()` as
+ * `{ minimum: 0, exclusiveMinimum: true }` — correct for OpenAPI 3.0 and
+ * rejected by AJV, which compiles REQUEST schemas and accepts only
+ * `{ exclusiveMinimum: 0 }`. The result is not a bad spec, it is
+ * `FST_ERR_SCH_VALIDATION_BUILD: exclusiveMinimum must be number` at
+ * boot: the API refuses to start because someone documented a route.
+ *
+ * Found the hard way while documenting the scoring catalog, where
+ * `weight: z.number().positive()` was rewritten as a `.refine` to get
+ * past it. That workaround is the wrong shape — it puts the fix in
+ * whichever schema happens to trip first and leaves the next one to
+ * rediscover it. Converted centrally instead, and `.positive()` restored.
+ *
+ * The two forms mean the same thing (`minimum: 0` + exclusive is `> 0`;
+ * `exclusiveMinimum: 0` is `> 0`), and Swagger UI renders the numeric
+ * form correctly, so nothing is lost by preferring the one that boots.
+ */
+function numericExclusiveBounds(
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  if (schema.exclusiveMinimum === true && typeof schema.minimum === "number") {
+    schema.exclusiveMinimum = schema.minimum;
+    delete schema.minimum;
+  }
+  if (schema.exclusiveMaximum === true && typeof schema.maximum === "number") {
+    schema.exclusiveMaximum = schema.maximum;
+    delete schema.maximum;
+  }
+  for (const key of ["properties", "patternProperties"]) {
+    const group = schema[key] as
+      Record<string, Record<string, unknown>> | undefined;
+    if (group) for (const v of Object.values(group)) numericExclusiveBounds(v);
+  }
+  for (const key of ["items", "additionalProperties", "not"]) {
+    const child = schema[key];
+    if (child && typeof child === "object")
+      numericExclusiveBounds(child as Record<string, unknown>);
+  }
+  for (const key of ["anyOf", "oneOf", "allOf"]) {
+    const branches = schema[key] as Record<string, unknown>[] | undefined;
+    if (Array.isArray(branches)) branches.forEach(numericExclusiveBounds);
+  }
+  return schema;
 }
 
 /**
@@ -175,8 +226,15 @@ export interface RouteSchemaInput {
   params?: z.ZodType;
   /** 200 body. Omit for a 204. */
   response?: z.ZodType;
-  /** Status for `response`, when it is not 200. */
-  status?: 200 | 201 | 202;
+  /**
+   * Status for `response`, when it is not 200.
+   *
+   * 207 is here because `POST /accounting/journal/reverse-bulk` really
+   * answers Multi-Status — some reversals land and some are refused in
+   * one call. It was left undocumented rather than publish a 200 it
+   * never sends, which was the right call and a one-word fix.
+   */
+  status?: 200 | 201 | 202 | 207;
   /**
    * Which standard failures this route can return. Listed rather than
    * assumed: "this can 409" is real API documentation, and a blanket

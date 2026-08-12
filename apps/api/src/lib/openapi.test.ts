@@ -1,3 +1,4 @@
+import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -180,5 +181,87 @@ describe("error bodies are not stripped by their own schema", () => {
     >;
 
     expect(props.issues!.items!.additionalProperties).toBe(true);
+  });
+});
+
+/**
+ * Invariant: documenting a route cannot stop the server from starting.
+ *
+ * The sharpest failure this helper has produced. `target: "openApi3"`
+ * renders `z.number().positive()` as `{ minimum: 0, exclusiveMinimum:
+ * true }` — correct OpenAPI 3.0, and rejected by AJV, which compiles
+ * REQUEST schemas and accepts only `{ exclusiveMinimum: 0 }`. The result
+ * is not a slightly wrong spec: it is
+ * `FST_ERR_SCH_VALIDATION_BUILD: exclusiveMinimum must be number` while
+ * building the route, and the API refuses to boot because somebody
+ * documented it.
+ *
+ * It was first worked around in the schema that happened to trip it,
+ * which would have left every later one to rediscover it.
+ */
+describe("exclusive bounds are emitted in the form AJV accepts", () => {
+  it("converts a positive() bound to the numeric form", () => {
+    const s = jsonSchema(z.object({ weight: z.number().positive() }));
+    const weight = (s.properties as Record<string, Record<string, unknown>>)
+      .weight!;
+
+    expect(weight.exclusiveMinimum).toBe(0);
+    expect(weight.minimum).toBeUndefined();
+  });
+
+  it("converts an upper bound too", () => {
+    const s = jsonSchema(z.object({ r: z.number().lt(1) }));
+    const r = (s.properties as Record<string, Record<string, unknown>>).r!;
+
+    expect(r.exclusiveMaximum).toBe(1);
+    expect(r.maximum).toBeUndefined();
+  });
+
+  it("leaves inclusive bounds alone", () => {
+    // `.min(0)` means >= 0 and must stay `minimum: 0`. Converting it
+    // would quietly reject a legitimate zero.
+    const s = jsonSchema(z.object({ w: z.number().min(0).max(1) }));
+    const w = (s.properties as Record<string, Record<string, unknown>>).w!;
+
+    expect(w.minimum).toBe(0);
+    expect(w.maximum).toBe(1);
+    expect(w.exclusiveMinimum).toBeUndefined();
+  });
+
+  it("reaches a bound nested inside an array of objects", () => {
+    // Where the conversion would most plausibly be forgotten.
+    const s = jsonSchema(
+      z.object({ rows: z.array(z.object({ n: z.number().positive() })) }),
+    );
+    const rows = (s.properties as Record<string, Record<string, unknown>>)
+      .rows!;
+    const item = rows.items as Record<string, unknown>;
+    const n = (item.properties as Record<string, Record<string, unknown>>).n!;
+
+    expect(n.exclusiveMinimum).toBe(0);
+  });
+
+  it("actually builds a Fastify route — the failure was at boot", async () => {
+    /*
+     * The assertions above check the emitted JSON; this checks the thing
+     * that broke. AJV compiles the request schema when the route is
+     * registered, so `app.ready()` is where the old form threw.
+     */
+    const app = Fastify({ logger: false });
+    app.post(
+      "/thing",
+      {
+        schema: routeSchema({
+          summary: "A thing.",
+          tags: ["test"],
+          body: z.object({ weight: z.number().positive().max(1000) }),
+          response: z.object({ ok: z.boolean() }),
+        }),
+      },
+      async () => ({ ok: true }),
+    );
+
+    await expect(app.ready()).resolves.toBeDefined();
+    await app.close();
   });
 });

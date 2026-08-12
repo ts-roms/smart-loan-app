@@ -39,7 +39,22 @@ declare module "fastify" {
 }
 
 export async function decisionRuleRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * onRequest, not preHandler — and this matters now that routes in this
+   * group carry request schemas.
+   *
+   * Fastify's order is onRequest -> preValidation -> preHandler. With
+   * `authenticate` at preHandler, an UNAUTHENTICATED request carrying a
+   * malformed body got a 400 describing the schema instead of a 401:
+   * the API parsed, validated and explained itself to an anonymous
+   * caller before ever checking who they were. Verified before the fix
+   * (400) and after (401).
+   *
+   * `jwtVerify` reads the Authorization header only, so it is safe this
+   * early. Anything that needs the body — `resolveTenantFromBody` on the
+   * login route — stays where it is.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     req.decisionRulesServices = {

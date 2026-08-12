@@ -119,7 +119,7 @@ Original plan:
 | 3.1  | Object storage (S3/MinIO) for uploads; DB keeps metadata; signed URLs | ⬜ needs a bucket + credentials; backup now archives `UPLOADS_DIR`, so it is planned, not urgent      |
 | 3.2  | Playwright + 6 journeys against a live stack                          | ✅ 21 assertions. Read-only; a write journey needs a disposable DB per run                            |
 | 3.3  | Enable CSP in production                                              | ◐ API done (`/uploads/` sandboxed, JSON `default-src 'none'`). **The SPA has none** — deployment work |
-| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ◐ mechanism + bearer scheme + conventions done; **10 of 336** operations, ratcheted by a test         |
+| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ◐ mechanism + bearer scheme + conventions done; **49 of 337** operations, ratcheted by a test         |
 | 3.5  | Documented restore drill                                              | ⬜ the backup script exists and archives uploads; the drill has never been run                        |
 
 **Phase 3 is where we are.** Two Phase 4 items landed early because they were

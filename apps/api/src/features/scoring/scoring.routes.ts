@@ -46,9 +46,35 @@ import {
 } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { routeSchema } from "../../lib/openapi";
 import { ScoringCatalogController } from "./catalog.controller";
+import {
+  catalogHistoryResponseSchema,
+  catalogIdParamSchema,
+  catalogResponseSchema,
+  catalogVersionResponseSchema,
+  factorCreateSchema,
+  factorRowResponseSchema,
+  factorUpdateSchema,
+  questionCreateSchema,
+  questionRowResponseSchema,
+  questionUpdateSchema,
+  reorderSchema,
+  versionParamSchema,
+} from "./catalog.schemas";
 import { ScoringController } from "./scoring.controller";
+import {
+  creditScoreResponseSchema,
+  customerIdParamSchema,
+  submitSurveySchema,
+  submitSurveyResponseSchema,
+  surveyQuestionListResponseSchema,
+  tierQuerySchema,
+  tierResponseSchema,
+} from "./schemas";
 import { ScoringService } from "./scoring.service";
+
+const TAGS = ["scoring"];
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -60,7 +86,9 @@ declare module "fastify" {
 }
 
 export async function scoringRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  // onRequest so authentication precedes schema validation — see
+  // decision-rules.routes.ts for why.
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
@@ -79,18 +107,68 @@ export async function scoringRoutes(app: FastifyInstance) {
 
   const read = { preHandler: app.requirePermission("customers.read") };
 
-  app.get("/survey/questions", read, ctrl.questions);
+  app.get(
+    "/survey/questions",
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "The questionnaire, in the order it should be asked.",
+        tags: TAGS,
+        response: surveyQuestionListResponseSchema,
+        errors: [401, 403],
+      }),
+    },
+    ctrl.questions,
+  );
   app.post(
     "/survey/submit",
-    { preHandler: app.requirePermission("customers.write") },
+    {
+      preHandler: app.requirePermission("customers.write"),
+      schema: routeSchema({
+        summary:
+          "Score a completed questionnaire and persist it against the " +
+          "customer.",
+        tags: TAGS,
+        body: submitSurveySchema,
+        response: submitSurveyResponseSchema,
+        status: 201,
+        errors: [400, 401, 403],
+      }),
+    },
     ctrl.submit,
   );
   app.get<{ Params: { customerId: string } }>(
     "/customers/:customerId/score",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "The customer's most recent persisted score.",
+        tags: TAGS,
+        params: customerIdParamSchema,
+        response: creditScoreResponseSchema,
+        // 404 means never scored, not "no such customer".
+        errors: [400, 401, 403, 404],
+      }),
+    },
     ctrl.latestForCustomer,
   );
-  app.get("/tier", ctrl.tier);
+  /*
+   * Left open to any authenticated caller: a pure band lookup on a score
+   * passed in the query string, touching no rows at all. Hence no 403.
+   */
+  app.get(
+    "/tier",
+    {
+      schema: routeSchema({
+        summary: "Band a score into its A-F tier and bureau bucket.",
+        tags: TAGS,
+        querystring: tierQuerySchema,
+        response: tierResponseSchema,
+        errors: [400, 401],
+      }),
+    },
+    ctrl.tier,
+  );
 
   // ─── catalog (admin-editable survey) ───────────────────────────────
   const cat = new ScoringCatalogController();
@@ -98,7 +176,21 @@ export async function scoringRoutes(app: FastifyInstance) {
     preHandler: app.requirePermission("admin.scoring_catalog"),
   };
 
-  app.get("/catalog", read, cat.list);
+  app.get(
+    "/catalog",
+    {
+      ...read,
+      schema: routeSchema({
+        summary:
+          "The editable scorecard: factors, their questions, and what each " +
+          "weight is currently worth in points.",
+        tags: TAGS,
+        response: catalogResponseSchema,
+        errors: [401, 403],
+      }),
+    },
+    cat.list,
+  );
   /*
    * Reading the history is the same permission as reading the catalog,
    * not the admin one. An officer explaining a customer's score needs to
@@ -109,34 +201,157 @@ export async function scoringRoutes(app: FastifyInstance) {
    * Registered before any "/catalog/:something" pattern so "versions"
    * is never mistaken for one.
    */
-  app.get("/catalog/versions", read, cat.history);
+  app.get(
+    "/catalog/versions",
+    {
+      ...read,
+      schema: routeSchema({
+        summary:
+          "Every scorecard revision, newest first. Snapshots omitted — " +
+          "fetch one version to get its snapshot.",
+        tags: TAGS,
+        response: catalogHistoryResponseSchema,
+        errors: [401, 403],
+      }),
+    },
+    cat.history,
+  );
   app.get<{ Params: { version: string } }>(
     "/catalog/versions/:version",
-    read,
+    {
+      ...read,
+      schema: routeSchema({
+        summary: "One revision, snapshot included — the replayable payload.",
+        tags: TAGS,
+        params: versionParamSchema,
+        response: catalogVersionResponseSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
     cat.version,
   );
-  app.post("/catalog/factors", editCatalog, cat.createFactor);
-  app.post("/catalog/factors/reorder", editCatalog, cat.reorderFactors);
+  app.post(
+    "/catalog/factors",
+    {
+      ...editCatalog,
+      schema: routeSchema({
+        summary: "Add a factor. Redistributes every other factor's points.",
+        tags: TAGS,
+        body: factorCreateSchema,
+        response: factorRowResponseSchema,
+        status: 201,
+        // 409 is a duplicate `key` — the request was well-formed and
+        // permitted, and the catalog's state refuses it.
+        errors: [400, 401, 403, 409],
+      }),
+    },
+    cat.createFactor,
+  );
+  app.post(
+    "/catalog/factors/reorder",
+    {
+      ...editCatalog,
+      schema: routeSchema({
+        summary:
+          "Persist a new factor order. Mints a version; moves no points.",
+        tags: TAGS,
+        body: reorderSchema,
+        errors: [400, 401, 403],
+      }),
+    },
+    cat.reorderFactors,
+  );
   app.patch<{ Params: { id: string } }>(
     "/catalog/factors/:id",
-    editCatalog,
+    {
+      ...editCatalog,
+      schema: routeSchema({
+        summary:
+          "Edit a factor. A weight change restates every other factor's " +
+          "points.",
+        tags: TAGS,
+        params: catalogIdParamSchema,
+        body: factorUpdateSchema,
+        response: factorRowResponseSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
     cat.updateFactor,
   );
   app.delete<{ Params: { id: string } }>(
     "/catalog/factors/:id",
-    editCatalog,
+    {
+      ...editCatalog,
+      schema: routeSchema({
+        summary: "Remove a factor. Refused while it still owns questions.",
+        tags: TAGS,
+        params: catalogIdParamSchema,
+        // 409 carries `questionCount`: the FK cascades, so deleting a
+        // factor would silently take its questions and every answer key
+        // they own with it. Move them first.
+        errors: [400, 401, 403, 409],
+      }),
+    },
     cat.deleteFactor,
   );
-  app.post("/catalog/questions", editCatalog, cat.createQuestion);
-  app.post("/catalog/questions/reorder", editCatalog, cat.reorderQuestions);
+  app.post(
+    "/catalog/questions",
+    {
+      ...editCatalog,
+      schema: routeSchema({
+        summary: "Add a question to a factor.",
+        tags: TAGS,
+        body: questionCreateSchema,
+        response: questionRowResponseSchema,
+        status: 201,
+        errors: [400, 401, 403, 409],
+      }),
+    },
+    cat.createQuestion,
+  );
+  app.post(
+    "/catalog/questions/reorder",
+    {
+      ...editCatalog,
+      schema: routeSchema({
+        summary:
+          "Persist a new question order. Versioned because the order is " +
+          "what the borrower was asked in.",
+        tags: TAGS,
+        body: reorderSchema,
+        errors: [400, 401, 403],
+      }),
+    },
+    cat.reorderQuestions,
+  );
   app.patch<{ Params: { id: string } }>(
     "/catalog/questions/:id",
-    editCatalog,
+    {
+      ...editCatalog,
+      schema: routeSchema({
+        summary:
+          "Edit a question. kind and config are validated as the MERGED " +
+          "pair, not just the fields sent.",
+        tags: TAGS,
+        params: catalogIdParamSchema,
+        body: questionUpdateSchema,
+        response: questionRowResponseSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
     cat.updateQuestion,
   );
   app.delete<{ Params: { id: string } }>(
     "/catalog/questions/:id",
-    editCatalog,
+    {
+      ...editCatalog,
+      schema: routeSchema({
+        summary: "Remove a question. Stored answers under its key survive.",
+        tags: TAGS,
+        params: catalogIdParamSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
     cat.deleteQuestion,
   );
 }

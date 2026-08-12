@@ -40,9 +40,10 @@ import { routeSchema } from "./openapi";
  * Routes carrying a real response schema, as of the last time this was
  * raised. RAISE IT when you document more; never lower it silently.
  *
- * Current: health (3) + decision-rules (7).
+ * Current: health (3) + decision-rules (7) + accounting (19) +
+ * scoring (15) + jobs (5).
  */
-const DOCUMENTED = 10;
+const DOCUMENTED = 49;
 
 const FEATURES = join(import.meta.dirname, "..", "features");
 
