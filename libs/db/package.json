@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@loan/accounting": "workspace:*",
+    "@loan/collections": "workspace:*",
     "@loan/credit-scoring": "workspace:*",
     "@loan/decisioning": "workspace:*",
     "@loan/jobs": "workspace:*",

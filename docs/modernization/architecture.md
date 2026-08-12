@@ -100,6 +100,18 @@ sitting outside the boundary system. No rule in `eslint.config.mjs` names a
 project — the constraints are written against tag patterns, so a newly tagged
 library inherits its layer's rules with no config change.
 
+**One caveat, found the first time a new library actually landed.** The rule
+resolves imports through Nx's cached project graph, so a brand-new library is
+invisible to it until that cache refreshes — the import is treated as an
+ordinary npm package and passes silently. `libs/collections` arrived untagged
+and linted clean; `npx nx reset` made the same file fail immediately.
+
+So the guarantee is "an untagged library fails lint **once Nx has seen it**",
+not "immediately". In CI that is automatic, because the cache starts cold. On a
+developer's machine, run `npx nx reset` after adding a library — and treat a
+boundary rule that suddenly goes quiet as a stale graph rather than as
+permission.
+
 ## Request lifecycle
 
 ```
