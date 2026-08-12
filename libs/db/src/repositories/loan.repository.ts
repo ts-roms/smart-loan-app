@@ -1739,12 +1739,40 @@ export class LoanRepository {
         },
       });
       if (!original) throw new Error("Loan not found");
-      if (!["ACTIVE", "DISBURSED", "DEFAULTED"].includes(original.status)) {
-        throw new Error(`Cannot restructure from status ${original.status}`);
-      }
       if (original.restructuredFromId) {
         throw new Error(
           "Cannot chain restructures off the same row; restructure the most recent loan in the chain.",
+        );
+      }
+      /*
+       * Claim the transition — same reasoning as `disburse` and
+       * `closeEarly`, and this was the last financial transition still
+       * doing check-then-act. Two concurrent restructures both read
+       * ACTIVE, both passed the old JS status check, and both created a
+       * replacement loan: the borrower's debt duplicated, with a second
+       * set of settlement rows behind it. The WHERE clause is the lock;
+       * only one caller can move the loan off a restructurable status,
+       * and the loser's whole transaction rolls back.
+       *
+       * The claim also has to come BEFORE the schedule settlement below,
+       * not after it where the old status write sat — settling first
+       * would let the losing caller mark instalments paid on a loan it
+       * never won.
+       */
+      const claim = await tx.loanApplication.updateMany({
+        where: {
+          id: original.id,
+          status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] },
+        },
+        data: { status: "RESTRUCTURED", closedAt: new Date() },
+      });
+      if (claim.count === 0) {
+        const current = await tx.loanApplication.findUnique({
+          where: { id: original.id },
+          select: { status: true },
+        });
+        throw new Error(
+          `Cannot restructure from status ${current?.status ?? original.status}`,
         );
       }
 
@@ -1764,14 +1792,12 @@ export class LoanRepository {
           },
         });
       }
-      const updatedOriginal = await tx.loanApplication.update({
-        // The row we resolved, not the caller's identifier, which may
-        // have been a loan number.
+      // The claim above already wrote RESTRUCTURED + closedAt; this is
+      // only the read-back for the return value. Keyed on the row we
+      // resolved, not the caller's identifier, which may have been a
+      // loan number.
+      const updatedOriginal = await tx.loanApplication.findUniqueOrThrow({
         where: { id: original.id },
-        data: {
-          status: "RESTRUCTURED",
-          closedAt: new Date(),
-        },
       });
 
       // Create the new loan, copying customer + collateral, linked back.
