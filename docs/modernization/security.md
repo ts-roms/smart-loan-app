@@ -53,10 +53,37 @@ What remains true, and is the real gap:
 Object storage remains the structural answer (roadmap 3.1), but it is no longer
 urgent for _access_, only for durability and scale.
 
-**S-2 (P2) — CSP disabled.** `helmet` is registered with
-`contentSecurityPolicy: false`. Understandable in development; in production it
-removes the main defence against injected script in an admin UI that renders
-customer-supplied strings. Roadmap 3.3.
+**S-2 — CSP. Closed 12 Aug 2026, for the API.**
+
+`helmet` still registers with `contentSecurityPolicy: false`, deliberately: one
+global policy cannot serve three kinds of response. The policy is set by hook
+instead.
+
+| Path            | Policy                                                                            | Why                                             |
+| --------------- | --------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `/uploads/`     | `default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox`    | Nothing served here may execute — see below     |
+| `/docs`         | none                                                                              | Swagger UI is a real HTML app and needs scripts |
+| everything else | `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` | It is all JSON, so it needs no sources at all   |
+
+The one that matters is `/uploads/`. `store.ts` already keeps `.svg` out of
+every borrower-writable subdir and explains why — uploads are served
+**same-origin**, so navigating directly to a stored SVG executes any script in
+it. That left `branding`, which is admin-writable and, unlike the rest,
+**public**: no signature is required, because the logo renders on the login
+screen before anyone holds a token. An admin-planted SVG on an unauthenticated
+path is a smaller hole than a borrower-planted one, and it is the same hole.
+
+`sandbox` closes it. A sandboxed response is its own opaque origin with
+scripting off, so the file renders and cannot reach the session that opened it.
+It governs **direct navigation** — the vector — and not `<img src>`, so the
+branding panel and every document preview are unaffected. Verified in the
+browser: uploads still render, no violations logged.
+
+**Still open: the SPA has no CSP.** `apps/web` is served by Vite in development
+and by a static host in production, neither of which this hook touches. That is
+where "injected script in an admin UI rendering customer-supplied strings"
+actually lands, and it needs a header on the static host or a `<meta>` in
+`index.html` — a deployment change rather than an application one.
 
 **S-3 (P2) — secrets management undocumented.** Configuration flows through
 `.env`. Adequate for self-hosted single-tenant, thin for the multi-tenant

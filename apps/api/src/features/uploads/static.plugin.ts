@@ -45,6 +45,37 @@ export async function uploadStaticPlugin(
     });
   });
 
+  /*
+   * Nothing served out of /uploads/ may execute.
+   *
+   * `store.ts` already keeps `.svg` out of every borrower-writable
+   * subdir, and says why: uploads are served SAME-ORIGIN, so navigating
+   * directly to a stored SVG runs any script inside it. That leaves
+   * `branding`, where an admin can still plant one — a smaller hole,
+   * but the same hole, and it is reachable by anyone who compromises an
+   * admin session rather than only by an admin.
+   *
+   * `sandbox` is what closes it. A sandboxed response is its own opaque
+   * origin with scripting off, so the file renders and cannot reach the
+   * session that opened it. It applies to DIRECT NAVIGATION — the
+   * vector — and not to `<img src>`, so the branding panel and every
+   * document preview are unaffected.
+   *
+   * default-src 'none' on top of that stops a served document fetching
+   * anything at all: no beacon, no exfiltration, nothing to see if a
+   * file does contain something it should not.
+   */
+  app.addHook("onSend", async (req, reply) => {
+    if (!req.url.startsWith("/uploads/")) return;
+    reply.header(
+      "Content-Security-Policy",
+      "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+    );
+    // Belt and braces with the CSP: stops a .png whose bytes are HTML
+    // from being re-interpreted as a document.
+    reply.header("X-Content-Type-Options", "nosniff");
+  });
+
   await app.register(staticPlugin, {
     root: opts.root,
     prefix: "/uploads/",

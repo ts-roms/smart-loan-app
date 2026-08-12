@@ -134,3 +134,64 @@ describe("public uploads", () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+/**
+ * Invariant: nothing served out of /uploads/ can execute.
+ *
+ * `store.ts` keeps `.svg` out of every borrower-writable subdir and says
+ * why — uploads are served SAME-ORIGIN, so navigating directly to a
+ * stored SVG runs any script inside it. That leaves `branding`, which is
+ * admin-writable and PUBLIC: no signature is needed to fetch the logo,
+ * because it renders on the login screen before anyone holds a token.
+ *
+ * So the residual vector is an admin-planted SVG on a path anyone can
+ * reach. `sandbox` closes it: a sandboxed response is its own opaque
+ * origin with scripting off. The file still renders, and it can no
+ * longer touch the session that opened it.
+ */
+describe("served files cannot execute", () => {
+  // Fastify types a header as string | string[] | number; only the
+  // string case can occur here, and the join keeps the array case from
+  // stringifying to "[object Object]" if it ever does.
+  const csp = (res: { headers: Record<string, unknown> }) => {
+    const h = res.headers["content-security-policy"];
+    return Array.isArray(h) ? h.join(" ") : typeof h === "string" ? h : "";
+  };
+
+  it("sandboxes a signed file", async () => {
+    const { url } = signUploadPath(KYC_PATH);
+    const res = await app.inject({ method: "GET", url });
+
+    expect(res.statusCode).toBe(200);
+    expect(csp(res)).toContain("sandbox");
+    expect(csp(res)).toContain("default-src 'none'");
+  });
+
+  it("sandboxes the PUBLIC branding path, which is the one that matters", async () => {
+    // Reachable without a signature and writable by an admin. If any
+    // single response needed this header, it is this one.
+    const res = await app.inject({ method: "GET", url: LOGO_PATH });
+
+    expect(res.statusCode).toBe(200);
+    expect(csp(res)).toContain("sandbox");
+  });
+
+  it("sends nosniff, so a .png full of HTML stays a .png", async () => {
+    const res = await app.inject({ method: "GET", url: LOGO_PATH });
+
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+  });
+
+  it("still lets the file itself render", async () => {
+    /*
+     * The bar this has to clear: the branding panel and every document
+     * preview use `<img src>`, and a CSP on the IMAGE response does not
+     * govern that embedding — it governs direct navigation, which is the
+     * vector. A policy that broke previews would be reverted within a
+     * day and the hole would come back with it.
+     */
+    const res = await app.inject({ method: "GET", url: LOGO_PATH });
+
+    expect(res.body).toBe("<svg/>");
+  });
+});

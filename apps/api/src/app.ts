@@ -123,7 +123,40 @@ export async function buildApp() {
     });
   }
 
+  /*
+   * CSP off in helmet, set by the hook below instead.
+   *
+   * helmet applies one policy to every route, and this API has three
+   * kinds of response that need three different answers: JSON (which
+   * needs nothing at all), Swagger UI at /docs (which is a real HTML app
+   * and needs scripts), and /uploads/ (which must never execute —
+   * handled in its own plugin, next to the signature check it belongs
+   * with). A single global policy would have to be loose enough for
+   * /docs, which is the same as having none where it matters.
+   */
   await app.register(helmet, { contentSecurityPolicy: false });
+
+  /*
+   * Everything this API returns is JSON, so it needs no sources at all.
+   *
+   * `default-src 'none'` costs nothing on a JSON response and closes the
+   * case where one is rendered as a document — an error page, a
+   * content-type slip, a browser sniffing an unexpected body.
+   * `frame-ancestors 'none'` is the modern X-Frame-Options and stops
+   * this API being framed.
+   *
+   * /docs is exempt because Swagger UI is a genuine HTML application;
+   * /uploads/ is exempt here because it sets its own, stricter policy.
+   * Both exemptions are by prefix rather than by route so a new path
+   * under either inherits the right answer.
+   */
+  app.addHook("onSend", async (req, reply) => {
+    if (req.url.startsWith("/docs") || req.url.startsWith("/uploads/")) return;
+    reply.header(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    );
+  });
   await app.register(cors, { origin: config.webOrigin, credentials: true });
   await app.register(sensible);
   await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } });

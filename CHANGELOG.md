@@ -171,6 +171,23 @@ sums by excluding `CURRENT` rather than by naming the overdue bands. Both were
 guarding the same failure: a band added later that renders in the table while
 dropping out of the total above it.
 
+### Added — Content Security Policy (API)
+
+Set by hook rather than by helmet, because one global policy cannot serve
+JSON, Swagger UI, and uploaded files at once. JSON responses get
+`default-src 'none'`; `/docs` is exempt; `/uploads/` gets `sandbox`.
+
+The uploads policy is the one with a real vector behind it. Uploaded files are
+served same-origin, and `branding` — admin-writable, and public because the
+logo renders on the login screen — accepts `.svg`. `sandbox` makes a served
+file its own opaque origin with scripting off: it still renders, and it can no
+longer touch the session that opened it. It governs direct navigation, not
+`<img src>`, so previews are unaffected — verified in the browser.
+
+The SPA still has no CSP. It is served by Vite in development and a static host
+in production, neither of which this hook touches; that one is a deployment
+change.
+
 ### Added — documentation
 
 - Phase 0 audit: nine artifacts plus a gap matrix, recommended architecture and
