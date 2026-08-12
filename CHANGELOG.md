@@ -111,9 +111,22 @@ badge announced only "v3" to a screen reader, and the rule editor's labels were
 not associated with their controls. Nine other copies of the same `Field`
 helper share the second defect and are flagged for a follow-up.
 
-E2E is still absent. Playwright is not a dependency, and component tests prove
-a page renders correctly from given data without proving the data is what the
-API sends. That remains the gap blocking a framework migration.
+**E2E followed**: Playwright, six journeys, 21 assertions against a live API —
+auth, RBAC, customer list and detail, decision-rule version history, and the
+loan schedule's arithmetic checked against what the DOM actually shows. They
+exist for the one thing component tests cannot do: catch the API and the page
+disagreeing about a shape.
+
+Writing them surfaced two things worth recording. The login route is throttled
+at 10/minute and signing in per test tripped it — fixed in the suite (sessions
+saved once per role and reused) rather than by weakening a real control. And
+`apps/web/e2e/` was invisible to both `tsc` and ESLint until added to the
+tsconfig.
+
+Every journey reads. Nothing covers apply → approve → disburse → pay, because
+doing that against the shared development database would drift the ledger a
+little on every run. That needs a disposable database per run, which is the
+next piece of work rather than something to fake with cleanup code.
 
 ### Added — documentation
 
@@ -129,10 +142,14 @@ Carried in [`docs/modernization/gap-matrix.md`](docs/modernization/gap-matrix.md
 
 Every P0 is closed, and so is every P1 except the frontend one.
 
-- **P1** — Playwright E2E, the precondition for any framework migration.
-  Component tests now cover the costly render decisions; nothing yet exercises
-  a journey end to end. Object storage for uploads is planned work rather than
-  urgent, since the backup script archives `UPLOADS_DIR`
+No P0 or P1 remains open.
+
+- **P2** — a write E2E journey (apply → disburse → pay), which needs a
+  disposable database per run; scorecard (`SurveyCatalog`) versioning, the same
+  argument as decision rules applied to factor weights; object storage for
+  uploads, now planned work rather than urgent since the backup script archives
+  `UPLOADS_DIR`; seven aging buckets rather than five; OpenAPI response
+  schemas; CSP; Nx module-boundary tags
 - **P2** — scorecard (`SurveyCatalog`) versioning, the same argument as
   decision rules applied to factor weights; seven aging buckets rather than
   five; OpenAPI response schemas; CSP; Nx module-boundary tags

@@ -63,12 +63,12 @@ change that would make it authoritative rather than merely protective.
 
 ## Gaps
 
-| Gap                                                                                                                                  | Priority                               |
-| ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
-| Frontend component testing — harness plus 5 files, 45 tests. Covers the surfaces where being wrong is costly, not the 148 components | **PARTIAL** (was P1)                   |
-| No E2E framework (`docs/smoke-tests/e2e.sh` is a shell script; Playwright is not a dependency)                                       | **P1** — blocks any frontend migration |
-| Golden corpus lacks fees, penalties, grace period, payment history, restructure, payoff (§82)                                        | P1                                     |
-| No coverage reporting — the numbers above are files, not lines                                                                       | P3                                     |
+| Gap                                                                                                                                  | Priority                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| Frontend component testing — harness plus 5 files, 45 tests. Covers the surfaces where being wrong is costly, not the 148 components | **PARTIAL** (was P1)                                                  |
+| E2E — Playwright, 6 journeys, 21 assertions against a live stack. Read-only; no journey covers apply → disburse → pay                | **PARTIAL** (was P1) — a disposable database per run is the next step |
+| Golden corpus lacks fees, penalties, grace period, payment history, restructure, payoff (§82)                                        | P1                                                                    |
+| No coverage reporting — the numbers above are files, not lines                                                                       | P3                                                                    |
 
 ## Frontend
 
@@ -98,10 +98,35 @@ badge announced only "v3" to a screen reader, and the rule editor's labels were
 not associated with their controls. Nine other copies of that `Field` helper
 carry the same defect — see the spawned task.
 
-**Still missing: E2E.** Playwright is not a dependency and no journey is
-exercised end to end. Component tests prove a page renders what it should from
-given data; they cannot prove the data is what the API sends. That gap is the
-one that still blocks a framework migration.
+## E2E
+
+Playwright, in `apps/web/e2e/`, run with `pnpm --filter @loan/web e2e`. Six
+journeys against a **live** API: auth, RBAC, the customer list and detail, the
+decision-rule version history, and the loan schedule's arithmetic. Full
+prerequisites in `apps/web/e2e/README.md`; `00-stack.spec.ts` checks them first
+and names the missing one.
+
+They exist for exactly one reason the component suites cannot serve. Those mock
+`@loan/api-client`, so a field renamed on the server passes every one of them
+and blanks a column in production. Only a live round trip catches it.
+
+Two things the suite learned about itself while being written, both worth
+keeping:
+
+- **The login route is throttled at 10/minute**, and signing in per test tripped
+  it on the twelfth. The repair belonged in the suite, not the app — sessions
+  are now saved once per role by a setup project and reused. Raising the limit
+  would have weakened a real control to suit a habit no user has.
+- **`e2e/` was invisible to `tsc` and ESLint** until added to
+  `apps/web/tsconfig.json`. A test suite nothing checks rots quietly.
+
+**Still missing: a write journey.** Every journey reads. This is a development
+database with hand-built fixtures and a nightly reconciliation; a suite that
+created loans would drift it on every run and the drift would surface as a
+finding somebody has to investigate. The cost is that nothing covers apply →
+approve → disburse → pay, which is the flow most worth covering. Doing it
+properly needs a disposable database per run — not cleanup code that fails
+halfway and leaves the ledger worse than no test at all.
 
 ## CI
 
