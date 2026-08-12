@@ -571,21 +571,21 @@ model CreditScore {
 // it's typed and easy to evolve; only the answers are persisted.
 
 model SurveyResponse {
-  id           String     @id @default(uuid())
-  customerId   String
+  id             String     @id @default(uuid())
+  customerId     String
   /// `{ questionId: answer, … }` — values are string|number|boolean
-  answers      Json
+  answers        Json
   /// Computed score from these answers at submission time
-  score        Int
-  tier         CreditTier
+  score          Int
+  tier           CreditTier
   /// Per-factor explanation (same shape as CreditScore.breakdown)
-  breakdown    Json
+  breakdown      Json
   /// The scorecard these answers were scored against. Matters more here
   /// than on CreditScore: the ANSWERS are keyed by question, and the
   /// questions are what the catalog owns.
   catalogVersion Int?
-  computedAt   DateTime   @default(now())
-  computedById String
+  computedAt     DateTime   @default(now())
+  computedById   String
 
   customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   computedBy   User          @relation("SurveyComputedBy", fields: [computedById], references: [id])
@@ -643,7 +643,6 @@ model SurveyFactor {
 
 /**
  * Append-only history of the scoring catalog.
- *
  * The counterpart to DecisionRuleVersion, and deliberately shaped
  * differently. A decision rule is versioned individually because rules
  * are independent — editing one says nothing about the others. The
@@ -651,23 +650,20 @@ model SurveyFactor {
  * weights against a fixed 150-point total, so raising one factor's
  * weight lowers every other factor's points. There is no such thing as
  * a change to one factor. The versioned unit is the whole catalog.
- *
  * What this adds over what was already there. `CreditScore.breakdown`
  * is genuinely explanatory — it freezes each factor's label, its
  * resolved maxPoints, the 0..1 weight achieved, and a human-readable
  * source line. A stored score already says what it was made of. What it
  * cannot say is:
- *
- *   • which scorecard produced it, so two scores cannot be known to be
- *     comparable, and a cohort cannot be re-run under the catalog that
- *     scored it;
- *   • what the QUESTIONS offered. The breakdown records the factor, not
- *     the question, so once someone edits a CHOICE option's weight,
- *     "why did answering 'employed 2 years' score 0.6?" has no answer;
- *   • which factors were switched OFF. An inactive factor is absent
- *     from the breakdown, indistinguishable from one that scored zero;
- *   • who changed the scorecard, when, or why.
- *
+ * • which scorecard produced it, so two scores cannot be known to be
+ * comparable, and a cohort cannot be re-run under the catalog that
+ * scored it;
+ * • what the QUESTIONS offered. The breakdown records the factor, not
+ * the question, so once someone edits a CHOICE option's weight,
+ * "why did answering 'employed 2 years' score 0.6?" has no answer;
+ * • which factors were switched OFF. An inactive factor is absent
+ * from the breakdown, indistinguishable from one that scored zero;
+ * • who changed the scorecard, when, or why.
  * `snapshot` is the full ScoringCatalog the lib consumes — factors and
  * questions, in its own shapes — so a version is replayable through
  * `computeCreditScore` rather than merely readable.
@@ -693,7 +689,7 @@ model ScoringCatalogVersion {
 
   /// What the edit touched. Coarse on purpose — the snapshot holds the
   /// detail, and a finer taxonomy would be a second thing to keep true.
-  changeType ScoringCatalogChangeType
+  changeType    ScoringCatalogChangeType
   /// One line, generated: "weight changed on 'income'". Saves an
   /// operator from diffing two JSON blobs to see what moved.
   changeSummary String?
@@ -2087,10 +2083,10 @@ model DecisionRule {
   /// reason, active. Renaming a rule or fixing a typo in its description
   /// changes no outcome, so it does not mint a version; if it did, the
   /// history would fill with entries an auditor has to read and discard.
-  version       Int      @default(1)
+  version       Int       @default(1)
   /// When the CURRENT version took effect. The matching row in
   /// DecisionRuleVersion is the one whose `effectiveTo` is null.
-  effectiveFrom DateTime @default(now())
+  effectiveFrom DateTime  @default(now())
   /// Set when the rule is retired instead of deleted. A retired rule
   /// evaluates against nothing and shows nowhere, but its history — and
   /// every loan pointing at it — survives.
@@ -2103,27 +2099,24 @@ model DecisionRule {
 
 /**
  * Append-only history of every decision rule.
- *
  * The question this exists to answer: *which rules approved this loan in
  * March?* Without it there is one mutable row per rule, so the only
  * available answer is what the rule says NOW — and a lender that retunes
  * its criteria (which is the entire reason the criteria live in a table)
  * cannot reconstruct the basis of any decision it has already made. The
  * BSP asks this. So does anyone contesting a rejection.
- *
  * Rows are written, never modified, with one exception: `effectiveTo` is
  * stamped once, when the next version supersedes this one. The
  * *current* version of a rule is the row with `effectiveTo = null`, and
  * exactly one such row exists per rule — enforced below.
- *
  * `ruleName` is duplicated rather than joined for the same reason
  * PreAssessment snapshots it: the name is part of what was true then. A
  * rule renamed from "High-risk block" to "AML hard block" must still
  * read as the former on the decisions it made under that name.
  */
 model DecisionRuleVersion {
-  id     String @id @default(uuid())
-  ruleId String
+  id      String @id @default(uuid())
+  ruleId  String
   /// 1-based, dense, per rule.
   version Int
 
@@ -2146,11 +2139,11 @@ model DecisionRuleVersion {
   // ── Who and why ─────────────────────────────────────────────────────
   /// CREATE for version 1, UPDATE for a retune, RETIRE for the closing
   /// row written when a rule is withdrawn.
-  changeType DecisionRuleChangeType
+  changeType  DecisionRuleChangeType
   /// Free text from the admin who made the change. Optional, because
   /// requiring it produces "update" a hundred times, which is worse than
   /// nothing — an empty note at least does not read as an explanation.
-  changeNote String?
+  changeNote  String?
   /// Not a foreign key: staff leave, and the history outlives them. Same
   /// reasoning as Customer.erasedById.
   changedById String?
@@ -2247,24 +2240,24 @@ model PreAssessment {
   applicantAge       Int
 
   // ── Outcome ─────────────────────────────────────────────────────────
-  verdict         PreAssessmentVerdict
-  reason          String
+  verdict            PreAssessmentVerdict
+  reason             String
   /// The rule that fired. Not a foreign key: rules get edited and deleted,
   /// and the verdict still has to be explainable afterwards, so the name is
   /// snapshotted alongside the id.
-  matchedRuleId   String?
-  matchedRuleName String?
+  matchedRuleId      String?
+  matchedRuleName    String?
   /// Version of that rule, resolving against DecisionRuleVersion. Null on
   /// assessments run before rules were versioned.
   matchedRuleVersion Int?
   /// Full DecisioningContext as evaluated. The rules can change tomorrow;
   /// this is what they saw today.
-  context         Json
+  context            Json
   /// AML / KYC pre-flight gates. Null on prospect rows — no customer, no
   /// gates to check.
-  gates           Json?
+  gates              Json?
   /// Statistical anomaly flags, same shape as the dry-run's.
-  anomalies       Json?
+  anomalies          Json?
 
   // ── Conversion ──────────────────────────────────────────────────────
   /// Set when this assessment turned into a real application.
