@@ -266,7 +266,18 @@ export interface AgingReport {
 
 const DAY_MS = 86_400_000;
 
-function bucketFor(daysOverdue: number): AgingBucket {
+/**
+ * The system's one derivation of a days-past-due band.
+ *
+ * Exported so no caller has to restate the thresholds. A second copy
+ * does not stay a copy: it drifts a boundary or a label and then two
+ * screens disagree about how overdue the same account is, with nothing
+ * in either one to say which is right.
+ *
+ * Bands are inclusive of their upper bound, so a loan exactly 90 days
+ * overdue is still `D_61_90` and 91 is the first day of the next band.
+ */
+export function agingBucketFor(daysOverdue: number): AgingBucket {
   if (daysOverdue <= 0) return "CURRENT";
   if (daysOverdue <= 30) return "D_1_30";
   if (daysOverdue <= 60) return "D_31_60";
@@ -326,7 +337,7 @@ export function buildAgingReport(
       outstandingBalance: acc.outstandingBalance,
       installmentsOverdue: acc.installmentsOverdue,
       daysOverdue,
-      bucket: bucketFor(daysOverdue),
+      bucket: agingBucketFor(daysOverdue),
     };
   });
 

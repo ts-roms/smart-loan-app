@@ -1,3 +1,4 @@
+import { agingBucketFor } from "@loan/accounting";
 import {
   type CollectionsRepository,
   type DorsiRepository,
@@ -139,7 +140,12 @@ export class ReportsService {
   /**
    * Delinquency snapshot as of run time — the exportable counterpart of
    * the collections queue, sharing its derivation (overdueQueue) so the
-   * report can never disagree with the screen about who is overdue.
+   * report can never disagree with the screen about who is overdue, and
+   * `agingBucketFor` so it cannot disagree about how overdue either.
+   * The band is emitted as the raw enum rather than a prettier label:
+   * a label map here would be a second place that names the bands, and
+   * the export is read next to the aging report, which emits the same
+   * tokens.
    *
    * Area matching is case-insensitive equality, not substring: the
    * values arrive typed rather than picked from a dropdown, and
@@ -168,7 +174,7 @@ export class ReportsService {
         outstanding: r.outstanding,
         overdueInstallments: r.overdueCount,
         daysOverdue: r.daysOverdue,
-        agingBucket: agingBucket(r.daysOverdue),
+        agingBucket: agingBucketFor(r.daysOverdue),
         assignee: r.assignee?.collectorName ?? "UNASSIGNED",
         assignedAt: r.assignee?.assignedAt.toISOString() ?? "",
       }));
@@ -295,17 +301,6 @@ export class ReportsService {
 }
 
 // ─── helpers ────────────────────────────────────────────────────────
-
-/**
- * Standard 30-day aging bands — same bands the My-accounts dashboard
- * shows, so the report's buckets line up with the screen's.
- */
-function agingBucket(days: number): string {
-  if (days <= 30) return "1-30";
-  if (days <= 60) return "31-60";
-  if (days <= 90) return "61-90";
-  return "90+";
-}
 
 function resolveRange(opts: BuildOptions) {
   const from = opts.from ?? oneMonthAgo();
