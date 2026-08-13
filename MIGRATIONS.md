@@ -21,6 +21,30 @@ files`); this repo pins Prisma **6.19.3**. Pin the CLI in CI.
 types still land** — verify with a typecheck rather than assuming the generate
 failed.
 
+### Do not run `migrate dev` against a database you care about
+
+`prisma/migrations` and `schema.prisma` have **drifted**, and have for some
+time. `prisma migrate diff` against a clean shadow database reports:
+
+- `AuditEvent(impersonatedById)` and `Customer(erasedAt)` — declared in
+  `schema.prisma`, created by no migration.
+- `journal_source_ref_unique` — the posting-idempotency index, whose name in
+  the database does not match the name Prisma derives
+  (`JournalEntry_source_sourceRefType_sourceRefId_key`).
+
+`prisma migrate status` reports **"up to date"** and is not wrong: every
+migration has been applied. Drift is a different question, and status does not
+ask it.
+
+The consequence is operational, not cosmetic. `migrate dev` reconciles the
+database to the schema, and on finding drift it offers to **reset** — which
+drops the data. Use `migrate deploy`, which only applies pending migrations and
+never resets. Exercise `migrate dev` on a throwaway database if you need it.
+
+Fixing the drift means renaming the journal idempotency index, which is the
+constraint behind §13 double-post prevention. That needs its own review and
+a migration of its own; it is deliberately not bundled with unrelated work.
+
 ## Rules — §74
 
 Every schema change must:
