@@ -22,6 +22,12 @@
  * via the single-decide endpoint.
  */
 
+import {
+  declarationsComplete,
+  type KycDeclarations,
+  type KycDocumentType,
+  validateKyc,
+} from "@loan/kyc";
 import type {
   LoanApproval,
   LoanApprovalStatus,
@@ -46,6 +52,134 @@ export interface ApproveStepInput {
   loanId: string;
   approverId: string;
   notes?: string;
+  /**
+   * Approve the FINAL step despite incomplete KYC documents or
+   * unanswered required declarations — the same escape hatch
+   * `LoanWorkflowService.decide` offers, and it means the same thing:
+   * the whole KYC posture, documents and declarations together.
+   *
+   * Ignored on non-final steps, which change no loan status and so
+   * gate nothing. Every use is recorded in the step's notes.
+   */
+  overrideKyc?: boolean;
+}
+
+/**
+ * Refusal by the KYC gate, distinguishable from the other reasons
+ * `approveStep` throws so the route can answer 409 — the same code
+ * `decide` already answers for the same two refusals — while wrong-state
+ * and already-approved errors keep answering 400 as that route
+ * documents.
+ *
+ * Carries a `code` field and is detected by that field rather than by
+ * `instanceof`: pnpm can resolve two copies of a library, and an
+ * `instanceof` across them silently returns false. Same reasoning as
+ * the P2002 checks elsewhere in this package.
+ */
+export class ApprovalKycBlockedError extends Error {
+  readonly code = "APPROVAL_KYC_BLOCKED" as const;
+  constructor(
+    message: string,
+    readonly kind: "KycIncomplete" | "DeclarationsIncomplete",
+  ) {
+    super(message);
+    this.name = "ApprovalKycBlockedError";
+  }
+}
+
+/** True for the error above, across duplicate module copies. */
+export function isApprovalKycBlocked(
+  err: unknown,
+): err is ApprovalKycBlockedError {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "APPROVAL_KYC_BLOCKED"
+  );
+}
+
+/**
+ * Why the final step re-checks KYC.
+ *
+ * `decide` validates KYC and declarations before approving, and refuses
+ * outright when the chain still has pending steps. That refusal is
+ * correct — it closed a hole where one officer holding `loans.decide`
+ * could approve past every outstanding sign-off — but it also made the
+ * chain the ONLY route to APPROVED for any product that has one. And
+ * the chain never checked KYC. So the gate did not become advisory; for
+ * chained products it became unreachable, while `decide` still carried
+ * the comment saying approval re-checks it.
+ *
+ * The check lives inside the claim transaction rather than in the route
+ * handler so a KYC document rejected between the request arriving and
+ * the final signature landing cannot slip through. `decide` checks
+ * outside its transaction; that is a weaker guarantee, not one worth
+ * copying.
+ */
+async function kycGate(
+  tx: Tx,
+  loanId: string,
+  overrideKyc: boolean,
+): Promise<string[]> {
+  const loan = await tx.loanApplication.findUnique({
+    where: { id: loanId },
+    select: {
+      customerId: true,
+      kycDeclarations: true,
+      product: { select: { requiredKycDocs: true } },
+    },
+  });
+  if (!loan) throw new Error("Loan not found.");
+
+  const notes: string[] = [];
+
+  const submissions = await tx.kycSubmission.findMany({
+    where: { customerId: loan.customerId },
+    orderBy: { submittedAt: "desc" },
+  });
+  const extras = (loan.product?.requiredKycDocs ?? []) as KycDocumentType[];
+  const kyc = validateKyc(submissions, extras);
+  if (!kyc.complete) {
+    if (!overrideKyc) {
+      throw new ApprovalKycBlockedError(
+        `Cannot approve — KYC is ${kyc.status.toLowerCase()}. Missing: ${
+          kyc.missing.join(", ") || "none"
+        }. Rejected: ${kyc.rejected.join(", ") || "none"}.`,
+        "KycIncomplete",
+      );
+    }
+    notes.push(
+      `[KYC override: missing=${kyc.missing.join(",") || "none"}, rejected=${
+        kyc.rejected.join(",") || "none"
+      }]`,
+    );
+  }
+
+  /*
+   * Against the snapshot taken at apply, not the product's current
+   * questionnaire — the contract is "answer what you were asked", and
+   * an admin adding a required question tomorrow must not retroactively
+   * block yesterday's application. Same reasoning as `decide`.
+   */
+  const decl = declarationsComplete(
+    loan.kycDeclarations as KycDeclarations | null,
+  );
+  if (!decl.complete) {
+    if (!overrideKyc) {
+      throw new ApprovalKycBlockedError(
+        `Cannot approve — ${String(decl.missing.length)} required ` +
+          `declaration(s) unanswered: ${decl.missing
+            .map((m) => m.label)
+            .join(", ")}.`,
+        "DeclarationsIncomplete",
+      );
+    }
+    notes.push(
+      `[Declarations override: ${String(decl.missing.length)} required unanswered]`,
+    );
+  }
+
+  return notes;
 }
 
 export class LoanApprovalRepository {
@@ -381,18 +515,14 @@ export class LoanApprovalRepository {
           d.permissions.includes(pending.requiredPermission),
       );
 
-      const updated = await tx.loanApproval.update({
-        where: { id: pending.id },
-        data: {
-          status: "APPROVED" satisfies LoanApprovalStatus,
-          approverId: input.approverId,
-          approvedAt: new Date(),
-          notes: input.notes,
-          signedUnderDelegationId: usedDelegation?.id ?? null,
-        },
-      });
-
-      // Is there a next step?
+      /*
+       * Is there a next step? Asked BEFORE the row is written, because
+       * the answer decides whether this signature approves the loan —
+       * and if it does, the KYC gate below may refuse it. Writing the
+       * approval first would leave a step marked APPROVED by someone
+       * whose approval was then rejected. The query does not depend on
+       * this row's status, so moving it earlier changes nothing else.
+       */
       const next = await tx.loanApproval.findFirst({
         where: {
           loanId: input.loanId,
@@ -400,6 +530,23 @@ export class LoanApprovalRepository {
           status: "PENDING",
         },
         orderBy: { stepOrder: "asc" },
+      });
+
+      // The final signature is the one that approves the loan, so it is
+      // the one that has to satisfy what approval requires.
+      const gateNotes = next
+        ? []
+        : await kycGate(tx, input.loanId, input.overrideKyc ?? false);
+
+      const updated = await tx.loanApproval.update({
+        where: { id: pending.id },
+        data: {
+          status: "APPROVED" satisfies LoanApprovalStatus,
+          approverId: input.approverId,
+          approvedAt: new Date(),
+          notes: [input.notes, ...gateNotes].filter(Boolean).join(" ") || null,
+          signedUnderDelegationId: usedDelegation?.id ?? null,
+        },
       });
 
       if (next) {

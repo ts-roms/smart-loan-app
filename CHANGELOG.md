@@ -40,6 +40,18 @@ from arriving in between. All four are now enforced by the database.
   all — a funded loan could be rewound to APPROVED or flipped to REJECTED with
   the money already out. Now claimed, while preserving the documented
   reconsideration flow (`REJECTED → APPROVED`). (`128b7b2`)
+- **Loans could reach APPROVED with an incomplete KYC file.** Two paths lead to
+  APPROVED and only one of them checked. `decide` validates KYC documents and
+  required declarations — and, once the approval chain was enforced, refuses
+  outright while steps are pending. That refusal was right, but it made the
+  chain the _only_ route to APPROVED for any product that has one, and
+  `LoanApprovalRepository.approveStep` flipped the loan on the final signature
+  without looking at KYC at all. The gate did not degrade to advisory; for
+  chained products it became unreachable, while `decide` still carried the
+  comment saying approval re-checks it. Every seeded product has a chain, so
+  the unchecked path was the ordinary one. The final step now runs the same
+  two checks inside the claim transaction, with the same `overrideKyc` escape
+  hatch, recorded in the step notes. Found by the write E2E journey.
 
 ### Fixed — jobs
 

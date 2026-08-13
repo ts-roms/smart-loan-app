@@ -30,6 +30,7 @@
     "@loan/credit-scoring": "workspace:*",
     "@loan/decisioning": "workspace:*",
     "@loan/jobs": "workspace:*",
+    "@loan/kyc": "workspace:*",
     "@loan/loans": "workspace:*",
     "@loan/notifications": "workspace:*",
     "@loan/payments": "workspace:*",

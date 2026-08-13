@@ -430,6 +430,9 @@ importers:
       "@loan/jobs":
         specifier: workspace:*
         version: link:../jobs
+      "@loan/kyc":
+        specifier: workspace:*
+        version: link:../kyc
       "@loan/loans":
         specifier: workspace:*
         version: link:../loans

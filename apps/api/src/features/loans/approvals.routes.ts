@@ -1,5 +1,6 @@
 import {
   AuditLogRepository,
+  isApprovalKycBlocked,
   LoanApprovalRepository,
   LoanRepository,
 } from "@loan/db";
@@ -19,6 +20,12 @@ const TAGS = ["loans"];
 
 const approveSchema = z.object({
   notes: z.string().max(2000).optional(),
+  /*
+   * Only meaningful on the final step, which is the one that approves
+   * the loan. Mirrors the flag `POST /loans/:id/decide` already takes,
+   * and means the same thing there and here.
+   */
+  overrideKyc: z.boolean().optional(),
 });
 
 const rejectSchema = z.object({
@@ -96,12 +103,14 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
       schema: routeSchema({
         summary:
           "Approve the current step. Per-step permission is enforced in " +
-          "the transaction; wrong-state refusals answer 400 here.",
+          "the transaction; wrong-state refusals answer 400 here. The " +
+          "final step also re-checks KYC and declarations, answering " +
+          "409 when they block approval unless overrideKyc is set.",
         tags: TAGS,
         params: loanIdParamSchema,
         body: approveSchema,
         response: approveStepResponseSchema,
-        errors: [400, 401, 403, 404],
+        errors: [400, 401, 403, 404, 409],
       }),
     },
     async (req, reply) => {
@@ -119,6 +128,7 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
           loanId: loan.id,
           approverId: req.user.sub,
           notes: parsed.data.notes,
+          overrideKyc: parsed.data.overrideKyc,
         });
         await audit.record({
           action: "LOAN_APPROVAL_STEP",
@@ -155,6 +165,16 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
         // other validation issues (already approved, wrong state) → 400.
         if (message.includes("don't hold")) {
           return reply.code(403).send({ error: "Forbidden", message });
+        }
+        /*
+         * KYC and declarations refusals answer 409, matching what
+         * `POST /loans/:id/decide` already answers for the identical
+         * two refusals. The same incomplete file should not produce a
+         * different status code depending on which endpoint the
+         * officer happened to use.
+         */
+        if (isApprovalKycBlocked(err)) {
+          return reply.code(409).send({ error: err.kind, message });
         }
         return reply.code(400).send({ error: "BadRequest", message });
       }
