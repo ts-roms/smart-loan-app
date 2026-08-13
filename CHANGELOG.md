@@ -10,6 +10,56 @@ automation depends on the manifest.
 
 ---
 
+## Unreleased — worktree batch: write E2E, OpenAPI, indexes, Next pilot
+
+### Added — the write E2E journey
+
+Apply → two-person approval chain → disburse → record payment, all through
+the UI, closing with a reconciliation run against a scratch database the run
+creates and drops. The write project is not even defined unless
+`E2E_WRITE_DB_URL` is set or `--project=write-journey` is typed, so the
+default suite neither runs it nor grows a skip. Dev database proven untouched
+across every run (`JournalLine` 79 before and after). It found one real
+defect (the KYC gate below) and one UI paper cut: the record-payment amount
+input steps by whole pesos, so it cannot tender the centavos its own ledger
+asks for.
+
+### Added — OpenAPI: auth, rbac, payments, loan-products, delegations
+
+174 of 338 operations now carry a real response shape (was 112), ratcheted.
+`authenticate` moved to `onRequest` in every group touched, verified live:
+unauthenticated + malformed body answers 401, the same request with a token
+answers 400 — so the schemas are active and authorization still wins.
+Login/register/refresh and the password-reset routes keep undeclared request
+bodies deliberately; a body schema would reinstate the 400-before-401 those
+designs exist to avoid.
+
+### Added — six indexes, from captured plans (`20260813090000`)
+
+Measured on a seeded 1.3M-row scratch book, buffer counts as the metric.
+Each index ships with its before/after `EXPLAIN` in
+`docs/modernization/query-performance.md`; five candidates were rejected with
+reasons, and four slow paths an index cannot fix (N+1 accrual loop,
+whole-book reports) are recorded as findings. The `JournalEntry` prefix index
+is not a duplicate of the idempotency unique index: under `en_US.utf8` a
+default btree cannot serve a LIKE prefix at all — re-proved at integration.
+Also documented in MIGRATIONS.md: `prisma/migrations` has drifted from
+`schema.prisma`, so `migrate dev` against a real database offers a reset;
+use `migrate deploy`.
+
+### Added — Next.js pilot (`apps/marketing-next`)
+
+Side by side with the untouched Vite app; six URLs preserved, static pages
+ship zero client JS. The finding that matters for §38: `libs/ui`'s barrel
+fails an RSC build (five modules hook at module scope, `index.ts` re-exports
+all 29) and its classes are bound to the console's design-token system.
+Integration added the one fix three green worktree gates could not have
+found: Nx injects the root `.env` (gitignored, so absent in worktrees) into
+every task, and its `NODE_ENV=development` made every `next build` prerender
+crash; the build script now scrubs it.
+
+---
+
 ## Unreleased — modernization Phases 0–2
 
 Driven by the enterprise-LMS modernization brief. Audit artifacts live in

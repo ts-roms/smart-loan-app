@@ -113,14 +113,14 @@ Original plan:
 
 ## Phase 3 — Durability and operations (P1/P2) — ONE ITEM LEFT
 
-| Step | Change                                                                | Status                                                                                                                                                                              |
-| ---- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.0  | Frontend component-test harness + 4 suites over the costly surfaces   | ✅ 45 tests                                                                                                                                                                         |
-| 3.1  | Object storage (S3/MinIO) for uploads; DB keeps metadata; signed URLs | ⬜ needs a bucket + credentials; backup now archives `UPLOADS_DIR`, so it is planned, not urgent                                                                                    |
-| 3.2  | Playwright + 6 journeys against a live stack                          | ✅ 21 assertions, read-only. A WRITE journey (apply→approve→disburse→pay against a disposable DB) is in flight                                                                      |
-| 3.3  | Enable CSP in production                                              | ✅ API (`/uploads/` sandboxed, JSON `default-src 'none'`) **and** SPA (build-time meta + `frame-ancestors` from nginx). `style-src` still needs `unsafe-inline` — Radix; documented |
-| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ◐ **112 of 337** operations, ratcheted by a test. Mechanism, bearer scheme and status conventions done; ~225 routes remain                                                          |
-| 3.5  | Documented restore drill                                              | ✅ written **and run** — and it FAILED on an unpatched host (pg_dump 18 vs server 16). See disaster-recovery.md                                                                     |
+| Step | Change                                                                | Status                                                                                                                                                                                                                                  |
+| ---- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.0  | Frontend component-test harness + 4 suites over the costly surfaces   | ✅ 45 tests                                                                                                                                                                                                                             |
+| 3.1  | Object storage (S3/MinIO) for uploads; DB keeps metadata; signed URLs | ⬜ needs a bucket + credentials; backup now archives `UPLOADS_DIR`, so it is planned, not urgent                                                                                                                                        |
+| 3.2  | Playwright + 6 journeys against a live stack                          | ✅ 21 read assertions **plus the write journey**: apply→2-person approval→disburse→pay, all UI, closing with reconciliation green on a scratch DB it creates and drops. Found a real defect (chain skipped the KYC re-check, now fixed) |
+| 3.3  | Enable CSP in production                                              | ✅ API (`/uploads/` sandboxed, JSON `default-src 'none'`) **and** SPA (build-time meta + `frame-ancestors` from nginx). `style-src` still needs `unsafe-inline` — Radix; documented                                                     |
+| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ◐ **174 of 338** operations, ratcheted by a test. Mechanism done; auth, rbac, payments, loan-products, delegations landed with 401-before-400 verified live; ~164 routes remain (portal is the largest)                                 |
+| 3.5  | Documented restore drill                                              | ✅ written **and run** — and it FAILED on an unpatched host (pg_dump 18 vs server 16). See disaster-recovery.md                                                                                                                         |
 
 **Phase 3 is one item from done** — only OpenAPI coverage remains inside it,
 and that is a per-feature grind rather than a design problem. Object storage
@@ -135,13 +135,13 @@ did.
 
 ## Phase 4 — Enterprise depth (P2)
 
-| Step | Change                                                                                                                                                                  |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.1  | ✅ Nx module-boundary tags + `@nx/enforce-module-boundaries` — both axes bite; caveat: a new lib is invisible until `nx reset`                                          |
-| 4.2  | Query plans for the 10 slowest endpoints; index from evidence — ⬜                                                                                                      |
-| 4.3  | ✅ GAP-15 verified (restructure links a new loan, never mutates a schedule) · ✅ GAP-18 rule versioning (`20260811180000`) · ✅ scorecard versioning (`20260812090000`) |
-| 4.4  | ✅ Consolidated customer exposure (GAP-29) — derived, no migration; written-off reported separately from the live total                                                 |
-| 4.5  | Next.js pilot on `apps/marketing` only                                                                                                                                  |
+| Step | Change                                                                                                                                                                                                                                                                                                  |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4.1  | ✅ Nx module-boundary tags + `@nx/enforce-module-boundaries` — both axes bite; caveat: a new lib is invisible until `nx reset`                                                                                                                                                                          |
+| 4.2  | ✅ Query plans from a 1.3M-row scratch book — six indexes added, each with before/after plans; five rejected with reasons; four N+1/whole-book findings recorded. See query-performance.md                                                                                                              |
+| 4.3  | ✅ GAP-15 verified (restructure links a new loan, never mutates a schedule) · ✅ GAP-18 rule versioning (`20260811180000`) · ✅ scorecard versioning (`20260812090000`)                                                                                                                                 |
+| 4.4  | ✅ Consolidated customer exposure (GAP-29) — derived, no migration; written-off reported separately from the live total                                                                                                                                                                                 |
+| 4.5  | ✅ Pilot shipped side-by-side as `apps/marketing-next` — 8 routes, URLs preserved, zero client JS on static pages. Headline finding: `libs/ui`'s barrel fails RSC builds and its classes are bound to the console's token system. Moves §38 from "defer, unknown cost" to "defer, and here is the cost" |
 
 ## Phase 5 — Intelligence (P3)
 

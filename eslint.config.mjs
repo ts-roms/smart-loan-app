@@ -242,6 +242,7 @@ export default tseslint.config(
       "apps/web/**/*.{ts,tsx}",
       "apps/platform/**/*.{ts,tsx}",
       "apps/marketing/**/*.{ts,tsx}",
+      "apps/marketing-next/**/*.{ts,tsx}",
       "libs/ui/**/*.{ts,tsx}",
       "libs/api-client/**/*.ts",
     ],
@@ -258,6 +259,19 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
+    },
+  },
+
+  // ── Next.js app ─────────────────────────────────────────────────
+  // react-refresh models VITE's Fast Refresh boundary. The App Router's
+  // own conventions violate it by design — a page exports `metadata`
+  // and `viewport` beside its component — and Next ships its own Fast
+  // Refresh integration that understands those exports. Keeping the
+  // rule here would warn on every page written the way Next documents.
+  {
+    files: ["apps/marketing-next/**/*.{ts,tsx}"],
+    rules: {
+      "react-refresh/only-export-components": "off",
     },
   },
 
