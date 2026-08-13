@@ -473,7 +473,13 @@ model Customer {
 
   @@index([phone])
   @@index([governmentIdType, governmentIdNumber])
-  @@index([erasedAt])
+  // Customer_erasedAt_idx exists in every database but is NOT declared
+  // here, on purpose. 20260523110000_customer_erasure built it as a
+  // PARTIAL index ("erasedAt" DESC WHERE "erasedAt" IS NOT NULL — it only
+  // covers the erased subset), and `@@index()` cannot express a partial
+  // index: Prisma also skips partial indexes at introspection, so declaring
+  // a plain @@index here made `migrate diff` report a phantom "missing"
+  // index forever. The migration is the source of truth.
   @@index([archivedAt])
   /// The customer list — and every borrower picker that reuses it — orders by
   /// `createdAt desc` and pages 200 at a time. Without this the planner had to
@@ -1543,7 +1549,15 @@ model JournalEntry {
   ///
   /// Postgres treats NULLs as distinct, so manual entries (sourceRefId
   /// null) are untouched and may repeat freely, which is correct.
-  @@unique([source, sourceRefType, sourceRefId], name: "journal_source_ref_unique")
+  ///
+  /// `map:` records the name the index actually has in every database:
+  /// 20260811120000_journal_source_ref_unique created it by hand as
+  /// "journal_source_ref_unique", while `name:` here only names the client
+  /// API field — without `map:` Prisma derives
+  /// "JournalEntry_source_sourceRefType_sourceRefId_key" and reports the
+  /// mismatch as drift. Declaring the real name costs zero DDL; renaming
+  /// the live idempotency constraint instead would not.
+  @@unique([source, sourceRefType, sourceRefId], name: "journal_source_ref_unique", map: "journal_source_ref_unique")
   @@index([entryDate])
   @@index([source, sourceRefId])
   @@index([sourceRefType, sourceRefId])
@@ -1562,7 +1576,16 @@ model JournalEntry {
   /// that index enforces the idempotency constraint and must keep collation
   /// semantics for equality.
   /// See docs/modernization/query-performance.md Q9.
-  @@index([source, sourceRefType, sourceRefId(ops: raw("text_pattern_ops"))], map: "JournalEntry_source_refType_refId_prefix_idx")
+  ///
+  /// The real index carries `text_pattern_ops` on sourceRefId — see
+  /// 20260813090000_query_plan_indexes, which is the source of truth for
+  /// that DDL. It is deliberately NOT declared here: Prisma 6.x cannot
+  /// introspect a raw btree operator class, so a `raw("text_pattern_ops")`
+  /// annotation makes `migrate diff` report a phantom drop/recreate of this
+  /// index forever. Migrations are hand-written in this repo, so the
+  /// annotation had no consumer; the declaration below matches what
+  /// introspection actually reports.
+  @@index([source, sourceRefType, sourceRefId], map: "JournalEntry_source_refType_refId_prefix_idx")
 }
 
 model JournalLine {
@@ -1750,9 +1773,13 @@ model AuditEvent {
   @@index([actorId, createdAt(sort: Desc)])
   @@index([targetType, targetId])
   @@index([action])
-  // Partial index: filter "audit rows from a support session." Skinny
-  // because the typical row has impersonatedById = null.
-  @@index([impersonatedById])
+  // AuditEvent_impersonatedById_idx exists in every database but is NOT
+  // declared here, on purpose. 20260523100000_audit_impersonation built it
+  // as a PARTIAL index (WHERE "impersonatedById" IS NOT NULL — skinny,
+  // because the typical row is null), and `@@index()` cannot express a
+  // partial index: Prisma also skips partial indexes at introspection, so
+  // declaring a plain @@index here made `migrate diff` report a phantom
+  // "missing" index forever. The migration is the source of truth.
 }
 
 // ─── Background jobs (scheduler) ─────────────────────────────────────────────
@@ -3542,7 +3569,11 @@ model Lead {
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 
-  @@index([status, createdAt])
+  /// `sort: Desc` records what 20260522100000_lead actually built
+  /// (`"createdAt" DESC`); declaring it plain made `migrate diff` want to
+  /// drop and recreate the index. Schema catches up to the database, not
+  /// the other way around.
+  @@index([status, createdAt(sort: Desc)])
   @@index([email])
 }
 
