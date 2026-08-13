@@ -23,27 +23,46 @@ failed.
 
 ### Do not run `migrate dev` against a database you care about
 
-`prisma/migrations` and `schema.prisma` have **drifted**, and have for some
-time. `prisma migrate diff` against a clean shadow database reports:
+The consequence of drift is operational, not cosmetic. `migrate dev`
+reconciles the database to the schema, and on finding drift it offers to
+**reset** — which drops the data. Use `migrate deploy`, which only applies
+pending migrations and never resets. Exercise `migrate dev` on a throwaway
+database if you need it. This warning stays even though the drift below is
+fixed: it is still true on any older checkout, and it is true in general.
 
-- `AuditEvent(impersonatedById)` and `Customer(erasedAt)` — declared in
-  `schema.prisma`, created by no migration.
-- `journal_source_ref_unique` — the posting-idempotency index, whose name in
-  the database does not match the name Prisma derives
-  (`JournalEntry_source_sourceRefType_sourceRefId_key`).
+The long-standing drift between `prisma/migrations` and `schema.prisma` is
+**FIXED** as of branch `feat/migration-drift-repair` —
+`prisma migrate diff --from-migrations ./prisma/migrations
+--to-schema-datamodel ./prisma/schema.prisma` now reports **"No difference
+detected"**. The fix is entirely schema-side: **zero DDL, zero migration** —
+in every case the database was right and the schema's declaration was wrong,
+so the schema caught up. What each item turned out to be:
 
-`prisma migrate status` reports **"up to date"** and is not wrong: every
-migration has been applied. Drift is a different question, and status does not
-ask it.
+- `journal_source_ref_unique` — the §13 posting-idempotency index. The
+  migration created it by hand under that name, but the schema's `@@unique`
+  used only `name:`, which names the **client API field**, not the database
+  index; Prisma therefore derived
+  `JournalEntry_source_sourceRefType_sourceRefId_key` and reported a rename.
+  Fixed by adding `map: "journal_source_ref_unique"`. The live constraint was
+  never touched.
+- `AuditEvent(impersonatedById)` and `Customer(erasedAt)` — long believed to
+  be "created by no migration". False: `20260523100000_audit_impersonation`
+  and `20260523110000_customer_erasure` create both, as **partial indexes**
+  (`WHERE ... IS NOT NULL`). `@@index()` cannot express a partial index and
+  introspection ignores them, so the schema's plain declarations diffed as
+  "missing" forever — phantom drift, with the real indexes present in every
+  database. Fixed by removing the two declarations; comments in
+  `schema.prisma` point at the owning migrations as the source of truth.
+- Two more surfaced while measuring: `Lead(status, createdAt)` was declared
+  without the `DESC` its migration built (now `createdAt(sort: Desc)`), and
+  the `text_pattern_ops` prefix index's `ops: raw(...)` annotation — which
+  Prisma 6.x cannot introspect, so the differ perpetually wanted to drop and
+  recreate it — was removed (`20260813090000_query_plan_indexes` owns that
+  DDL).
 
-The consequence is operational, not cosmetic. `migrate dev` reconciles the
-database to the schema, and on finding drift it offers to **reset** — which
-drops the data. Use `migrate deploy`, which only applies pending migrations and
-never resets. Exercise `migrate dev` on a throwaway database if you need it.
-
-Fixing the drift means renaming the journal idempotency index, which is the
-constraint behind §13 double-post prevention. That needs its own review and
-a migration of its own; it is deliberately not bundled with unrelated work.
+`prisma migrate status` reported **"up to date"** throughout and was not
+wrong: every migration had been applied. Drift is a different question, and
+status does not ask it.
 
 ## Rules — §74
 
