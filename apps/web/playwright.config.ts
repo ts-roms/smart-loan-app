@@ -35,6 +35,27 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const WEB = process.env.E2E_WEB_URL ?? "http://localhost:5173";
 
+/*
+ * Is the write journey being asked for?
+ *
+ * It is defined as a project only when it is, so that a bare
+ * `playwright test` does not merely SKIP it — it never selects it, and
+ * the read suite's result stays exactly the count it was before this
+ * project existed. The two ways of asking:
+ *
+ *   • `e2e/write-journey/scripts/run.mjs` exports E2E_WRITE_DB_URL when
+ *     it invokes Playwright — it is the only thing that can, since the
+ *     value names the scratch database it just created.
+ *   • `--project=write-journey` typed by hand, which is worth keeping
+ *     working: the spec's own skip then explains that the journey needs
+ *     the runner, which is a better answer than Playwright's "project
+ *     not found".
+ */
+const WRITE_JOURNEY_REQUESTED =
+  Boolean(process.env.E2E_WRITE_DB_URL) ||
+  process.argv.includes("write-journey") ||
+  process.argv.includes("--project=write-journey");
+
 export default defineConfig({
   testDir: "./e2e",
   /*
@@ -72,6 +93,47 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["setup"],
+      /*
+       * The write journey is not part of this suite: it runs against a
+       * disposable scratch stack, not the dev stack these journeys
+       * read. Ignored here so `playwright test` keeps meaning exactly
+       * what it meant before the write project existed.
+       */
+      testIgnore: /write-journey/,
     },
+    /*
+     * The WRITE journey — apply → approve → disburse → pay against a
+     * disposable database. Selected only by its runner:
+     *
+     *   pnpm --filter @loan/web e2e:write
+     *
+     * which creates smart_loan_e2e_<timestamp>, boots a dedicated API
+     * (:3003) + web (:5183) against it, runs this project, and drops
+     * the database afterwards — also on failure. It is not even
+     * DEFINED unless asked for (see WRITE_JOURNEY_REQUESTED above), so
+     * a plain `playwright test` runs the same tests it always did —
+     * not "the same plus one skip".
+     *
+     * No dependency on "setup": those storage states hold dev-stack
+     * tokens for dev-stack user ids. The journey signs into its own
+     * scratch stack — two sign-ins per run, nowhere near the login
+     * route's 10/minute throttle on a fresh API instance.
+     */
+    ...(WRITE_JOURNEY_REQUESTED
+      ? [
+          {
+            name: "write-journey",
+            testMatch: /write-journey\/.*\.spec\.ts/,
+            // One journey, five lifecycle stages, a cold Vite. The
+            // global 30s is right for reads; it is not right for this.
+            timeout: 300_000,
+            use: {
+              ...devices["Desktop Chrome"],
+              baseURL: process.env.E2E_WRITE_WEB_URL ?? "http://localhost:5183",
+              navigationTimeout: 90_000,
+            },
+          },
+        ]
+      : []),
   ],
 });
