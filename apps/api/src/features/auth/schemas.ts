@@ -219,3 +219,163 @@ export const resetPasswordSchema = z.object({
 
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+// ─── Response schemas ─────────────────────────────────────────────────
+//
+// Declared beside the requests they answer, and derived from what the
+// controller actually sends rather than from the service's TypeScript
+// return types — the two had already drifted once, see `userDigestSchema`.
+
+/** Every role the User table can hold. All six, so the serialiser
+ * never meets a value its enum refuses. */
+const userRoleSchema = z.enum([
+  "ADMIN",
+  "LOAN_OFFICER",
+  "ACCOUNTANT",
+  "COLLECTOR",
+  "AGENT",
+  "CUSTOMER",
+]);
+
+/**
+ * The user summary that rides along with a token pair.
+ *
+ * `customerId` is here because `digest()` in auth.service.ts puts it
+ * there — and it is load-bearing, not incidental: a CUSTOMER with a
+ * null `customerId` has registered but not completed their profile, and
+ * the web app gates the whole borrower portal on exactly this field.
+ *
+ * Worth naming because the controller's own `tokenResponse` helper
+ * types its `user` parameter as `{ id, email, name, role }` with no
+ * `customerId` at all. The type understated the payload; the payload is
+ * what clients read.
+ */
+export const userDigestSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string(),
+  name: z.string(),
+  role: userRoleSchema,
+  /** Null for staff, and for a borrower who has not completed /me/profile. */
+  customerId: z.string().uuid().nullable(),
+});
+
+/**
+ * Login / register / refresh all answer with this.
+ *
+ * `token` duplicates `accessToken` for clients that predate the rename.
+ * It is documented rather than quietly dropped because it is still what
+ * some deployed clients read; new integrations should use `accessToken`.
+ */
+export const tokenResponseSchema = z.object({
+  /** Deprecated alias of `accessToken`. */
+  token: z.string(),
+  accessToken: z.string(),
+  refreshToken: z.string(),
+  refreshTokenExpiresAt: z.string().datetime(),
+  user: userDigestSchema,
+});
+
+/** GET /auth/me — the signed-in account, without anything secret. */
+export const meResponseSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string(),
+  name: z.string(),
+  role: userRoleSchema,
+  active: z.boolean(),
+  createdAt: z.string().datetime(),
+  customerId: z.string().uuid().nullable(),
+});
+
+/** POST /auth/me/profile 201 — the login, now linked to a Customer. */
+export const completeProfileResponseSchema = z.object({
+  user: userDigestSchema,
+});
+
+/**
+ * GET/PUT/DELETE /auth/me/signature all answer the same pair. DELETE
+ * returns it with both fields null rather than a 204, so the client can
+ * repaint from the response without a second read.
+ */
+export const signatureResponseSchema = z.object({
+  signatureUrl: z.string().nullable(),
+  savedAt: z.string().datetime().nullable(),
+});
+
+/**
+ * GET /auth/me/permissions. `permissions` is the flattened union of
+ * keys across the caller's roles, sorted. The web app hides actions
+ * with it; the real gate is always `requirePermission` server-side.
+ */
+export const permissionsResponseSchema = z.object({
+  permissions: z.array(z.string()),
+  roles: z.array(
+    z.object({
+      key: z.string(),
+      name: z.string(),
+      /** Built-in roles cannot be renamed or deleted. */
+      system: z.boolean(),
+    }),
+  ),
+});
+
+/**
+ * Notification bell state. Shared by GET /me/notifications/state and
+ * POST /me/notifications/seen — the POST answers with the same shape,
+ * `unseen` reset to 0, so the bell can repaint from the write.
+ */
+export const notificationsStateResponseSchema = z.object({
+  /** Null on an account that has never opened the bell. */
+  lastSeenAt: z.string().datetime().nullable(),
+  unseen: z.number().int(),
+});
+
+export const totpStatusResponseSchema = z.object({
+  enabled: z.boolean(),
+  recoveryCodesRemaining: z.number().int(),
+});
+
+/**
+ * POST /auth/me/2fa/setup. `secret` is shown once, for manual entry;
+ * `otpauth` is the URI the client renders as a QR code. 2FA is not on
+ * until /enable confirms a code derived from this secret.
+ */
+export const totpSetupResponseSchema = z.object({
+  secret: z.string(),
+  otpauth: z.string(),
+});
+
+/**
+ * POST /auth/me/2fa/enable. The recovery codes are returned in clear
+ * exactly once — only their hashes are stored, so a client that does
+ * not show them here has lost them.
+ */
+export const totpEnableResponseSchema = z.object({
+  enabled: z.boolean(),
+  recoveryCodes: z.array(z.string()),
+});
+
+/** POST /auth/me/2fa/disable. */
+export const totpDisableResponseSchema = z.object({
+  enabled: z.boolean(),
+});
+
+/**
+ * The bare acknowledgement the password-reset routes answer with.
+ *
+ * Deliberately says nothing else. `/forgot-password` returns it whether
+ * or not the address matches an account, which is the entire point of
+ * the endpoint's design.
+ */
+export const okResponseSchema = z.object({
+  ok: z.boolean(),
+});
+
+/** Path param of GET /auth/reset-password/:token. */
+export const resetTokenParamSchema = z.object({
+  /**
+   * Unconstrained on purpose. Length rules belong to the handler, which
+   * answers an unusable link with 410 Gone; a `minLength` here would
+   * turn that into a 400 and tell the reset page the wrong story.
+   */
+  token: z.string(),
+});

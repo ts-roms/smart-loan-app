@@ -2,6 +2,9 @@ import { AuditLogRepository, LoanApprovalRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { routeSchema } from "../../lib/openapi";
+import { approvalChainResponseSchema, productCodeParamSchema } from "./schemas";
+
 const stepSchema = z.object({
   order: z.number().int().min(1),
   label: z.string().min(1).max(120),
@@ -34,7 +37,12 @@ declare module "fastify" {
 export async function loanApprovalChainRoutes(
   app: FastifyInstance,
 ): Promise<void> {
-  app.addHook("preHandler", app.authenticate);
+  // onRequest, not preHandler. The PUT below now declares a body
+  // schema, and Fastify validates at preValidation — before preHandler.
+  // With authenticate one stage later, an unauthenticated PUT with a
+  // malformed body was answered 400 describing the chain-step shape
+  // rather than 401. See loans.routes.ts for the full account.
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
@@ -44,10 +52,23 @@ export async function loanApprovalChainRoutes(
     };
   });
 
+  const TAGS = ["loan-products"];
+
   // Reading the chain is read-only — anyone with product read access.
   app.get<{ Params: { code: string } }>(
     "/:code/approval-chain",
-    { preHandler: app.requirePermission("products.read") },
+    {
+      preHandler: app.requirePermission("products.read"),
+      schema: routeSchema({
+        summary:
+          "The product's approval chain, in order. An empty array means " +
+          "no chain — the legacy single-decide flow applies.",
+        tags: TAGS,
+        params: productCodeParamSchema,
+        response: approvalChainResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     async (req) => req.approvalChainCtx!.approvals.listSteps(req.params.code),
   );
 
@@ -55,7 +76,21 @@ export async function loanApprovalChainRoutes(
   // admins) can reshape the workflow.
   app.put<{ Params: { code: string } }>(
     "/:code/approval-chain",
-    { preHandler: app.requirePermission("loans.approval.chain.manage") },
+    {
+      preHandler: app.requirePermission("loans.approval.chain.manage"),
+      schema: routeSchema({
+        summary:
+          "Replace the product's approval chain. Steps are renumbered " +
+          "1..N, so the orders you send back may not be the ones you sent.",
+        tags: TAGS,
+        params: productCodeParamSchema,
+        body: chainSchema,
+        response: approvalChainResponseSchema,
+        // 400 also covers a duplicate `order` in the payload — the repo
+        // would renumber it away, which is almost always an editor bug.
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const { approvals, audit } = req.approvalChainCtx!;
       const parsed = chainSchema.safeParse(req.body);

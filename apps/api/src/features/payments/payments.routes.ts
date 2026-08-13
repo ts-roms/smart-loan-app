@@ -4,7 +4,20 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 
 import { config } from "../../config";
-import { createIntentSchema } from "./schemas";
+import { routeSchema } from "../../lib/openapi";
+import {
+  createIntentSchema,
+  intentIdParamSchema,
+  intentListQuerySchema,
+  intentListResponseSchema,
+  paymentIntentResponseSchema,
+  sandboxConfirmResponseSchema,
+  sandboxParamSchema,
+  sandboxTenantParamSchema,
+  webhookParamSchema,
+  webhookResponseSchema,
+  webhookTenantParamSchema,
+} from "./schemas";
 
 /**
  * Payment-gateway routes. The provider comes from PAYMENT_PROVIDER via
@@ -77,14 +90,46 @@ export async function paymentsRoutes(app: FastifyInstance) {
   // Borrowers use POST/GET /portal/payments/intents, which resolves the
   // customer from the JWT and re-checks loan ownership.
 
+  const TAGS = ["payments"];
+
+  /*
+   * authenticate at onRequest for the three staff routes, and it has to
+   * be per-route rather than a plugin-wide hook: the webhook and
+   * sandbox routes below are unauthenticated by design and a group hook
+   * would lock the gateway out.
+   *
+   * The move matters because these routes now declare request schemas,
+   * and Fastify validates at preValidation — one stage BEFORE
+   * preHandler. With authenticate where it used to be, an
+   * unauthenticated POST to /payments/intents with a malformed body was
+   * answered 400 describing the intent-creation shape instead of 401.
+   */
+  const canCreate = {
+    onRequest: app.authenticate,
+    preHandler: [app.resolveTenant, app.requirePermission("payments.intents")],
+  };
+  const canRead = {
+    onRequest: app.authenticate,
+    preHandler: [
+      app.resolveTenant,
+      app.requirePermission("payments.intents", "loans.read"),
+    ],
+  };
+
   app.post(
     "/intents",
     {
-      preHandler: [
-        app.authenticate,
-        app.resolveTenant,
-        app.requirePermission("payments.intents"),
-      ],
+      ...canCreate,
+      schema: routeSchema({
+        summary:
+          "Create a gateway payment intent against a loan. Repeat with the " +
+          "same idempotencyKey to get the same intent back.",
+        tags: TAGS,
+        body: createIntentSchema,
+        response: paymentIntentResponseSchema,
+        status: 201,
+        errors: [400, 401, 403],
+      }),
     },
     async (req: FastifyRequest, reply) => {
       const parsed = createIntentSchema.safeParse(req.body);
@@ -118,11 +163,14 @@ export async function paymentsRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>(
     "/intents/:id",
     {
-      preHandler: [
-        app.authenticate,
-        app.resolveTenant,
-        app.requirePermission("payments.intents", "loans.read"),
-      ],
+      ...canRead,
+      schema: routeSchema({
+        summary: "One payment intent, by id or PI- number.",
+        tags: TAGS,
+        params: intentIdParamSchema,
+        response: paymentIntentResponseSchema,
+        errors: [401, 403, 404],
+      }),
     },
     async (req, reply) => {
       const intents = new PaymentIntentRepository(
@@ -138,11 +186,16 @@ export async function paymentsRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { loanId?: string } }>(
     "/intents",
     {
-      preHandler: [
-        app.authenticate,
-        app.resolveTenant,
-        app.requirePermission("payments.intents", "loans.read"),
-      ],
+      ...canRead,
+      schema: routeSchema({
+        summary:
+          "Payment intents for one loan, newest first. `loanId` is " +
+          "required — there is no unfiltered listing.",
+        tags: TAGS,
+        querystring: intentListQuerySchema,
+        response: intentListResponseSchema,
+        errors: [400, 401, 403],
+      }),
     },
     async (req, reply) => {
       if (!req.query.loanId) {
@@ -214,12 +267,52 @@ export async function paymentsRoutes(app: FastifyInstance) {
     }
   };
 
+  /*
+   * RESPONSES ONLY on the webhook pair, and no `body` schema at any
+   * price. The body is whatever the gateway sends — its shape belongs
+   * to the provider and is checked by `parseWebhook`, which is also
+   * where the signature is verified. A JSON Schema in front of that
+   * would reject a legitimate callback the provider changed the shape
+   * of, and a dropped settlement callback is a payment that never
+   * reaches the borrower's balance.
+   *
+   * `params` is safe: both segments are free strings and the handler
+   * compares the provider name itself.
+   */
   app.post<{ Params: { provider: string } }>(
     "/webhook/:provider",
+    {
+      schema: routeSchema({
+        summary:
+          "Gateway settlement callback (single-tenant). Unauthenticated — " +
+          "the provider's signature check is the only control.",
+        tags: TAGS,
+        params: webhookParamSchema,
+        response: webhookResponseSchema,
+        // 400 covers both refusals: the URL naming a provider this
+        // deployment is not configured for, and a callback `parseWebhook`
+        // would not verify or the repository could not apply.
+        errors: [400],
+      }),
+    },
     webhookHandler,
   );
   app.post<{ Params: { provider: string; tenantSlug: string } }>(
     "/webhook/:provider/:tenantSlug",
+    {
+      schema: routeSchema({
+        summary:
+          "Gateway settlement callback, tenant named in the URL because a " +
+          "callback carries no JWT.",
+        tags: TAGS,
+        params: webhookTenantParamSchema,
+        response: webhookResponseSchema,
+        // 404 is an unknown or suspended tenant slug — deliberately the
+        // same answer as a route that does not exist, so the endpoint
+        // cannot be used to enumerate tenants.
+        errors: [400, 404],
+      }),
+    },
     webhookHandler,
   );
 
@@ -280,20 +373,66 @@ export async function paymentsRoutes(app: FastifyInstance) {
     }
   };
 
+  /*
+   * Same rule as the webhook: params documented, body left alone. The
+   * POST form's optional `{ status, amount, reference }` is read with
+   * `req.body?.` precisely so a bare POST works — declaring an object
+   * body would turn "open the URL and confirm" into a 400.
+   */
+  const sandboxSummary =
+    "Sandbox only: simulate the customer paying. 404s unless the " +
+    "configured provider is MOCK — it is payment forgery by design.";
+
   app.get<{ Params: { externalId: string } }>(
     "/mock/confirm/:externalId",
+    {
+      schema: routeSchema({
+        summary: sandboxSummary,
+        tags: TAGS,
+        params: sandboxParamSchema,
+        response: sandboxConfirmResponseSchema,
+        errors: [400, 404],
+      }),
+    },
     sandboxHandler,
   );
   app.post<{ Params: { externalId: string } }>(
     "/mock/confirm/:externalId",
+    {
+      schema: routeSchema({
+        summary: `${sandboxSummary} POST form mirrors a provider callback.`,
+        tags: TAGS,
+        params: sandboxParamSchema,
+        response: sandboxConfirmResponseSchema,
+        errors: [400, 404],
+      }),
+    },
     sandboxHandler,
   );
   app.get<{ Params: { tenantSlug: string; externalId: string } }>(
     "/mock/confirm/:tenantSlug/:externalId",
+    {
+      schema: routeSchema({
+        summary: `${sandboxSummary} Tenant named in the URL.`,
+        tags: TAGS,
+        params: sandboxTenantParamSchema,
+        response: sandboxConfirmResponseSchema,
+        errors: [400, 404],
+      }),
+    },
     sandboxHandler,
   );
   app.post<{ Params: { tenantSlug: string; externalId: string } }>(
     "/mock/confirm/:tenantSlug/:externalId",
+    {
+      schema: routeSchema({
+        summary: `${sandboxSummary} Tenant named in the URL, POST form.`,
+        tags: TAGS,
+        params: sandboxTenantParamSchema,
+        response: sandboxConfirmResponseSchema,
+        errors: [400, 404],
+      }),
+    },
     sandboxHandler,
   );
 }

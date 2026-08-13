@@ -2,10 +2,30 @@ import { AuditLogRepository, type PrismaClient } from "@loan/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { config } from "../../config";
-import { forgotPasswordSchema, resetPasswordSchema } from "./schemas";
+import {
+  completeProfileResponseSchema,
+  completeProfileSchema,
+  forgotPasswordSchema,
+  meResponseSchema,
+  notificationsStateResponseSchema,
+  okResponseSchema,
+  permissionsResponseSchema,
+  resetPasswordSchema,
+  resetTokenParamSchema,
+  saveSignatureSchema,
+  signatureResponseSchema,
+  tokenResponseSchema,
+  totpCodeSchema,
+  totpDisableResponseSchema,
+  totpEnableResponseSchema,
+  totpSetupResponseSchema,
+  totpStatusResponseSchema,
+} from "./schemas";
 import { AuthController } from "./auth.controller";
 import { PasswordResetService } from "./password-reset.service";
 import { AuthService } from "./auth.service";
+
+import { routeSchema } from "../../lib/openapi";
 
 /**
  * Auth feature plugin. Owns every write path on /auth and every /me
@@ -43,6 +63,8 @@ declare module "fastify" {
 export async function authRoutes(app: FastifyInstance) {
   const auth = new AuthController();
 
+  const TAGS = ["auth"];
+
   // Tight rate limit on credential endpoints — defends against
   // credential stuffing and account-enumeration probes. Keyed on IP
   // via the global rate-limit plugin's default keyGenerator.
@@ -57,18 +79,91 @@ export async function authRoutes(app: FastifyInstance) {
   // the per-request AuthService against the resolved client.
   const publicPre = [resolveTenantFromBody(app), buildAuthService(app)];
 
-  app.post("/login", { ...authThrottle, preHandler: publicPre }, auth.login);
+  /*
+   * RESPONSES ONLY on this group, and that is deliberate.
+   *
+   * Attaching a `body` schema makes Fastify validate at preValidation —
+   * BEFORE `resolveTenantFromBody` runs. That preHandler answers a
+   * missing or unknown tenant with a 401 worded byte-identically to a
+   * wrong password, precisely so a prober cannot tell the two apart. A
+   * schema in front of it would answer the same request with a 400
+   * naming the field at fault, moving the line between "malformed" and
+   * "refused" on the most-integrated-against routes in the API and
+   * handing back a description of the credential shape to callers who
+   * have not authenticated.
+   *
+   * The request shapes are `loginSchema` / `registerSchema` /
+   * `refreshSchema` in ./schemas.ts and the controller still parses
+   * against them; what is published here is what comes BACK, which is
+   * the part an integrator cannot discover by reading the client.
+   */
+  app.post(
+    "/login",
+    {
+      ...authThrottle,
+      preHandler: publicPre,
+      schema: routeSchema({
+        summary:
+          "Exchange email + password (+ 2FA code) for an access and " +
+          "refresh token pair.",
+        tags: TAGS,
+        response: tokenResponseSchema,
+        // 401 covers all four refusals — bad credentials, bad TOTP, bad
+        // recovery code, and "second factor required". The last carries
+        // `requires2fa: true` and means the password WAS right.
+        errors: [400, 401, 429],
+      }),
+    },
+    auth.login,
+  );
   app.post(
     "/register",
-    { ...authThrottle, preHandler: publicPre },
+    {
+      ...authThrottle,
+      preHandler: publicPre,
+      schema: routeSchema({
+        summary:
+          "Self-register a borrower account. Creates a CUSTOMER with no " +
+          "Customer record yet — /auth/me/profile completes it.",
+        tags: TAGS,
+        response: tokenResponseSchema,
+        status: 201,
+        // 409 is the address already being registered.
+        errors: [400, 401, 409, 429],
+      }),
+    },
     auth.register,
   );
   app.post(
     "/refresh",
-    { ...authThrottle, preHandler: publicPre },
+    {
+      ...authThrottle,
+      preHandler: publicPre,
+      schema: routeSchema({
+        summary:
+          "Rotate a refresh token for a new pair. Re-using a spent token " +
+          "revokes every session for that user.",
+        tags: TAGS,
+        response: tokenResponseSchema,
+        errors: [400, 401, 429],
+      }),
+    },
     auth.refresh,
   );
-  app.post("/logout", { preHandler: publicPre }, auth.logout);
+  app.post(
+    "/logout",
+    {
+      preHandler: publicPre,
+      schema: routeSchema({
+        summary:
+          "Revoke the presented refresh token. Succeeds even for a token " +
+          "that was never valid, so it cannot be used as an oracle.",
+        tags: TAGS,
+        errors: [401],
+      }),
+    },
+    auth.logout,
+  );
 
   // ── Password reset ─────────────────────────────────────────────────
   //
@@ -79,9 +174,30 @@ export async function authRoutes(app: FastifyInstance) {
     config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
   };
 
+  /*
+   * NO `body` schema here, and this one is not a judgement call.
+   *
+   * The handler below answers 202 even for a body that is not an email,
+   * on purpose: a 400 would separate "not an email" from "no such
+   * account", which is the exact distinction the endpoint exists to
+   * hide. `forgotPasswordSchema` in front of it would reintroduce that
+   * 400 at preValidation, before the handler ever runs.
+   */
   app.post<{ Body: unknown }>(
     "/forgot-password",
-    { ...resetThrottle, preHandler: publicPre },
+    {
+      ...resetThrottle,
+      preHandler: publicPre,
+      schema: routeSchema({
+        summary:
+          "Start a password reset. Always answers 202, whether or not the " +
+          "address matches an account.",
+        tags: TAGS,
+        response: okResponseSchema,
+        status: 202,
+        errors: [401, 429],
+      }),
+    },
     async (req, reply) => {
       const parsed = forgotPasswordSchema.safeParse(req.body);
       // Even a malformed body gets the standard answer. A 400 here
@@ -98,7 +214,22 @@ export async function authRoutes(app: FastifyInstance) {
   // than after someone has typed a new password twice.
   app.get<{ Params: { token: string } }>(
     "/reset-password/:token",
-    { ...resetThrottle, preHandler: publicPre },
+    {
+      ...resetThrottle,
+      preHandler: publicPre,
+      schema: routeSchema({
+        summary:
+          "Check a reset link before showing the form. A spent or expired " +
+          "link answers 410 Gone with the reason.",
+        tags: TAGS,
+        params: resetTokenParamSchema,
+        response: okResponseSchema,
+        // The 410 is real and is NOT declared: `ERRORS` in lib/openapi.ts
+        // has no entry for it, and inventing one locally would be a
+        // second definition of the error envelope. See the report.
+        errors: [401, 429],
+      }),
+    },
     async (req, reply) => {
       const result = await buildResetService(app, req).check(req.params.token);
       if (!result.ok) {
@@ -108,9 +239,27 @@ export async function authRoutes(app: FastifyInstance) {
     },
   );
 
+  /*
+   * Also responses-only. `resetPasswordSchema` rejects a token shorter
+   * than 20 characters, and a schema in front of the handler would turn
+   * a truncated link — the commonest way a reset URL arrives broken,
+   * via a mail client wrapping it — into a 400 about `minLength`
+   * instead of the 410 "this link has expired" the reset page renders.
+   */
   app.post<{ Body: unknown }>(
     "/reset-password",
-    { ...resetThrottle, preHandler: publicPre },
+    {
+      ...resetThrottle,
+      preHandler: publicPre,
+      schema: routeSchema({
+        summary:
+          "Redeem a reset link and set a new password. A spent or expired " +
+          "link answers 410 Gone.",
+        tags: TAGS,
+        response: okResponseSchema,
+        errors: [400, 401, 429],
+      }),
+    },
     async (req, reply) => {
       const parsed = resetPasswordSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -136,42 +285,214 @@ export async function authRoutes(app: FastifyInstance) {
   // app.authenticate verifies the JWT → req.user is set with the
   // tenant claim. app.resolveTenant reads it and binds req.tenantCtx.
   // buildAuthService then instantiates the per-request service.
-  const authedPre = [
-    app.authenticate,
-    app.resolveTenant,
-    buildAuthService(app),
-  ];
+  //
+  // authenticate runs at ONREQUEST, not preHandler, and the two are not
+  // interchangeable here. Fastify validates a route's request schema at
+  // preValidation, which is BEFORE preHandler: with authenticate one
+  // stage later, an unauthenticated caller posting a malformed body to
+  // /me/2fa/enable got a 400 describing the schema instead of a 401 —
+  // an unauthenticated reader learning the request shape. onRequest is
+  // earlier than validation, so the 401 wins again. Same fix, same
+  // reason, as loans.routes.ts.
+  const authed = {
+    onRequest: app.authenticate,
+    preHandler: [app.resolveTenant, buildAuthService(app)],
+  };
 
-  app.get("/me", { preHandler: authedPre }, auth.me);
+  app.get(
+    "/me",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary: "The signed-in account: identity, role and customer link.",
+        tags: TAGS,
+        response: meResponseSchema,
+        // 404 is the token verifying against a user row that no longer
+        // exists — a deleted account holding a live access token.
+        errors: [401, 404],
+      }),
+    },
+    auth.me,
+  );
 
   // Completes a self-registered borrower's profile. Authenticated, but
   // deliberately NOT gated on already having a customer link — this is
   // the endpoint that creates that link, so requiring one would
   // deadlock every account it exists for.
-  app.post("/me/profile", { preHandler: authedPre }, auth.completeProfile);
+  app.post(
+    "/me/profile",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary:
+          "Complete a self-registered borrower's profile: create the " +
+          "Customer record and link it to the login.",
+        tags: TAGS,
+        body: completeProfileSchema,
+        response: completeProfileResponseSchema,
+        status: 201,
+        // 403 is a staff account asking — they have no borrower record
+        // by design. 409 is the profile already existing; edits go
+        // through the portal's own profile endpoint.
+        errors: [400, 401, 403, 404, 409],
+      }),
+    },
+    auth.completeProfile,
+  );
 
-  app.get("/me/signature", { preHandler: authedPre }, auth.getSignature);
-  app.put("/me/signature", { preHandler: authedPre }, auth.setSignature);
-  app.delete("/me/signature", { preHandler: authedPre }, auth.clearSignature);
-  app.get("/me/permissions", { preHandler: authedPre }, auth.permissions);
+  app.get(
+    "/me/signature",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary: "The caller's saved signature image, if they have one.",
+        tags: TAGS,
+        response: signatureResponseSchema,
+        errors: [401, 404],
+      }),
+    },
+    auth.getSignature,
+  );
+  app.put(
+    "/me/signature",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary: "Save the caller's default signature image. Audited.",
+        tags: TAGS,
+        body: saveSignatureSchema,
+        response: signatureResponseSchema,
+        errors: [400, 401],
+      }),
+    },
+    auth.setSignature,
+  );
+  app.delete(
+    "/me/signature",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary:
+          "Clear the caller's saved signature. Answers the same pair with " +
+          "both fields null, not a 204.",
+        tags: TAGS,
+        response: signatureResponseSchema,
+        errors: [401],
+      }),
+    },
+    auth.clearSignature,
+  );
+  app.get(
+    "/me/permissions",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary:
+          "Permission keys and roles for the caller. Advisory — the " +
+          "server-side gate is what actually decides.",
+        tags: TAGS,
+        response: permissionsResponseSchema,
+        errors: [401],
+      }),
+    },
+    auth.permissions,
+  );
 
   // Notification bell state
   app.get(
     "/me/notifications/state",
-    { preHandler: authedPre },
+    {
+      ...authed,
+      schema: routeSchema({
+        summary: "Unseen notification count and the caller's last-seen mark.",
+        tags: TAGS,
+        response: notificationsStateResponseSchema,
+        errors: [401, 404],
+      }),
+    },
     auth.notificationsState,
   );
   app.post(
     "/me/notifications/seen",
-    { preHandler: authedPre },
+    {
+      ...authed,
+      schema: routeSchema({
+        summary:
+          "Move the last-seen mark to now. Answers the fresh bell state, " +
+          "so the client repaints from the write.",
+        tags: TAGS,
+        response: notificationsStateResponseSchema,
+        errors: [401],
+      }),
+    },
     auth.markNotificationsSeen,
   );
 
   // 2FA (TOTP) — three-step setup flow + disable
-  app.get("/me/2fa/status", { preHandler: authedPre }, auth.totpStatus);
-  app.post("/me/2fa/setup", { preHandler: authedPre }, auth.totpSetup);
-  app.post("/me/2fa/enable", { preHandler: authedPre }, auth.totpEnable);
-  app.post("/me/2fa/disable", { preHandler: authedPre }, auth.totpDisable);
+  app.get(
+    "/me/2fa/status",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary: "Whether 2FA is on, and how many recovery codes are left.",
+        tags: TAGS,
+        response: totpStatusResponseSchema,
+        errors: [401, 404],
+      }),
+    },
+    auth.totpStatus,
+  );
+  app.post(
+    "/me/2fa/setup",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary:
+          "Generate a TOTP secret and otpauth URI. Does not turn 2FA on — " +
+          "/enable confirms a code first.",
+        tags: TAGS,
+        response: totpSetupResponseSchema,
+        // 409 is 2FA already being enabled: disable it before re-setting up.
+        errors: [401, 404, 409],
+      }),
+    },
+    auth.totpSetup,
+  );
+  app.post(
+    "/me/2fa/enable",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary:
+          "Confirm a code against the stashed secret and turn 2FA on. " +
+          "Returns the recovery codes in clear, once.",
+        tags: TAGS,
+        body: totpCodeSchema,
+        response: totpEnableResponseSchema,
+        // A wrong code and a missing /setup are both 400, not 401: the
+        // caller is authenticated, the code just did not verify.
+        errors: [400, 401],
+      }),
+    },
+    auth.totpEnable,
+  );
+  app.post(
+    "/me/2fa/disable",
+    {
+      ...authed,
+      schema: routeSchema({
+        summary:
+          "Turn 2FA off. Requires a fresh code, so a hijacked session " +
+          "alone cannot do it.",
+        tags: TAGS,
+        body: totpCodeSchema,
+        response: totpDisableResponseSchema,
+        // 409 is 2FA not being on in the first place.
+        errors: [400, 401, 409],
+      }),
+    },
+    auth.totpDisable,
+  );
 }
 
 // ─── preHandlers ──────────────────────────────────────────────────────

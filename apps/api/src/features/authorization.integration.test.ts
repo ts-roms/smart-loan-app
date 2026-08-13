@@ -595,6 +595,13 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: "/api/v1/payments/intents",
     permission: "payments.intents",
     roles: ["ACCOUNTANT", "ADMIN"],
+    // This route now publishes `createIntentSchema`, so an empty body is
+    // rejected at preValidation and the permission gate is never reached.
+    // See `payload` on StaffRoute above.
+    payload: {
+      loanId: "00000000-0000-0000-0000-000000000000",
+      amount: 1000,
+    },
   },
   {
     group: "payments",
