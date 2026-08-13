@@ -119,7 +119,7 @@ Original plan:
 | 3.1  | Object storage (S3/MinIO) for uploads; DB keeps metadata; signed URLs | ⬜ needs a bucket + credentials; backup now archives `UPLOADS_DIR`, so it is planned, not urgent                                                                                                                                        |
 | 3.2  | Playwright + 6 journeys against a live stack                          | ✅ 21 read assertions **plus the write journey**: apply→2-person approval→disburse→pay, all UI, closing with reconciliation green on a scratch DB it creates and drops. Found a real defect (chain skipped the KYC re-check, now fixed) |
 | 3.3  | Enable CSP in production                                              | ✅ API (`/uploads/` sandboxed, JSON `default-src 'none'`) **and** SPA (build-time meta + `frame-ancestors` from nginx). `style-src` still needs `unsafe-inline` — Radix; documented                                                     |
-| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ◐ **174 of 338** operations, ratcheted by a test. Mechanism done; auth, rbac, payments, loan-products, delegations landed with 401-before-400 verified live; ~164 routes remain (portal is the largest)                                 |
+| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ◐ **240 of 339** operations, ratcheted by a test. Twelve feature groups documented, each with 401-before-400 verified live; 99 remain, none of them large                                                                               |
 | 3.5  | Documented restore drill                                              | ✅ written **and run** — and it FAILED on an unpatched host (pg_dump 18 vs server 16). See disaster-recovery.md                                                                                                                         |
 
 **Phase 3 is one item from done** — only OpenAPI coverage remains inside it,
@@ -145,9 +145,10 @@ did.
 
 ## Phase 5 — Intelligence (P3)
 
-Collection priority scoring (GAP-23), roll-rate analysis (GAP-24), unified
-collateral model (GAP-26), product profitability (GAP-30), expanded fraud
-signals. All genuinely valuable, none urgent, all safe to defer.
+✅ Collection priority scoring (GAP-23), ✅ roll-rate analysis (GAP-24),
+✅ product profitability (GAP-30). Remaining: unified collateral model
+(GAP-26) and expanded fraud signals — both genuinely valuable, neither
+urgent, both safe to defer.
 
 ---
 

@@ -10,6 +10,67 @@ automation depends on the manifest.
 
 ---
 
+## Unreleased — worktree batch: OpenAPI, drift repair, profitability
+
+### Added — product profitability (§54 / GAP-30)
+
+Per product, over a period: interest, fees, late fees, write-off losses,
+net. Journal entries carry no product tag, so attribution reuses the
+`(source, sourceRefType, sourceRefId)` tuple the idempotency index and the
+reconciliation joins already depend on, resolved to loans in bulk rather
+than per row. `REVERSAL` entries inherit both the attribution and the
+classification of the entry they reverse — including when the original
+falls outside the window — so a correction cancels instead of
+double-counting. Entries resolving to no product land in an
+`unattributed` bucket that is included in the totals, never dropped.
+
+Cost of funds, opex allocation, agent commissions, bad-debt recoveries and
+ECL are out of scope and the file header says so rather than inventing
+figures: the book has no data for the first two, and the rest are separate
+lifecycles.
+
+Verified at integration against independent SQL: interest 12,285.42, fees
+11,375.00, write-offs 50,000.00, net −26,339.58, 0 unattributed — every
+figure matching, and `loanCount` 7 being exactly the disbursed loans of
+the ten in the book.
+
+### Fixed — schema/migrations drift, all five items, zero DDL
+
+The two indexes that looked missing were phantom drift: their migrations
+built them as **partial** indexes, which `@@index()` cannot express and
+Prisma introspection ignores, so plain declarations diffed as absent
+forever against indexes present in every database. The declarations are
+gone, with comments naming the owning migrations. The posting-idempotency
+index keeps its real name by declaration (`map:`), because `name:` only
+names the client API field — zero DDL against the §13 constraint. Plus two
+items the first measurement missed: `Lead`'s DESC sort, and the
+`text_pattern_ops` annotation, which Prisma 6 cannot introspect and which
+therefore diffed as a perpetual drop/recreate.
+
+`migrate diff --from-migrations --to-schema-datamodel` now reports **"No
+difference detected."**
+
+### Added — OpenAPI: portal, cooperative, dorsi, repossession, agents
+
+240 of 339 operations now carry a real response shape (was 174).
+`authenticate` moved to `onRequest` in all five groups; portal needed no
+special handling after all — it uses the same `app.authenticate`, and the
+borrower-vs-staff split lives in `PortalController.guard`, which is
+untouched. Two routes left undocumented on purpose: portal's `ledger.pdf`
+returns bytes, and dorsi's board-approval can answer a literal `null`.
+
+### Fixed — a duplicate portal KYC upload is a 409, not a 500
+
+The staff KYC route has always mapped `KycDuplicateError` to 409. The
+portal route never caught it, so a borrower re-uploading a document they
+had already sent got a 500 — an ordinary action reported as a server
+fault. Detected by the error's `code` field rather than `instanceof`,
+since pnpm can resolve two copies of `@loan/db` and an `instanceof`
+spanning them fails silently; one of the three tests pins that case with a
+foreign class of identical shape.
+
+---
+
 ## Unreleased — worktree batch: write E2E, OpenAPI, indexes, Next pilot
 
 ### Added — the write E2E journey
