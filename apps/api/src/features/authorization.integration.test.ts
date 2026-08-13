@@ -260,6 +260,20 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: "/api/v1/customers",
     permission: "customers.write",
     roles: ["LOAN_OFFICER", "ADMIN"],
+    payload: {
+      firstName: "Test",
+      lastName: "Borrower",
+      dateOfBirth: "1990-01-01",
+      phone: "09171234567",
+      email: "test.borrower@example.com",
+      address: "1 Test St",
+      city: "Manila",
+      governmentIdType: "NATIONAL_ID",
+      governmentIdNumber: "1234-5678",
+      employmentStatus: "EMPLOYED",
+      employerName: "Test Co",
+      monthlyIncome: 45000,
+    },
   },
   {
     group: "customers",
@@ -304,6 +318,13 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: "/api/v1/loans/apply",
     permission: "loans.apply",
     roles: ["LOAN_OFFICER", "ADMIN"],
+    payload: {
+      customerId: CUSTOMER_ID,
+      productCode: "SALARY",
+      principal: 50000,
+      termMonths: 12,
+      annualInterestRate: 0.24,
+    },
   },
   {
     group: "loans",
@@ -311,6 +332,13 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: "/api/v1/loans/dry-run",
     permission: "loans.apply",
     roles: ["LOAN_OFFICER", "ADMIN"],
+    payload: {
+      customerId: CUSTOMER_ID,
+      productCode: "SALARY",
+      principal: 50000,
+      termMonths: 12,
+      annualInterestRate: 0.24,
+    },
   },
   {
     group: "loans",
@@ -318,6 +346,7 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: `/api/v1/loans/${LOAN_ID}/decide`,
     permission: "loans.decide",
     roles: ["LOAN_OFFICER", "ADMIN"],
+    payload: { status: "APPROVED" },
   },
   {
     group: "loans",
@@ -333,6 +362,7 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: `/api/v1/loans/${LOAN_ID}/payments`,
     permission: "payments.record",
     roles: ["ACCOUNTANT", "ADMIN"],
+    payload: { amount: 1000 },
   },
   {
     group: "loans",
@@ -460,6 +490,7 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: `/api/v1/collections/loans/${LOAN_ID}/notes`,
     permission: "collections.note",
     roles: ["LOAN_OFFICER", "ADMIN"],
+    payload: { type: "CALL", body: "Reached the borrower." },
   },
   {
     group: "collections",

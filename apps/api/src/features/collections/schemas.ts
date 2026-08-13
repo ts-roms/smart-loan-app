@@ -74,3 +74,159 @@ export const queueScopeSchema = z.object({
   scope: z.enum(["all", "mine", "unassigned"]).default("all"),
 });
 export type QueueScope = z.infer<typeof queueScopeSchema>;
+
+/* ─── Request params, for the OpenAPI spec ──────────────────────────────
+ *
+ * `:loanId` is deliberately not `.uuid()`: the assignment and unassign
+ * paths resolve loan numbers too (idOrNumberWhere in the service), and
+ * the note/promise paths accept whatever string arrives today.
+ */
+export const loanIdParamSchema = z.object({
+  loanId: z.string().min(1),
+});
+
+export const promiseIdParamSchema = z.object({
+  id: z.string().min(1),
+});
+
+/* ─── Response shapes, for the OpenAPI spec ─────────────────────────────
+ *
+ * zod so they are real parsers a test can assert payloads against; they
+ * declare what is CONTRACTUAL and let the rest pass through (see
+ * lib/openapi.ts). Money rules: columns straight off a Prisma row are
+ * Decimal STRINGS (`PromiseToPay.amount`, the queue row's `principal`);
+ * figures folded in JS (`outstanding`) are numbers.
+ */
+
+/** The collector working an account, flattened onto a queue row. */
+const queueAssigneeSchema = z.object({
+  collectorId: z.string().uuid(),
+  collectorName: z.string(),
+  assignedAt: z.string().datetime(),
+  note: z.string().nullable(),
+});
+
+/**
+ * §29 priority verdict carried on every queue row — the score, its
+ * factor breakdown, and the recommended next move.
+ */
+const prioritySchema = z.object({
+  /** 0–100. Higher means work it sooner. */
+  score: z.number(),
+  band: z.string(),
+  agingBucket: z.string(),
+  /** Per-factor contribution, so the ordering is arguable. */
+  factors: z.array(
+    z.object({
+      factorId: z.string(),
+      label: z.string(),
+      weight: z.number(),
+      strength: z.number(),
+      points: z.number(),
+      source: z.string(),
+    }),
+  ),
+  action: z.string(),
+  actionReason: z.string(),
+  channel: z.string(),
+  channelReason: z.string(),
+  nextFollowUpDate: z.string().datetime(),
+  followUpReason: z.string(),
+  /** True when a terminal account is deliberately pushed down the queue. */
+  suppressed: z.boolean(),
+});
+
+/**
+ * One delinquent account. The loan row's own columns (Decimal strings,
+ * datetimes) ride along; the queue-specific figures are JS numbers.
+ */
+export const queueRowResponseSchema = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  customerId: z.string().uuid(),
+  productCode: z.string(),
+  /** Decimal on the wire. */
+  principal: z.string(),
+  status: z.string(),
+  customerName: z.string(),
+  /** Borrower's area — drives the queue's area filter. */
+  customerCity: z.string(),
+  customerProvince: z.string().nullable(),
+  /** Days the EARLIEST unpaid instalment is past due. Exact. */
+  daysOverdue: z.number().int(),
+  outstanding: z.number(),
+  overdueCount: z.number().int(),
+  assignee: queueAssigneeSchema.nullable(),
+  priority: prioritySchema,
+});
+
+export const queueResponseSchema = z.array(queueRowResponseSchema);
+
+/** Users who can hold accounts — the assign picker. */
+export const collectorListResponseSchema = z.array(
+  z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    email: z.string(),
+    role: z.string(),
+  }),
+);
+
+/** Accounts carried per collector, busiest first. */
+export const workloadResponseSchema = z.array(
+  z.object({
+    collectorId: z.string().uuid(),
+    collectorName: z.string(),
+    accounts: z.number().int(),
+  }),
+);
+
+/** The assignment row after an assign/reassign. */
+export const assignmentResponseSchema = z.object({
+  id: z.string().uuid(),
+  loanId: z.string().uuid(),
+  collectorId: z.string().uuid(),
+  assignedById: z.string().uuid(),
+  /** Refreshed on reassignment — "held since THIS collector got it". */
+  assignedAt: z.string().datetime(),
+  note: z.string().nullable(),
+  collector: z.object({ id: z.string().uuid(), name: z.string() }),
+});
+
+/** Bulk assignment outcome — unknown ids reported, not fatal. */
+export const bulkAssignResponseSchema = z.object({
+  assigned: z.number().int(),
+  missing: z.array(z.string()),
+});
+
+export const noteResponseSchema = z.object({
+  id: z.string().uuid(),
+  loanId: z.string().uuid(),
+  type: z.enum(["CALL", "SMS", "EMAIL", "VISIT", "OTHER"]),
+  body: z.string(),
+  createdAt: z.string().datetime(),
+  createdById: z.string().uuid(),
+});
+
+export const noteListResponseSchema = z.array(noteResponseSchema);
+
+export const promiseResponseSchema = z.object({
+  id: z.string().uuid(),
+  loanId: z.string().uuid(),
+  /** Decimal on the wire. */
+  amount: z.string(),
+  promisedDate: z.string().datetime(),
+  status: z.enum(["PROMISED", "HONORED", "BROKEN", "CANCELLED"]),
+  note: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  resolvedAt: z.string().datetime().nullable(),
+  createdById: z.string().uuid(),
+});
+
+export const promiseListResponseSchema = z.array(promiseResponseSchema);
+
+/** Idempotent accrual: `posted` is new entries, `skipped` everything else. */
+export const accrueLateFeesResponseSchema = z.object({
+  posted: z.number().int(),
+  skipped: z.number().int(),
+});

@@ -6,7 +6,16 @@ import {
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { routeSchema } from "../../lib/openapi";
 import { notifyApproversForStep } from "./notify-approvers";
+import {
+  approveStepResponseSchema,
+  loanApprovalListResponseSchema,
+  loanApprovalResponseSchema,
+  loanIdParamSchema,
+} from "./schemas";
+
+const TAGS = ["loans"];
 
 const approveSchema = z.object({
   notes: z.string().max(2000).optional(),
@@ -51,7 +60,11 @@ declare module "fastify" {
  * Phase 2: per-request repo wiring against `req.tenantCtx.prisma`.
  */
 export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", app.authenticate);
+  // onRequest, not preHandler — these routes carry request schemas, and
+  // authentication has to precede schema validation or an anonymous
+  // caller with a bad body gets a 400 instead of a 401. See
+  // decision-rules.routes.ts.
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", buildApprovalCtx());
 
@@ -59,7 +72,16 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
   // loan can see its approval chain.
   app.get<{ Params: { id: string } }>(
     "/:id/approvals",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary: "The loan's approval chain, in step order.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: loanApprovalListResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const { loans, approvals } = req.approvalCtx!;
       const loan = await loans.findByIdOrNumber(req.params.id);
@@ -68,65 +90,92 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.post<{ Params: { id: string } }>("/:id/approvals", async (req, reply) => {
-    const { loans, approvals, audit } = req.approvalCtx!;
-    const parsed = approveSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply
-        .code(400)
-        .send({ error: "ValidationError", issues: parsed.error.issues });
-    }
-    const loan = await loans.findByIdOrNumber(req.params.id);
-    if (!loan) return reply.code(404).send({ error: "NotFound" });
-    try {
-      const result = await approvals.approveStep({
-        loanId: loan.id,
-        approverId: req.user.sub,
-        notes: parsed.data.notes,
-      });
-      await audit.record({
-        action: "LOAN_APPROVAL_STEP",
-        actorId: req.user.sub,
-        targetType: "LoanApplication",
-        targetId: loan.id,
-        payload: {
-          loanNumber: loan.number,
-          stepOrder: result.approval.stepOrder,
-          stepLabel: result.approval.stepLabel,
-          isFinal: result.isFinal,
-          signedUnderDelegationId: result.approval.signedUnderDelegationId,
-        },
-      });
-      // Hand-off notification: if the step that just landed isn't the
-      // final one, the next step's approvers need to know they have
-      // something waiting. Fire-and-forget so the HTTP response isn't
-      // blocked on the dispatcher round-trip. Uses the tenant-scoped
-      // prisma client so the lookup hits the right schema.
-      if (!result.isFinal && result.nextStep) {
-        const prisma = req.tenantCtx.prisma;
-        void notifyApproversForStep(
-          app,
-          prisma,
-          app.notifications(prisma),
-          loan.id,
-          result.nextStep,
-        );
+  app.post<{ Params: { id: string } }>(
+    "/:id/approvals",
+    {
+      schema: routeSchema({
+        summary:
+          "Approve the current step. Per-step permission is enforced in " +
+          "the transaction; wrong-state refusals answer 400 here.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: approveSchema,
+        response: approveStepResponseSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
+    async (req, reply) => {
+      const { loans, approvals, audit } = req.approvalCtx!;
+      const parsed = approveSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
       }
-      return result;
-    } catch (err) {
-      const message = (err as Error).message;
-      // Permission denial → 403 so the UI can show a clean error;
-      // other validation issues (already approved, wrong state) → 400.
-      if (message.includes("don't hold")) {
-        return reply.code(403).send({ error: "Forbidden", message });
+      const loan = await loans.findByIdOrNumber(req.params.id);
+      if (!loan) return reply.code(404).send({ error: "NotFound" });
+      try {
+        const result = await approvals.approveStep({
+          loanId: loan.id,
+          approverId: req.user.sub,
+          notes: parsed.data.notes,
+        });
+        await audit.record({
+          action: "LOAN_APPROVAL_STEP",
+          actorId: req.user.sub,
+          targetType: "LoanApplication",
+          targetId: loan.id,
+          payload: {
+            loanNumber: loan.number,
+            stepOrder: result.approval.stepOrder,
+            stepLabel: result.approval.stepLabel,
+            isFinal: result.isFinal,
+            signedUnderDelegationId: result.approval.signedUnderDelegationId,
+          },
+        });
+        // Hand-off notification: if the step that just landed isn't the
+        // final one, the next step's approvers need to know they have
+        // something waiting. Fire-and-forget so the HTTP response isn't
+        // blocked on the dispatcher round-trip. Uses the tenant-scoped
+        // prisma client so the lookup hits the right schema.
+        if (!result.isFinal && result.nextStep) {
+          const prisma = req.tenantCtx.prisma;
+          void notifyApproversForStep(
+            app,
+            prisma,
+            app.notifications(prisma),
+            loan.id,
+            result.nextStep,
+          );
+        }
+        return result;
+      } catch (err) {
+        const message = (err as Error).message;
+        // Permission denial → 403 so the UI can show a clean error;
+        // other validation issues (already approved, wrong state) → 400.
+        if (message.includes("don't hold")) {
+          return reply.code(403).send({ error: "Forbidden", message });
+        }
+        return reply.code(400).send({ error: "BadRequest", message });
       }
-      return reply.code(400).send({ error: "BadRequest", message });
-    }
-  });
+    },
+  );
 
   // Reject. Notes mandatory.
   app.post<{ Params: { id: string } }>(
     "/:id/approvals/reject",
+    {
+      schema: routeSchema({
+        summary:
+          "Reject the current step — terminal for the loan. Notes are " +
+          "mandatory; wrong-state refusals answer 400 here.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: rejectSchema,
+        response: loanApprovalResponseSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const { loans, approvals, audit } = req.approvalCtx!;
       const parsed = rejectSchema.safeParse(req.body);

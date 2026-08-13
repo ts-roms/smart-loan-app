@@ -34,23 +34,57 @@ import { LoanWorkflowController } from "./loans.controller";
 import { LoanWorkflowService } from "./loans.service";
 import { notifyApproversForStep } from "./notify-approvers";
 
+import { routeSchema } from "../../lib/openapi";
+
 // All zod request schemas live in ./schemas.ts. They're inferred here
 // so request-handler bodies stay close to the wire shape without zod
 // noise inside this file.
 import {
+  applyRequestSchema,
+  applyResponseSchema,
+  bulkPaymentResponseSchema,
   bulkPaymentSchema,
+  closeEarlyResponseSchema,
   closeEarlySchema,
+  coMakerIdParamSchema,
+  coMakerInviteResponseSchema,
+  coMakerListResponseSchema,
+  coMakerResponseSchema,
   coMakerSchema,
+  declarationAnswersRequestSchema,
+  declarationsResponseSchema,
+  decideSchema,
   draftCreateSchema,
+  draftListResponseSchema,
+  draftResponseSchema,
   draftUpdateSchema,
+  dryRunResponseSchema,
+  kycStatusResponseSchema,
+  loanDetailResponseSchema,
+  loanIdParamSchema,
   loanListQuerySchema,
+  loanListResponseSchema,
+  loanMessageListResponseSchema,
+  loanMessageResponseSchema,
+  loanPaymentResponseSchema,
+  loanResponseSchema,
+  messageIdParamSchema,
   paymentSchema,
+  penaltiesResponseSchema,
+  penaltyWaiverListResponseSchema,
+  quoteResponseSchema,
   quoteSchema,
+  renewResponseSchema,
   renewSchema,
+  renewalEligibilityResponseSchema,
+  restructureResponseSchema,
   restructureSchema,
+  revokeInviteResponseSchema,
   selfieMatchSchema,
   signSchema,
+  waivePenaltyResponseSchema,
   waivePenaltySchema,
+  writeOffResponseSchema,
   writeOffSchema,
 } from "./schemas";
 
@@ -115,10 +149,16 @@ declare module "fastify" {
 export async function loanRoutes(app: FastifyInstance) {
   const workflow = new LoanWorkflowController();
 
-  app.addHook("preHandler", app.authenticate);
+  // onRequest, not preHandler — routes in this group carry request
+  // schemas, and Fastify validates at preValidation, BEFORE preHandler.
+  // With authenticate at preHandler an unauthenticated caller with a
+  // malformed body got a 400 describing the schema instead of a 401.
+  // See decision-rules.routes.ts for the full account.
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", buildLoanCtx(app));
 
+  const TAGS = ["loans"];
   const canRead = { preHandler: app.requirePermission("loans.read") };
 
   /**
@@ -161,7 +201,18 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { id: string } }>(
     "/:id/kyc-status",
-    canRead,
+    {
+      ...canRead,
+      schema: routeSchema({
+        summary:
+          "KYC rollup for the loan's borrower against the product's " +
+          "required documents.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: kycStatusResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const { loans, kyc } = req.loanCtx!;
       const loan = await loans.findByIdOrNumber(req.params.id);
@@ -185,52 +236,71 @@ export async function loanRoutes(app: FastifyInstance) {
    * it reads nothing but the caller's own inputs and the public
    * LoanProduct parameters, and the portal apply wizard depends on it.
    */
-  app.post("/quote", async (req, reply) => {
-    const parsed = quoteSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply
-        .code(400)
-        .send({ error: "ValidationError", issues: parsed.error.issues });
-    }
-    const { principal, termMonths, annualInterestRate, productCode } =
-      parsed.data;
-    const product = productCode
-      ? await req.tenantCtx.prisma.loanProduct.findUnique({
-          where: { code: productCode },
-        })
-      : null;
-    const method = product?.interestMethod ?? "DECLINING";
-    const frequency = product?.paymentFrequency ?? "MONTHLY";
-    const schedule = computeAmortizationFor(
-      principal,
-      annualInterestRate,
-      termMonths,
-      { method, frequency },
-    );
-    const monthly = monthlyPayment(
-      principal,
-      annualInterestRate / periodsPerYear(frequency),
-      installmentCount(termMonths, frequency),
-    );
-    const total = schedule.reduce((s, r) => s + r.payment, 0);
-    const fees = product
-      ? computeFees(principal, {
-          processingFeeRate: Number(product.processingFeeRate),
-          processingFeeFlat: Number(product.processingFeeFlat),
-          documentaryStampRate: Number(product.documentaryStampRate),
-        })
-      : { processing: 0, documentary: 0, total: 0, netDisbursement: principal };
-    return {
-      monthlyPayment: monthly,
-      totalPaid: Math.round(total * 100) / 100,
-      totalInterest: Math.round((total - principal) * 100) / 100,
-      schedule,
-      fees,
-      method,
-      frequency,
-      installments: schedule.length,
-    };
-  });
+  app.post(
+    "/quote",
+    {
+      schema: routeSchema({
+        summary:
+          "Preview schedule and fees for a candidate loan. Open to any " +
+          "authenticated caller, borrowers included.",
+        tags: TAGS,
+        body: quoteSchema,
+        response: quoteResponseSchema,
+        errors: [400, 401],
+      }),
+    },
+    async (req, reply) => {
+      const parsed = quoteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
+      }
+      const { principal, termMonths, annualInterestRate, productCode } =
+        parsed.data;
+      const product = productCode
+        ? await req.tenantCtx.prisma.loanProduct.findUnique({
+            where: { code: productCode },
+          })
+        : null;
+      const method = product?.interestMethod ?? "DECLINING";
+      const frequency = product?.paymentFrequency ?? "MONTHLY";
+      const schedule = computeAmortizationFor(
+        principal,
+        annualInterestRate,
+        termMonths,
+        { method, frequency },
+      );
+      const monthly = monthlyPayment(
+        principal,
+        annualInterestRate / periodsPerYear(frequency),
+        installmentCount(termMonths, frequency),
+      );
+      const total = schedule.reduce((s, r) => s + r.payment, 0);
+      const fees = product
+        ? computeFees(principal, {
+            processingFeeRate: Number(product.processingFeeRate),
+            processingFeeFlat: Number(product.processingFeeFlat),
+            documentaryStampRate: Number(product.documentaryStampRate),
+          })
+        : {
+            processing: 0,
+            documentary: 0,
+            total: 0,
+            netDisbursement: principal,
+          };
+      return {
+        monthlyPayment: monthly,
+        totalPaid: Math.round(total * 100) / 100,
+        totalInterest: Math.round((total - principal) * 100) / 100,
+        schedule,
+        fees,
+        method,
+        frequency,
+        installments: schedule.length,
+      };
+    },
+  );
 
   /**
    * GET /loans — the master list, with optional search + filters. Every
@@ -241,24 +311,54 @@ export async function loanRoutes(app: FastifyInstance) {
    * filter would only ever search the page it was given and silently miss
    * the older loan the operator went looking for.
    */
-  app.get("/", canRead, async (req, reply) => {
-    const parsed = loanListQuerySchema.safeParse(req.query);
-    if (!parsed.success) {
-      return reply
-        .code(400)
-        .send({ error: "ValidationError", issues: parsed.error.issues });
-    }
-    return req.loanCtx!.loans.list(parsed.data);
-  });
+  app.get(
+    "/",
+    {
+      ...canRead,
+      schema: routeSchema({
+        summary:
+          "Loans, newest first, with balance and borrower. Filters are " +
+          "server-side; the bare call returns the 200 most recent.",
+        tags: TAGS,
+        querystring: loanListQuerySchema,
+        response: loanListResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
+    async (req, reply) => {
+      const parsed = loanListQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "ValidationError", issues: parsed.error.issues });
+      }
+      return req.loanCtx!.loans.list(parsed.data);
+    },
+  );
 
   // GET /loans/:idOrNumber — accept either the UUID or the human "LN-..."
   // number. The number form is what the new frontend uses on URLs; UUIDs
   // are still resolved so old bookmarks / API consumers keep working.
-  app.get<{ Params: { id: string } }>("/:id", canRead, async (req, reply) => {
-    const l = await req.loanCtx!.loans.findByIdOrNumber(req.params.id);
-    if (!l) return reply.code(404).send({ error: "NotFound" });
-    return l;
-  });
+  app.get<{ Params: { id: string } }>(
+    "/:id",
+    {
+      ...canRead,
+      schema: routeSchema({
+        summary:
+          "One loan with schedule, payments, borrower, product and " +
+          "collateral — by id or LN- number.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: loanDetailResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
+    async (req, reply) => {
+      const l = await req.loanCtx!.loans.findByIdOrNumber(req.params.id);
+      if (!l) return reply.code(404).send({ error: "NotFound" });
+      return l;
+    },
+  );
 
   /**
    * Persist a face-match (selfie ↔ ID) score computed client-side.
@@ -272,7 +372,19 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { id: string } }>(
     "/:id/selfie-match",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary:
+          "Persist a client-side face-match score. Both passes and fails " +
+          "are audited.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: selfieMatchSchema,
+        response: loanResponseSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const { loans, audit } = req.loanCtx!;
       const parsed = selfieMatchSchema.safeParse(req.body);
@@ -313,7 +425,22 @@ export async function loanRoutes(app: FastifyInstance) {
   // takes any customerId in the body, so it needs `loans.apply`.
   app.post(
     "/apply",
-    { preHandler: app.requirePermission("loans.apply") },
+    {
+      preHandler: app.requirePermission("loans.apply"),
+      schema: routeSchema({
+        summary:
+          "Submit a loan application: AML gate, one-live-loan check, " +
+          "decisioning, approval-chain stamp.",
+        tags: TAGS,
+        body: applyRequestSchema,
+        // The 201 is the created row plus the engine's verdict.
+        response: applyResponseSchema,
+        status: 201,
+        // 409 covers the state refusals: unresolved AML match, erased or
+        // archived customer, and a loan already live on this borrower.
+        errors: [400, 401, 403, 409],
+      }),
+    },
     workflow.apply,
   );
 
@@ -336,7 +463,20 @@ export async function loanRoutes(app: FastifyInstance) {
   // would fire, which is internal underwriting policy.
   app.post(
     "/dry-run",
-    { preHandler: app.requirePermission("loans.apply") },
+    {
+      preHandler: app.requirePermission("loans.apply"),
+      schema: routeSchema({
+        summary:
+          "Preview the decisioning verdict for an application without " +
+          "creating anything.",
+        tags: TAGS,
+        body: applyRequestSchema,
+        response: dryRunResponseSchema,
+        // 404 is the named customer not existing — the one lookup this
+        // read depends on.
+        errors: [400, 401, 403, 404],
+      }),
+    },
     workflow.dryRun,
   );
 
@@ -350,7 +490,21 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.put<{ Params: { id: string } }>(
     "/:id/declarations",
-    { preHandler: app.requirePermission("kyc.submit") },
+    {
+      preHandler: app.requirePermission("kyc.submit"),
+      schema: routeSchema({
+        summary:
+          "Answer or amend the application's KYC declarations. Frozen " +
+          "once the loan is decided.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: declarationAnswersRequestSchema,
+        response: declarationsResponseSchema,
+        // 404 is the loan — or a product with no questionnaire. 409 is a
+        // decided loan: the answers are part of what approval judged.
+        errors: [400, 401, 403, 404, 409],
+      }),
+    },
     workflow.answerDeclarations,
   );
 
@@ -368,7 +522,15 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.get(
     "/drafts",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary: "The caller's own wizard drafts, most recently touched first.",
+        tags: TAGS,
+        response: draftListResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     async (req) => {
       return req.loanCtx!.drafts.listByAuthor(req.user.sub);
     },
@@ -376,7 +538,17 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.post(
     "/drafts",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary: "Save a new wizard draft. Author-scoped.",
+        tags: TAGS,
+        body: draftCreateSchema,
+        response: draftResponseSchema,
+        status: 201,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const parsed = draftCreateSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -397,7 +569,16 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { id: string } }>(
     "/drafts/:id",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary: "One of the caller's drafts. 404 covers 'not yours' too.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: draftResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const draft = await req.loanCtx!.drafts.findByIdForAuthor(
         req.params.id,
@@ -410,7 +591,17 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.patch<{ Params: { id: string } }>(
     "/drafts/:id",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary: "Patch a draft — step position and wizard state.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: draftUpdateSchema,
+        response: draftResponseSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const { drafts } = req.loanCtx!;
       const existing = await drafts.findByIdForAuthor(
@@ -430,7 +621,16 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>(
     "/drafts/:id",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary: "Discard a draft. Fired by the wizard after final submit.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        // No `response` → documented as the 204 it answers.
+        errors: [401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const { drafts } = req.loanCtx!;
       const existing = await drafts.findByIdForAuthor(
@@ -446,12 +646,39 @@ export async function loanRoutes(app: FastifyInstance) {
   // Delegated to LoanWorkflowController.
   app.post<{ Params: { id: string } }>(
     "/:id/decide",
-    { preHandler: app.requirePermission("loans.decide") },
+    {
+      preHandler: app.requirePermission("loans.decide"),
+      schema: routeSchema({
+        summary:
+          "Decide a pending loan. Approval re-checks KYC, declarations " +
+          "and the approval chain; rejection is never gated.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: decideSchema,
+        response: loanResponseSchema,
+        // 409 is the whole family of state refusals: already decided /
+        // past deciding, approval steps outstanding, KYC or declarations
+        // incomplete without the override flag.
+        errors: [400, 401, 403, 404, 409],
+      }),
+    },
     workflow.decide,
   );
   app.post<{ Params: { id: string } }>(
     "/:id/disburse",
-    { preHandler: app.requirePermission("loans.disburse") },
+    {
+      preHandler: app.requirePermission("loans.disburse"),
+      schema: routeSchema({
+        summary:
+          "Disburse an approved loan: schedule, journal entry, commission, " +
+          "renewal settlement.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: loanResponseSchema,
+        // 409 is a co-maker who has not approved — the body names them.
+        errors: [401, 403, 404, 409],
+      }),
+    },
     workflow.disburse,
   );
 
@@ -470,7 +697,20 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.put<{ Params: { id: string } }>(
     "/:id/agent",
-    { preHandler: app.requirePermission("agents.assign") },
+    {
+      preHandler: app.requirePermission("agents.assign"),
+      schema: routeSchema({
+        summary:
+          "Credit the loan to a field agent, move it, or clear it " +
+          "(agentId: null). Idempotent.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: assignAgentSchema,
+        response: loanResponseSchema,
+        // 409: inactive agent, or the commission is already posted.
+        errors: [400, 401, 403, 409],
+      }),
+    },
     async (req, reply) => {
       const parsed = assignAgentSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -507,7 +747,22 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { id: string } }>(
     "/:id/payments",
-    { preHandler: app.requirePermission("payments.record") },
+    {
+      preHandler: app.requirePermission("payments.record"),
+      schema: routeSchema({
+        summary:
+          "Record a payment: allocate to the schedule, post the journal " +
+          "entry. Idempotency-Key replays return the original payment.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: paymentSchema,
+        response: loanPaymentResponseSchema,
+        status: 201,
+        // 409 is a loan whose status cannot take money — never disbursed,
+        // or replaced by a restructure.
+        errors: [400, 401, 403, 409],
+      }),
+    },
     async (req, reply) => {
       const parsed = paymentSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -571,6 +826,16 @@ export async function loanRoutes(app: FastifyInstance) {
         app.requireFeature("bulk.payments"),
         app.requirePermission("payments.bulk"),
       ],
+      schema: routeSchema({
+        summary:
+          "Record up to 500 payments in one call. Rows post independently; " +
+          "the 207 reports each row's outcome.",
+        tags: TAGS,
+        body: bulkPaymentSchema,
+        response: bulkPaymentResponseSchema,
+        status: 207,
+        errors: [400, 401, 402, 403],
+      }),
     },
     async (req, reply) => {
       const parsed = bulkPaymentSchema.safeParse(req.body);
@@ -611,7 +876,18 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.get<{ Params: { id: string } }>(
     "/:id/renewal-eligibility",
-    canRead,
+    {
+      ...canRead,
+      schema: routeSchema({
+        summary:
+          "Can this loan be renewed, and what would settling it cost? " +
+          "eligible:true carries payoffAmount; false carries the reason.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: renewalEligibilityResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const prisma = req.tenantCtx.prisma;
       const loan = await prisma.loanApplication.findFirst({
@@ -656,7 +932,22 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { id: string } }>(
     "/:id/renew",
-    { preHandler: app.requirePermission("loans.restructure") },
+    {
+      preHandler: app.requirePermission("loans.restructure"),
+      schema: routeSchema({
+        summary:
+          "Renew a loan in good standing: a new application whose proceeds " +
+          "settle the old one at disbursement.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: renewSchema,
+        response: renewResponseSchema,
+        status: 201,
+        // 409 is an ineligible loan — wrong status, already renewed, in
+        // arrears, or not paid down enough. The body carries the reason.
+        errors: [400, 401, 403, 404, 409],
+      }),
+    },
     async (req, reply) => {
       const parsed = renewSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -752,7 +1043,28 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>(
     "/:id/restructure",
-    { preHandler: app.requirePermission("loans.restructure") },
+    {
+      preHandler: app.requirePermission("loans.restructure"),
+      schema: routeSchema({
+        summary:
+          "Settle the original and create a replacement loan. NOTE: this " +
+          "route answers refusals (unknown loan, wrong status, chained " +
+          "restructure) as 400, not the 409 used elsewhere.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: restructureSchema,
+        response: restructureResponseSchema,
+        status: 201,
+        /*
+         * Documented as it behaves: every repository refusal — including
+         * "loan not found" and the status claim — reaches the caller as
+         * 400 via the catch below. The house convention says 409 for
+         * state refusals; changing the mapping is out of scope for a
+         * documentation pass, so the spec tells the truth instead.
+         */
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const { loans, audit } = req.loanCtx!;
       const parsed = restructureSchema.safeParse(req.body);
@@ -794,21 +1106,52 @@ export async function loanRoutes(app: FastifyInstance) {
   /** Current accrued penalty + waived-to-date totals. */
   app.get<{ Params: { id: string } }>(
     "/:id/penalties",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary: "Accrued late fees minus waivers — the live penalty figure.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: penaltiesResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     async (req) => req.loanCtx!.loans.accruedPenaltiesFor(req.params.id),
   );
 
   /** History of waivers on this loan (drawer audit trail). */
   app.get<{ Params: { id: string } }>(
     "/:id/penalty-waivers",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary: "Every waiver granted on this loan, newest first.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: penaltyWaiverListResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     async (req) => req.loanCtx!.loans.listPenaltyWaivers(req.params.id),
   );
 
   /** Waive part or all of the outstanding penalty. Posts the reversal. */
   app.post<{ Params: { id: string } }>(
     "/:id/waive-penalty",
-    { preHandler: app.requirePermission("loans.waive_penalty") },
+    {
+      preHandler: app.requirePermission("loans.waive_penalty"),
+      schema: routeSchema({
+        summary:
+          "Waive outstanding penalty and post the reversing entry. " +
+          "Refusals (over-waive, unknown loan) answer 400 here.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: waivePenaltySchema,
+        response: waivePenaltyResponseSchema,
+        status: 201,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const { loans, audit } = req.loanCtx!;
       const parsed = waivePenaltySchema.safeParse(req.body);
@@ -848,7 +1191,20 @@ export async function loanRoutes(app: FastifyInstance) {
   /** Write off the loan — books bad debt for the remaining principal. */
   app.post<{ Params: { id: string } }>(
     "/:id/write-off",
-    { preHandler: app.requirePermission("loans.write_off") },
+    {
+      preHandler: app.requirePermission("loans.write_off"),
+      schema: routeSchema({
+        summary:
+          "Write off remaining principal to Bad Debt. Refusals (already " +
+          "terminal, unknown loan) answer 400 here.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: writeOffSchema,
+        response: writeOffResponseSchema,
+        status: 201,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const { loans, audit } = req.loanCtx!;
       const parsed = writeOffSchema.safeParse(req.body);
@@ -888,6 +1244,18 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { id: string } }>(
     "/:id/sign-officer",
+    {
+      schema: routeSchema({
+        summary:
+          "Officer signs the agreement — directly or under an active " +
+          "delegation. Requires the loan's UUID, not its number.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: signSchema,
+        response: loanResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const { delegations, audit } = req.loanCtx!;
       const parsed = signSchema.safeParse(req.body);
@@ -970,7 +1338,19 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { id: string } }>(
     "/:id/sign-borrower",
-    { preHandler: app.requirePermission("loans.sign_officer") },
+    {
+      preHandler: app.requirePermission("loans.sign_officer"),
+      schema: routeSchema({
+        summary:
+          "Borrower signs, officer-mediated (in-branch). Requires the " +
+          "loan's UUID, not its number.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: signSchema,
+        response: loanResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const { audit } = req.loanCtx!;
       const parsed = signSchema.safeParse(req.body);
@@ -1008,9 +1388,21 @@ export async function loanRoutes(app: FastifyInstance) {
 
   // ─── Co-makers ─────────────────────────────────────────────────────
 
-  app.get<{ Params: { id: string } }>("/:id/co-makers", canRead, async (req) =>
-    // With consent state + attachments — the officer view needs both.
-    req.loanCtx!.coMakers.listForLoanWithDocuments(req.params.id),
+  app.get<{ Params: { id: string } }>(
+    "/:id/co-makers",
+    {
+      ...canRead,
+      schema: routeSchema({
+        summary: "Co-makers on the loan, with consent state and attachments.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: coMakerListResponseSchema,
+        errors: [401, 403],
+      }),
+    },
+    async (req) =>
+      // With consent state + attachments — the officer view needs both.
+      req.loanCtx!.coMakers.listForLoanWithDocuments(req.params.id),
   );
 
   // Adding a co-maker is part of assembling the application file, so it
@@ -1019,7 +1411,23 @@ export async function loanRoutes(app: FastifyInstance) {
   // difference is one of intent, not of reach.)
   app.post<{ Params: { id: string } }>(
     "/:id/co-makers",
-    { preHandler: app.requirePermission("loans.apply") },
+    {
+      preHandler: app.requirePermission("loans.apply"),
+      schema: routeSchema({
+        summary:
+          "Add a registered customer as co-maker. Identity is snapshotted " +
+          "from their record, never typed.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: coMakerSchema,
+        response: coMakerResponseSchema,
+        status: 201,
+        // 404 is the loan. An unknown CUSTOMER answers 400 — a 404 here
+        // would read as "no such loan" to a caller that just resolved
+        // one. 409: the borrower themselves, or already on the loan.
+        errors: [400, 401, 403, 404, 409],
+      }),
+    },
     async (req, reply) => {
       const parsed = coMakerSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1053,7 +1461,18 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { coMakerId: string } }>(
     "/co-makers/:coMakerId/invite",
-    { preHandler: app.requirePermission("loans.apply") },
+    {
+      preHandler: app.requirePermission("loans.apply"),
+      schema: routeSchema({
+        summary:
+          "Mint (or replace) a co-maker's consent link. Resending " +
+          "invalidates the old link and clears any previous answer.",
+        tags: TAGS,
+        params: coMakerIdParamSchema,
+        response: coMakerInviteResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const token = mintInviteToken(req.tenantCtx.slug);
       const expiresAt = new Date(
@@ -1104,7 +1523,18 @@ export async function loanRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { coMakerId: string } }>(
     "/co-makers/:coMakerId/revoke-invite",
-    { preHandler: app.requirePermission("admin.force_logout") },
+    {
+      preHandler: app.requirePermission("admin.force_logout"),
+      schema: routeSchema({
+        summary:
+          "Kill a co-maker's invite link now. Success even when no link " +
+          "was live — the asked-for state holds either way.",
+        tags: TAGS,
+        params: coMakerIdParamSchema,
+        response: revokeInviteResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const existing = await req.tenantCtx.prisma.coMaker.findUnique({
         where: { id: req.params.coMakerId },
@@ -1137,7 +1567,16 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { coMakerId: string } }>(
     "/co-makers/:coMakerId",
-    { preHandler: app.requirePermission("loans.decide") },
+    {
+      preHandler: app.requirePermission("loans.decide"),
+      schema: routeSchema({
+        summary: "Remove a co-maker. Returns the deleted row.",
+        tags: TAGS,
+        params: coMakerIdParamSchema,
+        response: coMakerResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     async (req) => req.loanCtx!.coMakers.delete(req.params.coMakerId),
   );
 
@@ -1145,7 +1584,18 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { id: string } }>(
     "/:id/messages",
-    canMessage,
+    {
+      ...canMessage,
+      schema: routeSchema({
+        summary:
+          "The officer↔borrower thread, oldest first. Staff need " +
+          "loans.read; a borrower must own the loan.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: loanMessageListResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     async (req) =>
       req.tenantCtx.prisma.loanMessage.findMany({
         where: { loanId: req.params.id },
@@ -1155,7 +1605,19 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string }; Body: { body: string } }>(
     "/:id/messages",
-    canMessage,
+    {
+      ...canMessage,
+      schema: routeSchema({
+        summary:
+          "Post a message to the thread. Body: { body: string }, 1–2000 " +
+          "chars — validated by hand, so no request schema is attached.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: loanMessageResponseSchema,
+        status: 201,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const body = (req.body?.body ?? "").trim();
       if (!body || body.length > 2000) {
@@ -1185,7 +1647,16 @@ export async function loanRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string; messageId: string } }>(
     "/:id/messages/:messageId/read",
-    canMessage,
+    {
+      ...canMessage,
+      schema: routeSchema({
+        summary: "Mark one message read. 404 if it isn't on this loan.",
+        tags: TAGS,
+        params: messageIdParamSchema,
+        response: loanMessageResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
     async (req, reply) => {
       // Scope the update by loanId as well as messageId: `canMessage`
       // authorized the caller for `:id`, so the row being marked read
@@ -1204,7 +1675,19 @@ export async function loanRoutes(app: FastifyInstance) {
   /** Settle the loan early with the product's pre-termination fee. */
   app.post<{ Params: { id: string } }>(
     "/:id/close-early",
-    { preHandler: app.requirePermission("loans.close_early") },
+    {
+      preHandler: app.requirePermission("loans.close_early"),
+      schema: routeSchema({
+        summary:
+          "Settle early: remaining principal plus the product's " +
+          "pre-termination fee. Refusals answer 400 here.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: closeEarlySchema,
+        response: closeEarlyResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const parsed = closeEarlySchema.safeParse(req.body);
       if (!parsed.success) {

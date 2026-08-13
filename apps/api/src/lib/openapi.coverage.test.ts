@@ -41,9 +41,10 @@ import { routeSchema } from "./openapi";
  * raised. RAISE IT when you document more; never lower it silently.
  *
  * Current: health (3) + decision-rules (7) + accounting (19) +
- * scoring (15) + jobs (5).
+ * scoring (15) + jobs (5) + reports/roll-rate (1) + loans (39) +
+ * customers (11) + collections (12).
  */
-const DOCUMENTED = 49;
+const DOCUMENTED = 112;
 
 const FEATURES = join(import.meta.dirname, "..", "features");
 
@@ -74,13 +75,21 @@ describe("OpenAPI coverage", () => {
     ).toBeGreaterThanOrEqual(DOCUMENTED);
   });
 
-  it("still has a large undocumented remainder, and says so", async () => {
+  it("still has an undocumented remainder, and says so", async () => {
     /*
      * Not a failure — a reminder. This asserts the OPPOSITE of the usual
      * coverage test: that the job is visibly unfinished, so nobody reads
-     * "OpenAPI: done" off a green suite. When it starts failing, the
-     * remainder has genuinely shrunk and this test has done its job and
-     * should go.
+     * "OpenAPI: done" off a green suite.
+     *
+     * It used to assert `registrations > DOCUMENTED * 5` — "less than a
+     * fifth is documented" — and that multiplier was arbitrary. It fired
+     * the moment coverage crossed ~20%, with 112 of 325 registrations
+     * documented: a third of the way is real progress and nothing like
+     * finished, so the threshold was wrong rather than the reminder.
+     *
+     * Replaced with the actual question — is anything still
+     * undocumented? When THIS fails, every route is described and the
+     * whole file can go.
      */
     const files = await routeFiles(FEATURES);
     let registrations = 0;
@@ -91,7 +100,12 @@ describe("OpenAPI coverage", () => {
       ).length;
     }
 
-    expect(registrations).toBeGreaterThan(DOCUMENTED * 5);
+    expect(
+      registrations,
+      `${String(DOCUMENTED)} of ${String(registrations)} route registrations ` +
+        "carry a response schema. If this now fails, every route is " +
+        "documented — delete this file.",
+    ).toBeGreaterThan(DOCUMENTED);
   });
 });
 
