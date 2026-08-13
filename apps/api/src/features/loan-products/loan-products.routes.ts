@@ -1,7 +1,15 @@
 import { LoanProductRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import { createSchema, updateSchema } from "./schemas";
+import { routeSchema } from "../../lib/openapi";
+import {
+  createSchema,
+  loanProductListResponseSchema,
+  loanProductResponseSchema,
+  productCodeParamSchema,
+  seedResponseSchema,
+  updateSchema,
+} from "./schemas";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -28,24 +36,69 @@ declare module "fastify" {
  * live in ./approval-chain.routes.ts and follow the same pattern.
  */
 export async function loanProductRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  // onRequest, not preHandler — the write routes below now declare
+  // request schemas, and Fastify validates at preValidation, which runs
+  // BEFORE preHandler. Left where it was, an unauthenticated POST with a
+  // malformed body came back 400 listing every pricing field the
+  // product model has, instead of 401. Same fix as loans.routes.ts.
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     req.loanProductsRepo = new LoanProductRepository(req.tenantCtx.prisma);
   });
 
-  app.get("/", async (req) => req.loanProductsRepo!.list());
+  const TAGS = ["loan-products"];
 
-  app.get<{ Params: { code: string } }>("/:code", async (req, reply) => {
-    const p = await req.loanProductsRepo!.findByCode(req.params.code);
-    if (!p) return reply.code(404).send({ error: "NotFound" });
-    return p;
-  });
+  app.get(
+    "/",
+    {
+      schema: routeSchema({
+        summary:
+          "Every loan product with its full underwriting parameter set, " +
+          "by code. Any authenticated caller.",
+        tags: TAGS,
+        response: loanProductListResponseSchema,
+        errors: [401],
+      }),
+    },
+    async (req) => req.loanProductsRepo!.list(),
+  );
+
+  app.get<{ Params: { code: string } }>(
+    "/:code",
+    {
+      schema: routeSchema({
+        summary: "One loan product by code.",
+        tags: TAGS,
+        params: productCodeParamSchema,
+        response: loanProductResponseSchema,
+        errors: [401, 404],
+      }),
+    },
+    async (req, reply) => {
+      const p = await req.loanProductsRepo!.findByCode(req.params.code);
+      if (!p) return reply.code(404).send({ error: "NotFound" });
+      return p;
+    },
+  );
 
   /** Create a brand-new product. ADMIN only. */
   app.post(
     "/",
-    { preHandler: app.requirePermission("products.write") },
+    {
+      preHandler: app.requirePermission("products.write"),
+      schema: routeSchema({
+        summary:
+          "Create a loan product. The code is UPPER_SNAKE_CASE and " +
+          "immutable once set.",
+        tags: TAGS,
+        body: createSchema,
+        response: loanProductResponseSchema,
+        status: 201,
+        // 409 is the code already existing — every other refusal is 400.
+        errors: [400, 401, 403, 409],
+      }),
+    },
     async (req, reply) => {
       const parsed = createSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -68,7 +121,19 @@ export async function loanProductRoutes(app: FastifyInstance) {
 
   app.patch<{ Params: { code: string } }>(
     "/:code",
-    { preHandler: app.requirePermission("products.write") },
+    {
+      preHandler: app.requirePermission("products.write"),
+      schema: routeSchema({
+        summary:
+          "Update a product's parameters. Every field is optional; the " +
+          "code itself cannot be changed.",
+        tags: TAGS,
+        params: productCodeParamSchema,
+        body: updateSchema,
+        response: loanProductResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const parsed = updateSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -82,7 +147,18 @@ export async function loanProductRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { code: string } }>(
     "/:code",
-    { preHandler: app.requirePermission("products.write") },
+    {
+      preHandler: app.requirePermission("products.write"),
+      schema: routeSchema({
+        summary:
+          "Delete a product. Refused with 409 once any loan references " +
+          "it — the FK is ON DELETE RESTRICT.",
+        tags: TAGS,
+        params: productCodeParamSchema,
+        response: loanProductResponseSchema,
+        errors: [401, 403, 409],
+      }),
+    },
     async (req, reply) => {
       try {
         return await req.loanProductsRepo!.delete(req.params.code);
@@ -97,7 +173,17 @@ export async function loanProductRoutes(app: FastifyInstance) {
 
   app.post(
     "/seed",
-    { preHandler: app.requirePermission("products.write") },
+    {
+      preHandler: app.requirePermission("products.write"),
+      schema: routeSchema({
+        summary:
+          "Insert the default product catalog. Never overwrites an " +
+          "existing code, so it is safe to re-run.",
+        tags: TAGS,
+        response: seedResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     async (req) => req.loanProductsRepo!.seedDefaults(),
   );
 }

@@ -42,9 +42,10 @@ import { routeSchema } from "./openapi";
  *
  * Current: health (3) + decision-rules (7) + accounting (19) +
  * scoring (15) + jobs (5) + reports/roll-rate (1) + loans (39) +
- * customers (11) + collections (12).
+ * customers (11) + collections (12) + auth (19) + rbac (18) +
+ * payments (9) + loan-products (8) + delegations (8).
  */
-const DOCUMENTED = 112;
+const DOCUMENTED = 174;
 
 const FEATURES = join(import.meta.dirname, "..", "features");
 
