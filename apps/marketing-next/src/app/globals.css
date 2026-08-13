@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Theme tokens, lifted VERBATIM from apps/marketing/index.html.
+ *
+ * They were an inline <style> block there because the Vite marketing
+ * site deliberately shipped no CSS file — "the bundle has no CSS file
+ * to fetch before first paint". Next inlines the critical CSS for a
+ * route into the streamed document itself, so that property is kept by
+ * a different mechanism rather than lost.
+ *
+ * The original comments are preserved because they record decisions
+ * (measured contrast ratios) that would otherwise be re-litigated.
+ */
+@layer base {
+  /*
+   * Light is the default, matching the console. Dark is kept intact
+   * under [data-theme="dark"] — nothing sets that attribute here
+   * yet, so it's dormant, but the values are preserved and a toggle
+   * is a small change away rather than a re-derivation.
+   *
+   * The `-soft` / `-ring` pairs exist because the pages had been
+   * hardcoding `rgba(248,113,113,0.08)` and friends inline. Those
+   * alphas were picked against a near-black page and turn muddy on
+   * white, so the tints are named here and tuned per theme.
+   */
+  :root {
+    color-scheme: light;
+
+    --bg: #f6f7f9;
+    --bg-elev: #ffffff;
+    --border: #dfe3e8;
+    --text: #171c26;
+    --text-dim: #545c6b;
+    /* Tuned against the tinted callout panels, not the page white —
+     * #6b7280 cleared AA on the body but measured 4.07:1 on the
+     * light-blue step boxes in /install, where it's mostly used. */
+    --text-muted: #59606d;
+    /* `--accent` is link text on white; `--accent-strong` is a fill
+     * that carries white text. Both are darker than the obvious
+     * sky-blue: at #0b93cb the primary buttons measured 3.47:1
+     * against their own white labels. */
+    --accent: #0a5f9e;
+    --accent-strong: #0a5f9e;
+    --success: #0f7a4f;
+    --warning: #9a6100;
+    --danger: #c02626;
+
+    --accent-soft: rgba(10, 95, 158, 0.07);
+    --accent-ring: rgba(10, 95, 158, 0.28);
+    --success-soft: rgba(15, 122, 79, 0.07);
+    --success-ring: rgba(15, 122, 79, 0.3);
+    --warning-soft: rgba(154, 97, 0, 0.07);
+    --warning-ring: rgba(154, 97, 0, 0.32);
+    --danger-soft: rgba(192, 38, 38, 0.06);
+    --danger-ring: rgba(192, 38, 38, 0.3);
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --bg: #0a0f1e;
+    --bg-elev: #0e1525;
+    --border: #1e293b;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #60a5fa;
+    --accent-strong: #3b82f6;
+    --success: #10b981;
+    --warning: #fbbf24;
+    --danger: #fca5a5;
+
+    --accent-soft: rgba(96, 165, 250, 0.1);
+    --accent-ring: rgba(96, 165, 250, 0.3);
+    --success-soft: rgba(16, 185, 129, 0.08);
+    --success-ring: rgba(16, 185, 129, 0.3);
+    --warning-soft: rgba(251, 191, 36, 0.07);
+    --warning-ring: rgba(251, 191, 36, 0.4);
+    --danger-soft: rgba(248, 113, 113, 0.08);
+    --danger-ring: rgba(248, 113, 113, 0.35);
+  }
+
+  /*
+   * Tailwind's preflight already zeroes margins and sets
+   * `box-sizing: border-box`, so only the three things the old
+   * stylesheet added on top of a reset survive here: the page colours,
+   * the type ramp, and the fact that links are accent-coloured and
+   * underline on hover rather than always.
+   */
+  html,
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: theme("fontFamily.sans");
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  button {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  /*
+   * The three primitives apps/marketing exported from App.tsx as plain
+   * CSSProperties objects (`btnPrimary`, `btnSecondary`, `inputStyle`).
+   *
+   * They are @apply component classes rather than a `<Button>` React
+   * component ON PURPOSE, and the reason is the pilot's headline
+   * finding: `@loan/ui`'s Button cannot be rendered from a Server
+   * Component, and nearly every button on this site sits inside one.
+   * See docs/modernization/nextjs-migration.md.
+   */
+  .btn {
+    @apply inline-block cursor-pointer rounded-lg border-0 px-6 py-3 text-[15px] font-medium no-underline;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent-strong text-white hover:no-underline;
+  }
+
+  .btn-secondary {
+    @apply btn border border-border bg-transparent text-fg hover:no-underline;
+  }
+
+  .field-input {
+    @apply w-full rounded-md border border-border bg-bg px-[14px] py-[10px] font-[inherit] text-sm text-fg;
+  }
+}
