@@ -12,4 +12,5 @@ export * from "./chart";
 export * from "./posting";
 export * from "./reports";
 export * from "./roll-rate";
+export * from "./profitability";
 export * from "./periods";

@@ -21,9 +21,12 @@ import {
   type LedgerLineInput,
   type NormalBalanceCode,
   type PeriodKey,
+  PROFITABILITY_ACCOUNT_CODES,
+  type ProfitabilityEntryInput,
   buildAgingReport,
   buildBalanceSheet,
   buildIncomeStatement,
+  buildProductProfitabilityReport,
   buildRollRateReport,
   buildTrialBalance,
   keyOf,
@@ -43,6 +46,16 @@ type Tx = Prisma.TransactionClient | PrismaClient;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * "<scheduleId>:<periodKey>" → the schedule id (see lateFeeAccrualEntry).
+ * `indexOf` + `slice` rather than `split(":")[0]` so the result is
+ * provably a string under noUncheckedIndexedAccess.
+ */
+function scheduleIdOfLateFeeRef(ref: string): string {
+  const i = ref.indexOf(":");
+  return i === -1 ? ref : ref.slice(0, i);
 }
 
 export interface AccountCreateInput {
@@ -822,6 +835,221 @@ export class AccountingRepository {
           totalDue: Number(s.totalDue),
           paidInFullAt: s.paidInFullAt,
         })),
+      })),
+      from,
+      to,
+    );
+  }
+
+  /**
+   * Product profitability (§54): per product over [from, to], what the
+   * ledger attributes to it — interest, fees, late fees, write-off
+   * losses — via the `(source, sourceRefType, sourceRefId)` conventions
+   * the auto-posting flows already stamp (§80: the same joins the
+   * reconciliation checks use, not a parallel tagging scheme).
+   *
+   * Everything is fetched in BULK — one query for the in-scope journal
+   * lines, one per referenced table for the ref→loan hops, one for the
+   * loans — per the N+1 findings in
+   * docs/modernization/query-performance.md. Nothing here loops a query.
+   */
+  async productProfitability(from: Date, to: Date) {
+    // 1. Every line on the in-scope accounts inside the window, with the
+    //    owning entry's attribution tuple.
+    const lines = await this.prisma.journalLine.findMany({
+      where: {
+        account: { code: { in: [...PROFITABILITY_ACCOUNT_CODES] } },
+        entry: { entryDate: { gte: from, lte: to } },
+      },
+      select: {
+        debit: true,
+        credit: true,
+        account: { select: { code: true } },
+        entry: {
+          select: {
+            id: true,
+            source: true,
+            sourceRefType: true,
+            sourceRefId: true,
+          },
+        },
+      },
+    });
+
+    // Group lines under their entries — attribution is per ENTRY.
+    const entryMap = new Map<string, ProfitabilityEntryInput>();
+    for (const l of lines) {
+      let e = entryMap.get(l.entry.id);
+      if (!e) {
+        e = {
+          entryId: l.entry.id,
+          source: l.entry.source,
+          sourceRefType: l.entry.sourceRefType,
+          sourceRefId: l.entry.sourceRefId,
+          loanId: null,
+          inWindow: true,
+          lines: [],
+        };
+        entryMap.set(l.entry.id, e);
+      }
+      e.lines.push({
+        accountCode: l.account.code,
+        // Decimal → exact string; the builder sums integer centavos.
+        debit: l.debit.toString(),
+        credit: l.credit.toString(),
+      });
+    }
+
+    // 2. A REVERSAL points at the entry it backs out, which may lie
+    //    OUTSIDE the window (corrections land in the open period). Fetch
+    //    the missing originals — attribution tuple only, no lines — so
+    //    the builder can classify the reversal.
+    const missingOriginalIds = [...entryMap.values()]
+      .filter(
+        (e) =>
+          e.source === "REVERSAL" &&
+          e.sourceRefId &&
+          !entryMap.has(e.sourceRefId),
+      )
+      .map((e) => e.sourceRefId!);
+    if (missingOriginalIds.length > 0) {
+      const originals = await this.prisma.journalEntry.findMany({
+        where: { id: { in: missingOriginalIds } },
+        select: {
+          id: true,
+          source: true,
+          sourceRefType: true,
+          sourceRefId: true,
+        },
+      });
+      for (const o of originals) {
+        entryMap.set(o.id, {
+          entryId: o.id,
+          source: o.source,
+          sourceRefType: o.sourceRefType,
+          sourceRefId: o.sourceRefId,
+          loanId: null,
+          inWindow: false,
+          lines: [],
+        });
+      }
+    }
+
+    // 3. Resolve each entry's ref to a loan id, batched per ref type.
+    //    These are the posting.ts conventions verbatim.
+    const directLoanRefTypes = new Set([
+      "LoanApplication", // disbursement — sourceRefId is the loan
+      "LoanWriteOff",
+      "LoanPreTermination",
+      "LoanRestructure", // sourceRefId is the REPLACEMENT loan
+      "AgentCommission",
+    ]);
+    const paymentIds = new Set<string>();
+    const scheduleIds = new Set<string>();
+    const waiverIds = new Set<string>();
+    const caseIds = new Set<string>();
+    for (const e of entryMap.values()) {
+      if (!e.sourceRefId || !e.sourceRefType) continue;
+      switch (e.sourceRefType) {
+        case "LoanPayment":
+          paymentIds.add(e.sourceRefId);
+          break;
+        case "LoanScheduleAccrual":
+          scheduleIds.add(e.sourceRefId);
+          break;
+        case "LoanScheduleLateFee":
+          scheduleIds.add(scheduleIdOfLateFeeRef(e.sourceRefId));
+          break;
+        case "PenaltyWaiver":
+          waiverIds.add(e.sourceRefId);
+          break;
+        case "RepossessionCase":
+          caseIds.add(e.sourceRefId);
+          break;
+        default:
+          break;
+      }
+    }
+
+    const [payments, schedules, waivers, cases] = await Promise.all([
+      paymentIds.size > 0
+        ? this.prisma.loanPayment.findMany({
+            where: { id: { in: [...paymentIds] } },
+            select: { id: true, loanId: true },
+          })
+        : [],
+      scheduleIds.size > 0
+        ? this.prisma.loanSchedule.findMany({
+            where: { id: { in: [...scheduleIds] } },
+            select: { id: true, loanId: true },
+          })
+        : [],
+      waiverIds.size > 0
+        ? this.prisma.penaltyWaiver.findMany({
+            where: { id: { in: [...waiverIds] } },
+            select: { id: true, loanId: true },
+          })
+        : [],
+      caseIds.size > 0
+        ? this.prisma.repossessionCase.findMany({
+            where: { id: { in: [...caseIds] } },
+            select: { id: true, loanId: true },
+          })
+        : [],
+    ]);
+    const loanByPayment = new Map(payments.map((p) => [p.id, p.loanId]));
+    const loanBySchedule = new Map(schedules.map((s) => [s.id, s.loanId]));
+    const loanByWaiver = new Map(waivers.map((w) => [w.id, w.loanId]));
+    const loanByCase = new Map(cases.map((c) => [c.id, c.loanId]));
+
+    for (const e of entryMap.values()) {
+      if (!e.sourceRefId || !e.sourceRefType) continue;
+      if (directLoanRefTypes.has(e.sourceRefType)) {
+        e.loanId = e.sourceRefId;
+      } else if (e.sourceRefType === "LoanPayment") {
+        e.loanId = loanByPayment.get(e.sourceRefId) ?? null;
+      } else if (e.sourceRefType === "LoanScheduleAccrual") {
+        e.loanId = loanBySchedule.get(e.sourceRefId) ?? null;
+      } else if (e.sourceRefType === "LoanScheduleLateFee") {
+        e.loanId =
+          loanBySchedule.get(scheduleIdOfLateFeeRef(e.sourceRefId)) ?? null;
+      } else if (e.sourceRefType === "PenaltyWaiver") {
+        e.loanId = loanByWaiver.get(e.sourceRefId) ?? null;
+      } else if (e.sourceRefType === "RepossessionCase") {
+        e.loanId = loanByCase.get(e.sourceRefId) ?? null;
+      }
+      // "JournalEntry" (reversals) stays null — the builder follows the
+      // pointer. Anything else stays null and reports as unattributed.
+    }
+
+    // 4. Loan → product, one query. A direct ref that is not actually a
+    //    loan id simply finds no row and falls to the unattributed
+    //    bucket — reported, not guessed.
+    const loanIds = [
+      ...new Set(
+        [...entryMap.values()]
+          .map((e) => e.loanId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const loans =
+      loanIds.length > 0
+        ? await this.prisma.loanApplication.findMany({
+            where: { id: { in: loanIds } },
+            select: {
+              id: true,
+              productCode: true,
+              product: { select: { name: true } },
+            },
+          })
+        : [];
+
+    return buildProductProfitabilityReport(
+      [...entryMap.values()],
+      loans.map((l) => ({
+        loanId: l.id,
+        productCode: l.productCode,
+        productName: l.product.name,
       })),
       from,
       to,

@@ -8,6 +8,7 @@ import type {
   JournalEntry,
   JournalEntryCreateInput,
   LedgerLine,
+  ProductProfitabilityReport,
   RollRateReport,
   TrialBalanceReport,
 } from "@loan/shared-types";
@@ -38,6 +39,8 @@ export const accountingKeys = {
     ["accounting", "reports", "loan-portfolio", asOf ?? ""] as const,
   rollRate: (from?: string, to?: string) =>
     ["reports", "roll-rate", from ?? "", to ?? ""] as const,
+  productProfitability: (from?: string, to?: string) =>
+    ["reports", "product-profitability", from ?? "", to ?? ""] as const,
 };
 
 export function useAccounts() {
@@ -205,6 +208,31 @@ export function useRollRate(
     queryFn: () =>
       getApiClient().get<RollRateReport>(
         `/reports/roll-rate${qs ? `?${qs}` : ""}`,
+      ),
+    enabled: opts.enabled ?? true,
+  });
+}
+
+/**
+ * Product profitability (§54) — `GET /reports/product-profitability`.
+ * Same placement rule as `useRollRate`: the endpoint lives in the
+ * reports feature (permission `reports.read`); the hook sits here with
+ * the other ledger-derived report readers.
+ */
+export function useProductProfitability(
+  from?: string,
+  to?: string,
+  opts: { enabled?: boolean } = {},
+) {
+  const query = new URLSearchParams();
+  if (from) query.set("from", from);
+  if (to) query.set("to", to);
+  const qs = query.toString();
+  return useQuery({
+    queryKey: accountingKeys.productProfitability(from, to),
+    queryFn: () =>
+      getApiClient().get<ProductProfitabilityReport>(
+        `/reports/product-profitability${qs ? `?${qs}` : ""}`,
       ),
     enabled: opts.enabled ?? true,
   });

@@ -27,6 +27,8 @@ import { useState } from "react";
 import { findArticle, TourButton } from "../../help";
 import { todayLocalISO } from "@loan/shared-utils";
 
+import { ProductProfitabilityCard } from "./ProductProfitabilityCard";
+
 /**
  * Compliance Reports — audit requirements across modules.
  *
@@ -135,6 +137,11 @@ export function ReportsPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* §54 — per-product earnings over a period. Inline table rather
+          than a CSV card: the figures are meant to be read here, the way
+          roll-rate and aging are on the portfolio page. */}
+      <ProductProfitabilityCard />
 
       <div
         className="grid grid-cols-1 md:grid-cols-2 gap-3"
