@@ -111,28 +111,36 @@ Original plan:
 | 2.3  | Standing reconciliation job (subledger vs GL, per period), failing loudly                                                                      | Turns a manual trial balance into a continuous assertion |
 | 2.4  | `Contribution` / `SavingsTransaction` FK: CASCADE → RESTRICT                                                                                   | Database enforces what the service already promises      |
 
-## Phase 3 — Durability and operations (P1/P2) — IN PROGRESS
+## Phase 3 — Durability and operations (P1/P2) — ONE ITEM LEFT
 
-| Step | Change                                                                | Status                                                                                                |
-| ---- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| 3.0  | Frontend component-test harness + 4 suites over the costly surfaces   | ✅ 45 tests                                                                                           |
-| 3.1  | Object storage (S3/MinIO) for uploads; DB keeps metadata; signed URLs | ⬜ needs a bucket + credentials; backup now archives `UPLOADS_DIR`, so it is planned, not urgent      |
-| 3.2  | Playwright + 6 journeys against a live stack                          | ✅ 21 assertions. Read-only; a write journey needs a disposable DB per run                            |
-| 3.3  | Enable CSP in production                                              | ◐ API done (`/uploads/` sandboxed, JSON `default-src 'none'`). **The SPA has none** — deployment work |
-| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ◐ mechanism + bearer scheme + conventions done; **49 of 337** operations, ratcheted by a test         |
-| 3.5  | Documented restore drill                                              | ⬜ the backup script exists and archives uploads; the drill has never been run                        |
+| Step | Change                                                                | Status                                                                                                                                                                              |
+| ---- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.0  | Frontend component-test harness + 4 suites over the costly surfaces   | ✅ 45 tests                                                                                                                                                                         |
+| 3.1  | Object storage (S3/MinIO) for uploads; DB keeps metadata; signed URLs | ⬜ needs a bucket + credentials; backup now archives `UPLOADS_DIR`, so it is planned, not urgent                                                                                    |
+| 3.2  | Playwright + 6 journeys against a live stack                          | ✅ 21 assertions, read-only. A WRITE journey (apply→approve→disburse→pay against a disposable DB) is in flight                                                                      |
+| 3.3  | Enable CSP in production                                              | ✅ API (`/uploads/` sandboxed, JSON `default-src 'none'`) **and** SPA (build-time meta + `frame-ancestors` from nginx). `style-src` still needs `unsafe-inline` — Radix; documented |
+| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ◐ **112 of 337** operations, ratcheted by a test. Mechanism, bearer scheme and status conventions done; ~225 routes remain                                                          |
+| 3.5  | Documented restore drill                                              | ✅ written **and run** — and it FAILED on an unpatched host (pg_dump 18 vs server 16). See disaster-recovery.md                                                                     |
 
-**Phase 3 is where we are.** Two Phase 4 items landed early because they were
-the highest-value work available at the time — see 4.3 below.
+**Phase 3 is one item from done** — only OpenAPI coverage remains inside it,
+and that is a per-feature grind rather than a design problem. Object storage
+(3.1) is blocked on a bucket and credentials, not on engineering.
+
+Several Phase 4 and Phase 5 items landed early because they were the
+highest-value work available once the P1 queue emptied: module boundaries
+(4.1), consolidated exposure (4.4), rule and scorecard versioning (4.3), plus
+§29 collection priority scoring and §30 roll-rate analysis from Phase 5. The
+phases have not run in order and this records that rather than implying they
+did.
 
 ## Phase 4 — Enterprise depth (P2)
 
 | Step | Change                                                                                                                                                                  |
 | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 4.1  | Nx module-boundary tags + lint rule — ⬜                                                                                                                                |
+| 4.1  | ✅ Nx module-boundary tags + `@nx/enforce-module-boundaries` — both axes bite; caveat: a new lib is invisible until `nx reset`                                          |
 | 4.2  | Query plans for the 10 slowest endpoints; index from evidence — ⬜                                                                                                      |
 | 4.3  | ✅ GAP-15 verified (restructure links a new loan, never mutates a schedule) · ✅ GAP-18 rule versioning (`20260811180000`) · ✅ scorecard versioning (`20260812090000`) |
-| 4.4  | Consolidated customer exposure (GAP-29) if not already derivable                                                                                                        |
+| 4.4  | ✅ Consolidated customer exposure (GAP-29) — derived, no migration; written-off reported separately from the live total                                                 |
 | 4.5  | Next.js pilot on `apps/marketing` only                                                                                                                                  |
 
 ## Phase 5 — Intelligence (P3)
