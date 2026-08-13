@@ -102,3 +102,57 @@ export const rollRateResponseSchema = z.object({
     }),
   ),
 });
+
+// ─── Product profitability (§54) ─────────────────────────────────────
+//
+// Same date contract as roll-rate: date-only widens to start/end of day,
+// validated in the handler.
+
+export const productProfitabilityQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+/**
+ * Money figures are STRINGS — exact decimal ("365.00", "-3700.00"),
+ * summed as integer centavos in @loan/accounting's profitability
+ * builder. Declaring them numeric would push the amounts back through a
+ * float in Fastify's serialiser, the exact thing the builder exists to
+ * avoid — same rule as the journal-line schemas in the accounting
+ * feature.
+ */
+const profitabilityFiguresShape = {
+  interestIncome: z.string(),
+  feeIncome: z.string(),
+  /** 4100 income from LATE_FEE_ACCRUAL entries, net of PENALTY_WAIVEs. */
+  lateFeeIncome: z.string(),
+  /** Write-offs, restructure write-downs, auction deficiencies (5000). */
+  writeOffLoss: z.string(),
+  /** interest + fee + lateFee − writeOff. */
+  net: z.string(),
+};
+
+const productProfitabilityRowSchema = z.object({
+  productCode: z.string(),
+  productName: z.string(),
+  /** Distinct loans that contributed at least one entry in the window. */
+  loanCount: z.number().int(),
+  ...profitabilityFiguresShape,
+});
+
+export const productProfitabilityResponseSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  products: z.array(productProfitabilityRowSchema),
+  /**
+   * In-scope ledger money no loan/product claims (manual entries against
+   * the income accounts, reversals of deleted entries). Reported rather
+   * than dropped, so the totals always answer for the whole ledger.
+   */
+  unattributed: z.object({
+    entryCount: z.number().int(),
+    ...profitabilityFiguresShape,
+  }),
+  /** Product rows plus the unattributed bucket. */
+  totals: z.object(profitabilityFiguresShape),
+});

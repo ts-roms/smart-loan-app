@@ -19,7 +19,12 @@ import { routeSchema } from "../../lib/openapi";
 import { validationError } from "../../lib/validation-error";
 import { ReportsController } from "./reports.controller";
 import { ReportsService } from "./reports.service";
-import { rollRateQuerySchema, rollRateResponseSchema } from "./schemas";
+import {
+  productProfitabilityQuerySchema,
+  productProfitabilityResponseSchema,
+  rollRateQuerySchema,
+  rollRateResponseSchema,
+} from "./schemas";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -130,6 +135,66 @@ export async function reportRoutes(app: FastifyInstance) {
           from: from.toISOString(),
           to: to.toISOString(),
           rowCount: report.totalLoans,
+        },
+      });
+
+      return report;
+    },
+  );
+
+  /*
+   * Product profitability (§54). Static route for the same reasons as
+   * roll-rate: it wins over `/:type`, and its payload — per-product
+   * figures with exact-decimal money strings — is not the flat CSV rows
+   * the dispatcher below serializes.
+   */
+  app.get<{ Querystring: { from?: string; to?: string } }>(
+    "/product-profitability",
+    {
+      preHandler: app.requirePermission("reports.read"),
+      schema: routeSchema({
+        summary:
+          "Product profitability — per loan product over the period: " +
+          "interest, fee and late-fee income, write-off losses, and net. " +
+          "Money figures are exact decimal strings. Defaults to the last " +
+          "30 days.",
+        tags: ["reports"],
+        querystring: productProfitabilityQuerySchema,
+        response: productProfitabilityResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
+    async (req) => {
+      const to = parseDateParam(req.query.to, "to", endOfDay) ?? new Date();
+      const from =
+        parseDateParam(req.query.from, "from", startOfDay) ??
+        new Date(to.getTime() - 30 * DAY_MS);
+      if (from.getTime() >= to.getTime()) {
+        throw validationError([
+          {
+            path: ["from"],
+            message: "`from` must be earlier than `to`.",
+            in: "querystring",
+          },
+        ]);
+      }
+
+      const report = await req.reportsServices!.accounting.productProfitability(
+        from,
+        to,
+      );
+
+      await req.reportsServices!.audit.record({
+        action: "REPORT_GENERATED",
+        actorId: req.user.sub,
+        targetType: "Report",
+        targetId: "product-profitability",
+        payload: {
+          reportType: "product-profitability",
+          format: "json",
+          from: from.toISOString(),
+          to: to.toISOString(),
+          rowCount: report.products.length,
         },
       });
 

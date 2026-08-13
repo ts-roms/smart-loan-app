@@ -1548,6 +1548,36 @@ export interface RollRateReport {
   byProduct: Array<{ productCode: string; rows: RollRateMatrixRow[] }>;
 }
 
+/**
+ * Product profitability (§54) — mirrors @loan/accounting's
+ * profitability.ts. All money figures are EXACT DECIMAL STRINGS
+ * ("365.00", "-3700.00"): the builder sums integer centavos and the API
+ * ships the strings verbatim so no float ever touches a peso.
+ */
+export interface ProfitabilityFigures {
+  interestIncome: string;
+  feeIncome: string;
+  lateFeeIncome: string;
+  writeOffLoss: string;
+  net: string;
+}
+
+export interface ProductProfitabilityRow extends ProfitabilityFigures {
+  productCode: string;
+  productName: string;
+  loanCount: number;
+}
+
+export interface ProductProfitabilityReport {
+  from: string;
+  to: string;
+  products: ProductProfitabilityRow[];
+  /** In-scope ledger money no product claims — reported, not dropped. */
+  unattributed: ProfitabilityFigures & { entryCount: number };
+  /** Product rows plus the unattributed bucket. */
+  totals: ProfitabilityFigures;
+}
+
 export type PeriodStatus = "OPEN" | "CLOSED";
 
 export interface AccountingPeriod {

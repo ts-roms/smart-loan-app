@@ -41,9 +41,10 @@ import { routeSchema } from "./openapi";
  * raised. RAISE IT when you document more; never lower it silently.
  *
  * Current: health (3) + decision-rules (7) + accounting (19) +
- * scoring (15) + jobs (5) + reports/roll-rate (1) + loans (39) +
- * customers (11) + collections (12) + auth (19) + rbac (18) +
- * payments (9) + loan-products (8) + delegations (8) + portal (17) +
+ * scoring (15) + jobs (5) + reports (2: roll-rate,
+ * product-profitability) + loans (39) + customers (11) +
+ * collections (12) + auth (19) + rbac (18) + payments (9) +
+ * loan-products (8) + delegations (8) + portal (17) +
  * cooperative (15) + dorsi (11) + repossession (11) + agents (11).
  *
  * Portal is 17 of 18 (ledger.pdf answers PDF bytes); dorsi is 11 of 12
@@ -51,7 +52,7 @@ import { routeSchema } from "./openapi";
  * skipped for the same reason: routeSchema would document a JSON shape
  * those answers don't have.
  */
-const DOCUMENTED = 239;
+const DOCUMENTED = 240;
 
 const FEATURES = join(import.meta.dirname, "..", "features");
 
