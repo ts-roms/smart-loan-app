@@ -1,0 +1,101 @@
+# SmartLoan marketing site (Next.js pilot) — Railway image
+#
+# Sits alongside Dockerfile.marketing rather than replacing it. The Vite
+# image stays the deployed one until this is verified (roadmap §38); this
+# file exists so the pilot can answer "can it actually be deployed?" with
+# a build rather than an opinion.
+#
+# ─── What changes versus Dockerfile.marketing, and why ────────────────
+#
+# The Vite image is nginx + a directory of static files. This one is a
+# Node process, and that single fact is most of the diff:
+#
+#   1. The runtime stage is node:20-slim, not nginx:alpine. Roughly
+#      110 MB versus 45 MB.
+#   2. nginx is gone, and with it the four things it was doing for the
+#      marketing service: serving static files, the /public proxy, the
+#      /api/v1 + /uploads + /docs proxies, and the /app mount to the web
+#      service. Marketing owns the ROOT DOMAIN in the Railway topology
+#      (see deploy/railway/README.md), so it is the public edge for all
+#      of them. Next can express every one of these as a `rewrite` in
+#      next.config.mjs — but they then run inside the Node process
+#      instead of nginx, and only /public is wired up in this pilot.
+#      Migrating for real means either porting the other three rewrites
+#      or keeping nginx in front, and the second is the honest answer:
+#      a Node process should not be the TLS-terminating edge proxy for a
+#      financial API.
+#   3. The healthcheck path changes. nginx answered /health.txt from a
+#      static `return 200`; here it is an App Router route handler, so
+#      "is the SPA being served" and "is Node alive" are the same
+#      question again — the separation deploy/railway/nginx.spa.conf
+#      .template deliberately created is lost.
+#   4. Build args are renamed VITE_* → NEXT_PUBLIC_*. Same mechanism
+#      (build-time inlining), different prefix. See src/lib/site.ts.
+#
+# Build context is the REPO ROOT, not this directory.
+
+ARG NODE_VERSION=20.18.0
+FROM node:${NODE_VERSION}-bookworm-slim AS builder
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+WORKDIR /app
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc* package.json tsconfig.base.json ./
+COPY apps ./apps
+COPY libs ./libs
+
+RUN pnpm install --frozen-lockfile
+
+# Same Prisma prerequisite as the other images: the shared types these
+# apps import resolve through @loan/db. The Next marketing app does not
+# import @loan/db, but `pnpm install` runs the workspace's postinstall
+# graph and apps/web's build script expects the client to exist.
+RUN pnpm --filter @loan/db prisma:generate
+
+# Next inlines NEXT_PUBLIC_* at BUILD time — a Railway service variable
+# alone reaches the running container, which is far too late for a
+# statically-generated page. Identical reasoning to the VITE_* pair in
+# Dockerfile.marketing; only the prefix differs.
+ARG NEXT_PUBLIC_APP_URL=http://localhost:5173
+ARG NEXT_PUBLIC_PLATFORM_URL=http://localhost:5174
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+ENV NEXT_PUBLIC_PLATFORM_URL=$NEXT_PUBLIC_PLATFORM_URL
+
+RUN pnpm --filter @loan/marketing-next build
+
+# ─── runtime ────────────────────────────────────────────────────────────
+FROM node:${NODE_VERSION}-bookworm-slim AS runtime
+
+ENV NODE_ENV=production
+# Next's server binds this. Railway overrides it per deploy; the default
+# keeps a plain `docker run` working, same rationale as the ENV PORT in
+# Dockerfile.marketing.
+ENV PORT=8080
+ENV HOSTNAME=0.0.0.0
+
+WORKDIR /app
+
+# `output: "standalone"` emits a self-contained server: node_modules
+# pruned to what the traced import graph actually reaches, with every
+# @loan/* workspace package COPIED IN rather than symlinked. That is the
+# whole reason the runtime stage needs no pnpm and no workspace — and
+# the reason experimental.outputFileTracingRoot has to point at the repo
+# root, or the tracer never finds the packages to copy.
+COPY --from=builder /app/apps/marketing-next/dist/standalone ./
+COPY --from=builder /app/apps/marketing-next/dist/static \
+     ./apps/marketing-next/dist/static
+
+# Where the API lives, for the /public rewrite in next.config.mjs. The
+# nginx image took this as API_UPSTREAM; the mechanism differs but the
+# value and the caveat are the same — Railway derives the hostname from
+# the SERVICE NAME, so a service called `@loan/api` is reachable at
+# loanapi.railway.internal, and a wrong value here is a request-time
+# 502 rather than a build error.
+ENV MARKETING_API_ORIGIN=http://api.railway.internal:8080
+
+# The standalone output preserves the workspace's directory layout, so
+# the server entrypoint sits at the app's path inside it.
+CMD ["node", "apps/marketing-next/server.js"]

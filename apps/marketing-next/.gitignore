@@ -1,0 +1,5 @@
+# Next's build output. Named `dist` rather than `.next` — see the
+# `distDir` comment in next.config.mjs. The root .gitignore already
+# covers `dist/`; this file exists for the generated type shim below.
+dist/
+next-env.d.ts
