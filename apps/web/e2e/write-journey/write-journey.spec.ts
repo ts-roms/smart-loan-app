@@ -14,12 +14,14 @@ import { ACCOUNTS, money, type Role } from "../support";
  *
  *   pnpm --filter @loan/web e2e:write
  *
- * which is `e2e/write-journey/run.mjs`: it creates
+ * which is `e2e/write-journey/scripts/run.mjs`: it creates
  * `smart_loan_e2e_<timestamp>` on the dev Postgres, migrates + seeds
  * it, boots a dedicated API (:3003) and web server (:5183) against it,
- * runs this spec, and drops everything — also on failure. Under a bare
- * `playwright test` this file skips: the scratch stack it needs does
- * not exist, and failing six ways would only obscure that sentence.
+ * runs this spec, and drops everything — also on failure. A bare
+ * `playwright test` does not define this project at all (see
+ * `playwright.config.ts`), so the read suite's count is unchanged; ask
+ * for it by hand with `--project=write-journey` and the skip below
+ * explains that it needs the runner.
  *
  * ── What goes through the UI, and what doesn't ──────────────────────
  *
@@ -46,7 +48,7 @@ import { ACCOUNTS, money, type Role } from "../support";
  *
  * Borrower: PICKER-001 "Clara Clean" (smoke-test fixtures — no live
  * loan, so the one-live-loan gate stays quiet), with a VERIFIED base
- * KYC pack seeded by `seed-kyc.ts` (the fixtures set kycStatus but the
+ * KYC pack seeded by `scripts/seed-kyc.mjs` (fixtures set kycStatus but the
  * wizard judges submissions). Product: SALARY — no collateral, no
  * extra KYC docs, no declarations questionnaire, so the wizard's gates
  * are satisfied by real data rather than overrides.
@@ -136,7 +138,7 @@ test.describe("write journey: apply → approve → disburse → pay", () => {
 
       // Step 2 — product & terms. Defaults (₱50,000 / 12 months / 24%)
       // are within SALARY's ranges; the KYC checklist must read ready,
-      // which it does because seed-kyc.ts verified the base pack.
+      // which it does because scripts/seed-kyc.mjs verified the pack.
       await officer.getByLabel("Loan product").click();
       await officer.getByRole("option", { name: "Salary Loan" }).click();
       await expect(officer.getByText("Ready to apply")).toBeVisible({
