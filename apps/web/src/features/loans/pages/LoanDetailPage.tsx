@@ -540,6 +540,13 @@ export function LoanDetailPage() {
                 <Input
                   type="number"
                   min={1}
+                  /*
+                   * step="0.01", like the Payments console: with the
+                   * default step of 1 the browser rejects ₱4,727.98,
+                   * so the form could not tender the centavos its own
+                   * schedule asks for. Found by the write E2E journey.
+                   */
+                  step="0.01"
                   placeholder="Amount"
                   value={paymentAmount || ""}
                   onChange={(e) => setPaymentAmount(Number(e.target.value))}
@@ -1257,6 +1264,7 @@ function CollectionsPanel({ loanId }: { loanId: string }) {
                 type="number"
                 placeholder="Amount"
                 min={1}
+                step="0.01"
                 value={ptpAmount || ""}
                 onChange={(e) => setPtpAmount(Number(e.target.value))}
               />

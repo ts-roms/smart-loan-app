@@ -246,20 +246,20 @@ test.describe("write journey: apply → approve → disburse → pay", () => {
        * "Promises to pay" section has its own placeholder="Amount"
        * input, so the bare getByPlaceholder is ambiguous on this page.
        *
-       * The amount is the CEILING of the installment total, not the
-       * exact figure, and that is a finding, not a preference: the
-       * form's amount input is type="number" with the default step of
-       * 1, so the browser's native validation rejects "4727.98" — the
-       * UI cannot tender the centavos its own ledger asks for. An
-       * operator would hit the same wall. Rounding up keeps the first
-       * installment fully settled; the spare centavos allocate into
-       * installment 2, which the closeTo assertions below absorb.
+       * The exact installment figure, centavos included. The first
+       * version of this journey could only tender the CEILING: the
+       * form's amount input had the default step of 1, so the
+       * browser's native validation rejected "4727.98" — the UI could
+       * not tender the centavos its own ledger asked for. That finding
+       * is now fixed (step="0.01", like the Payments console), and the
+       * journey pays the exact figure precisely so the fix cannot
+       * silently regress: with the old step, this fill fails.
        */
       const payForm = admin
         .locator("form")
         .filter({ has: admin.getByPlaceholder("Reference / OR #") });
-      const amountPaid = Math.ceil(installmentTotal);
-      await payForm.getByPlaceholder("Amount").fill(String(amountPaid));
+      const amountPaid = installmentTotal;
+      await payForm.getByPlaceholder("Amount").fill(amountPaid.toFixed(2));
       await payForm.getByPlaceholder("Reference / OR #").fill("E2E-OR-0001");
       await payForm
         .getByRole("button", { name: "Record", exact: true })
@@ -278,12 +278,12 @@ test.describe("write journey: apply → approve → disburse → pay", () => {
       const paidToDate = money(
         await ledgerTotal(admin, "Paid to date").textContent(),
       );
-      expect(paidToDate).toBeCloseTo(Math.ceil(installmentTotal), 1);
+      expect(paidToDate).toBeCloseTo(installmentTotal, 1);
       const outstandingAfter = money(
         await ledgerTotal(admin, "Outstanding").textContent(),
       );
       expect(outstandingAfter).toBeCloseTo(
-        outstandingBefore - Math.ceil(installmentTotal),
+        outstandingBefore - installmentTotal,
         1,
       );
     });
