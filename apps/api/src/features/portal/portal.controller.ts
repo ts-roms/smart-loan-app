@@ -1,3 +1,4 @@
+import { isKycDuplicate } from "@loan/db";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { portalPreAssessmentSchema } from "../pre-assessment/index";
@@ -211,13 +212,31 @@ export class PortalController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return reply.code(201).send(
-      await req.portalServices!.portal.submitKyc({
-        customerId: auth,
-        userId: req.user.sub,
-        input: parsed.data,
-      }),
-    );
+    try {
+      return reply.code(201).send(
+        await req.portalServices!.portal.submitKyc({
+          customerId: auth,
+          userId: req.user.sub,
+          input: parsed.data,
+        }),
+      );
+    } catch (err) {
+      /*
+       * The staff KYC route has always mapped this to 409; the portal
+       * never caught it, so a borrower re-uploading a document they had
+       * already submitted got a 500 — an ordinary, expected action
+       * reported as a server fault. Same refusal, same status code,
+       * whichever door it came through.
+       */
+      if (isKycDuplicate(err)) {
+        return reply.code(409).send({
+          error: "Duplicate",
+          message: err.message,
+          existing: err.existing,
+        });
+      }
+      throw err;
+    }
   };
 
   // ─── payments ─────────────────────────────────────────────────────

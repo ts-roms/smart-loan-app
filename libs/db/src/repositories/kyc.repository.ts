@@ -42,6 +42,22 @@ export class KycDuplicateError extends Error {
 }
 
 /**
+ * True for the error above, across duplicate module copies.
+ *
+ * Detects by the `code` field rather than `instanceof`: pnpm can
+ * resolve two copies of a package, and an `instanceof` spanning them
+ * silently returns false — which here would turn a 409 into a 500.
+ * Same reasoning as the P2002 checks elsewhere in this package.
+ */
+export function isKycDuplicate(err: unknown): err is KycDuplicateError {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === "KYC_DUPLICATE"
+  );
+}
+
+/**
  * KYC submissions: documents the customer uploads, decisions the officer
  * makes. Whenever a decision lands we recompute the customer's rollup
  * `kycStatus` so other parts of the system (loan apply) can short-circuit

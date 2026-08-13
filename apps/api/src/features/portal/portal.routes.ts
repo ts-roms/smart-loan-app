@@ -291,12 +291,14 @@ export async function portalRoutes(app: FastifyInstance) {
     "/kyc",
     {
       schema: routeSchema({
-        summary: "Submit a KYC document for review.",
+        summary:
+          "Submit a KYC document for review. 409 when a submission of " +
+          "that type is already on file, carrying the existing row.",
         tags: TAGS,
         body: kycSubmitSchema,
         response: kycSubmissionResponseSchema,
         status: 201,
-        errors: [400, 401, 403],
+        errors: [400, 401, 403, 409],
       }),
     },
     ctrl.submitKyc,
