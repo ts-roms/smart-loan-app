@@ -475,6 +475,11 @@ model Customer {
   @@index([governmentIdType, governmentIdNumber])
   @@index([erasedAt])
   @@index([archivedAt])
+  /// The customer list — and every borrower picker that reuses it — orders by
+  /// `createdAt desc` and pages 200 at a time. Without this the planner had to
+  /// read the whole table and top-N sort it on every page.
+  /// See docs/modernization/query-performance.md Q6.
+  @@index([createdAt(sort: Desc)])
 }
 
 // ─── KYC document submissions ────────────────────────────────────────────────
@@ -1307,6 +1312,17 @@ model LoanApplication {
   /// An agent's own book: "my loans, newest first". Composite because
   /// the page is always scoped to one agent and always time-ordered.
   @@index([agentId, submittedAt])
+  /// The loans list orders by `submittedAt desc` with no status filter — the
+  /// default view. `[status, submittedAt]` cannot serve that: status leads, so
+  /// an unfiltered page fell back to a full scan plus a top-N sort.
+  /// See docs/modernization/query-performance.md Q7.
+  @@index([submittedAt(sort: Desc)])
+  /// Disbursement-date lookups: YTD originations on the dashboard, and the
+  /// bank-reconciliation disbursement candidate search (principal + date
+  /// window). NOT added for the roll-rate report — that reads ~90% of the
+  /// table and the planner correctly ignores any index on it.
+  /// See docs/modernization/query-performance.md Q4, Q10c, Q3.
+  @@index([disbursedAt])
 }
 
 // ─── Amortization schedule + actual payments ────────────────────────────────
@@ -1342,6 +1358,14 @@ model LoanSchedule {
 
   @@unique([loanId, installmentNo])
   @@index([dueDate])
+  /// "Open instalments", optionally "and already due" — the shape behind the
+  /// aging report, the collections queue, and the nightly late-fee accrual
+  /// driver. `paidInFullAt` leads because IS NULL is the selective half (~15%
+  /// of rows on a mature book) and btree indexes NULLs, so `IS NULL AND
+  /// dueDate < now()` is a single index condition rather than a filter over
+  /// every instalment ever written.
+  /// See docs/modernization/query-performance.md Q1, Q2, Q11.
+  @@index([paidInFullAt, dueDate])
 }
 
 model LoanPayment {
@@ -1369,6 +1393,12 @@ model LoanPayment {
   intent     PaymentIntent?
 
   @@index([loanId, paidOn(sort: Desc)])
+  /// Bank reconciliation matches a statement line to a payment by exact amount
+  /// within a date window. `[loanId, paidOn]` cannot serve it — there is no
+  /// loan id at that point, which is the whole reason the match is being
+  /// guessed. Amount leads because it is the equality predicate.
+  /// See docs/modernization/query-performance.md Q10b.
+  @@index([amount, paidOn])
 }
 
 // ─── Accounting (general ledger, double-entry) ───────────────────────────────
@@ -1518,6 +1548,21 @@ model JournalEntry {
   @@index([source, sourceRefId])
   @@index([sourceRefType, sourceRefId])
   @@index([periodId])
+  /// Not a duplicate of the unique index above, though it looks like one.
+  ///
+  /// Late-fee accrual entries carry `sourceRefId = "<scheduleId>:<n>"`, and
+  /// both the nightly accrual and the loan detail page look them up by
+  /// `startsWith("<scheduleId>:")` — a LIKE prefix. This database collates
+  /// en_US.utf8, under which a default-opclass btree cannot answer a prefix
+  /// range at all: the unique index narrowed to (source, sourceRefType) and
+  /// then filtered ~100k rows through the heap. `text_pattern_ops` compares
+  /// byte-wise, which makes the prefix an index condition.
+  ///
+  /// Kept separate rather than changing the unique index's opclass, because
+  /// that index enforces the idempotency constraint and must keep collation
+  /// semantics for equality.
+  /// See docs/modernization/query-performance.md Q9.
+  @@index([source, sourceRefType, sourceRefId(ops: raw("text_pattern_ops"))], map: "JournalEntry_source_refType_refId_prefix_idx")
 }
 
 model JournalLine {
