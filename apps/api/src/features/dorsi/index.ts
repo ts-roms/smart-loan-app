@@ -18,7 +18,12 @@ declare module "fastify" {
  * state-changing action audits via the tenant-scoped AuditLogRepository.
  */
 export async function dorsiRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", app.authenticate);
+  // onRequest, not preHandler — routes in this group carry request
+  // schemas, and Fastify validates at preValidation, BEFORE preHandler.
+  // With authenticate at preHandler an unauthenticated caller with a
+  // malformed body got a 400 describing the schema instead of a 401.
+  // See decision-rules.routes.ts for the full account.
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   // DORSI is an ENTERPRISE-tier compliance module. Gate the entire
   // /dorsi/* prefix. The gate reads req.tenantCtx, so resolveTenant
