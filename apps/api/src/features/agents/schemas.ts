@@ -105,3 +105,197 @@ export const payoutListQuerySchema = z.object({
   agentId: z.string().uuid().optional(),
   take: z.coerce.number().int().min(1).max(200).optional(),
 });
+
+/* ─── Spec-only request variant ─────────────────────────────────────────
+ *
+ * `paidOn` is `z.coerce.date()`, which renders as `format: "date-time"`
+ * — and AJV's date-time refuses the date-only "2026-08-14" that
+ * `new Date(...)` (and therefore the controller's parse) accepts. The
+ * attached variant widens it to a bare string so nothing the handler
+ * accepts is refused at the door; the controller's coerce still runs.
+ */
+export const createPayoutRequestSchema = createPayoutSchema.extend({
+  paidOn: z.string(),
+});
+
+/**
+ * `:id` — an agent accepts a uuid or "AGT-…", a payout a uuid or
+ * "APO-…", so no `.uuid()` here.
+ */
+export const agentIdParamSchema = z.object({
+  id: z.string().min(1),
+});
+
+/* ─── Response shapes, for the OpenAPI spec ─────────────────────────────
+ *
+ * zod so they are real parsers a test can assert payloads against; they
+ * name what is CONTRACTUAL and undeclared fields pass through (see
+ * lib/openapi.ts). The money rule is SPLIT in this feature and worth
+ * reading twice: the list/get/book/payable/payout-list paths map their
+ * rows in JS and answer NUMBERS, while POST /agents, PATCH /agents/:id,
+ * POST /payouts and the void answer raw Prisma rows whose Decimal
+ * columns (commissionRate, payout amount) arrive as STRINGS.
+ */
+
+const agentBookTotalsSchema = z.object({
+  /** Loans assigned to this agent, whatever their status. */
+  loanCount: z.number().int(),
+  /** Of those, the ones that reached disbursement. */
+  fundedCount: z.number().int(),
+  /** Commission on funded loans. */
+  earned: z.number(),
+  /** Commission riding on applications still in flight. Not banked. */
+  pipeline: z.number(),
+});
+
+/** A directory row — mapped in JS, numbers throughout. */
+export const agentSummaryResponseSchema = z.object({
+  id: z.string().uuid(),
+  /** "AGT-2026-000007". Accepted in place of the id on /agents/:id. */
+  number: z.string(),
+  userId: z.string().uuid(),
+  name: z.string(),
+  email: z.string(),
+  /** Fraction of principal. Null = inherit the product's rate. */
+  commissionRate: z.number().nullable(),
+  territory: z.string().nullable(),
+  notes: z.string().nullable(),
+  active: z.boolean(),
+  deactivatedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+  totals: agentBookTotalsSchema,
+});
+
+export const agentListResponseSchema = z.array(agentSummaryResponseSchema);
+
+/**
+ * The raw stored row the write paths return — no user join, no totals,
+ * and `commissionRate` is a Decimal STRING here, unlike the summary.
+ */
+export const agentRowResponseSchema = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  userId: z.string().uuid(),
+  /** Decimal on the wire — "0.0200" for 2%. */
+  commissionRate: z.string().nullable(),
+  territory: z.string().nullable(),
+  notes: z.string().nullable(),
+  active: z.boolean(),
+  deactivatedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+});
+
+/** One loan of an agent's book — mapped in JS, numbers. */
+const agentBookLoanSchema = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  status: z.string(),
+  productCode: z.string(),
+  principal: z.number(),
+  submittedAt: z.string().datetime(),
+  disbursedAt: z.string().datetime().nullable(),
+  customerName: z.string(),
+  customerNumber: z.string(),
+  /** Frozen at assignment. Null on rows assigned before a rate existed. */
+  commissionRate: z.number().nullable(),
+  commissionAmount: z.number().nullable(),
+  /** Set once the commission was booked to the ledger, at disbursement. */
+  commissionPostedAt: z.string().datetime().nullable(),
+});
+
+/** GET /agents/:id/book and GET /agents/me — the agent and their loans. */
+export const agentBookResponseSchema = z.object({
+  agent: agentSummaryResponseSchema,
+  loans: z.array(agentBookLoanSchema),
+  /** Over the WHOLE book, not the returned page. */
+  totals: agentBookTotalsSchema,
+});
+
+/** A loan whose commission is booked and not yet settled by a payout. */
+const payableLoanSchema = z.object({
+  loanId: z.string().uuid(),
+  loanNumber: z.string(),
+  customerName: z.string(),
+  principal: z.number(),
+  commissionAmount: z.number(),
+  postedAt: z.string().datetime(),
+});
+
+/** GET /agents/:id/payable — the staff view of what an agent is owed. */
+export const agentPayableResponseSchema = z.object({
+  agent: agentSummaryResponseSchema,
+  loans: z.array(payableLoanSchema),
+  /** Owed right now — booked, unpaid. */
+  payableTotal: z.number(),
+  /** Settled by earlier payouts. */
+  paidTotal: z.number(),
+});
+
+/** A payout on the list path — mapped in JS, numbers. */
+const payoutListItemSchema = z.object({
+  id: z.string().uuid(),
+  /** "APO-2026-000003". Accepted in place of the id on the void path. */
+  number: z.string(),
+  agentId: z.string().uuid(),
+  agentNumber: z.string(),
+  agentName: z.string(),
+  amount: z.number(),
+  paidOn: z.string().datetime(),
+  method: z.string().nullable(),
+  reference: z.string().nullable(),
+  notes: z.string().nullable(),
+  /** Non-null = this payout was reversed; its loans are payable again. */
+  voidedAt: z.string().datetime().nullable(),
+  voidReason: z.string().nullable(),
+  items: z.array(
+    z.object({
+      loanId: z.string().uuid(),
+      loanNumber: z.string(),
+      amount: z.number(),
+    }),
+  ),
+});
+
+export const payoutListResponseSchema = z.array(payoutListItemSchema);
+
+/** GET /agents/me/payable — the agent's own view, payout history included. */
+export const myPayableResponseSchema = z.object({
+  loans: z.array(payableLoanSchema),
+  payableTotal: z.number(),
+  paidTotal: z.number(),
+  payouts: payoutListResponseSchema,
+});
+
+/**
+ * The raw stored payout row the write paths return — `amount` is a
+ * Decimal STRING here, unlike the list.
+ */
+export const payoutRowResponseSchema = z.object({
+  id: z.string().uuid(),
+  number: z.string(),
+  agentId: z.string().uuid(),
+  /** Decimal on the wire. */
+  amount: z.string(),
+  paidOn: z.string().datetime(),
+  method: z.string().nullable(),
+  reference: z.string().nullable(),
+  notes: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  createdById: z.string().nullable(),
+  voidedAt: z.string().datetime().nullable(),
+  voidReason: z.string().nullable(),
+  voidedById: z.string().nullable(),
+});
+
+/** POST /agents/payouts 201 — the row plus its settled lines. */
+export const payoutCreateResponseSchema = payoutRowResponseSchema.extend({
+  items: z.array(
+    z.object({
+      id: z.string().uuid(),
+      payoutId: z.string().uuid(),
+      loanId: z.string().uuid(),
+      /** Decimal on the wire. */
+      amount: z.string(),
+    }),
+  ),
+});
