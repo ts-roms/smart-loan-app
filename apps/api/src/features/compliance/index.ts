@@ -21,11 +21,31 @@ export {
   type ExportResult,
   type EraseArgs,
   type EraseResult,
+  type PurgeDocumentsArgs,
+  type PurgeDocumentsResult,
 } from "./compliance.service";
+export {
+  DOCUMENT_TOMBSTONE,
+  purgeCustomerDocuments,
+  type DocumentPurgeItem,
+  type DocumentPurgeOutcome,
+  type DocumentPurgeResult,
+} from "./document-purge";
 export {
   RetentionService,
   AMLA_AUDIT_FLOOR_DAYS,
   type RetentionPolicyView,
   type RetentionPurgeResult,
   type UpdateRetentionInput,
+  type UpdateRetentionResult,
 } from "./retention.service";
+export {
+  classifyAuditAction,
+  isPurgeableAuditAction,
+  purgeableAuditWhere,
+  FINANCIAL_AUDIT_ACTIONS,
+  OPERATIONAL_AUDIT_ACTIONS,
+  PRIVACY_AUDIT_ACTIONS,
+  SECURITY_AUDIT_ACTIONS,
+  type AuditRetentionClass,
+} from "./audit-retention";

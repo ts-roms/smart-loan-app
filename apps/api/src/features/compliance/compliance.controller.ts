@@ -1,7 +1,11 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { retentionPolicyUpdateSchema } from "./retention.schemas";
-import { eraseRequestSchema, exportRequestSchema } from "./schemas";
+import {
+  documentPurgeRequestSchema,
+  eraseRequestSchema,
+  exportRequestSchema,
+} from "./schemas";
 
 /**
  * HTTP adapter for /compliance/*. Stateless — reads the service from
@@ -98,7 +102,18 @@ export class ComplianceController {
     return req.complianceServices!.retention.getPolicy();
   };
 
-  /** PUT — admin updates the days-per-table knobs. Audited. */
+  /**
+   * PUT — admin updates the days-per-table knobs. Audited.
+   *
+   * The floor rejection answers 400 with `error: "BelowRegulatoryFloor"`
+   * rather than the 422 it deserves. 422 is the honest status — the body
+   * is well-formed and in range, so this is a semantically valid request
+   * the platform refuses, not a malformed one — but the shared error
+   * table in lib/openapi.ts does not carry 422, and widening it is the
+   * OpenAPI branch's call, not this one's. The discriminator is
+   * therefore the `error` field: a UI tells a typo from a policy refusal
+   * by reading it, not by status. Worth revisiting when 422 lands.
+   */
   updateRetentionPolicy = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = retentionPolicyUpdateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -106,10 +121,52 @@ export class ComplianceController {
         .code(400)
         .send({ error: "ValidationError", issues: parsed.error.issues });
     }
-    return req.complianceServices!.retention.updatePolicy({
+    const result = await req.complianceServices!.retention.updatePolicy({
       input: parsed.data,
       actorId: req.user.sub,
     });
+    if (!result.ok) {
+      return reply.code(400).send({
+        error: result.kind,
+        message: result.message,
+        floorDays: result.floorDays,
+        requestedDays: result.requestedDays,
+      });
+    }
+    return result.policy;
+  };
+
+  /**
+   * POST /compliance/customers/:id/documents-purge — delete the
+   * uploaded KYC documents and application selfies behind a customer,
+   * keeping every header row.
+   *
+   * `dryRun: true` (the default in the schema) reports what a real run
+   * would remove and touches nothing, which is the §46 preview step.
+   * Safe to re-run either way.
+   */
+  purgeCustomerDocuments = async (
+    req: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const parsed = documentPurgeRequestSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: "ValidationError", issues: parsed.error.issues });
+    }
+    const result = await req.complianceServices!.compliance.purgeDocuments({
+      customerId: req.params.id,
+      actorId: req.user.sub,
+      reason: parsed.data.reason,
+      dryRun: parsed.data.dryRun,
+    });
+    if (!result.ok) {
+      return reply
+        .code(404)
+        .send({ error: result.kind, message: result.message });
+    }
+    return result;
   };
 
   /**
