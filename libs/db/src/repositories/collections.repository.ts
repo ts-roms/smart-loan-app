@@ -31,10 +31,18 @@ import type {
   PromiseToPay,
 } from "@prisma/client";
 
+import { forEachBookChunk, resumeAfter } from "../lib/chunked-scan";
 import {
   feeIncomeCreditOf,
   lateFeeAccrualsBySchedule,
 } from "../lib/late-fee-accruals";
+import {
+  type Page,
+  type PageParams,
+  type PagingBounds,
+  resolvePaging,
+  toPage,
+} from "../lib/pagination";
 import { AccountingRepository } from "./accounting.repository";
 
 export interface NoteCreateInput {
@@ -63,6 +71,66 @@ export interface AssignInput {
   collectorId: string;
   assignedById: string;
   note?: string;
+}
+
+export interface OverdueQueueFilter {
+  /** Narrow to one collector's own book. */
+  collectorId?: string;
+  /** Only accounts nobody holds — the hand-out pool. */
+  unassignedOnly?: boolean;
+  /**
+   * Borrower's area.
+   *
+   * Applied in SQL rather than by the caller, because the queue is now
+   * served a page at a time and filtering a page is not filtering the
+   * book — a collector narrowing to "Cebu" must get every Cebu account,
+   * not the Cebu ones that happened to land on page 1. Matching is
+   * case-insensitive EQUALITY, not substring, matching the exportable
+   * delinquency report it shares its derivation with: these values
+   * arrive typed rather than picked from a list, and "Rizal" as a
+   * substring would also pull every city with Rizal in its name.
+   */
+  province?: string;
+  city?: string;
+}
+
+/** One ranked account on the queue. */
+export type OverdueQueueRow = LoanApplication & {
+  customerName: string;
+  /** Borrower's area — drives the queue's area filter. */
+  customerCity: string;
+  customerProvince: string | null;
+  daysOverdue: number;
+  outstanding: number;
+  overdueCount: number;
+  assignee: QueueAssignee | null;
+  /** §29 score, breakdown and recommendation. */
+  priority: PriorityResult;
+};
+
+/**
+ * Page bounds for the queue.
+ *
+ * Smaller than the 200/500 the customer and loan lists use. A collector
+ * works this list top-down by hand and does not read 200 accounts in a
+ * sitting; the point of the ordering is that the first screen is the
+ * right screen.
+ */
+const QUEUE_PAGING: PagingBounds = { defaultPageSize: 50, maxPageSize: 200 };
+
+/** The area half of the queue's `where`, or nothing when unfiltered. */
+function areaWhere(filter: OverdueQueueFilter) {
+  const province = filter.province?.trim();
+  const city = filter.city?.trim();
+  if (!province && !city) return {};
+  return {
+    customer: {
+      ...(province
+        ? { province: { equals: province, mode: "insensitive" as const } }
+        : {}),
+      ...(city ? { city: { equals: city, mode: "insensitive" as const } } : {}),
+    },
+  };
 }
 
 export class CollectionsRepository {
@@ -148,72 +216,90 @@ export class CollectionsRepository {
    */
   async overdueQueue(
     asOf: Date = new Date(),
-    filter: { collectorId?: string; unassignedOnly?: boolean } = {},
-  ): Promise<
-    Array<
-      LoanApplication & {
-        customerName: string;
-        /** Borrower's area — drives the queue's area filter. */
-        customerCity: string;
-        customerProvince: string | null;
-        daysOverdue: number;
-        outstanding: number;
-        overdueCount: number;
-        assignee: QueueAssignee | null;
-        /** §29 score, breakdown and recommendation. */
-        priority: PriorityResult;
-      }
-    >
-  > {
-    const rows = await this.prisma.loanApplication.findMany({
-      where: {
-        status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] },
-        schedule: { some: { paidInFullAt: null, dueDate: { lt: asOf } } },
-        ...(filter.collectorId
-          ? { collectionAssignment: { collectorId: filter.collectorId } }
-          : {}),
-        ...(filter.unassignedOnly ? { collectionAssignment: null } : {}),
-      },
-      include: {
-        customer: {
-          select: {
-            firstName: true,
-            lastName: true,
-            city: true,
-            province: true,
-            // Contactability inputs — which channels exist for this
-            // borrower at all.
-            phone: true,
-            secondaryPhone: true,
-            email: true,
-            // Risk grade: the most recent scorecard result, if ever run.
-            creditScores: {
-              select: { tier: true },
-              orderBy: { computedAt: "desc" },
-              take: 1,
+    filter: OverdueQueueFilter = {},
+  ): Promise<OverdueQueueRow[]> {
+    /*
+     * Walked in bounded chunks rather than fetched whole.
+     *
+     * This is NOT a page of the queue — every matching loan is still
+     * visited, scored, and ranked against every other one. See
+     * `overdueQueuePage` for why the ranking cannot be computed any
+     * other way, and what a page means here.
+     *
+     * The chunking is worth doing even so. Each row drags six relations
+     * behind it — the borrower, every open instalment, the assignment,
+     * every promise-to-pay, the newest note, and both collateral
+     * tables — so the hydrated footprint per loan is large even though
+     * the pre-filter is selective.
+     *
+     * The pre-filter is the real bound and it already existed:
+     * `status IN (ACTIVE, DISBURSED, DEFAULTED)` with `schedule some
+     * (paidInFullAt IS NULL AND dueDate < asOf)` is 0.7% of instalments
+     * at the volume the query doc measured — 8,472 of 1,296,000 — and
+     * `LoanSchedule(paidInFullAt, dueDate)` from
+     * 20260813090000_query_plan_indexes serves it. The queue is
+     * thousands of loans, not hundreds of thousands. That is why
+     * scoring all of it stays affordable.
+     */
+    const fetchChunk = (resumeAfterId: string | null, take: number) =>
+      this.prisma.loanApplication.findMany({
+        where: {
+          status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] },
+          schedule: { some: { paidInFullAt: null, dueDate: { lt: asOf } } },
+          ...(filter.collectorId
+            ? { collectionAssignment: { collectorId: filter.collectorId } }
+            : {}),
+          ...(filter.unassignedOnly ? { collectionAssignment: null } : {}),
+          ...areaWhere(filter),
+        },
+        include: {
+          customer: {
+            select: {
+              firstName: true,
+              lastName: true,
+              city: true,
+              province: true,
+              // Contactability inputs — which channels exist for this
+              // borrower at all.
+              phone: true,
+              secondaryPhone: true,
+              email: true,
+              // Risk grade: the most recent scorecard result, if ever run.
+              creditScores: {
+                select: { tier: true },
+                orderBy: { computedAt: "desc" },
+                take: 1,
+              },
             },
           },
+          schedule: {
+            where: { paidInFullAt: null },
+            orderBy: { dueDate: "asc" },
+          },
+          collectionAssignment: {
+            include: { collector: { select: { name: true } } },
+          },
+          // Promise reliability — kept vs broken, and any open commitment.
+          promisesToPay: { select: { status: true, promisedDate: true } },
+          // Contact recency. Only the newest is needed: the score asks
+          // "how long since anyone tried", not for the whole log.
+          collectionNotes: {
+            select: { createdAt: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+          // Collateral, at most one of the two by construction.
+          vehicle: { select: { appraisedValue: true } },
+          property: { select: { appraisedValue: true } },
         },
-        schedule: {
-          where: { paidInFullAt: null },
-          orderBy: { dueDate: "asc" },
-        },
-        collectionAssignment: {
-          include: { collector: { select: { name: true } } },
-        },
-        // Promise reliability — kept vs broken, and any open commitment.
-        promisesToPay: { select: { status: true, promisedDate: true } },
-        // Contact recency. Only the newest is needed: the score asks
-        // "how long since anyone tried", not for the whole log.
-        collectionNotes: {
-          select: { createdAt: true },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
-        // Collateral, at most one of the two by construction.
-        vehicle: { select: { appraisedValue: true } },
-        property: { select: { appraisedValue: true } },
-      },
+        orderBy: { id: "asc" },
+        take,
+        ...resumeAfter(resumeAfterId),
+      });
+
+    const rows: Awaited<ReturnType<typeof fetchChunk>> = [];
+    await forEachBookChunk(fetchChunk, (chunk) => {
+      rows.push(...chunk);
     });
 
     /*
@@ -345,6 +431,122 @@ export class CollectionsRepository {
         b.priority.score - a.priority.score || b.daysOverdue - a.daysOverdue,
     );
     return out;
+  }
+
+  /**
+   * One page of the queue, in the queue's own global order.
+   *
+   * ─── Why this is a slice and not a `take`/`skip` ────────────────────
+   *
+   * The ordering key does not exist in the database. The §29 score is
+   * computed in JavaScript (`@loan/collections`) from seven weighted
+   * factors drawn from six relations — exposure, aging band, promise
+   * outcomes, contact channels and recency, the borrower's history
+   * across their whole book, scorecard tier, collateral. Postgres cannot
+   * order by it, so `ORDER BY score LIMIT 50 OFFSET 50` is not a query
+   * that can be written.
+   *
+   * Three ways out were considered. This is the one taken, and the two
+   * that were not, with the reason:
+   *
+   * 1. REJECTED — page over a stable SQL ordering and score within the
+   *    page. This is the cheap fix and it is the wrong one. Page 2 would
+   *    hold the 51st-to-100th loans by loan id, re-ranked among
+   *    themselves, and the highest-priority account in the book could sit
+   *    on page 7 with a rank of 1. The screen would look correct — sorted
+   *    descending, scores attached — while telling a collector to call
+   *    the wrong borrower. §29 exists precisely because working the queue
+   *    in the wrong order costs recoveries, and a silently local ranking
+   *    reintroduces that failure in a form nobody can see. Not done.
+   *
+   * 2. NOT DONE IN THIS BATCH — push the score into SQL so the database
+   *    can order and page it. This is the only thing that makes the
+   *    ranking pageable in the strict sense, and it is a real piece of
+   *    work: the seven factors, the aging bands, the ₱500,000 exposure
+   *    ceiling, the suppression rules and the neutral-0.5 defaults would
+   *    all have to be expressed as SQL, and would then exist in two
+   *    places that must agree forever. Two implementations of a scoring
+   *    policy drift, and the failure mode when they do is a queue that
+   *    ranks differently depending on which endpoint you asked — with no
+   *    error. It needs its own change, its own tests, and a decision
+   *    about where the policy lives. What it needs precisely is recorded
+   *    in the F4 report.
+   *
+   * 3. TAKEN — score the whole eligible set, rank it globally, and serve
+   *    a window of the result. The ranking a collector sees is
+   *    unchanged: row 1 is the same account it was before this change,
+   *    and so is row 400. What is bounded is the RESPONSE, which was the
+   *    other half of the §58 finding ("Large API Responses"), plus the
+   *    peak hydration in `overdueQueue` itself.
+   *
+   * This is affordable because the set being scored is small, and it is
+   * small because of a pre-filter that already existed and is already
+   * indexed — only loans with an unpaid instalment actually past due.
+   * See the note on the scan in `overdueQueue`.
+   *
+   * ─── Offset, and why it fits here ──────────────────────────────────
+   *
+   * Offset over a materialized in-memory list, so the objection to deep
+   * offsets does not apply: nothing is re-scanned per page, the list is
+   * already ranked and in hand, and the slice is O(1). A cursor would
+   * need a stable database-orderable key, which is the one thing this
+   * ordering does not have.
+   *
+   * ─── Why the area filter is applied here and not in the query ──────
+   *
+   * `overdueQueue` can push an area filter into SQL and does. This method
+   * deliberately does not use that, and scans the caller's whole SCOPE
+   * (their own book, or the unassigned pool) instead, because it has to
+   * return `areas` as well — the values the filter control offers.
+   *
+   * Those have to be derived from the unfiltered scope. A dropdown built
+   * from the filtered set collapses to the one area already chosen, and a
+   * dropdown built from the current page offers only the areas that
+   * happened to land on it while silently hiding the rest of a
+   * collector's book. Deriving both from one scan costs nothing extra:
+   * the whole scope is scanned regardless, because the ranking demands
+   * it, so filtering the ranked list in memory adds no query.
+   */
+  async overdueQueuePage(
+    asOf: Date = new Date(),
+    filter: OverdueQueueFilter = {},
+    paging: PageParams = {},
+  ): Promise<
+    Page<OverdueQueueRow> & { areas: { provinces: string[]; cities: string[] } }
+  > {
+    const { province, city, ...scope } = filter;
+    const ranked = await this.overdueQueue(asOf, scope);
+
+    const provinces = new Set<string>();
+    const cities = new Set<string>();
+    for (const r of ranked) {
+      if (r.customerProvince) provinces.add(r.customerProvince);
+      if (r.customerCity) cities.add(r.customerCity);
+    }
+
+    const wantProvince = province?.trim().toLowerCase();
+    const wantCity = city?.trim().toLowerCase();
+    // Same case-insensitive equality as the delinquency export, so the
+    // screen and the CSV can never disagree about who is in an area.
+    const matching = ranked.filter(
+      (r) =>
+        (!wantProvince ||
+          (r.customerProvince ?? "").toLowerCase() === wantProvince) &&
+        (!wantCity || r.customerCity.toLowerCase() === wantCity),
+    );
+
+    const resolved = resolvePaging(paging, QUEUE_PAGING);
+    return {
+      ...toPage(
+        matching.slice(resolved.skip, resolved.skip + resolved.take),
+        matching.length,
+        resolved,
+      ),
+      areas: {
+        provinces: [...provinces].sort((a, b) => a.localeCompare(b)),
+        cities: [...cities].sort((a, b) => a.localeCompare(b)),
+      },
+    };
   }
 
   // ─── Account ownership ─────────────────────────────────────────────

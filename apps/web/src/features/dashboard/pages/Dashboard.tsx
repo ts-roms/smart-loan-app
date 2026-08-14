@@ -83,7 +83,12 @@ export function DashboardPage() {
   });
   const originations = useOriginations({ enabled: canSeeAccounting });
   const vintages = useVintageCohorts({ enabled: canSeeAccounting });
-  const aging = useLoanPortfolio(undefined, { enabled: canSeeAccounting });
+  // AgingChart reads `totals` and `totalOutstanding` only — both
+  // whole-book on any page — so the per-loan rows are dead weight here.
+  const aging = useLoanPortfolio(undefined, {
+    enabled: canSeeAccounting,
+    pageSize: 1,
+  });
 
   // A disabled query never leaves `pending`, so it must not be waited on
   // — including it here would hold the skeleton up forever for exactly

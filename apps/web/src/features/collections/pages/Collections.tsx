@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Pagination,
   Select,
   SelectContent,
   SelectItem,
@@ -59,19 +60,38 @@ const TYPE_LABELS: Record<string, string> = {
  * collection: the collector who covers Bulacan gets everything overdue
  * in Bulacan, in one action instead of fifty.
  *
- * Filtering is client-side over the loaded queue, deliberately: the
- * endpoint already returns the whole derived worklist (it has no
- * pagination), so a server round-trip per filter change would buy
- * nothing. If the book ever outgrows one response, the filter moves
- * server-side with it.
+ * Filtering and paging are both SERVER-side. They used to be neither:
+ * the endpoint returned the whole derived worklist and this page sliced
+ * it in the browser, which was correct only for as long as "the whole
+ * worklist" was a sane thing to ship. It is not (finding F4,
+ * docs/modernization/query-performance.md), and the two had to move
+ * together — filtering one page is not filtering the book, so a
+ * client-side filter over a paginated response would quietly show a
+ * collector only the Bulacan accounts that happened to land on page 1.
+ *
+ * The ordering is unaffected. The server scores and ranks every eligible
+ * account before cutting the page, so row 1 is still the highest-priority
+ * account in the book and page 2 continues that same ranking.
  *
  * The "Accrue late fees" button runs the daily job: posts the *delta*
  * between what the policy says should be on the books today and what's
  * already been accrued. Idempotent — safe to hit multiple times per day.
  */
+/** Rows per page. A collector works this list top-down, by hand. */
+const PAGE_SIZE = 50;
+
 export function CollectionsPage() {
   const [scope, setScope] = useState<QueueScope>("all");
-  const queue = useOverdueQueue(scope);
+  const [province, setProvince] = useState("ALL");
+  const [city, setCity] = useState("ALL");
+  const [page, setPage] = useState(1);
+
+  const queue = useOverdueQueue(scope, {
+    province: province === "ALL" ? undefined : province,
+    city: city === "ALL" ? undefined : city,
+    page,
+    pageSize: PAGE_SIZE,
+  });
   const accrue = useAccrueLateFees();
   const toast = useToast();
   const canAccrue = usePermission("collections.accrue");
@@ -81,47 +101,30 @@ export function CollectionsPage() {
   const myPerms = useMyPermissions();
   const canAssign = myPerms.data?.permissions.includes("collections.assign");
 
-  const [province, setProvince] = useState("ALL");
-  const [city, setCity] = useState("ALL");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [assigning, setAssigning] = useState(false);
 
-  const rows = useMemo(() => queue.data ?? [], [queue.data]);
-
-  // Filter options come from the data on screen, so the dropdowns never
-  // offer an area with nothing overdue in it. "—" buckets rows whose
-  // customer has no province recorded (city is required, province isn't).
-  const provinces = useMemo(
-    () =>
-      [...new Set(rows.map((r) => r.customerProvince ?? "—"))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [rows],
-  );
-  const cities = useMemo(
-    () =>
-      [
-        ...new Set(
-          rows
-            .filter(
-              (r) =>
-                province === "ALL" || (r.customerProvince ?? "—") === province,
-            )
-            .map((r) => r.customerCity),
-        ),
-      ].sort((a, b) => a.localeCompare(b)),
-    [rows, province],
-  );
-
-  const visible = useMemo(
-    () =>
-      rows.filter(
-        (r) =>
-          (province === "ALL" || (r.customerProvince ?? "—") === province) &&
-          (city === "ALL" || r.customerCity === city),
-      ),
-    [rows, province, city],
-  );
+  /*
+   * `visible` is now simply the page the server returned — it has
+   * already applied the area filter, over the whole book rather than
+   * over whatever is on screen. `total` is the size of the filtered
+   * queue, not of this page.
+   *
+   * Filter options come from `areas`, which the server derives from the
+   * caller's whole scope with the area filter deliberately NOT applied:
+   * a list built from the current page would offer only the areas that
+   * happened to land on it, and one built from the filtered set would
+   * collapse to the single value already chosen.
+   *
+   * Accounts whose customer has no province recorded (city is required,
+   * province is not) are no longer offered as a "—" bucket, because
+   * there is no such value to filter on server-side. They are reachable
+   * under "All provinces".
+   */
+  const visible = useMemo(() => queue.data?.rows ?? [], [queue.data]);
+  const total = queue.data?.total ?? 0;
+  const provinces = queue.data?.areas.provinces ?? [];
+  const cities = queue.data?.areas.cities ?? [];
 
   // A narrower province can orphan the chosen city; reset rather than
   // silently filtering on a city that's no longer offered.
@@ -129,12 +132,21 @@ export function CollectionsPage() {
     setCity("ALL");
   }, [province]);
 
+  // Any narrowing sends you back to page 1: staying on page 7 of a
+  // result that now has two pages shows an empty table and reads as
+  // "no overdue accounts in Bulacan".
+  useEffect(() => {
+    setPage(1);
+  }, [province, city, scope]);
+
   // Selection only ever means "these visible rows" — changing the filter
   // or scope silently keeping off-screen rows selected is how a
   // supervisor assigns Bulacan and quietly reassigns half of Cavite too.
+  // Paging clears it for the same reason, and more sharply now that the
+  // off-screen rows are not even loaded.
   useEffect(() => {
     setSelected(new Set());
-  }, [province, city, scope]);
+  }, [province, city, scope, page]);
 
   const allVisibleSelected =
     visible.length > 0 && visible.every((r) => selected.has(r.id));
@@ -232,8 +244,9 @@ export function CollectionsPage() {
             </SelectContent>
           </Select>
           <span className="text-xs text-fg-muted ml-auto">
-            {visible.length} of {rows.length} account
-            {rows.length === 1 ? "" : "s"}
+            {/* `total` is the filtered queue, not this page — reading
+                `visible.length` here would say "50 accounts" forever. */}
+            {visible.length} of {total} account{total === 1 ? "" : "s"}
           </span>
         </div>
 
@@ -261,7 +274,7 @@ export function CollectionsPage() {
 
         {queue.isLoading ? (
           <SkeletonCard />
-        ) : rows.length === 0 ? (
+        ) : total === 0 && province === "ALL" && city === "ALL" ? (
           <p className="text-sm text-success">No overdue loans. </p>
         ) : visible.length === 0 ? (
           <p className="text-sm text-fg-muted">
@@ -349,6 +362,21 @@ export function CollectionsPage() {
               ))}
             </tbody>
           </table>
+        )}
+
+        {/* The queue is ranked globally before the page is cut, so page 2
+            is the next 50 most important accounts — not a re-ranked
+            slice. Hidden on an empty result: the message above says it. */}
+        {visible.length > 0 && (
+          <Pagination
+            page={queue.data?.page ?? 1}
+            totalPages={queue.data?.totalPages ?? 1}
+            total={total}
+            pageSize={queue.data?.pageSize ?? PAGE_SIZE}
+            onPageChange={setPage}
+            noun="account"
+            busy={queue.isFetching}
+          />
         )}
       </CardContent>
 

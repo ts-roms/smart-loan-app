@@ -37,7 +37,11 @@ export function AccountingDashboardPage() {
   const trial = useTrialBalance();
   const incomeStmt = useIncomeStatement();
   const balance = useBalanceSheet();
-  const aging = useLoanPortfolio();
+  // Only the band totals and the loan count are rendered here, never the
+  // per-loan rows — so ask for the smallest page the server will serve
+  // rather than shipping 200 rows to drop them. `totals`, `totalOutstanding`
+  // and `total` cover the whole book regardless of page size.
+  const aging = useLoanPortfolio(undefined, { pageSize: 1 });
 
   if (
     trial.isLoading ||
@@ -141,7 +145,11 @@ export function AccountingDashboardPage() {
             <ReportLink
               to="/accounting/portfolio"
               title="Loan portfolio"
-              subtitle={`${aging.data?.rows.length ?? 0} active`}
+              // `total`, not `rows.length`. They were the same number
+              // until the aging report's rows were paginated; after
+              // that, `rows.length` is the page size and this KPI would
+              // have quietly read "200 active" for any real book.
+              subtitle={`${aging.data?.total ?? 0} active`}
             />
           </div>
         </CardContent>

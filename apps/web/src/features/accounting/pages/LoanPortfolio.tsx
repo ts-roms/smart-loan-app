@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
   DatePicker,
+  Pagination,
   Select,
   SelectContent,
   SelectItem,
@@ -20,7 +21,7 @@ import {
   SkeletonCard,
 } from "@loan/ui";
 import { formatMoney, formatPercent, todayLocalISO } from "@loan/shared-utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 const BUCKET_LABELS: Record<AgingBucket, string> = {
@@ -43,9 +44,25 @@ const BUCKET_LABELS: Record<AgingBucket, string> = {
  */
 const BUCKETS = Object.keys(BUCKET_LABELS) as AgingBucket[];
 
+/** Rows per page of the per-loan detail table. */
+const PAGE_SIZE = 100;
+
 export function LoanPortfolioPage() {
   const [asOf, setAsOf] = useState(() => todayLocalISO());
-  const report = useLoanPortfolio(asOf);
+  const [page, setPage] = useState(1);
+  /*
+   * `rows` is one page; `totals`, `totalOutstanding` and `total` always
+   * cover the whole book, on every page. That split is the point of the
+   * change — the band totals and the NPL figures read off this report
+   * drive provisioning, so they can never be a page's worth.
+   */
+  const report = useLoanPortfolio(asOf, { page, pageSize: PAGE_SIZE });
+
+  // A new as-of date is a different report; page 7 of the old one means
+  // nothing in it.
+  useEffect(() => {
+    setPage(1);
+  }, [asOf]);
 
   return (
     <div className="space-y-4">
@@ -132,8 +149,11 @@ export function LoanPortfolioPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t border-default bg-surface-2 font-semibold">
+                  {/* Labelled "all loans", not "Total": it is the
+                      whole-book figure and sits directly under a single
+                      page of rows that do not add up to it. */}
                   <td className="py-2 px-2" colSpan={2}>
-                    Total
+                    Total, all loans
                   </td>
                   <td className="py-2 px-2 text-right font-mono">
                     {formatMoney(report.data?.totalOutstanding ?? 0)}
@@ -142,6 +162,18 @@ export function LoanPortfolioPage() {
                 </tr>
               </tfoot>
             </table>
+          )}
+
+          {(report.data?.rows ?? []).length > 0 && (
+            <Pagination
+              page={report.data?.page ?? 1}
+              totalPages={report.data?.totalPages ?? 1}
+              total={report.data?.total ?? 0}
+              pageSize={report.data?.pageSize ?? PAGE_SIZE}
+              onPageChange={setPage}
+              noun="loan"
+              busy={report.isFetching}
+            />
           )}
         </CardContent>
       </Card>

@@ -35,8 +35,17 @@ export const accountingKeys = {
     ] as const,
   balanceSheet: (asOf?: string) =>
     ["accounting", "reports", "balance-sheet", asOf ?? ""] as const,
-  loanPortfolio: (asOf?: string) =>
-    ["accounting", "reports", "loan-portfolio", asOf ?? ""] as const,
+  // Page is part of the key: `rows` is a page, so two pages are two
+  // different responses and must not share a cache entry.
+  loanPortfolio: (asOf?: string, page?: number, pageSize?: number) =>
+    [
+      "accounting",
+      "reports",
+      "loan-portfolio",
+      asOf ?? "",
+      page ?? 1,
+      pageSize ?? 0,
+    ] as const,
   rollRate: (from?: string, to?: string) =>
     ["reports", "roll-rate", from ?? "", to ?? ""] as const,
   productProfitability: (from?: string, to?: string) =>
@@ -171,13 +180,25 @@ export function useBalanceSheet(asOf?: string) {
   });
 }
 
+/**
+ * The aging report.
+ *
+ * `rows` is one page of per-loan detail; `totals`, `totalOutstanding`
+ * and `total` cover the whole book on every page. Callers wanting the
+ * number of loans must read `total`, not `rows.length` — see AgingReport.
+ */
 export function useLoanPortfolio(
   asOf?: string,
-  opts: { enabled?: boolean } = {},
+  opts: { enabled?: boolean; page?: number; pageSize?: number } = {},
 ) {
-  const qs = asOf ? `?asOf=${encodeURIComponent(asOf)}` : "";
+  const params = new URLSearchParams();
+  if (asOf) params.set("asOf", asOf);
+  if (opts.page) params.set("page", String(opts.page));
+  if (opts.pageSize) params.set("pageSize", String(opts.pageSize));
+  const qs = params.toString() ? `?${params.toString()}` : "";
+
   return useQuery({
-    queryKey: accountingKeys.loanPortfolio(asOf),
+    queryKey: accountingKeys.loanPortfolio(asOf, opts.page, opts.pageSize),
     queryFn: () =>
       getApiClient().get<AgingReport>(
         `/accounting/reports/loan-portfolio${qs}`,

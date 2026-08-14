@@ -23,12 +23,12 @@ import {
   type PeriodKey,
   PROFITABILITY_ACCOUNT_CODES,
   type ProfitabilityEntryInput,
-  buildAgingReport,
   buildBalanceSheet,
   buildIncomeStatement,
   buildProductProfitabilityReport,
-  buildRollRateReport,
   buildTrialBalance,
+  createAgingAccumulator,
+  createRollRateAccumulator,
   keyOf,
   periodFor,
 } from "@loan/accounting";
@@ -40,10 +40,27 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
+import { forEachBookChunk, resumeAfter } from "../lib/chunked-scan";
 import { scheduleIdOfLateFeeRef } from "../lib/late-fee-accruals";
+import {
+  type PageParams,
+  type PagingBounds,
+  pageMetaOf,
+  resolvePaging,
+} from "../lib/pagination";
 import { isUniqueViolation } from "../lib/prisma-errors";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
+
+/**
+ * Page bounds for the aging report's per-loan rows.
+ *
+ * The same 200/500 the other operator tables use
+ * (`CUSTOMER_PAGING`, `LOAN_PAGING`) — this is read next to them and a
+ * different page size would be a surprise, not a feature. The band
+ * totals it ships alongside are never affected by these.
+ */
+const AGING_PAGING: PagingBounds = { defaultPageSize: 200, maxPageSize: 500 };
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -755,35 +772,87 @@ export class AccountingRepository {
     });
   }
 
-  async loanPortfolioAging(asOf: Date) {
-    const rows = await this.prisma.loanSchedule.findMany({
-      where: {
-        paidInFullAt: null,
-        loan: { status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] } },
-      },
-      include: {
-        loan: {
-          select: {
-            id: true,
-            number: true,
-            customer: { select: { firstName: true, lastName: true } },
+  /**
+   * Loan aging, per loan and totalled by band (§28's seven).
+   *
+   * ─── Why the totals are not paginated and the rows are ─────────────
+   *
+   * The band totals and `totalOutstanding` are computed over the WHOLE
+   * book, always, on every call. They have to be: a band total is a sum
+   * over every open instalment that matches, and there is no page of the
+   * book from which the right answer can be derived. Provisioning is
+   * decided off these numbers (§81), so serving a total that reflected
+   * only the rows on screen would be worse than serving no total.
+   *
+   * What is paginated is `rows` — the per-loan detail list, which is
+   * what actually made the response large. `total` reports how many
+   * loans the report covers, so a caller can tell "50 loans on this
+   * page" from "50 loans in the book"; the aging dashboard reads that
+   * field rather than `rows.length` for exactly this reason.
+   *
+   * Offset, not keyset, and this one genuinely fits: the rows are sorted
+   * by `daysOverdue` — derived in JavaScript from the earliest unpaid
+   * instalment, not a column — so there is no database-orderable key to
+   * carry in a cursor. They are also already materialized in rank order
+   * by the time the page is cut, which is the case offset costs nothing
+   * for. Callers page a table and want "page 3 of 12".
+   *
+   * ─── What changed about the read itself ────────────────────────────
+   *
+   * The instalment scan is now walked in bounded chunks
+   * (`forEachBookChunk`) and folded as it arrives, instead of hydrating
+   * every open instalment in the book before the first addition. The
+   * rows visited, and therefore every number produced, are identical —
+   * see whole-book-reads.golden.test.ts.
+   */
+  async loanPortfolioAging(asOf: Date, paging: PageParams = {}) {
+    const accumulator = createAgingAccumulator(asOf);
+
+    await forEachBookChunk(
+      (resumeAfterId, take) =>
+        this.prisma.loanSchedule.findMany({
+          where: {
+            paidInFullAt: null,
+            loan: { status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] } },
           },
-        },
+          include: {
+            loan: {
+              select: {
+                id: true,
+                number: true,
+                customer: { select: { firstName: true, lastName: true } },
+              },
+            },
+          },
+          orderBy: { id: "asc" },
+          take,
+          ...resumeAfter(resumeAfterId),
+        }),
+      (rows) => {
+        for (const r of rows) {
+          accumulator.add({
+            loanId: r.loan.id,
+            loanNumber: r.loan.number,
+            customerName: `${r.loan.customer.firstName} ${r.loan.customer.lastName}`,
+            installmentNo: r.installmentNo,
+            dueDate: r.dueDate,
+            totalDue:
+              Number(r.totalDue) -
+              Number(r.principalPaid) -
+              Number(r.interestPaid),
+            paidInFullAt: r.paidInFullAt,
+          });
+        }
       },
-    });
-    return buildAgingReport(
-      rows.map((r) => ({
-        loanId: r.loan.id,
-        loanNumber: r.loan.number,
-        customerName: `${r.loan.customer.firstName} ${r.loan.customer.lastName}`,
-        installmentNo: r.installmentNo,
-        dueDate: r.dueDate,
-        totalDue:
-          Number(r.totalDue) - Number(r.principalPaid) - Number(r.interestPaid),
-        paidInFullAt: r.paidInFullAt,
-      })),
-      asOf,
     );
+
+    const report = accumulator.finish();
+    const resolved = resolvePaging(paging, AGING_PAGING);
+    return {
+      ...report,
+      rows: report.rows.slice(resolved.skip, resolved.skip + resolved.take),
+      ...pageMetaOf(report.rows.length, resolved),
+    };
   }
 
   /**
@@ -798,49 +867,79 @@ export class AccountingRepository {
    * into the `from` snapshot. See roll-rate.ts for the full argument.
    */
   async rollRate(from: Date, to: Date) {
-    const loans = await this.prisma.loanApplication.findMany({
-      where: {
-        disbursedAt: { not: null, lte: to },
-        status: {
-          in: [
-            "ACTIVE",
-            "DISBURSED",
-            "DEFAULTED",
-            "CLOSED",
-            "RESTRUCTURED",
-            "WRITTEN_OFF",
-          ],
-        },
+    const accumulator = createRollRateAccumulator(from, to);
+
+    /*
+     * Walked in bounded chunks rather than fetched whole.
+     *
+     * There is nothing to paginate on the wire here: the response is a
+     * MATRIX — eight origin rows by nine destinations, plus the same per
+     * product — and its size is set by the number of aging bands, not by
+     * the size of the book. It was never the response that was large.
+     *
+     * What was large was the input. This read is the widest in the
+     * application: ~90% of every loan ever disbursed (rejection R1
+     * measured 107,440 of 120,000), and `schedule` pulls EVERY
+     * instalment of every one of them — 1.3M rows at that volume, all
+     * hydrated into Prisma objects before the first transition was
+     * derived. A loan collapses to one small `Transition` the instant it
+     * is seen, so holding the schedules was pure peak memory.
+     *
+     * R1 also established that the sequential scan is the correct plan
+     * for reading 90% of a table, so this is not trying to make the scan
+     * selective — only to stop buffering its entire result.
+     */
+    await forEachBookChunk(
+      (resumeAfterId, take) =>
+        this.prisma.loanApplication.findMany({
+          where: {
+            disbursedAt: { not: null, lte: to },
+            status: {
+              in: [
+                "ACTIVE",
+                "DISBURSED",
+                "DEFAULTED",
+                "CLOSED",
+                "RESTRUCTURED",
+                "WRITTEN_OFF",
+              ],
+            },
+          },
+          select: {
+            id: true,
+            number: true,
+            productCode: true,
+            disbursedAt: true,
+            closedAt: true,
+            writtenOffAt: true,
+            schedule: {
+              select: { dueDate: true, totalDue: true, paidInFullAt: true },
+            },
+          },
+          orderBy: { id: "asc" },
+          take,
+          ...resumeAfter(resumeAfterId),
+        }),
+      (loans) => {
+        for (const l of loans) {
+          accumulator.add({
+            loanId: l.id,
+            loanNumber: l.number,
+            productCode: l.productCode,
+            disbursedAt: l.disbursedAt,
+            closedAt: l.closedAt,
+            writtenOffAt: l.writtenOffAt,
+            schedule: l.schedule.map((s) => ({
+              dueDate: s.dueDate,
+              totalDue: Number(s.totalDue),
+              paidInFullAt: s.paidInFullAt,
+            })),
+          });
+        }
       },
-      select: {
-        id: true,
-        number: true,
-        productCode: true,
-        disbursedAt: true,
-        closedAt: true,
-        writtenOffAt: true,
-        schedule: {
-          select: { dueDate: true, totalDue: true, paidInFullAt: true },
-        },
-      },
-    });
-    return buildRollRateReport(
-      loans.map((l) => ({
-        loanId: l.id,
-        loanNumber: l.number,
-        productCode: l.productCode,
-        disbursedAt: l.disbursedAt,
-        closedAt: l.closedAt,
-        writtenOffAt: l.writtenOffAt,
-        schedule: l.schedule.map((s) => ({
-          dueDate: s.dueDate,
-          totalDue: Number(s.totalDue),
-          paidInFullAt: s.paidInFullAt,
-        })),
-      })),
-      from,
-      to,
     );
+
+    return accumulator.finish();
   }
 
   /**

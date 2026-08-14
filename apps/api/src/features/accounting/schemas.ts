@@ -123,6 +123,26 @@ export const asOfQuerySchema = z.object({
   asOf: z.string().optional(),
 });
 
+/**
+ * `asOf` plus paging, for the aging report's per-loan rows.
+ *
+ * A separate schema rather than page params bolted onto
+ * `asOfQuerySchema`, which three other reports share and none of them
+ * paginate — advertising `page` on an endpoint that ignores it is a
+ * worse contract than not advertising it.
+ *
+ * Declaring them here is load-bearing, not documentation: `routeSchema`
+ * compiles the querystring with `additionalProperties: false`, so
+ * Fastify's AJV strips any parameter not named here before the handler
+ * runs. An undeclared `?page=2` would vanish silently and always serve
+ * page 1. Bounds are left loose because the repository clamps them.
+ */
+export const agingQuerySchema = z.object({
+  asOf: z.string().optional(),
+  page: z.coerce.number().optional(),
+  pageSize: z.coerce.number().optional(),
+});
+
 /* ─── Response shapes, for the OpenAPI spec ─────────────────────────────
  *
  * zod rather than hand-written JSON Schema so they are real parsers: a
@@ -315,6 +335,21 @@ const agingBucketSchema = z.enum([
   "D_180_PLUS",
 ]);
 
+/**
+ * Aging: a page of per-loan rows over whole-book totals.
+ *
+ * `rows` is paginated (finding F4); `totals` and `totalOutstanding` are
+ * NOT, and never can be. A band total is a sum over every open
+ * instalment that matches, and there is no page of the book from which
+ * the right answer can be derived — so they are recomputed over the
+ * whole book on every request and are identical on every page.
+ * Provisioning is decided off them (§81).
+ *
+ * `total` is the number of loans the report covers. It exists because
+ * `rows.length` used to serve as the active-loan count on the
+ * dashboard, and once `rows` became a page that reading turned into
+ * "page size" — a wrong number with nothing to signal it.
+ */
 export const loanPortfolioAgingResponseSchema = z.object({
   asOf: z.string().datetime(),
   rows: z.array(
@@ -341,6 +376,12 @@ export const loanPortfolioAgingResponseSchema = z.object({
     D_180_PLUS: z.number(),
   }),
   totalOutstanding: z.number(),
+  /** Loans in the report across all pages — not rows.length. */
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  /** At least 1 even when nothing matched. */
+  totalPages: z.number().int(),
 });
 
 export const portfolioSummaryResponseSchema = z.object({

@@ -13,6 +13,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Pagination,
   Select,
   SelectContent,
   SelectItem,
@@ -75,6 +76,9 @@ function severityVariant(days: number): "muted" | "warning" | "danger" {
  * screen — handing work out is a reaction to seeing the spread, and
  * splitting them means looking at two screens to make one decision.
  */
+/** Rows per page. A collector works this list top-down, by hand. */
+const PAGE_SIZE = 50;
+
 export function MyAccountsPage() {
   const canAssign = usePermission("collections.assign");
 
@@ -96,6 +100,9 @@ export function MyAccountsPage() {
     raw === "unassigned" || raw === "all" ? raw : "mine";
   const province = params.get("province") ?? "ALL";
   const city = params.get("city") ?? "ALL";
+  // Page is in the URL for the same reason scope and area are: the list
+  // a supervisor is looking at should survive a link and a back button.
+  const page = Math.max(1, Number(params.get("page") ?? 1) || 1);
 
   // One updater, defaults omitted from the URL so the bare route stays
   // the canonical "my accounts" link. Changing province resets city —
@@ -104,54 +111,45 @@ export function MyAccountsPage() {
     scope?: QueueScope;
     province?: string;
     city?: string;
+    page?: number;
   }) => {
-    const merged = { scope, province, city, ...next };
+    const merged = { scope, province, city, page: 1, ...next };
     const out: Record<string, string> = {};
     if (merged.scope !== "mine") out.scope = merged.scope;
     if (merged.province !== "ALL") out.province = merged.province;
     if (merged.city !== "ALL") out.city = merged.city;
+    if (merged.page !== 1) out.page = String(merged.page);
     setParams(out, { replace: true });
   };
+  // Any narrowing drops back to page 1 — `update` defaults `page` to 1,
+  // so only an explicit page change carries one through. Staying on
+  // page 4 of a result that now has one page reads as "nothing here".
   const setScope = (next: QueueScope) => update({ scope: next });
   const setProvince = (next: string) => update({ province: next, city: "ALL" });
   const setCity = (next: string) => update({ city: next });
+  const setPage = (next: number) => update({ page: next });
 
-  const queue = useOverdueQueue(scope);
-  const rows = useMemo(() => queue.data ?? [], [queue.data]);
+  const queue = useOverdueQueue(scope, {
+    province: province === "ALL" ? undefined : province,
+    city: city === "ALL" ? undefined : city,
+    page,
+    pageSize: PAGE_SIZE,
+  });
 
-  // Area options come from the rows on screen — the dropdowns never
-  // offer a province or city with nothing in it. Same convention as the
-  // collections queue: "—" buckets customers with no recorded province.
-  const provinces = useMemo(
-    () =>
-      [...new Set(rows.map((r) => r.customerProvince ?? "—"))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [rows],
-  );
-  const cities = useMemo(
-    () =>
-      [
-        ...new Set(
-          rows
-            .filter(
-              (r) =>
-                province === "ALL" || (r.customerProvince ?? "—") === province,
-            )
-            .map((r) => r.customerCity),
-        ),
-      ].sort((a, b) => a.localeCompare(b)),
-    [rows, province],
-  );
-  const visible = useMemo(
-    () =>
-      rows.filter(
-        (r) =>
-          (province === "ALL" || (r.customerProvince ?? "—") === province) &&
-          (city === "ALL" || r.customerCity === city),
-      ),
-    [rows, province, city],
-  );
+  /*
+   * The server filters and pages; `rows` is already the right window.
+   *
+   * Area options come from `areas`, derived server-side over the whole
+   * scope with the area filter NOT applied — a list built from the
+   * current page would offer only the areas that happened to land on it.
+   * Customers with no recorded province are no longer offered as a "—"
+   * bucket (there is no such value to filter on server-side); they
+   * appear under "All provinces".
+   */
+  const visible = useMemo(() => queue.data?.rows ?? [], [queue.data]);
+  const total = queue.data?.total ?? 0;
+  const provinces = queue.data?.areas.provinces ?? [];
+  const cities = queue.data?.areas.cities ?? [];
 
   return (
     <div className="space-y-4">
@@ -164,7 +162,8 @@ export function MyAccountsPage() {
               : scope === "unassigned"
                 ? "Unassigned accounts"
                 : "All delinquent accounts"}
-            <Badge variant="muted">{visible.length}</Badge>
+            {/* The whole filtered queue, not this page. */}
+            <Badge variant="muted">{total}</Badge>
           </CardTitle>
           {/*
             Supervisors need to move between "what am I carrying" and
@@ -226,8 +225,8 @@ export function MyAccountsPage() {
             </Select>
             {(province !== "ALL" || city !== "ALL") && (
               <span className="text-xs text-fg-muted">
-                {visible.length} of {rows.length} account
-                {rows.length === 1 ? "" : "s"}
+                {/* `total` is the filtered queue across all pages. */}
+                {visible.length} of {total} account{total === 1 ? "" : "s"}
               </span>
             )}
           </div>
@@ -236,13 +235,20 @@ export function MyAccountsPage() {
             <SkeletonCard />
           ) : (
             <>
+              {/*
+                AgingSummary folds the rows it is given, so on a paged
+                queue it describes THIS PAGE and says so in its own
+                heading. The unpaged whole-queue equivalent is the
+                delinquency report, which is an export rather than a
+                screen precisely because it is the whole book.
+              */}
               <AgingSummary rows={visible} />
               <AccountsTable
                 rows={visible}
                 scope={scope}
                 canAssign={canAssign}
                 emptyMessage={
-                  rows.length > 0
+                  province !== "ALL" || city !== "ALL"
                     ? "No accounts in that area."
                     : scope === "mine"
                       ? "Nothing assigned to you. A supervisor hands accounts out from the unassigned pool."
@@ -251,6 +257,17 @@ export function MyAccountsPage() {
                         : "No delinquent accounts."
                 }
               />
+              {visible.length > 0 && (
+                <Pagination
+                  page={queue.data?.page ?? 1}
+                  totalPages={queue.data?.totalPages ?? 1}
+                  total={total}
+                  pageSize={queue.data?.pageSize ?? PAGE_SIZE}
+                  onPageChange={setPage}
+                  noun="account"
+                  busy={queue.isFetching}
+                />
+              )}
             </>
           )}
         </CardContent>
@@ -265,6 +282,13 @@ export function MyAccountsPage() {
  * Aging buckets plus the totals. Counts AND money, because ten accounts
  * one month late and one account a year late are very different
  * problems and a headcount alone hides which one you have.
+ *
+ * Folds whatever rows it is handed, which since the queue was paginated
+ * means THIS PAGE. The labels say so rather than implying a whole-book
+ * figure: an "Outstanding" that silently meant "outstanding on the
+ * fifty accounts currently on screen" is exactly the kind of number
+ * someone quotes in a meeting. The whole-book equivalents are the aging
+ * report (§28 bands, every loan) and the delinquency export.
  */
 function AgingSummary({ rows }: { rows: OverdueRow[] }) {
   if (rows.length === 0) return null;
@@ -275,9 +299,12 @@ function AgingSummary({ rows }: { rows: OverdueRow[] }) {
   return (
     <div className="space-y-3">
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label="Accounts" value={String(rows.length)} />
-        <Stat label="Outstanding" value={formatMoney(totalOutstanding)} />
-        <Stat label="Worst" value={`${worst} days`} />
+        <Stat label="Accounts on this page" value={String(rows.length)} />
+        <Stat
+          label="Outstanding on this page"
+          value={formatMoney(totalOutstanding)}
+        />
+        <Stat label="Worst on this page" value={`${worst} days`} />
       </dl>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {BUCKETS.map((b) => {

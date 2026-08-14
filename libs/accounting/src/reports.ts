@@ -344,10 +344,31 @@ export const OVERDUE_BUCKETS: readonly AgingBucket[] = AGING_BUCKETS.filter(
   (b) => b !== "CURRENT",
 );
 
-export function buildAgingReport(
-  rows: ScheduleRowForAging[],
-  asOf: Date,
-): AgingReport {
+/**
+ * Fold instalments into the aging report one at a time.
+ *
+ * Exists so the repository can walk the open instalments in bounded
+ * chunks rather than materializing every one of them before the fold
+ * starts (finding F4, docs/modernization/query-performance.md). The fold
+ * was already incremental in shape — a map keyed by loan — so this
+ * exposes what `buildAgingReport` was doing internally rather than adding
+ * a second way of doing it. Memory becomes one accumulator per LOAN
+ * instead of one hydrated row per INSTALMENT, which on a mature book is
+ * roughly an order of magnitude.
+ *
+ * Order-insensitive by construction: instalments group by `loanId`,
+ * `earliestOverdue` is a running minimum, and the counters are sums. The
+ * per-instalment `round2` operates on exact 2-decimal values, so it does
+ * not make the result depend on arrival order either.
+ */
+export interface AgingAccumulator {
+  /** Fold one open instalment. Settled rows are ignored, as before. */
+  add(row: ScheduleRowForAging): void;
+  /** Assemble the report from everything added so far. */
+  finish(): AgingReport;
+}
+
+export function createAgingAccumulator(asOf: Date): AgingAccumulator {
   const byLoan = new Map<
     string,
     {
@@ -359,29 +380,57 @@ export function buildAgingReport(
       installmentsOverdue: number;
     }
   >();
-  for (const r of rows) {
-    if (r.paidInFullAt) continue;
-    let acc = byLoan.get(r.loanId);
-    if (!acc) {
-      acc = {
-        loanId: r.loanId,
-        loanNumber: r.loanNumber,
-        customerName: r.customerName,
-        outstandingBalance: 0,
-        earliestOverdue: null,
-        installmentsOverdue: 0,
-      };
-      byLoan.set(r.loanId, acc);
-    }
-    acc.outstandingBalance = round2(acc.outstandingBalance + r.totalDue);
-    if (r.dueDate.getTime() < asOf.getTime()) {
-      acc.installmentsOverdue += 1;
-      if (!acc.earliestOverdue || r.dueDate < acc.earliestOverdue) {
-        acc.earliestOverdue = r.dueDate;
-      }
-    }
-  }
 
+  return {
+    add(r) {
+      if (r.paidInFullAt) return;
+      let acc = byLoan.get(r.loanId);
+      if (!acc) {
+        acc = {
+          loanId: r.loanId,
+          loanNumber: r.loanNumber,
+          customerName: r.customerName,
+          outstandingBalance: 0,
+          earliestOverdue: null,
+          installmentsOverdue: 0,
+        };
+        byLoan.set(r.loanId, acc);
+      }
+      acc.outstandingBalance = round2(acc.outstandingBalance + r.totalDue);
+      if (r.dueDate.getTime() < asOf.getTime()) {
+        acc.installmentsOverdue += 1;
+        if (!acc.earliestOverdue || r.dueDate < acc.earliestOverdue) {
+          acc.earliestOverdue = r.dueDate;
+        }
+      }
+    },
+    finish: () => finishAging(byLoan, asOf),
+  };
+}
+
+export function buildAgingReport(
+  rows: ScheduleRowForAging[],
+  asOf: Date,
+): AgingReport {
+  const acc = createAgingAccumulator(asOf);
+  for (const r of rows) acc.add(r);
+  return acc.finish();
+}
+
+function finishAging(
+  byLoan: Map<
+    string,
+    {
+      loanId: string;
+      loanNumber: string;
+      customerName: string;
+      outstandingBalance: number;
+      earliestOverdue: Date | null;
+      installmentsOverdue: number;
+    }
+  >,
+  asOf: Date,
+): AgingReport {
   const out: AgingRow[] = [...byLoan.values()].map((acc) => {
     const daysOverdue = acc.earliestOverdue
       ? Math.max(

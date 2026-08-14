@@ -51,16 +51,31 @@ export class CollectionsService {
    * `actorId` is the authenticated caller, not a parameter the client
    * chooses — "mine" means the person asking. See queueScopeSchema.
    */
-  overdueQueue(args: { scope: QueueScope["scope"]; actorId: string }) {
+  overdueQueue(args: {
+    scope: QueueScope["scope"];
+    actorId: string;
+    province?: string;
+    city?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const area = { province: args.province, city: args.city };
+    const paging = { page: args.page, pageSize: args.pageSize };
     if (args.scope === "mine") {
-      return this.repo.overdueQueue(new Date(), {
-        collectorId: args.actorId,
-      });
+      return this.repo.overdueQueuePage(
+        new Date(),
+        { ...area, collectorId: args.actorId },
+        paging,
+      );
     }
     if (args.scope === "unassigned") {
-      return this.repo.overdueQueue(new Date(), { unassignedOnly: true });
+      return this.repo.overdueQueuePage(
+        new Date(),
+        { ...area, unassignedOnly: true },
+        paging,
+      );
     }
-    return this.repo.overdueQueue();
+    return this.repo.overdueQueuePage(new Date(), area, paging);
   }
 
   // ─── account ownership ────────────────────────────────────────────

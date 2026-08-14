@@ -72,6 +72,30 @@ export type BulkAssignInput = z.infer<typeof bulkAssignSchema>;
  */
 export const queueScopeSchema = z.object({
   scope: z.enum(["all", "mine", "unassigned"]).default("all"),
+  /**
+   * Borrower area, matched case-insensitively and exactly.
+   *
+   * Server-side since the queue became paginated. It used to be a
+   * client-side filter over the whole worklist, which was correct only
+   * because the endpoint returned all of it; filtering one page is not
+   * filtering the book, and a collector narrowing to a province would
+   * have silently seen only the accounts from that province that
+   * happened to land on the current page.
+   */
+  province: z.string().max(120).optional(),
+  city: z.string().max(120).optional(),
+  /*
+   * Declared, or Fastify's AJV strips them.
+   *
+   * `routeSchema` compiles the querystring with `additionalProperties:
+   * false` and `removeAdditional`, so a parameter that is not named here
+   * is deleted from `req.query` before the handler runs — no error, the
+   * page just silently reverts to the first one. Left loosely bounded on
+   * purpose, as on the other list endpoints: the repository clamps, so a
+   * stale `?page=0` bookmark lands on page 1 rather than on a 400.
+   */
+  page: z.coerce.number().optional(),
+  pageSize: z.coerce.number().optional(),
 });
 export type QueueScope = z.infer<typeof queueScopeSchema>;
 
@@ -160,7 +184,42 @@ export const queueRowResponseSchema = z.object({
   priority: prioritySchema,
 });
 
-export const queueResponseSchema = z.array(queueRowResponseSchema);
+/**
+ * The queue, one page at a time.
+ *
+ * Was a bare array. It is now the house offset envelope
+ * (`libs/db/src/lib/pagination.ts`) plus `areas`, because the endpoint
+ * returned the entire delinquent book on every request — finding F4 in
+ * docs/modernization/query-performance.md.
+ *
+ * `rows` is a window onto the queue's GLOBAL ranking, not a re-ranked
+ * subset: every eligible account is still scored and ordered against
+ * every other one before the window is cut. Row 1 of page 1 is the same
+ * account it was before this change. See `overdueQueuePage` for why the
+ * ordering cannot be pushed into SQL, and what it would take to do it.
+ *
+ * `total` is the size of the whole filtered queue, so a UI can say
+ * "50 of 812" rather than mistaking a page for the book.
+ */
+export const queueResponseSchema = z.object({
+  rows: z.array(queueRowResponseSchema),
+  /** Accounts matching the filter across all pages — not rows.length. */
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  /** At least 1 even when nothing matched. */
+  totalPages: z.number().int(),
+  /**
+   * Distinct areas across the caller's whole scope, for the filter
+   * control. Derived from the unfiltered scope rather than the current
+   * page or the current filter, so the dropdown neither hides the rest
+   * of a collector's book nor collapses to the value already chosen.
+   */
+  areas: z.object({
+    provinces: z.array(z.string()),
+    cities: z.array(z.string()),
+  }),
+});
 
 /** Users who can hold accounts — the assign picker. */
 export const collectorListResponseSchema = z.array(

@@ -12,6 +12,7 @@ import {
   accountResponseSchema,
   accountSchema,
   accrueResponseSchema,
+  agingQuerySchema,
   asOfQuerySchema,
   balanceSheetResponseSchema,
   entrySchema,
@@ -434,14 +435,18 @@ export async function accountingRoutes(app: FastifyInstance) {
       req.accountingCtx!.accounting.balanceSheet(parseAsOf(req.query.asOf)),
   );
 
-  app.get<{ Querystring: { asOf?: string } }>(
+  app.get<{
+    Querystring: { asOf?: string; page?: number; pageSize?: number };
+  }>(
     "/reports/loan-portfolio",
     {
       ...read,
       schema: routeSchema({
-        summary: "Loan aging, per loan and totalled by band.",
+        summary:
+          "Loan aging: a page of per-loan rows, over band totals that " +
+          "always cover the whole book.",
         tags: TAGS,
-        querystring: asOfQuerySchema,
+        querystring: agingQuerySchema,
         response: loanPortfolioAgingResponseSchema,
         errors: [...dateReadErrors],
       }),
@@ -449,6 +454,7 @@ export async function accountingRoutes(app: FastifyInstance) {
     async (req) =>
       req.accountingCtx!.accounting.loanPortfolioAging(
         parseAsOf(req.query.asOf),
+        { page: req.query.page, pageSize: req.query.pageSize },
       ),
   );
 
