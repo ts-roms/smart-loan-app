@@ -28,7 +28,34 @@ declare module "fastify" {
 }
 
 export async function eclRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * onRequest, not preHandler.
+   *
+   * Fastify's order is onRequest -> parsing -> preValidation ->
+   * preHandler. Neither route here carries a request schema (see the
+   * note on POST /runs below), which is why this hook was left at
+   * preHandler when every other group moved — the reasoning being that
+   * with nothing to validate there was nothing to leak.
+   *
+   * That reasoning was half right and the missing half is the BODY
+   * PARSER, which also runs ahead of preHandler. Measured before the
+   * fix, with no Authorization header:
+   *
+   *   POST /ecl/runs  Content-Type: application/json  body: {"junk":[[[}
+   *   -> 400 {"error":"Bad Request"}
+   *
+   * An anonymous caller got the JSON parser's verdict on their body
+   * instead of a 401. It leaks less than a schema does — it says the
+   * body was unparseable, not what a good one looks like — but it is
+   * the same inversion, and a route in this group gaining a `body`
+   * schema later would turn it into the full version. onRequest is
+   * ahead of parsing, so the 401 wins in both cases.
+   *
+   * `jwtVerify` reads the Authorization header only, so it is safe this
+   * early. `resolveTenant` and `requireFeature` need `req.user` and
+   * `req.tenantCtx` respectively and stay at preHandler, in order.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   // ECL provisioning is an ENTERPRISE-tier feature. The gate reads the
   // caller's license via req.tenantCtx, so resolveTenant must run first.
@@ -72,10 +99,13 @@ export async function eclRoutes(app: FastifyInstance) {
    * effect of documenting it. The response is described; the request
    * stays open because the handler genuinely accepts nothing.
    *
-   * With no request schema on either route in this group there is also
-   * nothing for Fastify to validate ahead of `preHandler`, which is why
-   * `app.authenticate` can stay where it is above while every group
-   * that DID gain a request schema had to move to `onRequest`.
+   * There is therefore no request schema on either route in this group.
+   * That once read as a reason `app.authenticate` could stay at
+   * preHandler here while every group that DID gain a request schema
+   * moved to `onRequest` — but a schema is not the only thing that runs
+   * ahead of preHandler. The body parser does too, and it was answering
+   * anonymous callers 400 on unparseable JSON; the hook has moved. See
+   * the note above it.
    */
   app.post(
     "/runs",

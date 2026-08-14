@@ -180,6 +180,29 @@ export async function authRoutes(app: FastifyInstance) {
           "signing out has to work for someone whose access token has " +
           "already expired, which is the common case. The refresh token " +
           "being revoked travels in the body.",
+        /*
+         * The 401 is real, and it does NOT come from the handler —
+         * `AuthController.logout` answers 204 unconditionally, on
+         * purpose, so the route cannot be used as an oracle.
+         *
+         * It comes from `resolveTenantFromBody` in `publicPre`, which
+         * refuses a missing or unknown `tenantSlug` with 401 before the
+         * handler runs. That resolver short-circuits when
+         * `config.multiTenant` is false, so on a single-tenant
+         * deployment — the default — this route really does only ever
+         * answer 204, and probing one is what makes the declaration
+         * look false. It was reported as exactly that. Verified on
+         * MULTI_TENANT=true:
+         *
+         *   POST /auth/logout  {"refreshToken":"whatever"}
+         *   -> 401 {"error":"Unauthorized",
+         *           "message":"Invalid email or password"}
+         *
+         * Every route in this group declares 401 for this reason, and
+         * two of them — `/forgot-password` (always 202) and this one —
+         * have no other source for it. Dropping it here would make the
+         * spec wrong for every multi-tenant deployment.
+         */
         errors: [401],
       }),
     },

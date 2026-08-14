@@ -73,7 +73,20 @@ function buildDocsCtx() {
 }
 
 export async function documentRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * onRequest, not preHandler — see the note in reports.routes.ts for
+   * the measured version of what this prevents.
+   *
+   * Nothing in this file carries a request schema and every route is a
+   * GET, so unlike `reports` (a live 400 on an anonymous request) and
+   * `ecl` (the body parser answering one), there is no way to trip the
+   * inversion here today. This is alignment rather than a fix: the six
+   * routes below stream a borrower's signed agreement — which prints
+   * the government ID block — and the stage at which they decide
+   * whether the caller is anyone should not be the one thing about
+   * them that depends on no route ever gaining a `params` schema.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", buildDocsCtx());
 
@@ -105,7 +118,8 @@ export async function documentRoutes(app: FastifyInstance) {
  * sure the user can only download their own.
  */
 export async function portalDocumentRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  // onRequest for the same reason as the officer surface above.
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", buildDocsCtx());
 
