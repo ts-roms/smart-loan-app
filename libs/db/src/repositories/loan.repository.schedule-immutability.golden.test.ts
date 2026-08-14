@@ -255,7 +255,29 @@ function harness(opts: HarnessOptions = {}) {
       }) => {
         state.writes.push({ op: "update", rowId: where.id, data });
         const row = state.rows.find((r) => r.id === where.id);
-        if (row) Object.assign(row, data);
+        /*
+         * The recorded write keeps `data` exactly as the repository sent
+         * it — these tests are about WHICH columns get touched, and that
+         * must stay verbatim. The stored row, though, models a
+         * `Decimal(14, 2)` column, so the money values are coerced back to
+         * the numbers this fixture represents them with.
+         *
+         * `recordPayment` writes the progress columns as exact decimal text
+         * ("1000.00") rather than a JS float — §11, keeping money off the
+         * double on its way into a Decimal column. Postgres cannot tell the
+         * two apart; only a stub that assigns whatever it is handed can.
+         */
+        if (row) {
+          Object.assign(
+            row,
+            Object.fromEntries(
+              Object.entries(data).map(([k, v]) => [
+                k,
+                k === "interestPaid" || k === "principalPaid" ? Number(v) : v,
+              ]),
+            ),
+          );
+        }
         return Promise.resolve({ ...row });
       },
       findMany: ({ where }: { where?: { paidInFullAt?: null } } = {}) => {
