@@ -6,41 +6,52 @@ import { ReportsService } from "./reports.service";
 /**
  * GOLDEN TESTS — the ECL movement report (`ReportsService`, "ecl-movement").
  *
- * Written against the implementation as it stands and committed passing
- * BEFORE any change, per §81. They pin what the report produces today,
- * including the two ways it can report a movement the general ledger
- * never booked.
+ * Committed passing against the UNMODIFIED report first, per §81, then
+ * updated by the fix. Five assertions changed and every one of them had
+ * pinned a defect; each carries a note saying what it used to say.
  *
- * ── What the current implementation does, exactly ──────────────────────
+ * ── What the implementation did BEFORE ─────────────────────────────────
  *
- *  1. Reads EVERY `EclRun` row whose `asOf` falls in [from, to],
- *     ordered by `asOf` ascending. No filter on whether the run posted.
- *  2. Derives `delta` by walking that sequence and subtracting the
+ *  1. Read EVERY `EclRun` row whose `asOf` falls in [from, to], ordered
+ *     by `asOf` ascending. No filter on whether the run posted.
+ *  2. Derived `delta` by walking that sequence and subtracting the
  *     previous ROW's `totalEcl`, seeded at **0**.
- *  3. Emits `journalEntryId` straight off the row — which, since the
+ *  3. Emitted `journalEntryId` straight off the row — which, since the
  *     double-post fix, is written only by the run that actually posted
  *     and is null on every re-run.
- *  4. Never reads the journal. Nothing in the report is sourced from the
- *     ledger, so nothing in it can be reconciled to the ledger.
+ *  4. Never read the journal, so nothing in the report could be
+ *     reconciled to what was actually booked.
  *
- * ── Defect 1: a re-run invents a movement that was never journalised ───
+ * ── Defect 1: a re-run invented a movement never journalised ───────────
  *
  * A second run over an already-posted period recomputes and re-stages,
  * and books nothing — `ALREADY_POSTED`. But it still writes an `EclRun`
- * row, and step 2 subtracts it from its predecessor, so the report grows
+ * row, and step 2 subtracted it from its predecessor, so the report grew
  * a delta row for a movement the ledger does not contain. In the fixture
- * below that is the −100.00 on the June re-run.
+ * below that was the −100.00 on the June re-run.
  *
- * ── Defect 2: the first row in the window reports its whole level ──────
+ * ── Defect 2: the first row in the window reported its whole level ─────
  *
- * `previousTotalEcl` is seeded at 0 rather than at the closing provision
- * of the period BEFORE the window, so the earliest row in any range
- * reports its entire provision as a movement. The fixture's May run
- * (700.00) sits outside the window, so June's first row claims a 780.00
- * movement against a ledger that booked 80.00.
+ * `previousTotalEcl` was seeded at 0 rather than at the closing
+ * provision of the period BEFORE the window, so the earliest row in any
+ * range reported its entire provision as a movement. The fixture's May
+ * run (700.00) sits outside the window, so June's first row claimed a
+ * 780.00 movement against a ledger that booked 80.00 — and the same
+ * period moved by a different amount depending on the range requested.
  *
- * Both are the same failure: the report and the general ledger disagree,
- * and the report is what management reads.
+ * Both are the same failure: the report and the general ledger
+ * disagreed, and the report is what management reads.
+ *
+ * ── What it does now ───────────────────────────────────────────────────
+ *
+ * Every run is still a row — dropping the unposted ones would make the
+ * report agree with the ledger by hiding the disagreement, and the stage
+ * splits live only on the run. Each row now carries `computedDelta`
+ * (against the previous PERIOD's close, looked up outside the window
+ * when needed), `bookedDelta` (read from the journal), `unbookedDelta`
+ * (the gap), and `postedByThisRun`. `delta` is gone rather than
+ * redefined. Summing `bookedDelta` over `postedByThisRun` rows gives the
+ * ledger's own movement for the window.
  *
  * ── Fixture ────────────────────────────────────────────────────────────
  *
@@ -207,57 +218,91 @@ function ledgerMovementFor(entries: FakeEntry[], periodRef: string): number {
     .toFixed(2);
 }
 
+/**
+ * Enough of Prisma to drive the real `ReportsService`. Both `eclRun`
+ * reads go through one `findMany`, discriminated the way Prisma would:
+ * the window read filters on `asOf`, the baseline read on `periodEnd`.
+ */
 function fakeDb(runs: FakeRun[], entries: FakeEntry[]) {
-  return {
+  const queries: string[] = [];
+  const client = {
     eclRun: {
-      findMany: ({ where }: { where: { asOf: { gte: Date; lte: Date } } }) => {
-        const { gte, lte } = where.asOf;
+      findMany: ({
+        where,
+        take,
+      }: {
+        where: { asOf?: { gte: Date; lte: Date }; periodEnd?: { lt: Date } };
+        take?: number;
+      }) => {
+        if (where.asOf) {
+          queries.push("window");
+          const { gte, lte } = where.asOf;
+          return Promise.resolve(
+            runs
+              .filter((r) => r.asOf >= gte && r.asOf <= lte)
+              .sort((a, b) => a.asOf.getTime() - b.asOf.getTime()),
+          );
+        }
+        queries.push("history");
+        const cutoff = where.periodEnd!.lt.getTime();
         return Promise.resolve(
           runs
-            .filter((r) => r.asOf >= gte && r.asOf <= lte)
-            .sort((a, b) => a.asOf.getTime() - b.asOf.getTime()),
+            .filter((r) => r.periodEnd.getTime() < cutoff)
+            .sort(
+              (a, b) =>
+                b.periodEnd.getTime() - a.periodEnd.getTime() ||
+                b.asOf.getTime() - a.asOf.getTime(),
+            )
+            .slice(0, take ?? runs.length),
         );
-      },
-      findFirst: ({
-        where,
-        orderBy,
-      }: {
-        where: { periodEnd: { lt: Date } };
-        orderBy?: unknown;
-      }) => {
-        void orderBy;
-        const prior = runs
-          .filter((r) => r.periodEnd.getTime() < where.periodEnd.lt.getTime())
-          .sort(
-            (a, b) =>
-              b.periodEnd.getTime() - a.periodEnd.getTime() ||
-              b.asOf.getTime() - a.asOf.getTime(),
-          );
-        return Promise.resolve(prior[0] ?? null);
       },
     },
     journalEntry: {
       findMany: ({
         where,
       }: {
-        where: { source: string; sourceRefId: { in: string[] } };
-      }) =>
-        Promise.resolve(
-          entries.filter(
-            (e) =>
-              e.source === where.source &&
-              where.sourceRefId.in.includes(e.sourceRefId ?? ""),
-          ),
-        ),
+        where: {
+          source: string;
+          sourceRefType: string;
+          sourceRefId: { in: string[] };
+        };
+      }) => {
+        queries.push("ledger");
+        return Promise.resolve(
+          entries
+            .filter(
+              (e) =>
+                e.source === where.source &&
+                e.sourceRefType === where.sourceRefType &&
+                where.sourceRefId.in.includes(e.sourceRefId ?? ""),
+            )
+            // Reshaped to the `select` the service asks for.
+            .map((e) => ({
+              id: e.id,
+              sourceRefId: e.sourceRefId,
+              reversedById: e.reversedById,
+              lines: e.lines.map((l) => ({
+                debit: l.debit,
+                credit: l.credit,
+                account: { code: l.code },
+              })),
+            })),
+        );
+      },
     },
-  } as unknown as PrismaClient;
+  };
+  return { prisma: client as unknown as PrismaClient, queries };
 }
 
 function service(runs: FakeRun[], entries: FakeEntry[]) {
-  return new ReportsService(
-    fakeDb(runs, entries),
-    undefined as unknown as ConstructorParameters<typeof ReportsService>[1],
-    undefined as unknown as ConstructorParameters<typeof ReportsService>[2],
+  const db = fakeDb(runs, entries);
+  return Object.assign(
+    new ReportsService(
+      db.prisma,
+      undefined as unknown as ConstructorParameters<typeof ReportsService>[1],
+      undefined as unknown as ConstructorParameters<typeof ReportsService>[2],
+    ),
+    { queries: db.queries },
   );
 }
 
@@ -316,17 +361,19 @@ describe("ecl-movement report — shape", () => {
 
 // ─── The defects ────────────────────────────────────────────────────────
 
-describe("ecl-movement report — deltas the ledger never booked", () => {
+describe("ecl-movement report — the report now ties to the ledger", () => {
   /**
-   * DEFECT 1. The June re-run booked nothing — it is the
-   * `ALREADY_POSTED` path, and that is why its `journalEntryId` is null.
-   * The report still gives it a movement row.
+   * DEFECT 1, closed. The June re-run booked nothing — it is the
+   * `ALREADY_POSTED` path, and that is why its `EclRun.journalEntryId`
+   * is null.
    *
-   * This assertion is expected to change. It pins a defect: a −100.00
-   * movement appears in a management report against a ledger that has
-   * no such entry.
+   * The row used to assert `delta === -100`: a movement in a management
+   * report against a ledger with no such entry. It now reports the
+   * −100.00 as UNBOOKED, which is the honest statement of the same
+   * fact — the recomputation says June should close at 680.00, the
+   * books carry 780.00, and 100.00 of release has not been journalised.
    */
-  it("reports a −100.00 movement for a re-run that booked nothing", async () => {
+  it("shows a re-run's movement as unbooked rather than as a movement", async () => {
     const { runs, entries } = fixture();
     const bundle = await service(runs, entries).generate(
       "ecl-movement",
@@ -335,24 +382,30 @@ describe("ecl-movement report — deltas the ledger never booked", () => {
 
     const reRun = bundle.rows[1]!;
     expect(reRun.runId).toBe("run-jun-2");
-    expect(reRun.delta).toBe(-100);
-    // …and it plainly did not post: no journal link on the row.
-    expect(reRun.journalEntryId).toBeNull();
+    // Against May's 700.00 close, this computation implies −20.00…
+    expect(reRun.computedDelta).toBe(-20);
+    // …the ledger booked +80.00 for June…
+    expect(reRun.bookedDelta).toBe(80);
+    // …so 100.00 of release is not in the books.
+    expect(reRun.unbookedDelta).toBe(-100);
 
-    // The ledger booked +80.00 for June, once. Nothing booked −100.00.
-    expect(ledgerMovementFor(entries, "2026-06-01:2026-06-30")).toBe(80);
+    // It did not post, and says so — but still points at June's entry.
+    expect(reRun.postedByThisRun).toBe(false);
+    expect(reRun.journalEntryId).toBe("je-1");
+
+    // Agrees with the journal, computed independently of the service.
+    expect(reRun.bookedDelta).toBe(
+      ledgerMovementFor(entries, "2026-06-01:2026-06-30"),
+    );
   });
 
   /**
-   * DEFECT 2. `previousTotalEcl` starts at 0, so the earliest row in the
-   * range reports its whole closing provision as a movement — here
-   * 780.00 against a ledger that booked 80.00, because the 700.00 it
-   * built on was booked in May, outside the window.
-   *
-   * Also expected to change: the movement of a period does not depend
-   * on which report range you asked for.
+   * DEFECT 2, closed. The baseline is the closing provision of the
+   * previous PERIOD, fetched from outside the report window when it has
+   * to be, instead of a zero seed. June's first row moved 80.00 from
+   * May's 700.00 — which is what the ledger booked.
    */
-  it("reports the first row's entire provision as its movement", async () => {
+  it("baselines the first row on the period before the window", async () => {
     const { runs, entries } = fixture();
     const bundle = await service(runs, entries).generate(
       "ecl-movement",
@@ -361,13 +414,14 @@ describe("ecl-movement report — deltas the ledger never booked", () => {
 
     const june = bundle.rows[0]!;
     expect(june.totalEcl).toBe(780);
-    expect(june.delta).toBe(780);
-
-    // The ledger booked 80.00 for June — the movement from May's 700.00.
-    expect(ledgerMovementFor(entries, "2026-06-01:2026-06-30")).toBe(80);
+    expect(june.computedDelta).toBe(80); // was 780 — the whole provision
+    expect(june.bookedDelta).toBe(80);
+    expect(june.unbookedDelta).toBe(0);
+    expect(june.postedByThisRun).toBe(true);
+    expect(june.journalEntryId).toBe("je-1");
   });
 
-  it("is range-dependent: the same run reports a different movement", async () => {
+  it("is range-independent: a period moves by the same amount either way", async () => {
     const { runs, entries } = fixture();
 
     const wide = await service(runs, entries).generate("ecl-movement", {
@@ -379,55 +433,76 @@ describe("ecl-movement report — deltas the ledger never booked", () => {
       WINDOW,
     );
 
-    // With May in range, June's first row moves 80.00. Without it, 780.00.
-    expect(wide.rows.find((r) => r.runId === "run-jun-1")!.delta).toBe(80);
-    expect(narrow.rows.find((r) => r.runId === "run-jun-1")!.delta).toBe(780);
+    // Was 80.00 with May in range and 780.00 without it.
+    const inWide = wide.rows.find((r) => r.runId === "run-jun-1")!;
+    const inNarrow = narrow.rows.find((r) => r.runId === "run-jun-1")!;
+    expect(inWide.computedDelta).toBe(80);
+    expect(inNarrow.computedDelta).toBe(80);
+    expect(inWide.bookedDelta).toBe(inNarrow.bookedDelta);
   });
 
   /**
-   * The headline. Summing the report's movement column over the window
-   * gives a number that is nowhere in the general ledger, and is wrong
-   * by 600.00 — larger than the movement itself.
+   * The headline, inverted. The booked column now sums to exactly what
+   * the general ledger moved over the window — and the rows that did
+   * not post are excluded from that sum by `postedByThisRun`, so a
+   * period that was run twice cannot be counted twice.
+   *
+   * The old `delta` column summed to 580.00 against a ledger that moved
+   * −20.00.
    */
-  it("sums to 580.00 over a window in which the ledger moved −20.00", async () => {
+  it("sums to the ledger's own movement over the window", async () => {
     const { runs, entries } = fixture();
     const bundle = await service(runs, entries).generate(
       "ecl-movement",
       WINDOW,
     );
 
-    const reported = bundle.rows.reduce(
-      (sum, r) => sum + (r.delta as number),
-      0,
-    );
-    expect(reported).toBe(580);
+    const booked = bundle.rows
+      .filter((r) => r.postedByThisRun)
+      .reduce((sum, r) => sum + (r.bookedDelta as number), 0);
 
-    const booked =
+    const inLedger =
       ledgerMovementFor(entries, "2026-06-01:2026-06-30") +
       ledgerMovementFor(entries, "2026-07-01:2026-07-31");
-    expect(booked).toBe(-20);
 
-    expect(reported).not.toBe(booked);
+    expect(booked).toBe(-20);
+    expect(booked).toBe(inLedger);
   });
 
-  it("carries no column sourced from the ledger at all", async () => {
+  it("July's movement is measured against June's latest recomputation", async () => {
     const { runs, entries } = fixture();
     const bundle = await service(runs, entries).generate(
       "ecl-movement",
       WINDOW,
     );
 
-    /*
-     * `journalEntryId` is an EclRun COLUMN, not a ledger read — the
-     * report never opens the journal, so there is nothing in it that
-     * could be reconciled against what was actually booked.
-     */
+    const july = bundle.rows[2]!;
+    expect(july.runId).toBe("run-jul");
+    // 580.00 against June's closing 680.00 — the re-run, not the 780.00
+    // first cut, because a period closes at what it was last computed to.
+    expect(july.computedDelta).toBe(-100);
+    expect(july.bookedDelta).toBe(-100);
+    expect(july.unbookedDelta).toBe(0);
+    expect(july.journalEntryId).toBe("je-2");
+  });
+
+  it("carries the ledger columns the reconciliation needs", async () => {
+    const { runs, entries } = fixture();
+    const bundle = await service(runs, entries).generate(
+      "ecl-movement",
+      WINDOW,
+    );
+
+    // `delta` is gone rather than redefined — it was neither the
+    // computed movement nor the booked one.
     expect(Object.keys(bundle.rows[0]!).sort()).toEqual([
       "asOf",
-      "delta",
+      "bookedDelta",
+      "computedDelta",
       "journalEntryId",
       "periodEnd",
       "periodStart",
+      "postedByThisRun",
       "runId",
       "stage1Count",
       "stage1Ecl",
@@ -437,6 +512,60 @@ describe("ecl-movement report — deltas the ledger never booked", () => {
       "stage3Ecl",
       "totalEad",
       "totalEcl",
+      "unbookedDelta",
     ]);
+  });
+});
+
+// ─── A reversed period ──────────────────────────────────────────────────
+
+describe("ecl-movement report — a period whose entry was reversed", () => {
+  /**
+   * §12 says posted history is corrected by reversal. A reversed entry
+   * booked nothing on net, so the period's whole movement is unbooked
+   * until something is posted in its place — and the report has to say
+   * so rather than keep crediting the reversed figure.
+   */
+  it("reports the whole movement as unbooked once the entry is reversed", async () => {
+    const { runs, entries } = fixture();
+    entries.find((e) => e.id === "je-1")!.reversedById = "je-rev";
+
+    const bundle = await service(runs, entries).generate(
+      "ecl-movement",
+      WINDOW,
+    );
+
+    const june = bundle.rows[0]!;
+    expect(june.computedDelta).toBe(80);
+    expect(june.bookedDelta).toBe(0);
+    expect(june.unbookedDelta).toBe(80);
+    // The entry is still named — a reader needs to find the reversal.
+    expect(june.journalEntryId).toBe("je-1");
+  });
+});
+
+// ─── Empty window ───────────────────────────────────────────────────────
+
+describe("ecl-movement report — no runs in the window", () => {
+  it("returns no rows, and does not go looking for a baseline", async () => {
+    const { runs, entries } = fixture();
+    const svc = service(runs, entries);
+    const bundle = await svc.generate("ecl-movement", {
+      from: utc("2026-01-01"),
+      to: utc("2026-01-31T23:59:59.999Z"),
+    });
+
+    expect(bundle.rows).toEqual([]);
+    // Neither the history nor the ledger is queried for an empty window.
+    expect(svc.queries).toEqual(["window"]);
+  });
+
+  it("reads the history and the ledger once each for a populated window", async () => {
+    const { runs, entries } = fixture();
+    const svc = service(runs, entries);
+    await svc.generate("ecl-movement", WINDOW);
+
+    // Three rows, three queries — not one per row.
+    expect(svc.queries).toEqual(["window", "history", "ledger"]);
   });
 });

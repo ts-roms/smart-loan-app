@@ -1,4 +1,5 @@
 import { eclPeriodRef } from "@loan/accounting";
+import { todayLocalISO } from "@loan/shared-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EclService } from "./ecl.service";
@@ -6,11 +7,14 @@ import { EclService } from "./ecl.service";
 /**
  * GOLDEN TESTS — ECL period defaulting (`EclService.run`).
  *
- * Written against the implementation as it stands and committed passing
- * BEFORE any change, per §81. These pin what the CURRENT defaulting
- * produces, including the two things about it that are wrong.
+ * Committed passing against the UNMODIFIED service first, per §81, then
+ * updated by the fix. Six assertions changed and every one of them had
+ * pinned a defect; each carries a CHANGED note saying what it used to
+ * say and why that was wrong. The figures are pinned in
+ * libs/db/src/repositories/ecl.repository.golden.test.ts and none of
+ * them moved — see `passes asOf EXPLICITLY` for the reason.
  *
- * ── What the current implementation does, exactly ──────────────────────
+ * ── What the implementation did BEFORE ─────────────────────────────────
  *
  * With neither `periodStart` nor `periodEnd` supplied (the only way the
  * UI ever calls it — `POST /ecl/runs` has no body schema and the page
@@ -20,7 +24,7 @@ import { EclService } from "./ecl.service";
  *                 hours/minutes/seconds and all.
  *   periodStart = `new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 1)`
  *                 — LOCAL midnight on the first of the LOCAL month.
- *   asOf        = not passed at all, so `EclRepository.run` defaults it
+ *   asOf        = not passed at all, so `EclRepository.run` defaulted it
  *                 to `periodEnd`, i.e. the same instant.
  *
  * `asOf` is what feeds DPD → staging → the ECL figures. `periodStart`
@@ -28,36 +32,40 @@ import { EclService } from "./ecl.service";
  * entry's idempotency key and is stringified with
  * `toISOString().slice(0, 10)` — a **UTC** calendar date.
  *
- * ── Defect 1: the key is derived from an instant, not a date ───────────
+ * ── Defect 1: the key was derived from an instant, not a date ──────────
  *
- * Because `periodEnd` is an instant and the key takes its UTC date, two
- * runs on the same LOCAL day land on different keys as soon as they fall
- * either side of UTC midnight. `postIfAbsent` then has nothing to
- * collide with and the movement is booked a second time — the exact
+ * Because `periodEnd` was an instant and the key takes its UTC date, two
+ * runs on the same LOCAL day landed on different keys as soon as they
+ * fell either side of UTC midnight. `postIfAbsent` then had nothing to
+ * collide with and the movement booked a second time — the exact
  * double-post that keying on the period was meant to close.
  *
- * In Manila (UTC+8) UTC midnight is 08:00 local, so every local day is
- * split in two: a run at 07:00 keys to yesterday's date, a run at 09:00
- * keys to today's. That is most of a working day, not an edge case.
+ * In Manila (UTC+8) UTC midnight is 08:00 local, so every local day was
+ * split in two: a run at 07:00 keyed to yesterday's date, a run at 09:00
+ * to today's. That is most of a working day, not an edge case.
  *
- * `same-local-day instants straddling UTC midnight derive DIFFERENT
- * keys` below pins this. It is the assertion that pins the defect, and
- * it is the one expected to flip.
+ * `same-local-day instants straddling UTC midnight …` below is the
+ * assertion that pinned it, and the one that flipped.
  *
- * ── Defect 2: the default periodStart renders as the WRONG MONTH ───────
+ * ── Defect 2: the default periodStart rendered as the WRONG MONTH ──────
  *
  * `new Date(y, m, 1)` is local midnight. Rendered back out as a UTC
  * date by `eclPeriodRef`, a host east of UTC gives the last day of the
  * PREVIOUS month: in Manila `new Date(2026, 7, 1)` is
- * `2026-07-31T16:00:00Z`, so the stored key and the entry memo both say
+ * `2026-07-31T16:00:00Z`, so the stored key and the entry memo both said
  * "2026-07-31" for a run the operator asked for on 1 August. The key is
- * immutable stored data, and it is not even stable across deployments —
- * the same request keys differently on a UTC host and a Manila one.
+ * immutable stored data, and it was not even stable across deployments —
+ * the same request keyed differently on a UTC host and a Manila one.
+ * The explicit-window path had the same bug and is fixed with it.
  *
- * These tests state that in a host-timezone-independent way: they pin
- * the local-midnight CONSTRUCTION (`getTime()` against locally-built
- * dates) rather than a rendered string that would only be wrong in some
- * timezones.
+ * ── How these stay host-timezone-independent ───────────────────────────
+ *
+ * The suite must mean the same thing wherever it runs, so nothing here
+ * hard-codes Manila. Expectations are built from `todayLocalISO` and
+ * from the host's own UTC offset; the straddling-instants pair is
+ * derived at runtime and skipped on a UTC host, where local and UTC
+ * midnight coincide and the defect could never have shown. This host
+ * runs at UTC+8, so that pair resolves to 07:00 and 09:00 local.
  *
  * ── What is deliberately NOT asserted here ─────────────────────────────
  *
@@ -160,41 +168,7 @@ afterEach(() => {
 // ─── The default window ─────────────────────────────────────────────────
 
 describe("EclService.run — the default period window", () => {
-  it("defaults periodEnd to the INSTANT of the request, not a date", async () => {
-    const now = new Date("2026-08-15T09:41:37.482Z");
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    const { service, calls } = harness();
-    await service.run({ input: {}, actorId: "user-1" });
-
-    // Not truncated to a day in any timezone — the full instant.
-    expect(calls[0]!.periodEnd.getTime()).toBe(now.getTime());
-    expect(calls[0]!.periodEnd.getUTCHours()).toBe(9);
-    expect(calls[0]!.periodEnd.getUTCMinutes()).toBe(41);
-    expect(calls[0]!.periodEnd.getUTCSeconds()).toBe(37);
-    expect(calls[0]!.periodEnd.getUTCMilliseconds()).toBe(482);
-  });
-
-  it("defaults periodStart to LOCAL midnight on the first of the LOCAL month", async () => {
-    const now = new Date("2026-08-15T09:41:37.482Z");
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    const { service, calls } = harness();
-    await service.run({ input: {}, actorId: "user-1" });
-
-    const expected = new Date(now.getFullYear(), now.getMonth(), 1);
-    expect(calls[0]!.periodStart.getTime()).toBe(expected.getTime());
-    // Local midnight — stated as local components so this holds anywhere.
-    expect(calls[0]!.periodStart.getHours()).toBe(0);
-    expect(calls[0]!.periodStart.getMinutes()).toBe(0);
-    expect(calls[0]!.periodStart.getSeconds()).toBe(0);
-    expect(calls[0]!.periodStart.getMilliseconds()).toBe(0);
-    expect(calls[0]!.periodStart.getDate()).toBe(1);
-  });
-
-  it("passes NO asOf, so the repository derives it from periodEnd", async () => {
+  it("defaults periodEnd to UTC midnight on the LOCAL calendar date", async () => {
     const now = new Date("2026-08-15T09:41:37.482Z");
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -203,11 +177,70 @@ describe("EclService.run — the default period window", () => {
     await service.run({ input: {}, actorId: "user-1" });
 
     /*
-     * The figures hang off `asOf`. Today the service never sets it, and
-     * `EclRepository.run` falls back to `asOf = periodEnd` — so the
-     * as-of moment is the request instant. Any change that moves this
-     * moves DPD, staging and every ECL number with it.
+     * CHANGED. This used to be the request INSTANT, hours and all —
+     * which is what let the key move at UTC midnight. It is now a
+     * calendar date, and the date is the LOCAL one, so the whole of an
+     * operator's working day maps to one window.
      */
+    expect(calls[0]!.periodEnd.toISOString()).toBe(
+      `${todayLocalISO(now)}T00:00:00.000Z`,
+    );
+    expect(calls[0]!.periodEnd.getUTCHours()).toBe(0);
+    expect(calls[0]!.periodEnd.getUTCMinutes()).toBe(0);
+    expect(calls[0]!.periodEnd.getUTCSeconds()).toBe(0);
+    expect(calls[0]!.periodEnd.getUTCMilliseconds()).toBe(0);
+  });
+
+  it("defaults periodStart to the first of the LOCAL month, as UTC midnight", async () => {
+    const now = new Date("2026-08-15T09:41:37.482Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const { service, calls } = harness();
+    await service.run({ input: {}, actorId: "user-1" });
+
+    /*
+     * CHANGED. This used to be LOCAL midnight — `new Date(y, m, 1)` —
+     * which on a host east of UTC renders back out as the last day of
+     * the PREVIOUS month. Built as UTC midnight it round-trips through
+     * `eclPeriodRef` as the date it was built from, on any host.
+     */
+    expect(calls[0]!.periodStart.toISOString()).toBe(
+      `${todayLocalISO(now).slice(0, 8)}01T00:00:00.000Z`,
+    );
+    expect(calls[0]!.periodStart.getUTCDate()).toBe(1);
+  });
+
+  it("passes asOf EXPLICITLY, holding the instant periodEnd used to carry", async () => {
+    const now = new Date("2026-08-15T09:41:37.482Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const { service, calls } = harness();
+    await service.run({ input: {}, actorId: "user-1" });
+
+    /*
+     * CHANGED, and this is the assertion that shows no ECL figure moved.
+     * The figures hang off `asOf`. It used to be omitted, so
+     * `EclRepository.run` fell back to `asOf = periodEnd` = the request
+     * instant. Now that `periodEnd` is a date, that fallback would have
+     * silently re-measured every on-demand run as of local midnight —
+     * moving DPD, staging and every ECL number. Passing the instant
+     * explicitly keeps the as-of moment exactly where it was.
+     */
+    expect(calls[0]!.asOf).toBeInstanceOf(Date);
+    expect(calls[0]!.asOf!.getTime()).toBe(now.getTime());
+  });
+
+  it("leaves asOf to the repository when the window is explicit", async () => {
+    const { service, calls } = harness();
+    await service.run({
+      input: { periodEnd: "2026-06-30" },
+      actorId: "user-1",
+    });
+
+    // A period asked for by name is measured at its end, not today —
+    // the repository's own `asOf = periodEnd` fallback, unchanged.
     expect(calls[0]!.asOf).toBeUndefined();
   });
 
@@ -251,17 +284,24 @@ describe("EclService.run — explicitly supplied window", () => {
     expect(keyOf(calls[0]!)).toBe("2026-06-01:2026-06-30");
   });
 
-  it("derives periodStart from an explicit periodEnd's LOCAL month", async () => {
+  it("derives periodStart from an explicit periodEnd's own month, in UTC", async () => {
     const { service, calls } = harness();
     await service.run({
       input: { periodEnd: "2026-06-30T12:00:00.000Z" },
       actorId: "user-1",
     });
 
-    const end = new Date("2026-06-30T12:00:00.000Z");
-    expect(calls[0]!.periodStart.getTime()).toBe(
-      new Date(end.getFullYear(), end.getMonth(), 1).getTime(),
+    /*
+     * CHANGED. This used to be `new Date(end.getFullYear(), ...)` —
+     * local components on a UTC instant — so on a UTC+8 host a request
+     * for the period ending 2026-06-30 stored a start of
+     * `2026-05-31T16:00:00Z` and keyed itself "2026-05-31:2026-06-30".
+     * The month is now read in UTC, matching how the end arrived.
+     */
+    expect(calls[0]!.periodStart.toISOString()).toBe(
+      "2026-06-01T00:00:00.000Z",
     );
+    expect(keyOf(calls[0]!)).toBe("2026-06-01:2026-06-30");
   });
 });
 
@@ -269,16 +309,18 @@ describe("EclService.run — explicitly supplied window", () => {
 
 describe("EclService.run — the period key is derived from an instant", () => {
   /**
-   * THE DEFECT. Two runs an hour apart, on one local working day, key
-   * to two different periods — so the unique index on
-   * (source, sourceRefType, sourceRefId) has nothing to catch and the
-   * movement is booked twice.
+   * THE DEFECT, now closed — and this is the assertion that flipped.
    *
-   * This assertion is expected to FLIP. It pins a defect, not a
-   * requirement: what the system owes its operator is that re-running on
-   * the same business day is idempotent.
+   * It used to read "…derive DIFFERENT keys": two runs an hour apart on
+   * one local working day keyed to two different periods, so the unique
+   * index on (source, sourceRefType, sourceRefId) had nothing to catch
+   * and the movement booked twice. In Manila that split every local day
+   * at 08:00.
+   *
+   * The window is now the local calendar day, so both runs key the same
+   * period and the second collides — `ALREADY_POSTED`, one entry.
    */
-  it("gives same-local-day instants straddling UTC midnight DIFFERENT keys", async () => {
+  it("gives same-local-day instants straddling UTC midnight the SAME key", async () => {
     const pair = sameLocalDayStraddlingUtcMidnight();
     if (!pair) {
       // Host runs at UTC; local and UTC midnight coincide, so the defect
@@ -305,11 +347,20 @@ describe("EclService.run — the period key is derived from an instant", () => {
     vi.setSystemTime(after);
     await service.run({ input: {}, actorId: "user-1" });
 
-    // Two keys for one business day — nothing for postIfAbsent to catch.
-    expect(keyOf(calls[0]!)).not.toBe(keyOf(calls[1]!));
+    // One key for one business day — the second run now collides.
+    expect(keyOf(calls[0]!)).toBe(keyOf(calls[1]!));
+    // And it is the local date, not the UTC date of either instant.
+    expect(keyOf(calls[0]!).endsWith(todayLocalISO(before))).toBe(true);
+
+    /*
+     * The as-of moments still differ, and must: each run measured the
+     * book at the moment it ran. Only the WINDOW is shared.
+     */
+    expect(calls[0]!.asOf!.getTime()).toBe(before.getTime());
+    expect(calls[1]!.asOf!.getTime()).toBe(after.getTime());
   });
 
-  it("keys two instants on the same UTC date identically", async () => {
+  it("keys two instants on the same local date identically", async () => {
     const { service, calls } = harness();
 
     vi.useFakeTimers();
@@ -319,12 +370,10 @@ describe("EclService.run — the period key is derived from an instant", () => {
     vi.setSystemTime(new Date("2026-08-15T15:59:00.000Z"));
     await service.run({ input: {}, actorId: "user-1" });
 
-    // The guard works — but only for instants that share a UTC date.
     expect(keyOf(calls[0]!)).toBe(keyOf(calls[1]!));
-    expect(keyOf(calls[0]!).endsWith("2026-08-15")).toBe(true);
   });
 
-  it("ends the key on the UTC date of the instant, whatever the local date", async () => {
+  it("ends the key on the LOCAL date of the instant, not the UTC date", async () => {
     const now = new Date("2026-08-14T23:30:00.000Z");
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -333,10 +382,15 @@ describe("EclService.run — the period key is derived from an instant", () => {
     await service.run({ input: {}, actorId: "user-1" });
 
     /*
-     * 23:30Z on the 14th is 07:30 on the 15th in Manila. The key says
-     * the 14th: the operator's Saturday morning run is filed under
-     * Friday, and their 09:00 run will be filed under Saturday.
+     * CHANGED. 23:30Z on the 14th is 07:30 on the 15th in Manila. The
+     * key used to say the 14th, so an operator's early-morning run was
+     * filed under yesterday and their 09:00 run under today — two
+     * windows, two postings. It now says whatever local date the
+     * operator is actually standing in.
      */
-    expect(keyOf(calls[0]!).endsWith("2026-08-14")).toBe(true);
+    expect(keyOf(calls[0]!).endsWith(todayLocalISO(now))).toBe(true);
+    expect(keyOf(calls[0]!)).toBe(
+      `${todayLocalISO(now).slice(0, 8)}01:${todayLocalISO(now)}`,
+    );
   });
 });

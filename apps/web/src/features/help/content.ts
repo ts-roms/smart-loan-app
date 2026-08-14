@@ -405,7 +405,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "· Demand letters — stage, status, approver, dispatcher\n" +
       "· Repossession cases — full state-machine timeline + auction proceeds\n" +
       "· Annual docs compliance — % valid / expiring / expired\n" +
-      "· ECL movement — per-run stage breakdown + delta\n\n" +
+      "· ECL movement — per-run stage breakdown, the movement booked to the ledger, and any unbooked difference\n\n" +
       "Each downloads as a CSV with a date-range filter where applicable. Pull into Excel / Sheets for review.",
     tour: [
       t(
