@@ -27,8 +27,19 @@ const KYC_PATH = `/uploads/kyc/${KYC_FILE}`;
 const KYC_BYTES = "kyc-image-bytes";
 const LOGO_PATH = "/uploads/branding/logo.svg";
 
+/**
+ * Captured so afterAll can put them back. `isolate` gives each file a
+ * fresh module registry but NOT a fresh `process.env`, so an unrestored
+ * variable follows this file into whatever the fork runs next — a
+ * `UPLOADS_DIR` pointing at a directory this suite has since deleted,
+ * and a JWT secret that isn't the one that file thinks it configured.
+ */
+const priorEnv: Record<string, string | undefined> = {};
+
 beforeAll(async () => {
   uploadsDir = await mkdtemp(join(tmpdir(), "loan-static-test-"));
+  priorEnv.UPLOADS_DIR = process.env.UPLOADS_DIR;
+  priorEnv.JWT_SECRET = process.env.JWT_SECRET;
   process.env.UPLOADS_DIR = uploadsDir;
   process.env.JWT_SECRET = JWT_SECRET;
 
@@ -61,6 +72,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await app?.close();
   await rm(uploadsDir, { recursive: true, force: true });
+  for (const [key, value] of Object.entries(priorEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 describe("protected uploads", () => {

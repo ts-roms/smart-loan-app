@@ -37,5 +37,20 @@ export default defineConfig({
      * quiet one is a suite people learn to re-run instead of read.
      */
     testTimeout: 15_000,
+    /*
+     * The other half of that same problem, and the half this file was
+     * missing: the competition was partly self-inflicted. Vitest defaults
+     * to `availableParallelism() - 1` workers per project, so this suite
+     * asked for one fork per spec file while @loan/api and @loan/db asked
+     * for fifteen each — on sixteen cores. Raising the timeout absorbed
+     * the symptom; capping the fan-out removes the cause.
+     *
+     * jsdom makes it worse here than elsewhere: each fork builds its own
+     * DOM environment, which is the single most expensive line in this
+     * project's timing breakdown.
+     *
+     * See apps/api/vitest.config.ts for the measurement behind the number.
+     */
+    maxWorkers: 4,
   },
 });
