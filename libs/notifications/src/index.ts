@@ -54,18 +54,60 @@ export interface NotificationProvider {
 }
 
 /**
- * Default provider for dev/test. Logs the message and returns. The dispatcher
- * still records the `Notification` row, so the UI sees the send happen.
+ * Redact a recipient down to something a developer can correlate but a log
+ * reader cannot contact: first character, masked middle, and the email
+ * domain (which is not personally identifying and is often the useful part
+ * when a template goes to the wrong audience).
+ *
+ *   juan.delacruz@example.com -> j***@example.com
+ *   +639171234567             -> +6391****567
+ */
+export function maskRecipient(recipient: string): string {
+  const at = recipient.indexOf("@");
+  if (at > 0) return `${recipient[0]!}***${recipient.slice(at)}`;
+  if (recipient.length <= 7) return "***";
+  return `${recipient.slice(0, 5)}****${recipient.slice(-3)}`;
+}
+
+/**
+ * Default provider for dev/test. The dispatcher still records the
+ * `Notification` row, so the UI sees the send happen.
+ *
+ * It deliberately does NOT log the recipient or the body.
+ *
+ * It used to `console.log` both, and that was a live privacy leak rather
+ * than a dev convenience. Three things compounded:
+ *
+ *   1. Every provider path terminates here. `buildTenantTwilioProvider` and
+ *      `buildTenantSendgridProvider` discard their config and return a mock,
+ *      and neither `twilio` nor `@sendgrid` is in any package.json — so
+ *      configuring real credentials did not route around this.
+ *   2. `console.log` bypasses pino, so none of the `redact` paths in
+ *      `app.ts` applied. Redaction that the data never passes through is
+ *      not redaction.
+ *   3. The bodies carry borrower name, outstanding balance and due date
+ *      (PAYMENT_DUE_SOON / PAYMENT_OVERDUE), password-reset links, and
+ *      co-maker consent tokens. A reset link in a log file is a live
+ *      credential.
+ *
+ * §57 is explicit — "Never leak sensitive financial or PII data into logs"
+ * — and §71 governs the PII. The masked recipient is enough to tell which
+ * message went where; the body belongs in the `Notification` row, which is
+ * access-controlled, not on stdout.
  */
 export class MockNotificationProvider implements NotificationProvider {
   readonly name = "MOCK";
   readonly channels: ReadonlySet<Channel> = new Set(["EMAIL", "SMS", "IN_APP"]);
 
   async send(input: SendInput): Promise<SendResult> {
+    const ref = `mock-${Date.now()}`;
+    // Length, not content: enough to spot an empty or truncated template
+    // without reproducing what it said.
     console.log(
-      `[notify:${input.channel}] → ${input.recipient}: ${input.subject ?? ""}\n${input.body}`,
+      `[notify:${input.channel}] → ${maskRecipient(input.recipient)} ` +
+        `(${String(input.body.length)} chars, ref ${ref})`,
     );
-    return { providerRef: `mock-${Date.now()}` };
+    return { providerRef: ref };
   }
 }
 
