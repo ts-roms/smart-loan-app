@@ -60,6 +60,7 @@ export function registerKycHttp(
           "answers 400 without it, and narrowing it here would change " +
           "the body callers already get.",
         tags: TAGS,
+        permission: "kyc.read",
         querystring: kycListQuerySchema,
         response: kycListResponseSchema,
         errors: [400, 401, 403],
@@ -83,6 +84,7 @@ export function registerKycHttp(
           "first, with the customer folded in so the list renders " +
           "without a fetch per row.",
         tags: TAGS,
+        permission: "kyc.read",
         querystring: kycPendingQuerySchema,
         response: kycPendingResponseSchema,
         errors: [400, 401, 403],
@@ -101,6 +103,7 @@ export function registerKycHttp(
           "— the conflicting record travels on the error body as " +
           "`existing` so the UI can link to it.",
         tags: TAGS,
+        permission: "kyc.submit",
         body: submitSchema,
         response: kycSubmissionResponseSchema,
         status: 201,
@@ -119,6 +122,7 @@ export function registerKycHttp(
           "customer's KYC rollup — VERIFIED only once every required " +
           "document is.",
         tags: TAGS,
+        permission: "kyc.decide",
         params: kycIdParamSchema,
         body: decisionSchema,
         response: kycSubmissionResponseSchema,
@@ -137,6 +141,7 @@ export function registerKycHttp(
           "documents are still missing or were rejected. Computed from " +
           "the submissions, not stored.",
         tags: TAGS,
+        permission: "kyc.read",
         params: kycCustomerIdParamSchema,
         response: kycStatusResponseSchema,
         errors: [400, 401, 403],

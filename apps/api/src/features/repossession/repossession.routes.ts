@@ -91,6 +91,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "Repossession cases, newest first (up to 200), each carrying " +
           "its loan reference. Filter by ?status and/or ?loanId.",
         tags: TAGS,
+        permission: "loans.read",
         querystring: listQuerySchema,
         response: caseListResponseSchema,
         errors: [400, 401, 402, 403],
@@ -106,6 +107,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "One repossession case, whatever stage it is at.",
         tags: TAGS,
+        permission: "loans.read",
         params: caseIdParamSchema,
         response: caseResponseSchema,
         errors: [401, 402, 403, 404],
@@ -123,6 +125,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "The loan's combined outstanding (schedule + accrued penalties) " +
           "— what the recover form default-fills.",
         tags: TAGS,
+        permission: "loans.read",
         params: caseIdParamSchema,
         response: outstandingResponseSchema,
         errors: [401, 402, 403, 404],
@@ -140,6 +143,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "Open a case against a loan (stage IDENTIFIED). One live case " +
           "per loan — a duplicate is refused as 400.",
         tags: TAGS,
+        permission: "repossession.identify",
         body: openSchema,
         response: caseResponseSchema,
         status: 201,
@@ -158,6 +162,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "Branch Manager tick — IDENTIFIED → BM_APPROVED. 400 covers an " +
           "invalid transition or unknown case.",
         tags: TAGS,
+        permission: "repossession.bm_approve",
         params: caseIdParamSchema,
         body: approvalSchema,
         response: caseResponseSchema,
@@ -176,6 +181,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "Credit Head tick — BM_APPROVED → CREDIT_HEAD_APPROVED. 400 " +
           "covers an invalid transition or unknown case.",
         tags: TAGS,
+        permission: "repossession.credit_approve",
         params: caseIdParamSchema,
         body: approvalSchema,
         response: caseResponseSchema,
@@ -194,6 +200,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "Legal tick — CREDIT_HEAD_APPROVED → LEGAL_APPROVED. 400 " +
           "covers an invalid transition or unknown case.",
         tags: TAGS,
+        permission: "repossession.legal_approve",
         params: caseIdParamSchema,
         body: approvalSchema,
         response: caseResponseSchema,
@@ -212,6 +219,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "Hand the recovery to a field agent — LEGAL_APPROVED → " +
           "AGENT_ASSIGNED.",
         tags: TAGS,
+        permission: "repossession.assign_agent",
         params: caseIdParamSchema,
         body: assignSchema,
         response: caseResponseSchema,
@@ -230,6 +238,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "Record the vehicle recovered — AGENT_ASSIGNED → RECOVERED. " +
           "Captures condition, storage, and the outstanding at recovery.",
         tags: TAGS,
+        permission: "repossession.recover",
         params: caseIdParamSchema,
         body: recoverSchema,
         response: caseResponseSchema,
@@ -249,6 +258,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "settlement entry, closes the loan, and answers the " +
           "deficiency/surplus verdict.",
         tags: TAGS,
+        permission: "repossession.auction",
         params: caseIdParamSchema,
         body: auctionSchema,
         response: auctionResponseSchema,
@@ -268,6 +278,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
           "Cancel a case from any pre-terminal stage, keeping the reason " +
           "on file.",
         tags: TAGS,
+        permission: "repossession.identify",
         params: caseIdParamSchema,
         body: cancelSchema,
         response: caseResponseSchema,

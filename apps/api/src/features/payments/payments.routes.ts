@@ -125,6 +125,16 @@ export async function paymentsRoutes(app: FastifyInstance) {
           "Create a gateway payment intent against a loan. Repeat with the " +
           "same idempotencyKey to get the same intent back.",
         tags: TAGS,
+        permission: "payments.intents",
+        /*
+         * `body`, not `header`, and the distinction is the whole reason
+         * this is documented. `POST /loans/:id/payments` reads
+         * `Idempotency-Key`; this route never looks at it. A caller who
+         * generalises from the other endpoint gets a second intent and
+         * no error — `parsed.data.idempotencyKey ?? randomUUID()` fills
+         * the gap silently.
+         */
+        idempotency: { mode: "body", field: "idempotencyKey" },
         body: createIntentSchema,
         response: paymentIntentResponseSchema,
         status: 201,
@@ -167,6 +177,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "One payment intent, by id or PI- number.",
         tags: TAGS,
+        permission: ["payments.intents", "loans.read"],
         params: intentIdParamSchema,
         response: paymentIntentResponseSchema,
         errors: [401, 403, 404],
@@ -192,6 +203,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
           "Payment intents for one loan, newest first. `loanId` is " +
           "required — there is no unfiltered listing.",
         tags: TAGS,
+        permission: ["payments.intents", "loans.read"],
         querystring: intentListQuerySchema,
         response: intentListResponseSchema,
         errors: [400, 401, 403],
@@ -287,6 +299,18 @@ export async function paymentsRoutes(app: FastifyInstance) {
           "Gateway settlement callback (single-tenant). Unauthenticated — " +
           "the provider's signature check is the only control.",
         tags: TAGS,
+        public:
+          "a payment gateway carries no JWT. The signature verified " +
+          "inside `parseWebhook` is the only control on this endpoint.",
+        idempotency: {
+          mode: "server",
+          derivedFrom: "the payment intent id (`intent:<id>`)",
+          note:
+            "A redelivery of an already-settled intent answers 200 with " +
+            "`paymentId: null` — the payment exists, this response just " +
+            "does not carry its id. Do not read that null as a failure " +
+            "and do not retry on it.",
+        },
         params: webhookParamSchema,
         response: webhookResponseSchema,
         // 400 covers both refusals: the URL naming a provider this
@@ -305,6 +329,17 @@ export async function paymentsRoutes(app: FastifyInstance) {
           "Gateway settlement callback, tenant named in the URL because a " +
           "callback carries no JWT.",
         tags: TAGS,
+        public:
+          "as above — no JWT exists for a gateway, which is also why the " +
+          "tenant has to ride the URL path instead of a token claim.",
+        idempotency: {
+          mode: "server",
+          derivedFrom: "the payment intent id (`intent:<id>`)",
+          note:
+            "A redelivery of an already-settled intent answers 200 with " +
+            "`paymentId: null` — the payment exists, this response just " +
+            "does not carry its id.",
+        },
         params: webhookTenantParamSchema,
         response: webhookResponseSchema,
         // 404 is an unknown or suspended tenant slug — deliberately the
@@ -389,6 +424,14 @@ export async function paymentsRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: sandboxSummary,
         tags: TAGS,
+        public:
+          "it impersonates the gateway, which has no JWT. 404s unless " +
+          "the configured provider is MOCK, so it does not exist at all " +
+          "beside a real gateway.",
+        idempotency: {
+          mode: "server",
+          derivedFrom: "the payment intent id (`intent:<id>`)",
+        },
         params: sandboxParamSchema,
         response: sandboxConfirmResponseSchema,
         errors: [400, 404],
@@ -402,6 +445,14 @@ export async function paymentsRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: `${sandboxSummary} POST form mirrors a provider callback.`,
         tags: TAGS,
+        public:
+          "it impersonates the gateway, which has no JWT. 404s unless " +
+          "the configured provider is MOCK, so it does not exist at all " +
+          "beside a real gateway.",
+        idempotency: {
+          mode: "server",
+          derivedFrom: "the payment intent id (`intent:<id>`)",
+        },
         params: sandboxParamSchema,
         response: sandboxConfirmResponseSchema,
         errors: [400, 404],
@@ -415,6 +466,13 @@ export async function paymentsRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: `${sandboxSummary} Tenant named in the URL.`,
         tags: TAGS,
+        public:
+          "it impersonates the gateway, which has no JWT. 404s unless " +
+          "the configured provider is MOCK.",
+        idempotency: {
+          mode: "server",
+          derivedFrom: "the payment intent id (`intent:<id>`)",
+        },
         params: sandboxTenantParamSchema,
         response: sandboxConfirmResponseSchema,
         errors: [400, 404],
@@ -428,6 +486,13 @@ export async function paymentsRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: `${sandboxSummary} Tenant named in the URL, POST form.`,
         tags: TAGS,
+        public:
+          "it impersonates the gateway, which has no JWT. 404s unless " +
+          "the configured provider is MOCK.",
+        idempotency: {
+          mode: "server",
+          derivedFrom: "the payment intent id (`intent:<id>`)",
+        },
         params: sandboxTenantParamSchema,
         response: sandboxConfirmResponseSchema,
         errors: [400, 404],

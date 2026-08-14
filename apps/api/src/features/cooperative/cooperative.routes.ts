@@ -98,6 +98,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
           "Latest 500 contribution rows, newest first. Fund columns are " +
           "Decimal strings.",
         tags: TAGS,
+        permission: "coop.read",
         response: z.array(contributionResponseSchema),
         errors: [401, 402, 403],
       }),
@@ -113,6 +114,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
           "Record a member contribution (CBU / mortuary / emergency — at " +
           "least one > 0) and post it to the GL in the same transaction.",
         tags: TAGS,
+        permission: "coop.contribute",
         body: contributionSchema,
         response: contributionResponseSchema,
         status: 201,
@@ -130,6 +132,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Latest 500 savings transactions, newest first.",
         tags: TAGS,
+        permission: "coop.read",
         response: z.array(savingsTransactionResponseSchema),
         errors: [401, 402, 403],
       }),
@@ -145,6 +148,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
           "Record a savings deposit or withdrawal and post it to the GL. " +
           "`amount` is a number in; a Decimal STRING comes back.",
         tags: TAGS,
+        permission: "coop.savings",
         body: savingsSchema,
         response: savingsTransactionResponseSchema,
         status: 201,
@@ -162,6 +166,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Latest 500 fund inflows, newest first.",
         tags: TAGS,
+        permission: "coop.read",
         response: z.array(fundTransactionResponseSchema),
         errors: [401, 402, 403],
       }),
@@ -177,6 +182,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
           "Record a capital inflow to a fund (member or third-party) and " +
           "post it to the GL.",
         tags: TAGS,
+        permission: "coop.funds",
         body: fundTxnSchema,
         response: fundTransactionResponseSchema,
         status: 201,
@@ -194,6 +200,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Latest 500 fund withdrawals, newest first.",
         tags: TAGS,
+        permission: "coop.read",
         response: z.array(fundWithdrawalResponseSchema),
         errors: [401, 402, 403],
       }),
@@ -209,6 +216,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
           "Record a capital outflow from a fund and post it to the GL. " +
           "400 covers chart-of-accounts misconfiguration for the source.",
         tags: TAGS,
+        permission: "coop.funds",
         body: withdrawalSchema,
         response: fundWithdrawalResponseSchema,
         status: 201,
@@ -226,6 +234,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Latest 500 expense rows, newest first.",
         tags: TAGS,
+        permission: "coop.read",
         response: z.array(expenseResponseSchema),
         errors: [401, 402, 403],
       }),
@@ -240,6 +249,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
         summary:
           "Record an operating expense against a fund and post it to the GL.",
         tags: TAGS,
+        permission: "coop.expense",
         body: expenseSchema,
         response: expenseResponseSchema,
         status: 201,
@@ -257,6 +267,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Latest 500 other-income rows, newest first.",
         tags: TAGS,
+        permission: "coop.read",
         response: z.array(otherIncomeResponseSchema),
         errors: [401, 402, 403],
       }),
@@ -272,6 +283,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
           "Record non-lending income credited to a fund and post it to " +
           "the GL.",
         tags: TAGS,
+        permission: "coop.income",
         body: otherIncomeSchema,
         response: otherIncomeResponseSchema,
         status: 201,
@@ -291,6 +303,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
           "One member's cooperative position: rolled-up totals plus the " +
           "latest 20 contributions and savings rows.",
         tags: TAGS,
+        permission: "coop.read",
         params: memberLedgerParamSchema,
         response: memberLedgerResponseSchema,
         errors: [401, 402, 403, 404],
@@ -309,6 +322,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
           "External capital accounts (Big Brother), newest first. " +
           "`capital` is a Decimal string.",
         tags: TAGS,
+        permission: "coop.read",
         response: z.array(bigBrotherResponseSchema),
         errors: [401, 402, 403],
       }),
@@ -324,6 +338,7 @@ export async function cooperativeRoutes(app: FastifyInstance) {
           "Register an external capital injection for a fixed period and " +
           "post the liability to the GL. 400 covers periodTo ≤ periodFrom.",
         tags: TAGS,
+        permission: "coop.big_brother",
         body: bigBrotherSchema,
         response: bigBrotherResponseSchema,
         status: 201,

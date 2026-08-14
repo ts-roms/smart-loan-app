@@ -52,6 +52,7 @@ export function registerCustomerHttp(
           "Customers, newest first, with live-loan and defaulted markers. " +
           "Archived rows are excluded unless asked for.",
         tags: TAGS,
+        permission: "customers.read",
         querystring: customerListQuerySchema,
         response: customerListResponseSchema,
         errors: [400, 401, 403],
@@ -66,6 +67,7 @@ export function registerCustomerHttp(
       schema: routeSchema({
         summary: "One customer, by id or CUST- number.",
         tags: TAGS,
+        permission: "customers.read",
         params: customerIdParamSchema,
         response: customerResponseSchema,
         errors: [401, 403, 404],
@@ -82,6 +84,7 @@ export function registerCustomerHttp(
           "Register a customer. AML screening kicks off best-effort after " +
           "the row commits.",
         tags: TAGS,
+        permission: "customers.write",
         body: customerSchema,
         response: customerResponseSchema,
         status: 201,
@@ -98,6 +101,7 @@ export function registerCustomerHttp(
         summary:
           "Side-drawer rollup: the record plus live loans and outstanding.",
         tags: TAGS,
+        permission: "customers.read",
         params: customerIdParamSchema,
         response: customerSummaryResponseSchema,
         errors: [401, 403, 404],
@@ -122,6 +126,7 @@ export function registerCustomerHttp(
           "What the lender is into this borrower for, across every loan — " +
           "arrears separate, exclusions named.",
         tags: TAGS,
+        permission: "customers.read",
         params: customerIdParamSchema,
         response: customerExposureResponseSchema,
         errors: [401, 403, 404],
@@ -137,6 +142,7 @@ export function registerCustomerHttp(
         summary:
           "Repeat-borrower check: a closed loan on file and no defaults.",
         tags: TAGS,
+        permission: "customers.read",
         params: customerIdParamSchema,
         response: repeatEligibilityResponseSchema,
         errors: [401, 403, 404],
@@ -153,6 +159,7 @@ export function registerCustomerHttp(
           "Patch the record. Phone rules validate on CHANGE against what " +
           "is stored, not on presence.",
         tags: TAGS,
+        permission: "customers.write",
         params: customerIdParamSchema,
         body: customerBaseSchema.partial(),
         response: customerResponseSchema,
@@ -178,6 +185,7 @@ export function registerCustomerHttp(
           "File a customer away, or restore them. Idempotent in both " +
           "directions.",
         tags: TAGS,
+        permission: "customers.archive",
         params: customerIdParamSchema,
         body: archiveCustomerSchema,
         response: archiveCustomerResponseSchema,

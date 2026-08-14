@@ -122,6 +122,9 @@ export async function platformRoutes(app: FastifyInstance) {
           "The token carries `platform: true`; tenant routes reject it, " +
           "and a tenant token is rejected everywhere below.",
         tags: TAGS,
+        public:
+          "this is where a platform token comes from. It is the only " +
+          "/platform route that takes none.",
         body: platformLoginSchema,
         response: platformLoginResponseSchema,
         errors: [400, 401],
@@ -160,6 +163,9 @@ export async function platformRoutes(app: FastifyInstance) {
             "hit. Carries no `name`, unlike the login response, because " +
             "the token does not hold one.",
           tags: TAGS,
+          auth: "platform",
+          // No `platformRole` and none intended: every platform user may
+          // read their own session, whatever their role.
           response: platformMeResponseSchema,
           errors: [401],
         }),
@@ -181,6 +187,16 @@ export async function platformRoutes(app: FastifyInstance) {
         schema: routeSchema({
           summary: "Every tenant, newest first. PLATFORM_SALES and above.",
           tags: TAGS,
+          auth: "platform",
+          /*
+           * No `platformRole`, and that is the TRUTH rather than an
+           * oversight in this file: the summary above says PLATFORM_SALES
+           * and above, but there is no `requirePlatformRole` preHandler on
+           * this route, so any authenticated platform role reaches it.
+           * Documenting the summary's claim would publish a gate that does
+           * not exist. Reported, not silently tightened — changing who can
+           * call it is an access-control decision, not a documentation one.
+           */
           response: tenantListResponseSchema,
           errors: [401, 403],
         }),
@@ -193,6 +209,16 @@ export async function platformRoutes(app: FastifyInstance) {
         schema: routeSchema({
           summary: "One tenant by slug. PLATFORM_SALES and above.",
           tags: TAGS,
+          auth: "platform",
+          /*
+           * No `platformRole`, and that is the TRUTH rather than an
+           * oversight in this file: the summary above says PLATFORM_SALES
+           * and above, but there is no `requirePlatformRole` preHandler on
+           * this route, so any authenticated platform role reaches it.
+           * Documenting the summary's claim would publish a gate that does
+           * not exist. Reported, not silently tightened — changing who can
+           * call it is an access-control decision, not a documentation one.
+           */
           params: tenantSlugParamSchema,
           response: tenantResponseSchema,
           errors: [401, 403, 404],
@@ -212,6 +238,8 @@ export async function platformRoutes(app: FastifyInstance) {
             "row plus `bootstrapPassword`, which is shown once and " +
             "never again. 409 if the slug is taken.",
           tags: TAGS,
+          auth: "platform",
+          platformRole: "PLATFORM_ADMIN",
           body: provisionTenantSchema,
           response: provisionTenantResponseSchema,
           status: 201,
@@ -229,6 +257,8 @@ export async function platformRoutes(app: FastifyInstance) {
             "Suspend a tenant. Its users get 503 until restored. Takes " +
             "no body; answers the updated tenant row.",
           tags: TAGS,
+          auth: "platform",
+          platformRole: "PLATFORM_ADMIN",
           params: tenantSlugParamSchema,
           response: tenantResponseSchema,
           errors: [401, 403, 404],
@@ -245,6 +275,8 @@ export async function platformRoutes(app: FastifyInstance) {
             "Lift a suspension. Takes no body; answers the updated " +
             "tenant row.",
           tags: TAGS,
+          auth: "platform",
+          platformRole: "PLATFORM_ADMIN",
           params: tenantSlugParamSchema,
           response: tenantResponseSchema,
           errors: [401, 403, 404],
@@ -262,6 +294,8 @@ export async function platformRoutes(app: FastifyInstance) {
             "the tenant stops serving and cannot be restored. Takes no " +
             "body; answers the updated tenant row.",
           tags: TAGS,
+          auth: "platform",
+          platformRole: "PLATFORM_ADMIN",
           params: tenantSlugParamSchema,
           response: tenantResponseSchema,
           errors: [401, 403, 404],
@@ -289,6 +323,8 @@ export async function platformRoutes(app: FastifyInstance) {
             "undeclared so the bodyless call keeps working. 409 if the " +
             "tenant is not in PROVISIONING.",
           tags: TAGS,
+          auth: "platform",
+          platformRole: "PLATFORM_ADMIN",
           params: tenantSlugParamSchema,
           response: retryProvisioningResponseSchema,
           errors: [400, 401, 403, 404, 409],
@@ -312,6 +348,8 @@ export async function platformRoutes(app: FastifyInstance) {
             "the point. Staff users only; impersonating a borrower is " +
             "refused with 400. `expiresAt` is an ISO timestamp.",
           tags: TAGS,
+          auth: "platform",
+          platformRole: "PLATFORM_ADMIN",
           params: tenantSlugParamSchema,
           body: impersonateTenantSchema,
           response: impersonateResponseSchema,
@@ -333,6 +371,8 @@ export async function platformRoutes(app: FastifyInstance) {
             "issuance can precede provisioning. `iat`/`nbf`/`exp` in " +
             "the payload are unix MILLISECONDS, not ISO strings.",
           tags: TAGS,
+          auth: "platform",
+          platformRole: ["PLATFORM_ADMIN", "PLATFORM_SALES"],
           body: issueLicenseSchema,
           response: issueLicenseResponseSchema,
           status: 201,
@@ -354,6 +394,16 @@ export async function platformRoutes(app: FastifyInstance) {
             "carries the full signed `token`, so a licence can be " +
             "resent without re-issuing it.",
           tags: TAGS,
+          auth: "platform",
+          /*
+           * No `platformRole`, and that is the TRUTH rather than an
+           * oversight in this file: the summary above says PLATFORM_SALES
+           * and above, but there is no `requirePlatformRole` preHandler on
+           * this route, so any authenticated platform role reaches it.
+           * Documenting the summary's claim would publish a gate that does
+           * not exist. Reported, not silently tightened — changing who can
+           * call it is an access-control decision, not a documentation one.
+           */
           params: tenantSlugParamSchema,
           response: tenantLicenseListResponseSchema,
           errors: [401, 403],
@@ -377,6 +427,8 @@ export async function platformRoutes(app: FastifyInstance) {
             "working. `clearedSnapshot` says whether the tenant's " +
             "cached licence was wiped too. 409 if already revoked.",
           tags: TAGS,
+          auth: "platform",
+          platformRole: "PLATFORM_ADMIN",
           params: licenseJtiParamSchema,
           response: revokeLicenseResponseSchema,
           errors: [400, 401, 403, 404, 409],
@@ -398,6 +450,8 @@ export async function platformRoutes(app: FastifyInstance) {
             "Distinct from the tenant `/audit` feed and a different " +
             "shape. `limit` defaults to 100 and is capped at 500.",
           tags: TAGS,
+          auth: "platform",
+          platformRole: "PLATFORM_ADMIN",
           querystring: platformAuditQuerySchema,
           response: platformAuditResponseSchema,
           errors: [400, 401, 403],

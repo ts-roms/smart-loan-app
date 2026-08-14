@@ -42,6 +42,7 @@ export function registerLedgerHttp(
           "JSON shape. No query schema — `from`/`to` are validated by " +
           "hand so date-only values keep working.",
         tags: TAGS,
+        permission: "customers.read",
         params: customerIdParamSchema,
         response: customerLedgerResponseSchema,
         // 400 is an unparseable from/to.
@@ -70,6 +71,7 @@ export function registerLedgerHttp(
           "Dispatch a statement-ready notification — in-app always, email " +
           "when one is on file. The PDF is never attached.",
         tags: TAGS,
+        permission: "customers.read",
         params: customerIdParamSchema,
         response: statementEmailResponseSchema,
         status: 202,

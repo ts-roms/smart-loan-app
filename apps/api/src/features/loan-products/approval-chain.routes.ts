@@ -64,6 +64,7 @@ export async function loanApprovalChainRoutes(
           "The product's approval chain, in order. An empty array means " +
           "no chain — the legacy single-decide flow applies.",
         tags: TAGS,
+        permission: "products.read",
         params: productCodeParamSchema,
         response: approvalChainResponseSchema,
         errors: [401, 403],
@@ -83,6 +84,7 @@ export async function loanApprovalChainRoutes(
           "Replace the product's approval chain. Steps are renumbered " +
           "1..N, so the orders you send back may not be the ones you sent.",
         tags: TAGS,
+        permission: "loans.approval.chain.manage",
         params: productCodeParamSchema,
         body: chainSchema,
         response: approvalChainResponseSchema,

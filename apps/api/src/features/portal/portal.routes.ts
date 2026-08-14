@@ -312,8 +312,19 @@ export async function portalRoutes(app: FastifyInstance) {
         summary:
           "Open a payment intent against one of the borrower's own loans. " +
           "The response's paymentUrl is where the borrower goes to pay. " +
-          "`amount` is a number in; a Decimal STRING comes back.",
+          "`amount` is a number in; a Decimal STRING comes back. NOT " +
+          "idempotent: every call opens a new intent.",
         tags: TAGS,
+        /*
+         * No `idempotency`, and unlike the staff-side
+         * `POST /payments/intents` this route accepts no key at ALL —
+         * the service mints `randomUUID()` with no caller input, so
+         * there is nothing an integrator could send to make it safe. A
+         * borrower double-tapping "Pay" opens two intents against the
+         * same loan. Said plainly rather than omitted, because the
+         * sibling staff route IS deduplicable and the asymmetry is
+         * invisible from the outside.
+         */
         body: intentSchema,
         response: paymentIntentResponseSchema,
         status: 201,

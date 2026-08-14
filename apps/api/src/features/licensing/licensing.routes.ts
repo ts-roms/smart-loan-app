@@ -103,6 +103,7 @@ export async function licensingRoutes(app: FastifyInstance) {
           "always the ACTIVE shape. A token that fails verification is a " +
           "400, not a 403 — it is a bad payload, not a permission issue.",
         tags: TAGS,
+        permission: "admin.roles",
         body: activateLicenseSchema,
         response: licenseStatusResponseSchema,
         errors: [400, 401, 403],
@@ -126,6 +127,7 @@ export async function licensingRoutes(app: FastifyInstance) {
           "it answers `revokedId: null` rather than 404, because the " +
           "caller asked for a state and got it. Takes no body.",
         tags: TAGS,
+        permission: "admin.roles",
         response: deactivateLicenseResponseSchema,
         errors: [401, 403],
       }),

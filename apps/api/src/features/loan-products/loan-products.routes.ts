@@ -92,6 +92,7 @@ export async function loanProductRoutes(app: FastifyInstance) {
           "Create a loan product. The code is UPPER_SNAKE_CASE and " +
           "immutable once set.",
         tags: TAGS,
+        permission: "products.write",
         body: createSchema,
         response: loanProductResponseSchema,
         status: 201,
@@ -128,6 +129,7 @@ export async function loanProductRoutes(app: FastifyInstance) {
           "Update a product's parameters. Every field is optional; the " +
           "code itself cannot be changed.",
         tags: TAGS,
+        permission: "products.write",
         params: productCodeParamSchema,
         body: updateSchema,
         response: loanProductResponseSchema,
@@ -154,6 +156,7 @@ export async function loanProductRoutes(app: FastifyInstance) {
           "Delete a product. Refused with 409 once any loan references " +
           "it — the FK is ON DELETE RESTRICT.",
         tags: TAGS,
+        permission: "products.write",
         params: productCodeParamSchema,
         response: loanProductResponseSchema,
         errors: [401, 403, 409],
@@ -180,6 +183,7 @@ export async function loanProductRoutes(app: FastifyInstance) {
           "Insert the default product catalog. Never overwrites an " +
           "existing code, so it is safe to re-run.",
         tags: TAGS,
+        permission: "products.write",
         response: seedResponseSchema,
         errors: [401, 403],
       }),

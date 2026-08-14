@@ -44,18 +44,25 @@
  * minutes. Both are `{ error, message }`, which is what the shared
  * component describes.
  *
- * ## Two statuses these routes send that the spec cannot say
+ * ## The two statuses that used to be unsayable — one now is
  *
- * `ERRORS` has no 501 and no 500, and both are reachable:
- * `/signup` and `/signup/confirm` answer **501 ModeDisabled** when the
- * server is not in multi-tenant mode, and `/signup/confirm` answers
- * **500 ProvisioningFailed** when schema creation fails part-way. They
- * are left undeclared rather than hand-rolled locally, on the same
- * grounds the co-maker routes used for 410/413 before those were added
- * centrally: a second error envelope defined in a feature file is the
- * divergence the shared components exist to prevent. Reported rather
- * than patched — 501 in particular is a mode signal, not a failure, and
- * whether it belongs in a shared `ERRORS` table is a design call.
+ * This file previously reported that `ERRORS` had no 501 and no 500
+ * while both were reachable, and declined to hand-roll either locally.
+ * That report has been answered, and the two got different answers.
+ *
+ * **501 is now in `ERRORS` and declared on both signup operations.** It
+ * is not an edge case: single-tenant is the DEFAULT mode, so on most
+ * deployments 501 is the only answer `/signup` and `/signup/confirm`
+ * ever give. A spec that documented a 202 and a 201 those routes will
+ * never send, and stayed silent about the status they always do, was
+ * describing a different server.
+ *
+ * **500 `ProvisioningFailed` is deliberately still not in `ERRORS`**,
+ * and is named in `/signup/confirm`'s own summary instead. The
+ * reasoning is beside the `ERRORS` table, where the next person to
+ * consider adding it will look: a shared 500 is the one entry that
+ * would end up on every route and mean nothing, and the two surfaces
+ * that raise this failure do not even agree on its sibling status.
  */
 
 import type { FastifyInstance } from "fastify";
@@ -112,6 +119,9 @@ export async function publicRoutes(app: FastifyInstance) {
           "leave with a handle on the row. 429 covers both the rate " +
           "limit and a repeat submission within five minutes.",
         tags: TAGS,
+        public:
+          "the marketing site calls it from a browser with no account " +
+          "behind it. There is no token that would make this work better.",
         body: captureLeadSchema,
         response: captureLeadResponseSchema,
         status: 201,
@@ -136,14 +146,15 @@ export async function publicRoutes(app: FastifyInstance) {
           "Request a tenant. Answers 202, not 201 — nothing is " +
           "provisioned yet. A confirmation link goes to `adminEmail` " +
           "and lapses at `expiresAt`; the token is never in this body. " +
-          "409 if the slug is taken. Also answers 501 when the server " +
-          "is not in multi-tenant mode (not declarable — see the note " +
-          "at the top of this file).",
+          "409 if the slug is taken.",
         tags: TAGS,
+        public:
+          "self-service signup, by definition: the caller has no tenant " +
+          "yet and so cannot have a token for one.",
         body: signupTenantSchema,
         response: signupResponseSchema,
         status: 202,
-        errors: [400, 409, 429],
+        errors: [400, 409, 429, 501],
       }),
     },
     ctrl.requestSignup,
@@ -168,13 +179,21 @@ export async function publicRoutes(app: FastifyInstance) {
           "`bootstrapPassword` is shown once and never again. A " +
           "malformed token and an unknown one both answer 400 " +
           "`InvalidToken`, deliberately indistinguishable; 409 means " +
-          "the link was already used. 500/501 are also reachable — see " +
-          "the note at the top of this file.",
+          "the link was already used. A **500 `ProvisioningFailed`** is " +
+          "also reachable and is the one failure here worth planning " +
+          "for: the tenant row exists but its schema is half-built, so " +
+          "the answer is neither a retry of this call nor a fresh " +
+          "signup — the vendor console's retry-provisioning is. It is " +
+          "named here rather than in the shared error table because it " +
+          "generalises to nothing else; see the note beside `ERRORS`.",
         tags: TAGS,
+        public:
+          "the confirmation link is redeemed straight from an email " +
+          "client. Possession of the token IS the credential.",
         body: confirmSignupSchema,
         response: confirmSignupResponseSchema,
         status: 201,
-        errors: [400, 409, 429],
+        errors: [400, 409, 429, 501],
       }),
     },
     ctrl.confirmSignup,

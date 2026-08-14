@@ -66,6 +66,7 @@ export function jobRoutes(
         schema: routeSchema({
           summary: "Every scheduled job for this tenant, by name.",
           tags: TAGS,
+          permission: "jobs.read",
           response: scheduledJobListResponseSchema,
           errors: [401, 403],
         }),
@@ -80,6 +81,7 @@ export function jobRoutes(
         schema: routeSchema({
           summary: "The last 50 runs of one job, newest first.",
           tags: TAGS,
+          permission: "jobs.read",
           params: jobNameParamSchema,
           response: jobRunListResponseSchema,
           // No 404: an unknown job name answers with an empty list, on
@@ -103,6 +105,7 @@ export function jobRoutes(
         schema: routeSchema({
           summary: "Reschedule a job. Recomputes its next run.",
           tags: TAGS,
+          permission: "jobs.configure",
           params: jobNameParamSchema,
           body: cronSchema,
           response: scheduledJobResponseSchema,
@@ -134,6 +137,7 @@ export function jobRoutes(
         schema: routeSchema({
           summary: "Enable or disable a job's schedule.",
           tags: TAGS,
+          permission: "jobs.configure",
           params: jobNameParamSchema,
           body: enabledSchema,
           response: scheduledJobResponseSchema,
@@ -164,6 +168,7 @@ export function jobRoutes(
             "Run a job now. Records a JobRun either way — a failure comes " +
             "back as a FAILED run, not as an error status.",
           tags: TAGS,
+          permission: "jobs.run",
           params: jobNameParamSchema,
           response: jobRunResponseSchema,
           // 404 means no job DEFINITION carries that name, so there is

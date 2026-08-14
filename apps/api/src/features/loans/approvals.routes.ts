@@ -84,6 +84,7 @@ export async function loanApprovalRoutes(app: FastifyInstance): Promise<void> {
       schema: routeSchema({
         summary: "The loan's approval chain, in step order.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         response: loanApprovalListResponseSchema,
         errors: [401, 403, 404],

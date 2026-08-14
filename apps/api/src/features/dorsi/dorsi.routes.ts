@@ -47,6 +47,7 @@ export function registerDorsiHttp(
           "The active DORSI register, newest tag first, borrower " +
           "identity joined in.",
         tags: TAGS,
+        permission: "dorsi.read",
         response: dorsiListResponseSchema,
         errors: [401, 402, 403],
       }),
@@ -62,6 +63,7 @@ export function registerDorsiHttp(
           "Tag a customer as Director / Officer / Stockholder / " +
           "Related-Interest. Re-tagging reactivates the existing row.",
         tags: TAGS,
+        permission: "dorsi.tag",
         body: tagSchema,
         response: dorsiRecordResponseSchema,
         status: 201,
@@ -79,6 +81,7 @@ export function registerDorsiHttp(
           "Deactivate a register row, keeping it (and the reason) on " +
           "file. 400 covers an unknown id — the miss is not mapped to 404.",
         tags: TAGS,
+        permission: "dorsi.tag",
         params: dorsiIdParamSchema,
         body: deactivateSchema,
         response: dorsiRecordResponseSchema,
@@ -96,6 +99,7 @@ export function registerDorsiHttp(
           "Stamp a periodic review on a register row. 400 covers an " +
           "unknown id — the miss is not mapped to 404.",
         tags: TAGS,
+        permission: "dorsi.tag",
         params: dorsiIdParamSchema,
         response: dorsiRecordResponseSchema,
         errors: [400, 401, 402, 403],
@@ -114,6 +118,7 @@ export function registerDorsiHttp(
           "The DORSI record for one customer, active or not. 404 = never " +
           "tagged.",
         tags: TAGS,
+        permission: "dorsi.read",
         params: dorsiCustomerParamSchema,
         response: dorsiRecordResponseSchema,
         errors: [401, 402, 403, 404],
@@ -130,6 +135,7 @@ export function registerDorsiHttp(
           "Current DORSI cap utilization — aggregate and per borrower. " +
           "All figures computed in JS: numbers.",
         tags: TAGS,
+        permission: "dorsi.read",
         response: dorsiUtilizationResponseSchema,
         errors: [401, 402, 403],
       }),
@@ -148,6 +154,7 @@ export function registerDorsiHttp(
           "persisting anything. Unconfigured equity fails closed to " +
           "BOARD_REQUIRED.",
         tags: TAGS,
+        permission: "dorsi.read",
         body: checkSchema,
         response: dorsiCheckResponseSchema,
         errors: [400, 401, 402, 403],
@@ -164,6 +171,7 @@ export function registerDorsiHttp(
           "Fuzzy-screen a name against the active register (run at " +
           "customer onboarding). Empty array = no potential match.",
         tags: TAGS,
+        permission: "dorsi.read",
         body: screenByNameSchema,
         response: dorsiScreenResponseSchema,
         errors: [400, 401, 402, 403],
@@ -183,6 +191,7 @@ export function registerDorsiHttp(
           "snapshotting the projected utilization it attested to. " +
           "Upserts per loan. 400 covers an unknown loan id.",
         tags: TAGS,
+        permission: "dorsi.board_approve",
         body: boardApprovalSchema,
         response: dorsiBoardApprovalResponseSchema,
         status: 201,
@@ -212,6 +221,7 @@ export function registerDorsiHttp(
       schema: routeSchema({
         summary: "The cap base (company total equity) and who last set it.",
         tags: TAGS,
+        permission: "dorsi.read",
         response: dorsiConfigResponseSchema,
         errors: [401, 402, 403],
       }),
@@ -227,6 +237,7 @@ export function registerDorsiHttp(
           "Set the company total equity the DORSI caps are computed " +
           "from. Echoes only the value written.",
         tags: TAGS,
+        permission: "admin.system_config",
         body: configUpdateSchema,
         response: dorsiConfigUpdateResponseSchema,
         errors: [400, 401, 402, 403],

@@ -25,6 +25,7 @@ export function registerBulkImportHttp(
           "Import up to 500 customers. Rows commit independently; the 207 " +
           "reports each row in CSV order. dryRun previews validation only.",
         tags: ["customers"],
+        permission: "customers.write",
         body: bulkImportSchema,
         response: bulkImportResponseSchema,
         status: 207,

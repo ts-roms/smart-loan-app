@@ -93,6 +93,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
           "Is a model reachable behind this panel. Answers 200 with " +
           "ok:false when it is not — an unreachable backend is a state.",
         tags: TAGS,
+        permission: "loans.read",
         response: pingResponseSchema,
         errors: [401, 402, 403],
       }),
@@ -117,6 +118,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
           "Plain-language account of why a loan reached its status. " +
           "Draft output — check isMock before showing it to anyone.",
         tags: TAGS,
+        permission: "loans.read",
         body: explainSchema,
         response: completionResponseSchema,
         errors: [400, 401, 402, 403, 404],
@@ -168,6 +170,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
           "First-pass demand-letter body for a loan and stage. Contains " +
           "<PLACEHOLDERS> the officer fills in; never dispatch as-is.",
         tags: TAGS,
+        permission: "loans.read",
         body: draftSchema,
         response: completionResponseSchema,
         errors: [400, 401, 402, 403, 404],
@@ -220,6 +223,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
           "Narrative summary of a borrower's history over their ten most " +
           "recent loans. Draft output — check isMock.",
         tags: TAGS,
+        permission: "loans.read",
         body: summarizeSchema,
         response: completionResponseSchema,
         errors: [400, 401, 402, 403, 404],

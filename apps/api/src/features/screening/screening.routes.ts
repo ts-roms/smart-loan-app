@@ -60,6 +60,7 @@ export async function screeningRoutes(app: FastifyInstance) {
           "Every screen run against one customer, newest first — the " +
           "full AML history including overrides.",
         tags: TAGS,
+        permission: "screening.read",
         params: customerIdParamSchema,
         response: screeningListResponseSchema,
         errors: [401, 403],
@@ -99,6 +100,7 @@ export async function screeningRoutes(app: FastifyInstance) {
           "Screen a customer against the watchlists now, appending a new " +
           "row. The answer is that row, and it becomes their status.",
         tags: TAGS,
+        permission: "screening.run",
         params: customerIdParamSchema,
         response: screeningResponseSchema,
         errors: [401, 403],
@@ -116,6 +118,7 @@ export async function screeningRoutes(app: FastifyInstance) {
           "Clear a customer despite a match, with a justification. " +
           "Recorded as a new OVERRIDDEN row, not an edit of the old one.",
         tags: TAGS,
+        permission: "screening.override",
         params: customerIdParamSchema,
         body: overrideSchema,
         response: screeningResponseSchema,
@@ -148,6 +151,7 @@ export async function screeningRoutes(app: FastifyInstance) {
           "The whole watchlist the mock provider screens against, " +
           "alphabetical by name.",
         tags: TAGS,
+        permission: "screening.read",
         response: watchlistListResponseSchema,
         errors: [401, 403],
       }),
@@ -162,6 +166,7 @@ export async function screeningRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Add a name to the watchlist.",
         tags: TAGS,
+        permission: "screening.watchlist",
         body: watchlistSchema,
         response: watchlistEntryResponseSchema,
         status: 201,
@@ -190,6 +195,7 @@ export async function screeningRoutes(app: FastifyInstance) {
           "Remove a name from the watchlist. Answers the deleted row, " +
           "not a 204.",
         tags: TAGS,
+        permission: "screening.watchlist",
         params: watchlistIdParamSchema,
         response: watchlistEntryResponseSchema,
         errors: [401, 403],

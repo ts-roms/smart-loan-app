@@ -86,6 +86,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "The agent directory, each row carrying its rolled-up book " +
           "totals. Filter by ?active and free-text ?q.",
         tags: TAGS,
+        permission: "agents.read",
         querystring: agentListQuerySchema,
         response: agentListResponseSchema,
         errors: [400, 401, 403],
@@ -103,6 +104,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "response is the raw row — commissionRate comes back as a " +
           "Decimal STRING, and no name/email/totals are joined.",
         tags: TAGS,
+        permission: "agents.manage",
         body: createAgentSchema,
         response: agentRowResponseSchema,
         status: 201,
@@ -120,6 +122,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "The signed-in agent's OWN book — resolved from the token, " +
           "never from an id. 403 = no agent profile on this login.",
         tags: TAGS,
+        permission: "agents.self",
         querystring: agentBookQuerySchema,
         response: agentBookResponseSchema,
         errors: [400, 401, 403],
@@ -136,6 +139,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "What the signed-in agent is owed right now, plus their payout " +
           "history. 403 = no agent profile on this login.",
         tags: TAGS,
+        permission: "agents.self",
         response: myPayableResponseSchema,
         errors: [401, 403],
       }),
@@ -161,6 +165,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "Payout history (latest 50 by default), voided runs included " +
           "and marked. Filter by ?agentId.",
         tags: TAGS,
+        permission: "agents.read",
         querystring: payoutListQuerySchema,
         response: payoutListResponseSchema,
         errors: [400, 401, 403],
@@ -179,6 +184,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "a loan settled by another run meanwhile. `amount` is a number " +
           "in; a Decimal STRING comes back.",
         tags: TAGS,
+        permission: "agents.payout",
         body: createPayoutRequestSchema,
         response: payoutCreateResponseSchema,
         status: 201,
@@ -197,6 +203,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "to be paid again. The row stays, marked voided. 409 = " +
           "already voided.",
         tags: TAGS,
+        permission: "agents.payout",
         params: agentIdParamSchema,
         body: voidPayoutSchema,
         response: payoutRowResponseSchema,
@@ -212,6 +219,7 @@ export async function agentRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "One agent by id or AGT-number, book totals rolled up.",
         tags: TAGS,
+        permission: "agents.read",
         params: agentIdParamSchema,
         response: agentSummaryResponseSchema,
         errors: [401, 403, 404],
@@ -228,6 +236,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "Adjust rate, territory, notes or active. The response is the " +
           "raw row — commissionRate comes back as a Decimal STRING.",
         tags: TAGS,
+        permission: "agents.manage",
         params: agentIdParamSchema,
         body: updateAgentSchema,
         response: agentRowResponseSchema,
@@ -245,6 +254,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "One agent's assisted loans (staff view), with totals over the " +
           "whole book regardless of paging or ?status filter.",
         tags: TAGS,
+        permission: "agents.read",
         params: agentIdParamSchema,
         querystring: agentBookQuerySchema,
         response: agentBookResponseSchema,
@@ -262,6 +272,7 @@ export async function agentRoutes(app: FastifyInstance) {
           "What an agent is owed right now — booked commissions no " +
           "payout has settled — and the loans behind the figure.",
         tags: TAGS,
+        permission: "agents.read",
         params: agentIdParamSchema,
         response: agentPayableResponseSchema,
         errors: [401, 403, 404],

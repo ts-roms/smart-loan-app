@@ -114,6 +114,7 @@ export async function scoringRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "The questionnaire, in the order it should be asked.",
         tags: TAGS,
+        permission: "customers.read",
         response: surveyQuestionListResponseSchema,
         errors: [401, 403],
       }),
@@ -129,6 +130,7 @@ export async function scoringRoutes(app: FastifyInstance) {
           "Score a completed questionnaire and persist it against the " +
           "customer.",
         tags: TAGS,
+        permission: "customers.write",
         body: submitSurveySchema,
         response: submitSurveyResponseSchema,
         status: 201,
@@ -144,6 +146,7 @@ export async function scoringRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "The customer's most recent persisted score.",
         tags: TAGS,
+        permission: "customers.read",
         params: customerIdParamSchema,
         response: creditScoreResponseSchema,
         // 404 means never scored, not "no such customer".
@@ -185,6 +188,7 @@ export async function scoringRoutes(app: FastifyInstance) {
           "The editable scorecard: factors, their questions, and what each " +
           "weight is currently worth in points.",
         tags: TAGS,
+        permission: "customers.read",
         response: catalogResponseSchema,
         errors: [401, 403],
       }),
@@ -210,6 +214,7 @@ export async function scoringRoutes(app: FastifyInstance) {
           "Every scorecard revision, newest first. Snapshots omitted — " +
           "fetch one version to get its snapshot.",
         tags: TAGS,
+        permission: "customers.read",
         response: catalogHistoryResponseSchema,
         errors: [401, 403],
       }),
@@ -223,6 +228,7 @@ export async function scoringRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "One revision, snapshot included — the replayable payload.",
         tags: TAGS,
+        permission: "customers.read",
         params: versionParamSchema,
         response: catalogVersionResponseSchema,
         errors: [400, 401, 403, 404],
@@ -237,6 +243,7 @@ export async function scoringRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Add a factor. Redistributes every other factor's points.",
         tags: TAGS,
+        permission: "admin.scoring_catalog",
         body: factorCreateSchema,
         response: factorRowResponseSchema,
         status: 201,
@@ -255,6 +262,7 @@ export async function scoringRoutes(app: FastifyInstance) {
         summary:
           "Persist a new factor order. Mints a version; moves no points.",
         tags: TAGS,
+        permission: "admin.scoring_catalog",
         body: reorderSchema,
         errors: [400, 401, 403],
       }),
@@ -270,6 +278,7 @@ export async function scoringRoutes(app: FastifyInstance) {
           "Edit a factor. A weight change restates every other factor's " +
           "points.",
         tags: TAGS,
+        permission: "admin.scoring_catalog",
         params: catalogIdParamSchema,
         body: factorUpdateSchema,
         response: factorRowResponseSchema,
@@ -285,6 +294,7 @@ export async function scoringRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Remove a factor. Refused while it still owns questions.",
         tags: TAGS,
+        permission: "admin.scoring_catalog",
         params: catalogIdParamSchema,
         // 409 carries `questionCount`: the FK cascades, so deleting a
         // factor would silently take its questions and every answer key
@@ -301,6 +311,7 @@ export async function scoringRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Add a question to a factor.",
         tags: TAGS,
+        permission: "admin.scoring_catalog",
         body: questionCreateSchema,
         response: questionRowResponseSchema,
         status: 201,
@@ -318,6 +329,7 @@ export async function scoringRoutes(app: FastifyInstance) {
           "Persist a new question order. Versioned because the order is " +
           "what the borrower was asked in.",
         tags: TAGS,
+        permission: "admin.scoring_catalog",
         body: reorderSchema,
         errors: [400, 401, 403],
       }),
@@ -333,6 +345,7 @@ export async function scoringRoutes(app: FastifyInstance) {
           "Edit a question. kind and config are validated as the MERGED " +
           "pair, not just the fields sent.",
         tags: TAGS,
+        permission: "admin.scoring_catalog",
         params: catalogIdParamSchema,
         body: questionUpdateSchema,
         response: questionRowResponseSchema,
@@ -348,6 +361,7 @@ export async function scoringRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Remove a question. Stored answers under its key survive.",
         tags: TAGS,
+        permission: "admin.scoring_catalog",
         params: catalogIdParamSchema,
         errors: [400, 401, 403, 404],
       }),
