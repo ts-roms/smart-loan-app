@@ -1,20 +1,25 @@
 /**
- * Writing an uploaded file to disk.
+ * Writing an uploaded file to storage.
  *
  * Extracted from uploads.routes so the co-maker consent flow can reuse
  * it. A co-maker has no account — the invite token is their
  * authorization — so they can't call the authenticated upload
  * endpoint, but they must not get a second, laxer implementation of
  * where files land and which extensions are allowed.
+ *
+ * Since roadmap 3.1 the bytes go to a `StorageBackend` rather than
+ * straight to the filesystem. On the default local-disk backend that is
+ * the same `mkdir` + stream-to-file it always was, at the same path; the
+ * seam exists so a bucket is a config change rather than a rewrite.
  */
 
 import { randomUUID } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import { mkdir, unlink } from "node:fs/promises";
-import { extname, join } from "node:path";
-import { pipeline } from "node:stream/promises";
+import { extname } from "node:path";
 
 import type { MultipartFile } from "@fastify/multipart";
+import type { StorageBackend } from "@loan/storage";
+
+import { uploadStorage, urlForKey } from "./backend";
 
 /**
  * Mirrors `UploadSubdir` in libs/api-client/src/hooks/use-upload.ts.
@@ -53,10 +58,27 @@ export type StoreResult =
   | { ok: true; url: string; filename: string; mimetype: string }
   | { ok: false; code: 400 | 413; message: string };
 
+/**
+ * Where the bytes go.
+ *
+ * A `StorageBackend` is what this really wants, and what the tests
+ * inject. A plain string is the legacy form and means "the configured
+ * backend" — the co-maker consent route passes the uploads directory
+ * it derived itself, which is the same directory the configured local
+ * backend is already rooted at, so the two agree by construction. It
+ * matters that a string does NOT build a bare local adapter: that would
+ * leave one caller writing to disk while the other wrote to a bucket.
+ */
+export type StoreTarget = StorageBackend | string;
+
+function backendFor(target: StoreTarget | undefined): StorageBackend {
+  return typeof target === "object" ? target : uploadStorage();
+}
+
 export async function storeUpload(
   file: MultipartFile,
   subdir: string,
-  baseDir: string,
+  target?: StoreTarget,
 ): Promise<StoreResult> {
   if (!ALLOWED_SUBDIRS.has(subdir)) {
     return { ok: false, code: 400, message: "Unknown upload subdir" };
@@ -73,24 +95,26 @@ export async function storeUpload(
     };
   }
 
-  const targetDir = join(baseDir, subdir);
-  await mkdir(targetDir, { recursive: true });
+  const storage = backendFor(target);
   const filename = `${randomUUID()}${ext}`;
-  const fpath = join(targetDir, filename);
-  await pipeline(file.file, createWriteStream(fpath));
+  // Both halves are allowlisted — `subdir` against ALLOWED_SUBDIRS and
+  // the extension against ALLOWED_EXT — so this key cannot carry a
+  // traversal. The backend re-checks anyway; see @loan/storage/key.
+  const key = `${subdir}/${filename}`;
+  await storage.put(key, file.file, { contentType: file.mimetype });
 
   // @fastify/multipart stops the stream at the size limit rather than
-  // throwing, so the partial file is already on disk here. Remove it —
+  // throwing, so the partial object is already stored here. Remove it —
   // the caller gets a 413 and never learns the URL, so leaving it
   // would just accumulate unreachable bytes.
   if (file.file.truncated) {
-    await unlink(fpath).catch(() => {});
+    await storage.delete(key).catch(() => {});
     return { ok: false, code: 413, message: "File exceeds 5 MB" };
   }
 
   return {
     ok: true,
-    url: `/uploads/${subdir}/${filename}`,
+    url: urlForKey(key),
     filename,
     mimetype: file.mimetype,
   };

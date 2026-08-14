@@ -10,6 +10,14 @@
  * here and document the same name in .env.example.
  */
 
+import { join } from "node:path";
+
+import {
+  missingS3Config,
+  resolveDriver,
+  type StorageConfig,
+} from "@loan/storage";
+
 const isProd = (process.env.NODE_ENV ?? "development") === "production";
 
 /** Lowercase string env var with a default. */
@@ -33,6 +41,17 @@ function num(key: string, fallback: number): number {
   if (!raw) return fallback;
   const n = Number(raw);
   return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * Tri-state boolean env var. `undefined` means "not set", which is
+ * distinct from `false` — some settings default to something other than
+ * off, and need to tell an explicit `false` from an absent variable.
+ */
+function bool(key: string): boolean | undefined {
+  const raw = (process.env[key] ?? "").trim().toLowerCase();
+  if (raw === "") return undefined;
+  return raw === "true" || raw === "1" || raw === "yes";
 }
 
 const NOTIFICATION_PROVIDERS = ["MOCK", "SENDGRID", "TWILIO", "SES"] as const;
@@ -99,6 +118,29 @@ export const config = {
   uploadsDir: str("UPLOADS_DIR", ""),
   /** Falls back to `${cwd}/uploads` when blank — done lazily in app.ts. */
 
+  /**
+   * Which storage backend holds uploaded files.
+   *
+   * Absent, blank or unrecognised all mean LOCAL — the value every
+   * deployment running today behaves as, without having the variable
+   * set. Introducing this must be invisible to them, so there is
+   * deliberately no warning for the unset case.
+   *
+   * Note this is `str`, not `enumOf`: `@loan/storage` owns the
+   * normalisation (`resolveDriver`) so the lib's fallback rule is one
+   * implementation rather than two that could drift apart.
+   */
+  storageDriver: str("STORAGE_DRIVER", ""),
+  s3Bucket: str("S3_BUCKET", ""),
+  s3Region: str("S3_REGION", "us-east-1"),
+  /** Custom endpoint for MinIO / R2 / Spaces. Blank means real AWS S3. */
+  s3Endpoint: str("S3_ENDPOINT", ""),
+  s3AccessKeyId: str("S3_ACCESS_KEY_ID", ""),
+  s3SecretAccessKey: str("S3_SECRET_ACCESS_KEY", ""),
+  s3SessionToken: str("S3_SESSION_TOKEN", ""),
+  /** Defaults to on whenever a custom endpoint is set; see @loan/storage. */
+  s3ForcePathStyle: bool("S3_FORCE_PATH_STYLE"),
+
   // ── Observability ──────────────────────────────────────────────────
   sentryDsn: str("SENTRY_DSN", ""),
 
@@ -140,6 +182,32 @@ export const config = {
   /** Cap the assistant's output length. Keeps prompts cheap + responses tight. */
   ollamaMaxTokens: num("OLLAMA_MAX_TOKENS", 512),
 };
+
+/**
+ * The uploads directory, with the `${cwd}/uploads` fallback applied.
+ *
+ * A function rather than a field because `process.cwd()` at module-load
+ * time is not necessarily what it is at call time under tsx/vitest, and
+ * because four call sites were each re-deriving this expression.
+ */
+export function resolvedUploadsDir(): string {
+  return config.uploadsDir || join(process.cwd(), "uploads");
+}
+
+/** Shape `@loan/storage` wants. Single place that maps env → backend. */
+export function storageConfig(): StorageConfig {
+  return {
+    driver: config.storageDriver,
+    uploadsDir: resolvedUploadsDir(),
+    s3Bucket: config.s3Bucket,
+    s3Region: config.s3Region,
+    s3Endpoint: config.s3Endpoint,
+    s3AccessKeyId: config.s3AccessKeyId,
+    s3SecretAccessKey: config.s3SecretAccessKey,
+    s3SessionToken: config.s3SessionToken,
+    s3ForcePathStyle: config.s3ForcePathStyle,
+  };
+}
 
 /**
  * Boot-time validation. Hard-fails in production when something looks
@@ -217,6 +285,28 @@ export function validateConfig(log?: {
       issues.push({
         level: "error",
         message: `PAYMENT_PROVIDER=${config.paymentProvider} but missing: ${missing.join(", ")}`,
+      });
+    }
+  }
+
+  /*
+   * Same rule as the providers above, and for a sharper reason. An
+   * operator who sets STORAGE_DRIVER=S3 believes borrower KYC documents
+   * are landing in a bucket. If the credentials are absent the backend
+   * falls back to local disk — correct for development, but in
+   * production it means regulated records accumulating on an ephemeral
+   * container filesystem that nothing is backing up, while the config
+   * says otherwise. Refuse to boot instead.
+   *
+   * An UNSET driver is not checked at all: local disk is the supported
+   * default, not a degraded mode.
+   */
+  if (resolveDriver(config.storageDriver) === "S3") {
+    const missing = missingS3Config(storageConfig());
+    if (missing.length > 0) {
+      issues.push({
+        level: "error",
+        message: `STORAGE_DRIVER=S3 but missing: ${missing.join(", ")}. Uploads would silently fall back to local disk.`,
       });
     }
   }

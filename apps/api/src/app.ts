@@ -15,7 +15,6 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyError } from "fastify";
 import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 
 import { config } from "./config";
 import { decorateFeatureGate } from "./features/licensing/feature-gate.plugin";
@@ -23,6 +22,7 @@ import { platformRoutes } from "./features/platform/index";
 import { coMakerConsentRoutes } from "./features/co-maker/consent.routes";
 import { publicRoutes } from "./features/public/index";
 import { registerRoutes } from "./routes/index";
+import { describeStorage, uploadStorage } from "./features/uploads/backend";
 import { uploadStaticPlugin } from "./features/uploads/static.plugin";
 import { validationBodyOf, validationError } from "./lib/validation-error";
 
@@ -328,9 +328,16 @@ export async function buildApp() {
   //
   // Registered as its own plugin so the signature check is scoped to
   // these routes and testable on its own — see static.plugin.ts.
-  const uploadsDir = config.uploadsDir || join(process.cwd(), "uploads");
-  await mkdir(uploadsDir, { recursive: true });
-  await app.register(uploadStaticPlugin, { root: uploadsDir });
+  //
+  // The backend is local disk unless STORAGE_DRIVER says otherwise; the
+  // boot-time mkdir is therefore conditional on actually having a local
+  // root, since there is no directory to create for a bucket.
+  const storage = uploadStorage(app.log);
+  if (storage.localRoot !== undefined) {
+    await mkdir(storage.localRoot, { recursive: true });
+  }
+  app.log.info(`[storage] uploads backed by ${describeStorage()}`);
+  await app.register(uploadStaticPlugin, { storage });
 
   /*
    * The spec described 336 operations and said nothing about how to

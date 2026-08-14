@@ -1,34 +1,33 @@
 import type { FastifyReply } from "fastify";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+
+import { keyFromUrl, uploadStorage } from "../uploads/backend";
 
 /**
- * Document helpers. Filesystem signature read + PDF streaming response
+ * Document helpers. Stored-signature read + PDF streaming response
  * shape. Both used by the service and the controller, kept as
  * standalone functions because they're stateless and don't carry deps.
  */
 
-const UPLOADS_DIR = process.env.UPLOADS_DIR ?? join(process.cwd(), "uploads");
-
 /**
  * Resolve a stored signature URL (e.g. `/uploads/signatures/xxx.png`)
- * to the filesystem path and return the bytes. Returns null on any
- * failure — the renderer falls back to a blank signature line, which
- * matches the experience of "no signature on file."
+ * to a storage key and return the bytes. Returns null on any failure —
+ * the renderer falls back to a blank signature line, which matches the
+ * experience of "no signature on file."
  *
- * Path traversal is rejected explicitly: anything containing `..` or
- * not starting with `/uploads/` is dropped.
+ * Path traversal is rejected by `keyFromUrl`, which applies the same
+ * key validator the storage backends do. This used to hold its own
+ * `..`-substring check against its own copy of `UPLOADS_DIR`, read
+ * straight from `process.env` rather than from `config` — one rule in
+ * one place now, and the read follows whichever backend is configured
+ * rather than always hitting local disk.
  */
 export async function loadSignature(
   url: string | null | undefined,
 ): Promise<Buffer | null> {
-  if (!url) return null;
-  const prefix = "/uploads/";
-  if (!url.startsWith(prefix)) return null;
-  const rel = url.slice(prefix.length);
-  if (rel.includes("..")) return null;
+  const key = keyFromUrl(url);
+  if (key === null) return null;
   try {
-    return await readFile(join(UPLOADS_DIR, rel));
+    return await uploadStorage().get(key);
   } catch {
     return null;
   }

@@ -265,7 +265,44 @@ The full set is documented in `.env.example`; the essentials:
 | `PUBLIC_API_URL` | Prod only | Public URL the API advertises in payment webhooks + PDF refs.                  |
 | `SENTRY_DSN`     | Prod-rec. | Per-tenant tagged error reporting. Empty disables.                             |
 | `UPLOADS_DIR`    | No        | Where uploaded docs land. Defaults to `./uploads` relative to cwd.             |
+| `STORAGE_DRIVER` | No        | `LOCAL` (default, or unset) / `S3`. See "Object storage" below.                |
 | `SYSTEM_USER_ID` | Prod-rec. | UUID of a real "system" user for scheduled-job audit attribution.              |
+
+### Object storage
+
+Uploaded files — KYC documents, selfies, collateral photographs,
+signatures, the company logo — sit behind a swappable backend
+(`@loan/storage`). **Local disk is the default and stays the default**:
+leaving `STORAGE_DRIVER` unset behaves exactly as it always has, writing
+under `UPLOADS_DIR`.
+
+| Variable               | Required when       | What it does                                                     |
+| ---------------------- | ------------------- | ---------------------------------------------------------------- |
+| `STORAGE_DRIVER`       | No                  | `S3` to use a bucket. Unset/blank/unrecognised means local disk. |
+| `S3_BUCKET`            | `STORAGE_DRIVER=S3` | Bucket name.                                                     |
+| `S3_ACCESS_KEY_ID`     | `STORAGE_DRIVER=S3` | Access key.                                                      |
+| `S3_SECRET_ACCESS_KEY` | `STORAGE_DRIVER=S3` | Secret key.                                                      |
+| `S3_REGION`            | No                  | Defaults to `us-east-1`.                                         |
+| `S3_ENDPOINT`          | No                  | MinIO / R2 / Spaces endpoint. Blank means real AWS S3.           |
+| `S3_FORCE_PATH_STYLE`  | No                  | Defaults on whenever `S3_ENDPOINT` is set.                       |
+| `S3_SESSION_TOKEN`     | No                  | For temporary STS credentials.                                   |
+
+Two things worth knowing before switching:
+
+- **Files are still served by the API, not by redirecting to the
+  bucket.** `/uploads/` responses carry a `sandbox` CSP and
+  `X-Content-Type-Options: nosniff`, and neither survives a redirect to
+  another origin. Uploads are attacker-influenced bytes, so the API
+  stays on the data path in both modes.
+- **`deploy/backup/backup.sh` does not back up a bucket.** It archives
+  `UPLOADS_DIR` and says so loudly when `STORAGE_DRIVER=S3`. Object
+  durability protects against hardware failure, not against a deletion
+  or a bad migration — enable bucket versioning and replication.
+
+Stored URLs keep the shape `/uploads/<subdir>/<uuid><ext>` in both
+modes, and the storage key is that path minus the `/uploads/` prefix, so
+switching backends needs no database migration — only a copy of the
+files into the bucket under the same keys.
 
 ### Provider switches (default all `MOCK`)
 

@@ -29,6 +29,7 @@
       "@loan/decisioning": ["libs/decisioning/src/index.ts"],
       "@loan/pdf": ["libs/pdf/src/index.ts"],
       "@loan/kyc": ["libs/kyc/src/index.ts"],
+      "@loan/storage": ["libs/storage/src/index.ts"],
       "@loan/licensing": ["libs/licensing/src/index.ts"],
       "@loan/api-client": ["libs/api-client/src/index.ts"],
       "@loan/ui": ["libs/ui/src/index.ts"],
