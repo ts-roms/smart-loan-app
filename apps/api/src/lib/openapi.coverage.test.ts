@@ -45,14 +45,34 @@ import { routeSchema } from "./openapi";
  * product-profitability) + loans (39) + customers (11) +
  * collections (12) + auth (19) + rbac (18) + payments (9) +
  * loan-products (8) + delegations (8) + portal (17) +
- * cooperative (15) + dorsi (11) + repossession (11) + agents (11).
+ * cooperative (15) + dorsi (11) + repossession (11) + agents (11) +
+ * reconciliation (8) + demand-letters (7) + screening (6) +
+ * system (6) + lease (6) + compliance (5) + annual-docs (5) +
+ * co-maker (4) + assistant (4).
  *
- * Portal is 17 of 18 (ledger.pdf answers PDF bytes); dorsi is 11 of 12
- * (the board-approval lookup can answer a literal null body). Both are
- * skipped for the same reason: routeSchema would document a JSON shape
- * those answers don't have.
+ * THREE routes are deliberately undocumented, all for the same reason —
+ * `routeSchema` would publish a JSON object shape the answer does not
+ * have:
+ *
+ *   • portal is 17 of 18 — `ledger.pdf` answers PDF bytes.
+ *   • dorsi is 11 of 12 — the board-approval lookup can answer a
+ *     literal `null` body.
+ *   • screening is 6 of 7 — `/customers/:id/latest` answers `null` at
+ *     the top level for a customer who has never been screened.
+ *
+ * Two further routes ARE counted here but carry a documented RESPONSE
+ * only, with the request body left undescribed on purpose. Both are
+ * noted in place:
+ *
+ *   • compliance `/customers/:id/export` — its body is entirely
+ *     optional and the handler parses `req.body ?? {}`, so attaching a
+ *     body schema would turn a legal bodyless POST into a 400.
+ *   • co-maker `/:token/upload` — multipart, read via `req.file()`.
+ *
+ * `documents` and `kyc` are untouched by this batch by request; another
+ * branch is changing how they read and write files.
  */
-const DOCUMENTED = 240;
+const DOCUMENTED = 291;
 
 const FEATURES = join(import.meta.dirname, "..", "features");
 

@@ -14,7 +14,23 @@ import {
 } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import { manualMatchSchema, statementSchema } from "./schemas";
+import { routeSchema } from "../../lib/openapi";
+
+import {
+  autoMatchResponseSchema,
+  candidateListResponseSchema,
+  lineIdParamSchema,
+  lineResponseSchema,
+  manualMatchSchema,
+  statementDetailResponseSchema,
+  statementIdParamSchema,
+  statementListResponseSchema,
+  statementResponseSchema,
+  statementSchema,
+  summaryResponseSchema,
+} from "./schemas";
+
+const TAGS = ["reconciliation"];
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -26,7 +42,14 @@ declare module "fastify" {
 }
 
 export async function reconciliationRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * onRequest, not preHandler — routes in this group carry request
+   * schemas, and Fastify validates at preValidation, BEFORE preHandler.
+   * With `authenticate` at preHandler an unauthenticated caller posting
+   * a malformed statement got a 400 describing the import schema
+   * instead of a 401. See decision-rules.routes.ts for the full account.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   // Bank reconciliation is a PROFESSIONAL-tier feature. The gate reads
   // req.tenantCtx, so resolveTenant must run before it.
@@ -41,13 +64,32 @@ export async function reconciliationRoutes(app: FastifyInstance) {
 
   app.get(
     "/statements",
-    { preHandler: app.requirePermission("accounting.read") },
+    {
+      preHandler: app.requirePermission("accounting.read"),
+      schema: routeSchema({
+        summary:
+          "Imported bank statements, most recent period first. Headers " +
+          "only — fetch one by id for its lines.",
+        tags: TAGS,
+        response: statementListResponseSchema,
+        errors: [401, 402, 403],
+      }),
+    },
     async (req) => req.reconciliationCtx!.repo.list(),
   );
 
   app.get<{ Params: { id: string } }>(
     "/statements/:id",
-    { preHandler: app.requirePermission("accounting.read") },
+    {
+      preHandler: app.requirePermission("accounting.read"),
+      schema: routeSchema({
+        summary: "One statement with every imported line, oldest first.",
+        tags: TAGS,
+        params: statementIdParamSchema,
+        response: statementDetailResponseSchema,
+        errors: [401, 402, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const s = await req.reconciliationCtx!.repo.findById(req.params.id);
       if (!s) return reply.code(404).send({ error: "NotFound" });
@@ -57,13 +99,36 @@ export async function reconciliationRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { id: string } }>(
     "/statements/:id/summary",
-    { preHandler: app.requirePermission("accounting.read") },
+    {
+      preHandler: app.requirePermission("accounting.read"),
+      schema: routeSchema({
+        summary:
+          "Matched/unmatched counts and amounts for one statement — the " +
+          "reconciliation dashboard's counters.",
+        tags: TAGS,
+        params: statementIdParamSchema,
+        response: summaryResponseSchema,
+        errors: [401, 402, 403],
+      }),
+    },
     async (req) => req.reconciliationCtx!.repo.summary(req.params.id),
   );
 
   app.post(
     "/statements",
-    { preHandler: app.requirePermission("accounting.post_journal") },
+    {
+      preHandler: app.requirePermission("accounting.post_journal"),
+      schema: routeSchema({
+        summary:
+          "Import a bank statement and its lines in one call. Answers the " +
+          "statement header; the lines are not echoed back.",
+        tags: TAGS,
+        body: statementSchema,
+        response: statementResponseSchema,
+        status: 201,
+        errors: [400, 401, 402, 403],
+      }),
+    },
     async (req, reply) => {
       const { repo, audit } = req.reconciliationCtx!;
       const parsed = statementSchema.safeParse(req.body);
@@ -106,7 +171,18 @@ export async function reconciliationRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>(
     "/statements/:id/auto-match",
-    { preHandler: app.requirePermission("accounting.post_journal") },
+    {
+      preHandler: app.requirePermission("accounting.post_journal"),
+      schema: routeSchema({
+        summary:
+          "Run the auto-matcher over the statement's unmatched lines. " +
+          "Conservative — anything ambiguous is left for a human.",
+        tags: TAGS,
+        params: statementIdParamSchema,
+        response: autoMatchResponseSchema,
+        errors: [401, 402, 403],
+      }),
+    },
     async (req) => {
       const { repo, audit } = req.reconciliationCtx!;
       const result = await repo.autoMatch(req.params.id);
@@ -123,7 +199,19 @@ export async function reconciliationRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>(
     "/lines/:id/match",
-    { preHandler: app.requirePermission("accounting.post_journal") },
+    {
+      preHandler: app.requirePermission("accounting.post_journal"),
+      schema: routeSchema({
+        summary:
+          "Pin a bank line to an internal record the auto-matcher could " +
+          "not place. 409 if another line already claims that record.",
+        tags: TAGS,
+        params: lineIdParamSchema,
+        body: manualMatchSchema,
+        response: lineResponseSchema,
+        errors: [400, 401, 402, 403, 409],
+      }),
+    },
     async (req, reply) => {
       const parsed = manualMatchSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -151,7 +239,18 @@ export async function reconciliationRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>(
     "/lines/:id/unmatch",
-    { preHandler: app.requirePermission("accounting.post_journal") },
+    {
+      preHandler: app.requirePermission("accounting.post_journal"),
+      schema: routeSchema({
+        summary:
+          "Release a line's match, clearing every matched* field back to " +
+          "null so the record it claimed is free again.",
+        tags: TAGS,
+        params: lineIdParamSchema,
+        response: lineResponseSchema,
+        errors: [401, 402, 403],
+      }),
+    },
     async (req) => req.reconciliationCtx!.repo.unmatch(req.params.id),
   );
 
@@ -161,7 +260,18 @@ export async function reconciliationRoutes(app: FastifyInstance) {
    */
   app.get<{ Params: { id: string } }>(
     "/lines/:id/candidates",
-    { preHandler: app.requirePermission("accounting.read") },
+    {
+      preHandler: app.requirePermission("accounting.read"),
+      schema: routeSchema({
+        summary:
+          "Scored match suggestions for one line, best first (up to 10). " +
+          "Answers [] for an unknown line rather than 404.",
+        tags: TAGS,
+        params: lineIdParamSchema,
+        response: candidateListResponseSchema,
+        errors: [401, 402, 403],
+      }),
+    },
     async (req) => req.reconciliationCtx!.repo.candidatesFor(req.params.id, 10),
   );
 }

@@ -1,15 +1,24 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { AuditLogRepository } from "@loan/db";
 
+import { routeSchema } from "../../lib/openapi";
+
 import {
+  brandingResponseSchema,
   brandingUpdateSchema,
+  idlePolicyResponseSchema,
+  idlePolicyUpdateResponseSchema,
   idlePolicyUpdateSchema,
   IDLE_TIMEOUT_MAX,
   IDLE_TIMEOUT_MIN,
   IDLE_WARNING_MAX,
   IDLE_WARNING_MIN,
+  notificationProvidersResponseSchema,
+  notificationProvidersUpdateResponseSchema,
   notificationProvidersUpdateSchema,
 } from "./schemas";
+
+const TAGS = ["system"];
 
 /**
  * Mask a secret for safe display in the admin UI. Keeps the first 4
@@ -39,7 +48,19 @@ declare module "fastify" {
 }
 
 export async function systemRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * onRequest, not preHandler — routes in this group carry request
+   * schemas, and Fastify validates at preValidation, BEFORE preHandler.
+   * With `authenticate` at preHandler an unauthenticated caller PUTting
+   * a malformed body got a 400 describing the schema instead of a 401.
+   * See decision-rules.routes.ts for the full account.
+   *
+   * EVERY route here is authenticated, including the two GETs that take
+   * no permission — this feature holds no liveness or readiness probe.
+   * Those live in features/health, mounted separately and deliberately
+   * open, and nothing in this file should be read as covering them.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     req.systemAuditRepo = new AuditLogRepository(
@@ -50,7 +71,27 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Idle-then-logout policy ────────────────────────────────────────
 
-  app.get("/idle-policy", async (req) => {
+  /*
+   * No `requirePermission` on this read, and that is intentional: every
+   * signed-in session needs the idle policy to arm its own logout timer,
+   * so gating it behind admin.system_config would break the shell for
+   * everyone who is not an admin. Authenticated, unpermissioned — hence
+   * a 401 in the spec but no 403.
+   */
+  app.get(
+    "/idle-policy",
+    {
+      schema: routeSchema({
+        summary:
+          "The org-wide idle-then-logout policy, plus the bounds the " +
+          "server enforces. Any signed-in caller — the shell arms its " +
+          "timer from this.",
+        tags: TAGS,
+        response: idlePolicyResponseSchema,
+        errors: [401],
+      }),
+    },
+    async (req) => {
     // SystemConfig is a singleton row; upsert the defaults on first read
     // so a fresh install never returns nulls. Cheap; runs once per
     // database lifetime.
@@ -73,11 +114,23 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
         idleWarningSeconds: { min: IDLE_WARNING_MIN, max: IDLE_WARNING_MAX },
       },
     };
-  });
+  },
+  );
 
   app.put(
     "/idle-policy",
-    { preHandler: app.requirePermission("admin.system_config") },
+    {
+      preHandler: app.requirePermission("admin.system_config"),
+      schema: routeSchema({
+        summary:
+          "Set the idle-then-logout policy. Answers the stored values " +
+          "without the bounds block the GET carries.",
+        tags: TAGS,
+        body: idlePolicyUpdateSchema,
+        response: idlePolicyUpdateResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const parsed = idlePolicyUpdateSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -131,19 +184,48 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
     updatedAt: true,
   } as const;
 
-  app.get("/branding", async (req) => {
-    const cfg = await req.tenantCtx.prisma.systemConfig.upsert({
-      where: { id: "singleton" },
-      update: {},
-      create: { id: "singleton" },
-      select: BRANDING_SELECT,
-    });
-    return cfg;
-  });
+  /*
+   * Unpermissioned for the same reason as /idle-policy: the sidebar,
+   * the page title and every generated PDF need the company's name and
+   * logo, so this has to be readable by whoever is signed in.
+   */
+  app.get(
+    "/branding",
+    {
+      schema: routeSchema({
+        summary:
+          "Company branding — name, logo and contact details used in the " +
+          "shell, page titles and PDF letterheads. Any signed-in caller.",
+        tags: TAGS,
+        response: brandingResponseSchema,
+        errors: [401],
+      }),
+    },
+    async (req) => {
+      const cfg = await req.tenantCtx.prisma.systemConfig.upsert({
+        where: { id: "singleton" },
+        update: {},
+        create: { id: "singleton" },
+        select: BRANDING_SELECT,
+      });
+      return cfg;
+    },
+  );
 
   app.put(
     "/branding",
-    { preHandler: app.requirePermission("admin.system_config") },
+    {
+      preHandler: app.requirePermission("admin.system_config"),
+      schema: routeSchema({
+        summary:
+          "Update company branding. Send null (or an empty string) in a " +
+          "field to clear it; companyName is required.",
+        tags: TAGS,
+        body: brandingUpdateSchema,
+        response: brandingResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const parsed = brandingUpdateSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -199,7 +281,17 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get(
     "/notification-providers",
-    { preHandler: app.requirePermission("admin.system_config") },
+    {
+      preHandler: app.requirePermission("admin.system_config"),
+      schema: routeSchema({
+        summary:
+          "Per-tenant Twilio + SendGrid settings, with the secrets " +
+          "MASKED — the full credentials are never returned after the PUT.",
+        tags: TAGS,
+        response: notificationProvidersResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     async (req) => {
       const cfg = await req.tenantCtx.prisma.systemConfig.upsert({
         where: { id: "singleton" },
@@ -247,7 +339,18 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
    */
   app.put(
     "/notification-providers",
-    { preHandler: app.requirePermission("admin.system_config") },
+    {
+      preHandler: app.requirePermission("admin.system_config"),
+      schema: routeSchema({
+        summary:
+          "Store Twilio + SendGrid credentials. Answers { ok: true } and " +
+          "an X-Refresh-Needed header — re-GET for the masked view.",
+        tags: TAGS,
+        body: notificationProvidersUpdateSchema,
+        response: notificationProvidersUpdateResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     async (req, reply) => {
       const parsed = notificationProvidersUpdateSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -324,8 +427,18 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
           ),
         },
       });
-      // Return the masked view — same shape as GET, so the UI can
-      // refresh from the response without an extra round-trip.
+      // Acknowledge only, and tell the client to re-read.
+      //
+      // This comment used to say the opposite — that the masked view
+      // came back "so the UI can refresh from the response without an
+      // extra round-trip" — while the code below has always sent
+      // `{ ok: true }`. Corrected when the response was documented,
+      // because a schema written from the old comment would have
+      // published a body this route never sends.
+      //
+      // The round-trip is the point: re-GETting is what re-masks the
+      // secrets, and echoing them back here would undo the property the
+      // GET exists to maintain.
       return reply.code(200).header("X-Refresh-Needed", "1").send({ ok: true });
     },
   );
