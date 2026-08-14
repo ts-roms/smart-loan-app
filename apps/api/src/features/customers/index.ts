@@ -1,5 +1,4 @@
 import {
-  AuditLogRepository,
   CustomerExposureRepository,
   CustomerLedgerRepository,
   CustomerRepository,
@@ -15,6 +14,7 @@ import { CustomerService } from "./customers.service";
 import { CustomerLedgerController } from "./ledger.controller";
 import { registerLedgerHttp } from "./ledger.routes";
 import { CustomerLedgerService } from "./ledger.service";
+import { auditFor } from "../../lib/audit-context";
 
 /**
  * Customers feature entry point — registered by the central router
@@ -105,7 +105,7 @@ function buildCustomerServices(app: FastifyInstance) {
         customerRepo,
         prisma,
         screening,
-        new AuditLogRepository(prisma, req.user?.impersonatedBy),
+        auditFor(req, prisma),
         new CustomerExposureRepository(prisma),
       ),
       bulkImport: new BulkImportService(customerRepo, screening),

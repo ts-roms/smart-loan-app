@@ -1,13 +1,14 @@
-import { KycRepository } from "@loan/db";
+import { KycRepository, type AuditLogRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { auditFor } from "../../lib/audit-context";
 import { KycController } from "./kyc.controller";
 import { registerKycHttp } from "./kyc.routes";
 import { KycService } from "./kyc.service";
 
 declare module "fastify" {
   interface FastifyRequest {
-    kycServices?: { kyc: KycService };
+    kycServices?: { kyc: KycService; audit: AuditLogRepository };
   }
 }
 
@@ -33,7 +34,12 @@ export async function kycRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const repo = new KycRepository(req.tenantCtx.prisma);
-    req.kycServices = { kyc: new KycService(repo) };
+    req.kycServices = {
+      kyc: new KycService(repo),
+      // §56 — the decide route hands this down so the audit row lands
+      // inside KycRepository.decide's transaction.
+      audit: auditFor(req, req.tenantCtx.prisma),
+    };
   });
 
   const controller = new KycController();

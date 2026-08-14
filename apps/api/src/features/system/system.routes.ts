@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { AuditLogRepository } from "@loan/db";
+import type { AuditLogRepository } from "@loan/db";
 
+import { auditFor } from "../../lib/audit-context";
 import { routeSchema } from "../../lib/openapi";
 
 import {
@@ -63,10 +64,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
-    req.systemAuditRepo = new AuditLogRepository(
-      req.tenantCtx.prisma,
-      req.user?.impersonatedBy,
-    );
+    req.systemAuditRepo = auditFor(req);
   });
 
   // ── Idle-then-logout policy ────────────────────────────────────────

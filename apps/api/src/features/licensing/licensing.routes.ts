@@ -14,7 +14,6 @@
  * Layered: routes → controller → service → repo + audit.
  */
 
-import { AuditLogRepository } from "@loan/db";
 import { loadPublicKeyPem } from "@loan/licensing";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
@@ -26,6 +25,7 @@ import {
   deactivateLicenseResponseSchema,
   licenseStatusResponseSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 const TAGS = ["licensing"];
 
@@ -64,7 +64,7 @@ export async function licensingRoutes(app: FastifyInstance) {
     req.licensingServices = {
       licensing: new LicensingService(
         prisma,
-        new AuditLogRepository(prisma, req.user?.impersonatedBy),
+        auditFor(req, prisma),
         req.log,
         publicKey,
       ),

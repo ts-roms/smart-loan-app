@@ -1,4 +1,8 @@
-import type { KycRepository, KycSubmission } from "@loan/db";
+import type {
+  AuditLogRepository,
+  KycRepository,
+  KycSubmission,
+} from "@loan/db";
 import { validateKyc } from "@loan/kyc";
 
 import type { DecideKycInput, SubmitKycInput } from "./schemas";
@@ -31,7 +35,14 @@ export class KycService {
 
   decide(
     id: string,
-    input: DecideKycInput & { decidedById: string },
+    input: DecideKycInput & {
+      decidedById: string;
+      /**
+       * §56 audit sink, passed straight through so the row is written
+       * inside the repository's decide transaction rather than after it.
+       */
+      audit?: AuditLogRepository;
+    },
   ): Promise<KycSubmission> {
     return this.kyc.decide(id, input);
   }

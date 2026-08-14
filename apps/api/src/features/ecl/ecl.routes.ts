@@ -7,7 +7,7 @@
  * Phase 2: per-request service wiring via `req.eclServices`.
  */
 
-import { AuditLogRepository, EclRepository } from "@loan/db";
+import { EclRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { routeSchema } from "../../lib/openapi";
@@ -17,6 +17,7 @@ import {
   eclRunListResponseSchema,
   eclRunResultResponseSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 const TAGS = ["ecl"];
 
@@ -35,10 +36,7 @@ export async function eclRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     req.eclServices = {
-      ecl: new EclService(
-        new EclRepository(prisma),
-        new AuditLogRepository(prisma, req.user?.impersonatedBy),
-      ),
+      ecl: new EclService(new EclRepository(prisma), auditFor(req, prisma)),
     };
   });
 

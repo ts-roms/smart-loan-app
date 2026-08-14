@@ -23,7 +23,7 @@ import {
   type AuditRequestContext,
   type PrismaClient,
 } from "@loan/db";
-import type { FastifyBaseLogger, FastifyRequest } from "fastify";
+import type { FastifyRequest } from "fastify";
 
 /**
  * Extract the §56 provenance from a request.
@@ -34,7 +34,16 @@ import type { FastifyBaseLogger, FastifyRequest } from "fastify";
  * path.
  */
 export function auditContextOf(req: FastifyRequest): AuditRequestContext {
-  const userAgent = req.headers["user-agent"];
+  // `user-agent` is typed `string | undefined` by Fastify, but a client is
+  // free to send the header twice, in which case Node hands back an array.
+  // Narrowing explicitly rather than trusting the declared type.
+  const rawUserAgent: unknown = req.headers["user-agent"];
+  const userAgent =
+    typeof rawUserAgent === "string"
+      ? rawUserAgent
+      : Array.isArray(rawUserAgent) && typeof rawUserAgent[0] === "string"
+        ? rawUserAgent[0]
+        : null;
   return {
     // The tenant slug, not a UUID. Under schema-per-tenant the slug IS
     // the tenant's identity — it names the schema — and it is what every
@@ -48,9 +57,7 @@ export function auditContextOf(req: FastifyRequest): AuditRequestContext {
     // back to the socket address, which is the correct answer for a
     // directly-exposed deployment.
     ipAddress: req.ip ?? null,
-    userAgent: Array.isArray(userAgent)
-      ? (userAgent[0] ?? null)
-      : (userAgent ?? null),
+    userAgent,
     // Seeded from an inbound X-Request-Id or a fresh UUID — see genReqId
     // in app.ts. Never the Fastify default counter.
     requestId: req.id ?? null,
@@ -75,7 +82,7 @@ export function auditFor(
   return new AuditLogRepository(
     prisma ?? (req as { tenantCtx: { prisma: PrismaClient } }).tenantCtx.prisma,
     req.user?.impersonatedBy,
-    { context: auditContextOf(req), logger: req.log as FastifyBaseLogger },
+    { context: auditContextOf(req), logger: req.log },
   );
 }
 
@@ -92,6 +99,6 @@ export function loginAttemptsFor(
 ): LoginAttemptRepository {
   return new LoginAttemptRepository(prisma, {
     context: auditContextOf(req),
-    logger: req.log as FastifyBaseLogger,
+    logger: req.log,
   });
 }

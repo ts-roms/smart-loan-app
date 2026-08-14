@@ -29,6 +29,7 @@ import {
   statementSchema,
   summaryResponseSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 const TAGS = ["reconciliation"];
 
@@ -58,7 +59,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
     const prisma = req.tenantCtx.prisma;
     req.reconciliationCtx = {
       repo: new BankReconciliationRepository(prisma),
-      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
+      audit: auditFor(req, prisma),
     };
   });
 

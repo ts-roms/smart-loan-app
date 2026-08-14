@@ -18,11 +18,11 @@
  * request time) and BEFORE the feature routes that consume it.
  */
 
-import { AuditLogRepository } from "@loan/db";
 import { type FeatureFlag, loadPublicKeyPem } from "@loan/licensing";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { LicensingService } from "./licensing.service";
+import { auditFor } from "../../lib/audit-context";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -74,7 +74,7 @@ export function decorateFeatureGate(app: FastifyInstance): void {
         const prisma = req.tenantCtx.prisma;
         const svc = new LicensingService(
           prisma,
-          new AuditLogRepository(prisma, req.user?.impersonatedBy),
+          auditFor(req, prisma),
           req.log,
           publicKey,
         );

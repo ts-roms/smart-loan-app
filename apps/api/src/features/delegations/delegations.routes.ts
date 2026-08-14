@@ -23,7 +23,7 @@
  * Layered: routes → controller → service → repo + audit.
  */
 
-import { AuditLogRepository, DelegationRepository } from "@loan/db";
+import { DelegationRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { routeSchema } from "../../lib/openapi";
@@ -39,6 +39,7 @@ import {
   myDelegationsResponseSchema,
   userDirectoryResponseSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -65,7 +66,7 @@ export async function delegationRoutes(app: FastifyInstance) {
       delegations: new DelegationService(
         prisma,
         new DelegationRepository(prisma),
-        new AuditLogRepository(prisma, req.user?.impersonatedBy),
+        auditFor(req, prisma),
         (userId) => app.resolvePermissions(userId, prisma),
         app.notifications(prisma),
         app.log,

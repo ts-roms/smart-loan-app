@@ -25,6 +25,7 @@ import {
   rollRateQuerySchema,
   rollRateResponseSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -77,7 +78,7 @@ export async function reportRoutes(app: FastifyInstance) {
       ),
       // Built with the caller so an impersonated session stamps the
       // platform operator behind it — see AuditLogRepository.
-      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
+      audit: auditFor(req, prisma),
       // The roll-rate matrix lives beside the aging query it mirrors.
       accounting: new AccountingRepository(prisma),
     };

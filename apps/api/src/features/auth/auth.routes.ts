@@ -1,4 +1,8 @@
-import { AuditLogRepository, type PrismaClient } from "@loan/db";
+import {
+  type AuditLogRepository,
+  type LoginAttemptRepository,
+  type PrismaClient,
+} from "@loan/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { config } from "../../config";
@@ -25,6 +29,7 @@ import { AuthController } from "./auth.controller";
 import { PasswordResetService } from "./password-reset.service";
 import { AuthService } from "./auth.service";
 
+import { auditFor, loginAttemptsFor } from "../../lib/audit-context";
 import { routeSchema } from "../../lib/openapi";
 
 /**
@@ -56,7 +61,13 @@ import { routeSchema } from "../../lib/openapi";
 
 declare module "fastify" {
   interface FastifyRequest {
-    authServices?: { auth: AuthService };
+    authServices?: {
+      auth: AuthService;
+      /** §56 security log — see AuthController.login. */
+      loginAttempts: LoginAttemptRepository;
+      /** Request-scoped audit repo, for AUTH_LOGIN / AUTH_LOGOUT. */
+      audit: AuditLogRepository;
+    };
   }
 }
 
@@ -608,7 +619,9 @@ function buildResetService(app: FastifyInstance, req: FastifyRequest) {
 function buildAuthService(app: FastifyInstance) {
   return async (req: FastifyRequest): Promise<void> => {
     const prisma: PrismaClient = req.tenantCtx.prisma;
-    const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
+    // `auditFor` also carries the §56 request context (tenant, IP, user
+    // agent, request id) and the pino logger.
+    const audit = auditFor(req, prisma);
     const service = new AuthService(
       prisma,
       audit,
@@ -617,6 +630,10 @@ function buildAuthService(app: FastifyInstance) {
       // there, not in the public schema.
       (userId) => app.resolvePermissions(userId, prisma),
     );
-    req.authServices = { auth: service };
+    req.authServices = {
+      auth: service,
+      loginAttempts: loginAttemptsFor(req, prisma),
+      audit,
+    };
   };
 }

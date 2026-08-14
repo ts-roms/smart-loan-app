@@ -16,11 +16,7 @@
  * Phase 2: per-request service wiring via `req.demandLetterServices`.
  */
 
-import {
-  AuditLogRepository,
-  DemandLetterRepository,
-  LoanRepository,
-} from "@loan/db";
+import { DemandLetterRepository, LoanRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { routeSchema } from "../../lib/openapi";
@@ -40,6 +36,7 @@ import {
   letterResponseSchema,
   listQuerySchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 const TAGS = ["demand-letters"];
 
@@ -73,7 +70,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
         new DemandLetterRepository(prisma),
         new LoanRepository(prisma),
         app.notifications(prisma),
-        new AuditLogRepository(prisma, req.user?.impersonatedBy),
+        auditFor(req, prisma),
         app.log,
       ),
       resolveCallerPerms: (userId: string) =>

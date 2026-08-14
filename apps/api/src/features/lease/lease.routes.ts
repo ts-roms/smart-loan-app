@@ -18,7 +18,7 @@
  * Phase 2: per-request service wiring via `req.leaseServices`.
  */
 
-import { AuditLogRepository, LeaseRepository } from "@loan/db";
+import { LeaseRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { routeSchema } from "../../lib/openapi";
@@ -35,6 +35,7 @@ import {
   loanIdParamSchema,
   pullOutSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 const TAGS = ["lease"];
 
@@ -62,7 +63,7 @@ export async function leaseRoutes(app: FastifyInstance) {
     req.leaseServices = {
       lease: new LeaseService(
         new LeaseRepository(prisma),
-        new AuditLogRepository(prisma, req.user?.impersonatedBy),
+        auditFor(req, prisma),
       ),
     };
   });

@@ -23,11 +23,7 @@
  * Phase 2: per-request service wiring via `req.repossessionServices`.
  */
 
-import {
-  AuditLogRepository,
-  LoanRepository,
-  RepossessionRepository,
-} from "@loan/db";
+import { LoanRepository, RepossessionRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { routeSchema } from "../../lib/openapi";
@@ -48,6 +44,7 @@ import {
   outstandingResponseSchema,
   recoverSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -75,7 +72,7 @@ export async function repossessionRoutes(app: FastifyInstance) {
         prisma,
         new RepossessionRepository(prisma),
         new LoanRepository(prisma),
-        new AuditLogRepository(prisma, req.user?.impersonatedBy),
+        auditFor(req, prisma),
       ),
     };
   });

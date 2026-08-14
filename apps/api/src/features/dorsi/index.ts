@@ -1,9 +1,10 @@
-import { AuditLogRepository, DorsiRepository } from "@loan/db";
+import { DorsiRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { DorsiController } from "./dorsi.controller";
 import { registerDorsiHttp } from "./dorsi.routes";
 import { DorsiService } from "./dorsi.service";
+import { auditFor } from "../../lib/audit-context";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -34,7 +35,7 @@ export async function dorsiRoutes(app: FastifyInstance): Promise<void> {
     req.dorsiServices = {
       dorsi: new DorsiService(
         new DorsiRepository(prisma),
-        new AuditLogRepository(prisma, req.user?.impersonatedBy),
+        auditFor(req, prisma),
       ),
     };
   });
