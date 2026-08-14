@@ -16,6 +16,7 @@
 import {
   CooperativeRepository,
   CreditScoreRepository,
+  CustomerExposureRepository,
   CustomerLedgerRepository,
   DecisionRuleRepository,
   KycRepository,
@@ -116,6 +117,7 @@ export async function portalRoutes(app: FastifyInstance) {
             scores: new CreditScoreRepository(prisma),
             kyc: new KycRepository(prisma),
             rules: new DecisionRuleRepository(prisma),
+            exposure: new CustomerExposureRepository(prisma),
           },
           new PreAssessmentRepository(prisma),
         ),

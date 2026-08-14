@@ -11,6 +11,7 @@ import {
   CoMakerRepository,
   CommissionAlreadyPostedError,
   CreditScoreRepository,
+  CustomerExposureRepository,
   DecisionRuleRepository,
   DelegationRepository,
   KycRepository,
@@ -1728,6 +1729,7 @@ function buildLoanCtx(app: FastifyInstance) {
     const kyc = new KycRepository(prisma);
     const coMakers = new CoMakerRepository(prisma);
     const rules = new DecisionRuleRepository(prisma);
+    const exposure = new CustomerExposureRepository(prisma);
     const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
     const delegations = new DelegationRepository(prisma);
     const drafts = new LoanDraftRepository(prisma);
@@ -1741,6 +1743,7 @@ function buildLoanCtx(app: FastifyInstance) {
       prisma,
       app.screening(prisma),
       notifications,
+      exposure,
       app.log,
       // Bind the Fastify instance + per-request prisma + notifications
       // into a function shape so the workflow service doesn't have to

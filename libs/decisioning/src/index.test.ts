@@ -43,6 +43,24 @@ const baseCtx: DecisioningContext = {
   customerAge: 35,
   monthlyIncome: 40_000,
   existingActiveLoans: 0,
+  /*
+   * A borrower with no other loans. Added when consolidated exposure
+   * (§53) was wired into decisioning; every assertion in this file
+   * predates that and none was changed, which is the point — the
+   * shipped policy decides identically on a first-time borrower before
+   * and after. `exposure-neutrality.test.ts` proves the stronger claim:
+   * it decides identically at ANY exposure.
+   */
+  existingExposure: 0,
+  existingExposureOutstanding: 0,
+  existingPastDue: 0,
+  existingExposureLoans: 0,
+  existingWrittenOff: 0,
+  totalExposureAfterLoan: 50_000,
+  existingMonthlyObligations: 0,
+  newLoanInstallment: 4_729.5,
+  disposableIncome: 40_000,
+  debtToIncomeRatio: 0.1182,
 };
 
 const ctx = (over: Partial<DecisioningContext> = {}): DecisioningContext => ({
