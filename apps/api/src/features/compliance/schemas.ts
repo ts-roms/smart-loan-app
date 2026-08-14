@@ -30,6 +30,19 @@ export const eraseRequestSchema = z.object({
   acknowledgesRetention: z.literal(true),
 });
 
+/**
+ * Body for POST /compliance/customers/:id/documents-purge.
+ *
+ * `dryRun` DEFAULTS TO TRUE. A caller who omits it gets the preview,
+ * not the deletion — the §46 order is Dry Run before Migration, and the
+ * safe default is the one that makes forgetting the flag harmless.
+ * Deleting requires saying `false` on purpose.
+ */
+export const documentPurgeRequestSchema = z.object({
+  reason: z.string().min(8).max(500),
+  dryRun: z.boolean().default(true),
+});
+
 /** `:id` — the customer a DSAR is being answered for. */
 export const customerIdParamSchema = z.object({ id: z.string().uuid() });
 
@@ -84,6 +97,48 @@ export const exportResponseSchema = z.object({
 });
 
 /**
+ * What happened to each uploaded file, and the totals.
+ *
+ * Shared by the erase response and the standalone documents-purge
+ * endpoint, because they run the identical operation — erasure just
+ * pins `dryRun` to false.
+ *
+ * The per-item array is contractual rather than a count-only summary
+ * because §46's reconciliation step needs the dry-run plan and the real
+ * run to be comparable row by row. `FAILED` items in particular have to
+ * be nameable: a storage error leaves that one file in place, and the
+ * operator answering the data subject needs to know which.
+ */
+export const documentPurgeResultSchema = z.object({
+  /** True when nothing was deleted — this is the plan, not the outcome. */
+  dryRun: z.boolean(),
+  /** Rows still pointing at a file when the run started. */
+  examined: z.number().int(),
+  counts: z.object({
+    /** Object existed and was removed. */
+    deleted: z.number().int(),
+    /** Row pointed at an object storage no longer had. A success. */
+    alreadyAbsent: z.number().int(),
+    /** Stored value was not a `/uploads/` reference we could key. */
+    unresolvable: z.number().int(),
+    /** Dry run only — what a real run would remove. */
+    wouldDelete: z.number().int(),
+    /** Storage refused. The row still points at the file; re-run retries. */
+    failed: z.number().int(),
+  }),
+  items: z.array(
+    z.object({
+      table: z.string(),
+      rowId: z.string(),
+      column: z.string(),
+      key: z.string().nullable(),
+      outcome: z.string(),
+      error: z.string().optional(),
+    }),
+  ),
+});
+
+/**
  * POST /compliance/customers/:id/erase — what was redacted and what
  * deliberately was not.
  *
@@ -104,4 +159,24 @@ export const eraseResponseSchema = z.object({
   fieldsCleared: z.array(z.string()),
   /** Tables left intact, and therefore still holding regulated data. */
   retainedTables: z.array(z.string()),
+  /**
+   * Per-file outcome for the uploaded documents.
+   *
+   * Contractual, not decorative. `retainedTables` used to carry the
+   * claim that uploaded KYC files were "cleared separately by retention
+   * job" — a job that deleted audit, notification and job-run rows and
+   * never touched storage. The files persisted indefinitely while the
+   * data subject was told otherwise. This section is the response
+   * reporting what was actually deleted instead of promising it.
+   */
+  documentsPurged: documentPurgeResultSchema,
+});
+
+/**
+ * POST /compliance/customers/:id/documents-purge — the plan, or the
+ * outcome, depending on `dryRun`.
+ */
+export const documentPurgeResponseSchema = documentPurgeResultSchema.extend({
+  ok: z.literal(true),
+  customerId: z.string().uuid(),
 });

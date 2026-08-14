@@ -19,6 +19,7 @@ import { AuditLogRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { routeSchema } from "../../lib/openapi";
+import { uploadStorage } from "../uploads/backend";
 
 import { ComplianceController } from "./compliance.controller";
 import { ComplianceService } from "./compliance.service";
@@ -30,6 +31,8 @@ import {
 import { RetentionService } from "./retention.service";
 import {
   customerIdParamSchema,
+  documentPurgeRequestSchema,
+  documentPurgeResponseSchema,
   eraseRequestSchema,
   eraseResponseSchema,
   exportResponseSchema,
@@ -59,8 +62,11 @@ export async function complianceRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
+    // Erasure deletes uploaded documents, so the service needs the
+    // storage seam. `uploadStorage` is memoized process-wide, so this
+    // is a map lookup per request rather than a new backend.
     req.complianceServices = {
-      compliance: new ComplianceService(prisma, audit),
+      compliance: new ComplianceService(prisma, audit, uploadStorage(app.log)),
       retention: new RetentionService(prisma, audit),
     };
   });
@@ -110,8 +116,10 @@ export async function complianceRoutes(app: FastifyInstance) {
       preHandler: app.requirePermission("admin.compliance"),
       schema: routeSchema({
         summary:
-          "Irreversibly redact a customer's PII in place. Financial " +
-          "records are retained; 409 if they were already erased.",
+          "Irreversibly redact a customer's PII in place AND delete their " +
+          "uploaded KYC documents and application selfies from storage. " +
+          "KYC header rows and financial records are retained; the " +
+          "response reports the per-file outcome. 409 if already erased.",
         tags: TAGS,
         permission: "admin.compliance",
         params: customerIdParamSchema,
@@ -121,6 +129,26 @@ export async function complianceRoutes(app: FastifyInstance) {
       }),
     },
     ctrl.eraseCustomer,
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/customers/:id/documents-purge",
+    {
+      preHandler: app.requirePermission("admin.compliance"),
+      schema: routeSchema({
+        summary:
+          "Delete the uploaded KYC documents and application selfies " +
+          "behind a customer, keeping every header row. Defaults to a " +
+          "dry run that reports the plan without deleting. Safe to re-run.",
+        tags: TAGS,
+        permission: "admin.compliance",
+        params: customerIdParamSchema,
+        body: documentPurgeRequestSchema,
+        response: documentPurgeResponseSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
+    ctrl.purgeCustomerDocuments,
   );
 
   // ─── retention ────────────────────────────────────────────────────
@@ -147,8 +175,9 @@ export async function complianceRoutes(app: FastifyInstance) {
       preHandler: app.requirePermission("admin.compliance"),
       schema: routeSchema({
         summary:
-          "Set the retention windows. 0 means never purge. The AMLA " +
-          "floor is warned about, not enforced — the change is audited.",
+          "Set the retention windows. 0 means never purge. An audit " +
+          "window below the AMLA §9 floor of 1,825 days is REFUSED " +
+          '(400, error: "BelowRegulatoryFloor"); the change is audited.',
         tags: TAGS,
         permission: "admin.compliance",
         body: retentionPolicyUpdateSchema,

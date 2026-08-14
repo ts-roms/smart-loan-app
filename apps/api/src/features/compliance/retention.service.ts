@@ -1,5 +1,10 @@
 import { type AuditLogRepository, type PrismaClient } from "@loan/db";
 
+import {
+  OPERATIONAL_AUDIT_ACTIONS,
+  purgeableAuditWhere,
+} from "./audit-retention";
+
 /**
  * Data-retention enforcement.
  *
@@ -7,15 +12,35 @@ import { type AuditLogRepository, type PrismaClient } from "@loan/db";
  * per-tenant retention policy from `SystemConfig` and deletes:
  *
  *   - AuditEvent rows older than `auditRetentionDays` (default 1825 d / 5 y)
+ *     AND classified as operational — see the carve-out below
  *   - Notification rows older than `notificationRetentionDays` (default 365 d)
  *   - JobRun rows older than `jobRunRetentionDays` (default 90 d)
  *
  * Each knob can be set to `0` to disable purge for that table — useful
  * during regulatory holds where everything must be retained pending
- * investigation. Below the AMLA-floor for audit (1825 d), the settings
- * UI surfaces a "retention below regulatory minimum" warning, but the
- * service still honors the value (compliance decisions are the
- * operator's, not the platform's).
+ * investigation.
+ *
+ * ## The audit carve-out (§56 vs §71)
+ *
+ * §56 makes the audit log append-only and requires every sensitive
+ * action to be audited; §71 requires retention policies that actually
+ * delete. This service used to satisfy only the second: one unqualified
+ * `deleteMany` on `createdAt < cutoff`, so a loan approval and a
+ * "someone ran a report" row expired on the same clock, and the AMLA
+ * floor was a cosmetic boolean on the policy view that nothing read.
+ *
+ * The reconciliation is that the clock is not allowed to reach rows
+ * that must survive. `purgeableAuditWhere` narrows the delete to a
+ * closed list of operational actions plus a non-impersonated
+ * requirement; everything else — including every action added after
+ * this was written — is out of reach at any retention setting. See
+ * audit-retention.ts for why the list is closed in that direction.
+ *
+ * That makes the day count a policy for noise only, which is why the
+ * AMLA floor moved from a warning to a refusal in `updatePolicy`: with
+ * regulated rows structurally unreachable, the remaining purpose of the
+ * floor is to catch a row this codebase MISCLASSIFIED as noise. Two
+ * independent guards for one obligation.
  *
  * ## Why DELETE, not soft-delete?
  *
@@ -58,6 +83,13 @@ export interface RetentionPurgeResult {
     notifications: number;
     jobRuns: number;
   };
+  /**
+   * The audit actions the run was permitted to delete, echoed so the
+   * purge's own audit row is self-explaining: a reviewer asking "why is
+   * this five-year-old approval still here" gets the answer from the
+   * record rather than from the source.
+   */
+  auditActionsInScope: string[];
 }
 
 export interface RetentionPolicyView {
@@ -75,6 +107,16 @@ export interface UpdateRetentionInput {
   notificationRetentionDays: number;
   jobRunRetentionDays: number;
 }
+
+export type UpdateRetentionResult =
+  | { ok: true; policy: RetentionPolicyView }
+  | {
+      ok: false;
+      kind: "BelowRegulatoryFloor";
+      message: string;
+      floorDays: number;
+      requestedDays: number;
+    };
 
 export class RetentionService {
   constructor(
@@ -103,15 +145,51 @@ export class RetentionService {
   }
 
   /**
-   * Update the policy. Doesn't enforce the AMLA floor — that's a
-   * compliance officer's call, not the platform's. The UI shows a
-   * warning; the audit row captures the value chosen so the
-   * regulator's reviewer can see who lowered it and when.
+   * Update the policy. REFUSES an audit window below the AMLA §9 floor.
+   *
+   * This used to be a warning: the service honored any value and the UI
+   * showed a flag, on the reasoning that compliance decisions belong to
+   * the operator. The flag had no teeth — nothing in `runPurge` read
+   * it — so "the operator's call" amounted to an unenforced label on an
+   * unguarded delete.
+   *
+   * It is a refusal now because the two halves of the fix support each
+   * other. The carve-out makes regulated rows structurally unreachable,
+   * so the day count only governs operational noise and there is no
+   * legitimate reason to set it below five years. What the floor still
+   * buys is defence in depth: if an action in
+   * `OPERATIONAL_AUDIT_ACTIONS` turns out to have been misclassified,
+   * the floor keeps five years of it anyway. Cheap insurance against
+   * the one mistake in this design that cannot be undone.
+   *
+   * `0` is still accepted — it means "never purge", which is above the
+   * floor rather than below it.
+   *
+   * NOTE for legal review (§70): the specific figure, 1,825 days, was
+   * already in this codebase and is carried forward unchanged. Whether
+   * AMLA §9 / BSP 706 truly bar an operator from setting a shorter
+   * window for non-regulated audit noise — and whether a documented
+   * legal opinion should be able to override this refusal — is a
+   * question for counsel, not for this service.
    */
   async updatePolicy(args: {
     input: UpdateRetentionInput;
     actorId: string;
-  }): Promise<RetentionPolicyView> {
+  }): Promise<UpdateRetentionResult> {
+    const requested = args.input.auditRetentionDays;
+    if (requested > 0 && requested < AMLA_AUDIT_FLOOR_DAYS) {
+      return {
+        ok: false,
+        kind: "BelowRegulatoryFloor",
+        message:
+          `Audit retention of ${requested} days is below the AMLA §9 / BSP Circular 706 ` +
+          `floor of ${AMLA_AUDIT_FLOOR_DAYS} days (5 years). Use 0 to disable the audit ` +
+          `purge entirely, or a value at or above the floor.`,
+        floorDays: AMLA_AUDIT_FLOOR_DAYS,
+        requestedDays: requested,
+      };
+    }
+
     const updated = await this.prisma.systemConfig.upsert({
       where: { id: "singleton" },
       update: {
@@ -140,10 +218,17 @@ export class RetentionService {
       payload: { ...args.input },
     });
     return {
-      ...updated,
-      auditBelowAmlaFloor:
-        updated.auditRetentionDays > 0 &&
-        updated.auditRetentionDays < AMLA_AUDIT_FLOOR_DAYS,
+      ok: true,
+      policy: {
+        ...updated,
+        // Always false on this path now — the guard above rejects the
+        // values that would raise it. Kept in the shape because GET and
+        // PUT answer the identical schema, and a pre-existing row
+        // written before the refusal can still be below the floor.
+        auditBelowAmlaFloor:
+          updated.auditRetentionDays > 0 &&
+          updated.auditRetentionDays < AMLA_AUDIT_FLOOR_DAYS,
+      },
     };
   }
 
@@ -193,8 +278,13 @@ export class RetentionService {
     let jobRunsDeleted = 0;
 
     if (auditCutoff) {
+      // The carve-out. NOT `{ createdAt: { lt: cutoff } }` — that form
+      // reached every regulated row in the table. `purgeableAuditWhere`
+      // adds the closed operational-action list and the
+      // non-impersonated requirement, so the clock cannot touch a
+      // financial, security or unclassified row at any setting.
       const r = await this.prisma.auditEvent.deleteMany({
-        where: { createdAt: { lt: auditCutoff } },
+        where: purgeableAuditWhere(auditCutoff),
       });
       auditEventsDeleted = r.count;
     }
@@ -226,6 +316,7 @@ export class RetentionService {
         notifications: notificationsDeleted,
         jobRuns: jobRunsDeleted,
       },
+      auditActionsInScope: [...OPERATIONAL_AUDIT_ACTIONS],
     };
 
     // Audit AFTER the deletes. If the audit write itself fails, the

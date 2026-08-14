@@ -1,4 +1,10 @@
 import { AuditLogRepository, type PrismaClient } from "@loan/db";
+import type { StorageBackend } from "@loan/storage";
+
+import {
+  purgeCustomerDocuments,
+  type DocumentPurgeResult,
+} from "./document-purge";
 
 /**
  * Compliance service — GDPR / PH Data Privacy Act §16(c) workflows.
@@ -12,12 +18,17 @@ import { AuditLogRepository, type PrismaClient } from "@loan/db";
  *     to a different cooperative or regulator without losing context.
  *
  *   - `eraseCustomer(id, opts)` — overwrite PII fields in the
- *     Customer row with deterministic placeholders. Financial
+ *     Customer row with deterministic placeholders, and delete the
+ *     uploaded ID photos, payslips and selfies from storage. Financial
  *     records (LoanApplication, JournalEntry, AuditEvent) are
  *     RETAINED — they're regulated records with mandatory retention
  *     periods (typically 5–10 years for AMLA in PH). The Customer
  *     row stays so foreign keys keep resolving, but the human-readable
  *     fields are gone.
+ *
+ *   - `purgeDocuments(id, opts)` — the file half of erasure on its own,
+ *     with a dry-run mode. Runnable against an already-erased customer,
+ *     which is how the borrowers erased before this existed get repaired.
  *
  * Both operations write to AuditEvent before returning so the
  * compliance trail captures who exported / erased what, when, and
@@ -95,6 +106,13 @@ export type EraseResult =
       erasedAt: string;
       fieldsCleared: string[];
       retainedTables: string[];
+      /**
+       * What happened to the uploaded files, reported rather than
+       * promised. This field is the whole point of the change that
+       * introduced it: the response used to claim a retention job
+       * cleared them, and no such job existed.
+       */
+      documentsPurged: DocumentPurgeResult;
     }
   | {
       ok: false;
@@ -102,10 +120,30 @@ export type EraseResult =
       message: string;
     };
 
+export interface PurgeDocumentsArgs {
+  customerId: string;
+  actorId: string;
+  /** Required — same bar as erasure; this deletes bytes irreversibly. */
+  reason: string;
+  /** Report the plan without deleting anything (§46 dry run). */
+  dryRun: boolean;
+}
+
+export type PurgeDocumentsResult =
+  | ({ ok: true; customerId: string } & DocumentPurgeResult)
+  | { ok: false; kind: "NotFound"; message: string };
+
 export class ComplianceService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly audit: AuditLogRepository,
+    /**
+     * Required, not optional-with-a-default. An erasure that silently
+     * skipped storage because nobody passed a backend is the exact
+     * failure this service is being fixed for; make it a compile error
+     * instead.
+     */
+    private readonly storage: StorageBackend,
   ) {}
 
   /**
@@ -370,6 +408,17 @@ export class ComplianceService {
       }),
     ]);
 
+    // Delete the uploaded files. AFTER the column redaction, because
+    // the redaction is the legally required half and must not be held
+    // up by a storage outage; the file purge is re-runnable on its own
+    // if this leg degrades, and reports honestly when it does.
+    const documentsPurged = await purgeCustomerDocuments({
+      prisma: this.prisma,
+      storage: this.storage,
+      customerId: args.customerId,
+      dryRun: false,
+    });
+
     // Audit AFTER the redaction lands. Records the metadata about
     // the erasure (who, why, what fields) — but obviously NOT a
     // before-snapshot of the cleared values, since that would be
@@ -383,6 +432,7 @@ export class ComplianceService {
         reason: args.reason,
         fieldsCleared,
         erasedAt: now.toISOString(),
+        documentsPurged,
         retentionNote:
           "Financial records (LoanApplication, LoanSchedule, LoanPayment, JournalEntry, AuditEvent) are retained per AMLA §9.",
       },
@@ -393,6 +443,7 @@ export class ComplianceService {
       customerId: args.customerId,
       erasedAt: now.toISOString(),
       fieldsCleared,
+      documentsPurged,
       retainedTables: [
         "LoanApplication",
         "LoanSchedule",
@@ -403,8 +454,71 @@ export class ComplianceService {
         "Contribution",
         "SavingsTransaction",
         "AmlScreening",
-        "KycSubmission (header rows; uploaded files cleared separately by retention job)",
+        // The header row is the compliance record — it evidences that
+        // identity verification happened, who decided it and when, and
+        // AMLA §9 retention applies to it exactly as to a journal entry.
+        // The uploaded document behind it is raw PII and was deleted;
+        // `documentsPurged` carries the per-file outcome. This entry
+        // says "header rows" and stops there on purpose: it used to
+        // promise that a retention job cleared the files, and no such
+        // job existed.
+        "KycSubmission (header rows only — the verification decision; the uploaded document itself was deleted, see documentsPurged)",
       ],
     };
+  }
+
+  /**
+   * The file half of erasure, on its own, with a dry run.
+   *
+   * Exists separately from `eraseCustomer` for two reasons:
+   *
+   *   1. §46 requires a migration-safety shape — Backup → Dry Run →
+   *      Validation → Migration → Reconciliation → Audit. `dryRun: true`
+   *      is the second step: it reports exactly which objects a real run
+   *      would remove, without removing any, so an operator can validate
+   *      the plan before the irreversible part.
+   *   2. `eraseCustomer` refuses to run on an already-erased customer,
+   *      but the customers who most need their files removed are exactly
+   *      the ones erased BEFORE this purge existed. This entry point is
+   *      not gated on `erasedAt`, so it can repair them.
+   *
+   * Safe to re-run. A row whose pointer column is already cleared is not
+   * a candidate, and a row pointing at an object storage no longer holds
+   * resolves as `ALREADY_ABSENT` rather than an error.
+   */
+  async purgeDocuments(
+    args: PurgeDocumentsArgs,
+  ): Promise<PurgeDocumentsResult> {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: args.customerId },
+      select: { id: true },
+    });
+    if (!customer) {
+      return {
+        ok: false,
+        kind: "NotFound",
+        message: `Customer ${args.customerId} not found.`,
+      };
+    }
+
+    const result = await purgeCustomerDocuments({
+      prisma: this.prisma,
+      storage: this.storage,
+      customerId: args.customerId,
+      dryRun: args.dryRun,
+    });
+
+    // Audit both modes. A dry run is still a read of which documents a
+    // customer holds, and §46's reconciliation step wants the plan and
+    // the eventual outcome to be comparable after the fact.
+    await this.audit.record({
+      action: "CUSTOMER_DOCUMENTS_PURGE",
+      actorId: args.actorId,
+      targetType: "Customer",
+      targetId: args.customerId,
+      payload: { reason: args.reason, ...result },
+    });
+
+    return { ok: true, customerId: args.customerId, ...result };
   }
 }
