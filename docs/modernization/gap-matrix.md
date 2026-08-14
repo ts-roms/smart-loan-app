@@ -128,9 +128,13 @@ of what the code does.** In the other direction, the AI-assistant row said the
 §51 audit trail was "not stored" when four of its seven fields are — the first
 stale row found to be _pessimistic_ rather than optimistic.
 
-That makes eight. The pattern is now specific enough to name: rows go stale when
-they record a _symptom string_ (a flag, a count, a file name) rather than a
-_behaviour_, because the string survives the fix that changes the behaviour.
+That makes nine occurrences. The pattern is now specific enough to name: **rows
+go stale when they record a _symptom string_ — a flag, a count, a file name —
+rather than a _behaviour_, because the string survives the fix that changes the
+behaviour.** "112 of 337" and "`contentSecurityPolicy: false`" were both true
+when written and both outlived their truth by months. A row phrased as what the
+system _does_ ("CSP is set per response kind") would have failed visibly the
+moment it stopped being true; a row quoting a flag fails silently.
 
 **Nothing is DANGEROUS at row level, but one sub-item is.** Re-running an ECL
 period double-posts the provision movement to the GL, because `postIfAbsent` keys

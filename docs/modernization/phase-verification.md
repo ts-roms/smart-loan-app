@@ -4,11 +4,16 @@ Ten phases of the Enterprise LMS Modernization Master Prompt whose status had
 **never been checked against the repository**. Each carries a §9 verdict and a
 `file:line` that justifies it.
 
-This document exists because `gap-matrix.md` and `roadmap.md` have been found
-stale **seven** times now, always in the same direction: a row says work is
-outstanding when it shipped weeks earlier. One stale row caused a whole batch to
-be scheduled against a problem already fixed. The corrections this audit made
-are listed at the bottom.
+This document exists because `gap-matrix.md` and `roadmap.md` had been found
+stale **six separate times** before this audit, always in the same direction: a
+row says work is outstanding when it shipped weeks earlier. One stale row caused
+a whole batch to be scheduled against a problem already fixed.
+
+**This audit found three more** — OpenAPI, CSP, and the AI-assistant row (that
+last one stale in the _opposite_ direction, understating what exists) — plus
+eight stale entries in `roadmap.md`. Nine occurrences of the same failure is no
+longer a series of accidents; the pattern is diagnosed at the bottom. The
+corrections made are listed there too.
 
 ---
 
