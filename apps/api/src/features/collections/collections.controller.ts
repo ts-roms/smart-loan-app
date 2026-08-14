@@ -15,7 +15,15 @@ import {
  */
 export class CollectionsController {
   queue = async (
-    req: FastifyRequest<{ Querystring: { scope?: string } }>,
+    req: FastifyRequest<{
+      Querystring: {
+        scope?: string;
+        province?: string;
+        city?: string;
+        page?: number;
+        pageSize?: number;
+      };
+    }>,
     reply: FastifyReply,
   ) => {
     const parsed = queueScopeSchema.safeParse(req.query);
@@ -27,6 +35,10 @@ export class CollectionsController {
     return req.collectionsServices!.collections.overdueQueue({
       scope: parsed.data.scope,
       actorId: req.user.sub,
+      province: parsed.data.province,
+      city: parsed.data.city,
+      page: parsed.data.page,
+      pageSize: parsed.data.pageSize,
     });
   };
 

@@ -257,6 +257,64 @@ function buildMatrix(transitions: Transition[]): RollRateMatrixRow[] {
 }
 
 /**
+ * Fold loans into the matrix one at a time.
+ *
+ * Exists so the repository can walk the book in bounded chunks instead of
+ * materializing every loan — and every loan's whole schedule — before the
+ * first transition is derived (finding F4,
+ * docs/modernization/query-performance.md). A loan reduces to at most one
+ * `Transition` the moment it arrives, so the accumulator holds one small
+ * record per loan rather than the schedule rows it was derived from.
+ *
+ * `buildRollRateReport` is implemented on top of this, so there is exactly
+ * one definition of what the matrix means and the chunked caller cannot
+ * drift from the whole-array one.
+ */
+export interface RollRateAccumulator {
+  /** Fold one loan. Loans that produced no transition are ignored. */
+  add(loan: LoanForRollRate): void;
+  /** Assemble the report from everything added so far. */
+  finish(): RollRateReport;
+}
+
+export function createRollRateAccumulator(
+  from: Date,
+  to: Date,
+): RollRateAccumulator {
+  const transitions: Transition[] = [];
+
+  return {
+    add(loan) {
+      const t = transitionOf(loan, from, to);
+      if (t) transitions.push(t);
+    },
+    finish() {
+      const byProductMap = new Map<string, Transition[]>();
+      for (const t of transitions) {
+        const list = byProductMap.get(t.productCode);
+        if (list) list.push(t);
+        else byProductMap.set(t.productCode, [t]);
+      }
+
+      return {
+        from: from.toISOString(),
+        to: to.toISOString(),
+        totalLoans: transitions.length,
+        origins: ROLL_RATE_ORIGINS,
+        destinations: ROLL_RATE_DESTINATIONS,
+        overall: buildMatrix(transitions),
+        byProduct: [...byProductMap.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([productCode, list]) => ({
+            productCode,
+            rows: buildMatrix(list),
+          })),
+      };
+    },
+  };
+}
+
+/**
  * The §30 matrix: for each band at `from`, where that band's loans landed
  * at `to`, as counts, gross amounts, and row-normalized fractions.
  *
@@ -268,31 +326,7 @@ export function buildRollRateReport(
   from: Date,
   to: Date,
 ): RollRateReport {
-  const transitions: Transition[] = [];
-  for (const loan of loans) {
-    const t = transitionOf(loan, from, to);
-    if (t) transitions.push(t);
-  }
-
-  const byProductMap = new Map<string, Transition[]>();
-  for (const t of transitions) {
-    const list = byProductMap.get(t.productCode);
-    if (list) list.push(t);
-    else byProductMap.set(t.productCode, [t]);
-  }
-
-  return {
-    from: from.toISOString(),
-    to: to.toISOString(),
-    totalLoans: transitions.length,
-    origins: ROLL_RATE_ORIGINS,
-    destinations: ROLL_RATE_DESTINATIONS,
-    overall: buildMatrix(transitions),
-    byProduct: [...byProductMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([productCode, list]) => ({
-        productCode,
-        rows: buildMatrix(list),
-      })),
-  };
+  const acc = createRollRateAccumulator(from, to);
+  for (const loan of loans) acc.add(loan);
+  return acc.finish();
 }

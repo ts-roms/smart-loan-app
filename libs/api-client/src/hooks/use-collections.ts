@@ -5,7 +5,7 @@ import type {
   CollectionNote,
   CollectionNoteType,
   CollectorWorkload,
-  OverdueRow,
+  OverdueQueuePage,
   PromiseStatus,
   PromiseToPay,
   QueueScope,
@@ -16,20 +16,61 @@ import { getApiClient } from "../client";
 
 export const collectionsKeys = {
   // Scoped: a collector's own queue and the full worklist are different
-  // responses and must not share a cache entry.
-  queue: (scope: QueueScope = "all") =>
-    ["collections", "queue", scope] as const,
+  // responses and must not share a cache entry. Area and page are part
+  // of the key for the same reason — the queue is served a page at a
+  // time and a filtered page is a different response, not a subset of a
+  // cached one.
+  queue: (scope: QueueScope = "all", filter: QueueFilter = {}) =>
+    [
+      "collections",
+      "queue",
+      scope,
+      filter.province ?? "",
+      filter.city ?? "",
+      filter.page ?? 1,
+      filter.pageSize ?? 0,
+    ] as const,
   collectors: ["collections", "collectors"] as const,
   workload: ["collections", "workload"] as const,
   notes: (loanId: string) => ["collections", "notes", loanId] as const,
   promises: (loanId: string) => ["collections", "promises", loanId] as const,
 };
 
-export function useOverdueQueue(scope: QueueScope = "all") {
+/** Server-side narrowing and paging for the queue. */
+export interface QueueFilter {
+  /** Borrower's province — matched case-insensitively and exactly. */
+  province?: string;
+  city?: string;
+  /** 1-indexed. Out-of-range values are clamped server-side. */
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * One page of the overdue queue.
+ *
+ * Returns an envelope, not an array. The endpoint used to hand back
+ * every delinquent account in the book on every request (finding F4);
+ * it now serves a window onto the same globally ranked list. Area
+ * filtering moved to the server with it — filtering a page client-side
+ * is not filtering the book.
+ */
+export function useOverdueQueue(
+  scope: QueueScope = "all",
+  filter: QueueFilter = {},
+) {
+  const params = new URLSearchParams({ scope });
+  if (filter.province) params.set("province", filter.province);
+  if (filter.city) params.set("city", filter.city);
+  if (filter.page) params.set("page", String(filter.page));
+  if (filter.pageSize) params.set("pageSize", String(filter.pageSize));
+
   return useQuery({
-    queryKey: collectionsKeys.queue(scope),
+    queryKey: collectionsKeys.queue(scope, filter),
     queryFn: () =>
-      getApiClient().get<OverdueRow[]>(`/collections/queue?scope=${scope}`),
+      getApiClient().get<OverdueQueuePage>(
+        `/collections/queue?${params.toString()}`,
+      ),
   });
 }
 

@@ -35,6 +35,13 @@ import {
   feeIncomeCreditOf,
   lateFeeAccrualsBySchedule,
 } from "../lib/late-fee-accruals";
+import {
+  type Page,
+  type PageParams,
+  type PagingBounds,
+  resolvePaging,
+  toPage,
+} from "../lib/pagination";
 import { AccountingRepository } from "./accounting.repository";
 
 export interface NoteCreateInput {
@@ -63,6 +70,76 @@ export interface AssignInput {
   collectorId: string;
   assignedById: string;
   note?: string;
+}
+
+export interface OverdueQueueFilter {
+  /** Narrow to one collector's own book. */
+  collectorId?: string;
+  /** Only accounts nobody holds — the hand-out pool. */
+  unassignedOnly?: boolean;
+  /**
+   * Borrower's area.
+   *
+   * Applied in SQL rather than by the caller, because the queue is now
+   * served a page at a time and filtering a page is not filtering the
+   * book — a collector narrowing to "Cebu" must get every Cebu account,
+   * not the Cebu ones that happened to land on page 1. Matching is
+   * case-insensitive EQUALITY, not substring, matching the exportable
+   * delinquency report it shares its derivation with: these values
+   * arrive typed rather than picked from a list, and "Rizal" as a
+   * substring would also pull every city with Rizal in its name.
+   */
+  province?: string;
+  city?: string;
+}
+
+/** One ranked account on the queue. */
+export type OverdueQueueRow = LoanApplication & {
+  customerName: string;
+  /** Borrower's area — drives the queue's area filter. */
+  customerCity: string;
+  customerProvince: string | null;
+  daysOverdue: number;
+  outstanding: number;
+  overdueCount: number;
+  assignee: QueueAssignee | null;
+  /** §29 score, breakdown and recommendation. */
+  priority: PriorityResult;
+};
+
+/**
+ * Page bounds for the queue.
+ *
+ * Smaller than the 200/500 the customer and loan lists use. A collector
+ * works this list top-down by hand and does not read 200 accounts in a
+ * sitting; the point of the ordering is that the first screen is the
+ * right screen.
+ */
+const QUEUE_PAGING: PagingBounds = { defaultPageSize: 50, maxPageSize: 200 };
+
+/**
+ * Ids per `IN (...)` list in the repayment-history lookup.
+ *
+ * Postgres caps a prepared statement at 32,767 bind variables. Well
+ * under it, because the cost of an extra round trip here is nothing next
+ * to the cost of the query failing outright — which is what it did
+ * before this bound existed. See the lookup for the whole story.
+ */
+const HISTORY_ID_CHUNK = 10_000;
+
+/** The area half of the queue's `where`, or nothing when unfiltered. */
+function areaWhere(filter: OverdueQueueFilter) {
+  const province = filter.province?.trim();
+  const city = filter.city?.trim();
+  if (!province && !city) return {};
+  return {
+    customer: {
+      ...(province
+        ? { province: { equals: province, mode: "insensitive" as const } }
+        : {}),
+      ...(city ? { city: { equals: city, mode: "insensitive" as const } } : {}),
+    },
+  };
 }
 
 export class CollectionsRepository {
@@ -148,23 +225,36 @@ export class CollectionsRepository {
    */
   async overdueQueue(
     asOf: Date = new Date(),
-    filter: { collectorId?: string; unassignedOnly?: boolean } = {},
-  ): Promise<
-    Array<
-      LoanApplication & {
-        customerName: string;
-        /** Borrower's area — drives the queue's area filter. */
-        customerCity: string;
-        customerProvince: string | null;
-        daysOverdue: number;
-        outstanding: number;
-        overdueCount: number;
-        assignee: QueueAssignee | null;
-        /** §29 score, breakdown and recommendation. */
-        priority: PriorityResult;
-      }
-    >
-  > {
+    filter: OverdueQueueFilter = {},
+  ): Promise<OverdueQueueRow[]> {
+    /*
+     * Fetched whole, deliberately — chunking was MEASURED AND REJECTED
+     * here, unlike in the aging and roll-rate reads.
+     *
+     * Every matching loan has to be resident at once: the §29 ranking
+     * compares each account against every other, so the fold retains
+     * everything it is given. Walking the same rows in chunks therefore
+     * moves the same bytes into the same array and changes nothing about
+     * the peak — measured on the scratch book (22,136 overdue accounts,
+     * 94,714 open instalments) at 328 MB retained either way, for 7 round
+     * trips whole against 22 chunked and ~19% more wall clock.
+     * `forEachBookChunk` pays for itself only where the accumulator
+     * discards, which is why the other two reads use it and this one
+     * does not.
+     *
+     * What genuinely bounds this read is a pre-filter that already
+     * existed and is already indexed: `status IN (ACTIVE, DISBURSED,
+     * DEFAULTED)` with `schedule some (paidInFullAt IS NULL AND dueDate <
+     * asOf)`. Only loans actually past due, served by
+     * LoanSchedule(paidInFullAt, dueDate) from
+     * 20260813090000_query_plan_indexes. The queue is tens of thousands
+     * of accounts, not the 120,000-loan book — which is what makes
+     * scoring all of it affordable, and what `overdueQueuePage` relies on.
+     *
+     * The unbounded thing this read really had was its RESPONSE: 84 MB of
+     * JSON for the measured queue, on an on-demand endpoint. That is
+     * bounded now — see `overdueQueuePage`.
+     */
     const rows = await this.prisma.loanApplication.findMany({
       where: {
         status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] },
@@ -173,6 +263,7 @@ export class CollectionsRepository {
           ? { collectionAssignment: { collectorId: filter.collectorId } }
           : {}),
         ...(filter.unassignedOnly ? { collectionAssignment: null } : {}),
+        ...areaWhere(filter),
       },
       include: {
         customer: {
@@ -214,42 +305,82 @@ export class CollectionsRepository {
         vehicle: { select: { appraisedValue: true } },
         property: { select: { appraisedValue: true } },
       },
+      // Deterministic, so two requests a second apart return the same
+      // order for accounts whose scores tie. The final ordering is the
+      // §29 sort below; this only makes the tie-break stable.
+      orderBy: { id: "asc" },
     });
 
     /*
-     * Customer repayment history, in ONE query rather than per row.
+     * Customer repayment history, grouped in SQL rather than per row.
      *
-     * `notIn` the loans already on the queue so an account cannot count
-     * itself as its own bad history — a DEFAULTED loan is eligible for
-     * the queue, and without this exclusion it would score itself worse
-     * for being the very loan being ranked.
+     * ─── Why this is chunked, and why the exclusion became a subtraction
+     *
+     * This query used to name every queue loan twice: once as
+     * `customerId IN (...)` and once as `id NOT IN (queueLoanIds)`. Each
+     * id is a bind variable and Postgres refuses a prepared statement
+     * with more than 32,767 of them, so on a book with more than ~16,000
+     * overdue accounts the whole queue failed outright with P2035 —
+     * "too many bind variables ... received 44276" at the volume this
+     * was measured on. Not slow: broken, and only above a threshold no
+     * test had ever crossed.
+     *
+     * Both halves are fixed here.
+     *
+     * The `notIn` is gone entirely, replaced by an exact subtraction.
+     * Its job was to stop an account counting itself as its own bad
+     * history — a DEFAULTED loan is eligible for the queue, and without
+     * the exclusion it would score itself worse for being the very loan
+     * being ranked. But the only status a queue loan and this filter can
+     * share is DEFAULTED: the queue is ACTIVE/DISBURSED/DEFAULTED and
+     * the filter is CLOSED/DEFAULTED/WRITTEN_OFF. So counting everything
+     * and then subtracting each customer's own DEFAULTED queue loans is
+     * the same number, and costs no bind variables at all.
+     *
+     * The `customerId IN (...)` list is chunked. Distinct customers, so
+     * a borrower with several overdue accounts is named once.
      */
-    const queueLoanIds = rows.map((l) => l.id);
-    const priorLoans =
-      queueLoanIds.length === 0
-        ? []
-        : await this.prisma.loanApplication.groupBy({
-            by: ["customerId", "status"],
-            where: {
-              customerId: { in: rows.map((l) => l.customerId) },
-              id: { notIn: queueLoanIds },
-              status: { in: ["CLOSED", "DEFAULTED", "WRITTEN_OFF"] },
-            },
-            _count: { _all: true },
-          });
+    const queueCustomerIds = [...new Set(rows.map((l) => l.customerId))];
 
     const historyByCustomer = new Map<
       string,
       { priorLoansClosed: number; priorLoansDefaulted: number }
     >();
-    for (const group of priorLoans) {
-      const acc = historyByCustomer.get(group.customerId) ?? {
-        priorLoansClosed: 0,
-        priorLoansDefaulted: 0,
-      };
-      if (group.status === "CLOSED") acc.priorLoansClosed += group._count._all;
-      else acc.priorLoansDefaulted += group._count._all;
-      historyByCustomer.set(group.customerId, acc);
+    const historyOf = (customerId: string) => {
+      let acc = historyByCustomer.get(customerId);
+      if (!acc) {
+        acc = { priorLoansClosed: 0, priorLoansDefaulted: 0 };
+        historyByCustomer.set(customerId, acc);
+      }
+      return acc;
+    };
+
+    for (let i = 0; i < queueCustomerIds.length; i += HISTORY_ID_CHUNK) {
+      const batch = queueCustomerIds.slice(i, i + HISTORY_ID_CHUNK);
+      const groups = await this.prisma.loanApplication.groupBy({
+        by: ["customerId", "status"],
+        where: {
+          customerId: { in: batch },
+          status: { in: ["CLOSED", "DEFAULTED", "WRITTEN_OFF"] },
+        },
+        _count: { _all: true },
+      });
+      for (const group of groups) {
+        const acc = historyOf(group.customerId);
+        if (group.status === "CLOSED") {
+          acc.priorLoansClosed += group._count._all;
+        } else {
+          acc.priorLoansDefaulted += group._count._all;
+        }
+      }
+    }
+
+    // The subtraction that replaces `notIn`: a DEFAULTED loan on the
+    // queue counted itself above, and must not.
+    for (const l of rows) {
+      if (l.status === "DEFAULTED") {
+        historyOf(l.customerId).priorLoansDefaulted -= 1;
+      }
     }
 
     const out = rows.map((l) => {
@@ -345,6 +476,122 @@ export class CollectionsRepository {
         b.priority.score - a.priority.score || b.daysOverdue - a.daysOverdue,
     );
     return out;
+  }
+
+  /**
+   * One page of the queue, in the queue's own global order.
+   *
+   * ─── Why this is a slice and not a `take`/`skip` ────────────────────
+   *
+   * The ordering key does not exist in the database. The §29 score is
+   * computed in JavaScript (`@loan/collections`) from seven weighted
+   * factors drawn from six relations — exposure, aging band, promise
+   * outcomes, contact channels and recency, the borrower's history
+   * across their whole book, scorecard tier, collateral. Postgres cannot
+   * order by it, so `ORDER BY score LIMIT 50 OFFSET 50` is not a query
+   * that can be written.
+   *
+   * Three ways out were considered. This is the one taken, and the two
+   * that were not, with the reason:
+   *
+   * 1. REJECTED — page over a stable SQL ordering and score within the
+   *    page. This is the cheap fix and it is the wrong one. Page 2 would
+   *    hold the 51st-to-100th loans by loan id, re-ranked among
+   *    themselves, and the highest-priority account in the book could sit
+   *    on page 7 with a rank of 1. The screen would look correct — sorted
+   *    descending, scores attached — while telling a collector to call
+   *    the wrong borrower. §29 exists precisely because working the queue
+   *    in the wrong order costs recoveries, and a silently local ranking
+   *    reintroduces that failure in a form nobody can see. Not done.
+   *
+   * 2. NOT DONE IN THIS BATCH — push the score into SQL so the database
+   *    can order and page it. This is the only thing that makes the
+   *    ranking pageable in the strict sense, and it is a real piece of
+   *    work: the seven factors, the aging bands, the ₱500,000 exposure
+   *    ceiling, the suppression rules and the neutral-0.5 defaults would
+   *    all have to be expressed as SQL, and would then exist in two
+   *    places that must agree forever. Two implementations of a scoring
+   *    policy drift, and the failure mode when they do is a queue that
+   *    ranks differently depending on which endpoint you asked — with no
+   *    error. It needs its own change, its own tests, and a decision
+   *    about where the policy lives. What it needs precisely is recorded
+   *    in the F4 report.
+   *
+   * 3. TAKEN — score the whole eligible set, rank it globally, and serve
+   *    a window of the result. The ranking a collector sees is
+   *    unchanged: row 1 is the same account it was before this change,
+   *    and so is row 400. What is bounded is the RESPONSE, which was the
+   *    other half of the §58 finding ("Large API Responses"), plus the
+   *    peak hydration in `overdueQueue` itself.
+   *
+   * This is affordable because the set being scored is small, and it is
+   * small because of a pre-filter that already existed and is already
+   * indexed — only loans with an unpaid instalment actually past due.
+   * See the note on the scan in `overdueQueue`.
+   *
+   * ─── Offset, and why it fits here ──────────────────────────────────
+   *
+   * Offset over a materialized in-memory list, so the objection to deep
+   * offsets does not apply: nothing is re-scanned per page, the list is
+   * already ranked and in hand, and the slice is O(1). A cursor would
+   * need a stable database-orderable key, which is the one thing this
+   * ordering does not have.
+   *
+   * ─── Why the area filter is applied here and not in the query ──────
+   *
+   * `overdueQueue` can push an area filter into SQL and does. This method
+   * deliberately does not use that, and scans the caller's whole SCOPE
+   * (their own book, or the unassigned pool) instead, because it has to
+   * return `areas` as well — the values the filter control offers.
+   *
+   * Those have to be derived from the unfiltered scope. A dropdown built
+   * from the filtered set collapses to the one area already chosen, and a
+   * dropdown built from the current page offers only the areas that
+   * happened to land on it while silently hiding the rest of a
+   * collector's book. Deriving both from one scan costs nothing extra:
+   * the whole scope is scanned regardless, because the ranking demands
+   * it, so filtering the ranked list in memory adds no query.
+   */
+  async overdueQueuePage(
+    asOf: Date = new Date(),
+    filter: OverdueQueueFilter = {},
+    paging: PageParams = {},
+  ): Promise<
+    Page<OverdueQueueRow> & { areas: { provinces: string[]; cities: string[] } }
+  > {
+    const { province, city, ...scope } = filter;
+    const ranked = await this.overdueQueue(asOf, scope);
+
+    const provinces = new Set<string>();
+    const cities = new Set<string>();
+    for (const r of ranked) {
+      if (r.customerProvince) provinces.add(r.customerProvince);
+      if (r.customerCity) cities.add(r.customerCity);
+    }
+
+    const wantProvince = province?.trim().toLowerCase();
+    const wantCity = city?.trim().toLowerCase();
+    // Same case-insensitive equality as the delinquency export, so the
+    // screen and the CSV can never disagree about who is in an area.
+    const matching = ranked.filter(
+      (r) =>
+        (!wantProvince ||
+          (r.customerProvince ?? "").toLowerCase() === wantProvince) &&
+        (!wantCity || r.customerCity.toLowerCase() === wantCity),
+    );
+
+    const resolved = resolvePaging(paging, QUEUE_PAGING);
+    return {
+      ...toPage(
+        matching.slice(resolved.skip, resolved.skip + resolved.take),
+        matching.length,
+        resolved,
+      ),
+      areas: {
+        provinces: [...provinces].sort((a, b) => a.localeCompare(b)),
+        cities: [...cities].sort((a, b) => a.localeCompare(b)),
+      },
+    };
   }
 
   // ─── Account ownership ─────────────────────────────────────────────

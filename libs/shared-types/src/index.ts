@@ -1515,11 +1515,26 @@ export interface AgingRow {
   daysOverdue: number;
 }
 
+/**
+ * `rows` is one PAGE of per-loan detail; `totals`, `totalOutstanding`
+ * and `total` always describe the WHOLE book, on every page.
+ *
+ * Read `total` — never `rows.length` — for the number of loans in the
+ * report. They were the same thing until the rows were paginated
+ * (finding F4 in docs/modernization/query-performance.md), and the
+ * difference does not announce itself: `rows.length` now silently means
+ * "page size".
+ */
 export interface AgingReport {
   asOf: string;
   rows: AgingRow[];
   totals: Record<AgingBucket, number>;
   totalOutstanding: number;
+  /** Loans in the report across all pages. */
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 /**
@@ -2556,6 +2571,28 @@ export interface OverdueRow {
    * the old ordering can still produce it.
    */
   priority: CollectionPriority;
+}
+
+/**
+ * One page of the overdue queue.
+ *
+ * `rows` is a WINDOW onto the queue's global ranking, not a re-ranked
+ * page: every eligible account is scored and ordered against every
+ * other one server-side before the window is cut, so row 1 of page 1 is
+ * the highest-priority account in the whole book and page 2 continues
+ * that same order. `total` is the size of the filtered queue.
+ */
+export interface OverdueQueuePage extends Paginated<OverdueRow> {
+  /**
+   * Distinct borrower areas across the caller's whole scope — the
+   * options the area filter should offer. Derived server-side from the
+   * unfiltered scope, so the control neither shrinks to the current
+   * page nor collapses to the value already selected.
+   */
+  areas: {
+    provinces: string[];
+    cities: string[];
+  };
 }
 
 /** One weighted factor's contribution to a collection priority score. */

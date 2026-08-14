@@ -91,14 +91,24 @@ export async function collectionsRoutes(app: FastifyInstance) {
   const note = { preHandler: app.requirePermission("collections.note") };
   const assign = { preHandler: app.requirePermission("collections.assign") };
 
-  app.get<{ Querystring: { scope?: string } }>(
+  app.get<{
+    Querystring: {
+      scope?: string;
+      province?: string;
+      city?: string;
+      page?: number;
+      pageSize?: number;
+    };
+  }>(
     "/queue",
     {
       ...read,
       schema: routeSchema({
         summary:
-          "Delinquent accounts by §29 collection priority. scope=mine is " +
-          "the caller's own book; unassigned is the hand-out pool.",
+          "Delinquent accounts by §29 collection priority, one page at a " +
+          "time. scope=mine is the caller's own book; unassigned is the " +
+          "hand-out pool. Rows are a window onto the whole queue's " +
+          "ranking, not a re-ranked page.",
         tags: TAGS,
         querystring: queueScopeSchema,
         response: queueResponseSchema,

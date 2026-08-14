@@ -89,8 +89,24 @@ export function toPage<T>(
   total: number,
   resolved: ResolvedPaging,
 ): Page<T> {
+  return { rows, ...pageMetaOf(total, resolved) };
+}
+
+/**
+ * The envelope's counters, without the rows.
+ *
+ * For responses that are not *only* a row list. The aging report carries
+ * whole-book band totals alongside its paginated `rows`, so it needs the
+ * page counters merged into an existing object rather than an envelope
+ * wrapped around one — and `total` there must keep meaning "how many
+ * matched", not "how many are on this page", because a dashboard reads
+ * it as the active-loan count.
+ */
+export function pageMetaOf(
+  total: number,
+  resolved: ResolvedPaging,
+): Omit<Page<never>, "rows"> {
   return {
-    rows,
     total,
     page: resolved.page,
     pageSize: resolved.pageSize,
