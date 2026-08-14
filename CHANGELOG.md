@@ -10,6 +10,95 @@ automation depends on the manifest.
 
 ---
 
+## Unreleased — worktree batch: delete constraints, schedule audit, OpenAPI complete
+
+### Fixed — ten relations that reached money on delete
+
+The matrix's one **DANGEROUS** row named `Contribution`/`SavingsTransaction`,
+and both had already been fixed by `20260811160000_coop_money_restrict`. **The
+row was stale**, and the briefs that kept scheduling it were reading the matrix
+rather than the schema. The class of problem was real and wider than the row.
+
+Eight cascades still terminated in money — `LoanSchedule`, `LoanPayment`,
+`PaymentIntent`, `PenaltyWaiver`, `RepossessionCase`, `LeaseAgreement`,
+`JournalLine`, `AgentPayoutItem`. The dangerous shape is that deleting a
+`LoanApplication` reads like discarding a form and took all of them with it.
+Two `SetNull` relations did comparable damage without deleting anything:
+`FundTransaction` and `FundWithdrawal` silently **unattributed** coop cash,
+leaving money on the books belonging to nobody — the same hole as the earlier
+migration, same domain, one column over.
+
+All ten are now `Restrict`, verified `confdeltype='r'` directly in the
+database. Thirty cascades were **kept and justified** rather than swept:
+assessment and identity rows off `Customer`, activity and governance rows off
+`LoanApplication`, join and config rows meaningless without their parent. What
+people did is not what money did. The closest calls are flagged rather than
+silently decided — `PromiseToPay` carries an amount but is never posted;
+`AmlScreening` is regulated but is not money.
+
+Compliance erasure is unaffected: `eraseCustomer` never deletes, it overwrites
+PII in place and stamps `erasedAt` precisely so financial relations keep
+resolving.
+
+Also closes the check-then-act window our own F2 work exposed: a **partial**
+unique index on `BankStatementLine(matchedType, matchedRefId)` where both are
+non-null, so nothing at the database level lets one payment be matched to two
+statement lines. Hand-written and deliberately not declared in `schema.prisma`
+— Prisma skips partial indexes at introspection, and a plain `@@unique` would
+reintroduce the phantom drift `e10f06a` just repaired. `migrate diff` still
+reports **"No difference detected."**
+
+### Verified — the schedule-immutability audit row was wrong
+
+"Immutable schedule versions" sat at NEEDS VERIFICATION / P1 since Phase 0,
+claiming schedule rows mutate on restructure. They do not. The contractual
+columns — `installmentNo`, `dueDate`, `principalDue`, `interestDue`,
+`totalDue` — are written once by the `createMany` at disbursement and never
+assigned again; all six UPDATE sites write only `paidInFullAt`,
+`principalPaid`, `interestPaid`, which are servicing columns and are supposed
+to move. Re-checked at integration by printing every `data` block.
+
+The audit misread `restructure`, which does run UPDATEs — but they settle the
+_original_ loan before minting a wholly new `LoanApplication` linked by
+`restructuredFromId`, which grows its own schedule at its own disbursement. The
+versioning the row asked for already exists; it lives at the loan level, not
+the schedule level, which is why looking at `LoanSchedule` never found it.
+
+19 characterisation tests pin this, proven non-vacuous by temporarily teaching
+`restructure` to write `dueDate`: exactly four fail.
+
+One smaller finding recorded rather than fixed: force settlement writes
+`principalPaid := principalDue`, so a part-paid instalment loses the split of
+what was actually paid. The aggregate survives on the settlement journal entry,
+but `auditLoan` refuses to replay force-settled loans, so nothing derives it
+today. P3 — and schedule versioning would not have addressed it.
+
+### Added — OpenAPI coverage complete
+
+**328 of 339** operations documented; the other 11 are enumerated exceptions.
+**410 and 413 join `ERRORS`**, which two earlier batches reported and correctly
+declined to patch unilaterally.
+
+The ratchet was **blind to 13 routes**. Its regex matched `app.get(...)`, but
+`platform` registers its authenticated control plane on an encapsulated child
+instance, so the entire vendor surface counted as one route — the public
+login. Counting `(app|scoped)` closes it, and source and spec totals now agree
+exactly at 339.
+
+The companion "still has an undocumented remainder" test was **converted, not
+deleted**. Its own comment said to delete it once everything was documented,
+but it would never have fired: eleven routes can take no schema, so
+`registrations > DOCUMENTED` stays true forever and it would have gone on
+reporting a finished job as unfinished. It now asserts the gap is exactly 11
+and fails in both directions.
+
+A 403→400 regression was caught by the existing suite and fixed:
+`requirePermission` is inherently a `preHandler`, so attaching body schemas
+made three routes answer 400 before the permission gate. Worth recording that
+the 401 fix (`authenticate` at `onRequest`) does **not** generalise to 403.
+
+---
+
 ## Unreleased — worktree batch: object storage, OpenAPI, N+1
 
 ### Added — object storage, with local disk still the default

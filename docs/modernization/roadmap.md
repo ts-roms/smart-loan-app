@@ -119,13 +119,13 @@ Original plan:
 | 3.1  | Object storage (S3/MinIO) for uploads; DB keeps metadata; signed URLs | ✅ `libs/storage` — local disk default, S3 adapter behind `STORAGE_DRIVER`, no migration needed. Deliberately no `getSignedUrl`: bytes keep leaving through the API so the `/uploads/` sandbox CSP and `nosniff` still apply. The S3 path has never run live — a bucket, an IAM principal and a round-trip test remain |
 | 3.2  | Playwright + 6 journeys against a live stack                          | ✅ 21 read assertions **plus the write journey**: apply→2-person approval→disburse→pay, all UI, closing with reconciliation green on a scratch DB it creates and drops. Found a real defect (chain skipped the KYC re-check, now fixed)                                                                                |
 | 3.3  | Enable CSP in production                                              | ✅ API (`/uploads/` sandboxed, JSON `default-src 'none'`) **and** SPA (build-time meta + `frame-ancestors` from nginx). `style-src` still needs `unsafe-inline` — Radix; documented                                                                                                                                    |
-| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ◐ **291 of 339** operations, ratcheted by a test. Twenty-one feature groups documented, each with 401-before-400 verified live; 48 remain, none of them large                                                                                                                                                          |
+| 3.4  | Attach zod-derived schemas to routes for real OpenAPI                 | ✅ **328 of 339** operations, ratcheted by a test. The other 11 are enumerated exceptions, not omissions: 8 stream `application/pdf`, 2 answer a literal top-level `null`, 1 dispatches a row shape that varies by report type. Every group verified 401-before-400 live                                               |
 | 3.5  | Documented restore drill                                              | ✅ written **and run** — and it FAILED on an unpatched host (pg_dump 18 vs server 16). See disaster-recovery.md                                                                                                                                                                                                        |
 
-**Phase 3 is one item from done** — only OpenAPI coverage remains inside it,
-and that is a per-feature grind rather than a design problem. Object storage
-(3.1) has shipped its engineering half; what is left is provisioning a bucket,
-not writing code.
+**Phase 3 is done.** OpenAPI coverage finished at 328 of 339 with the
+remaining 11 enumerated as exceptions rather than left vague. Object storage
+(3.1) has shipped its engineering half; what is left there is provisioning a
+bucket, not writing code.
 
 Several Phase 4 and Phase 5 items landed early because they were the
 highest-value work available once the P1 queue emptied: module boundaries
