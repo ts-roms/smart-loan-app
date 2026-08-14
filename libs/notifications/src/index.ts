@@ -1,14 +1,39 @@
 /**
  * @loan/notifications — provider-agnostic email + SMS dispatch.
  *
- * Providers implement `NotificationProvider`. The shipped `MockProvider`
- * just logs to console and resolves; production swaps in SendGrid /
- * Postmark / SES (email) and Semaphore / Globe Labs / Twilio (SMS).
+ * Providers implement `NotificationProvider`. Three exist:
  *
- * Templates live here as plain functions so they're easy to test. The
- * NotificationDispatcher in @loan/db wires templates + providers together
- * and persists each send as a `Notification` row.
+ *   - `MockNotificationProvider` — the dev/test default. Records the
+ *     dispatch, sends nothing.
+ *   - `SendGridProvider` (EMAIL) — `sendgrid.ts`.
+ *   - `TwilioProvider` (SMS) — `twilio.ts`.
+ *
+ * The two real ones are plain `fetch` against a single documented endpoint
+ * each, with no vendor SDK; `http.ts` carries that argument, the shared
+ * timeout, and the rule that no error message may echo a request.
+ *
+ * Neither has run against a live account. They are constructible,
+ * unit-tested for request shape and wired into both the platform factory
+ * (`apps/api/src/providers.ts`) and the per-tenant resolver
+ * (`apps/api/src/features/system/notification-providers.ts`), so turning
+ * one on is a credential change rather than a development project — the
+ * same standing the S3 adapter in `@loan/storage` shipped with.
+ *
+ * Templates live here as plain functions so they're easy to test.
+ * `NotificationRepository` in @loan/db wires templates + providers together
+ * and persists each send as a `Notification` row, marking it FAILED rather
+ * than throwing when a provider errors.
  */
+
+export {
+  DEFAULT_TIMEOUT_MS,
+  NotificationDeliveryError,
+  postJson,
+  type PostOptions,
+  type ProviderRequest,
+} from "./http";
+export { SendGridProvider, type SendGridProviderOptions } from "./sendgrid";
+export { TwilioProvider, type TwilioProviderOptions } from "./twilio";
 
 export type Channel = "EMAIL" | "SMS" | "IN_APP";
 
@@ -78,10 +103,14 @@ export function maskRecipient(recipient: string): string {
  * It used to `console.log` both, and that was a live privacy leak rather
  * than a dev convenience. Three things compounded:
  *
- *   1. Every provider path terminates here. `buildTenantTwilioProvider` and
- *      `buildTenantSendgridProvider` discard their config and return a mock,
- *      and neither `twilio` nor `@sendgrid` is in any package.json — so
- *      configuring real credentials did not route around this.
+ *   1. Every provider path terminated here. `buildTenantTwilioProvider` and
+ *      `buildTenantSendgridProvider` discarded their config and returned a
+ *      mock, so configuring real credentials did not route around this.
+ *      Real adapters now exist (`sendgrid.ts`, `twilio.ts`) and are wired,
+ *      but this remains the default in dev and test — which is where
+ *      developers actually read stdout — so the rule below still governs.
+ *      It governs those adapters too: neither logs at all, and their errors
+ *      carry a provider name and an HTTP status, never a request.
  *   2. `console.log` bypasses pino, so none of the `redact` paths in
  *      `app.ts` applied. Redaction that the data never passes through is
  *      not redaction.

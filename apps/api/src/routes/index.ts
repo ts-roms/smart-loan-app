@@ -105,7 +105,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     (prisma: PrismaClient) =>
       new NotificationRepository(
         prisma,
-        new TenantAwareNotificationProvider(prisma, notificationProvider),
+        new TenantAwareNotificationProvider(prisma, notificationProvider, {
+          timeoutMs: config.notificationTimeoutMs,
+        }),
       ),
   );
   app.decorate(

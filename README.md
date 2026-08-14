@@ -315,7 +315,16 @@ files into the bucket under the same keys.
 In multi-tenant mode, each tenant can override notification providers
 with their own Twilio + SendGrid keys via the admin UI (Settings →
 Notification Providers); the env-var setting is the platform-wide
-fallback.
+fallback, and is what the scheduled reminder jobs use.
+
+**`NOTIFICATION_PROVIDER=MOCK` will not boot under `NODE_ENV=production`.**
+The mock delivers nothing while marking every notification `SENT`, so a
+production deployment left on the default sends no payment reminders and
+looks healthy doing it. `SENDGRID` (email) and `TWILIO` (SMS) are
+implemented; `SES` is not, and is refused in production for the same
+reason. Neither implemented adapter has yet run against a live account —
+they are wired and unit-tested against the providers' documented request
+formats, so switching one on is a credentials change.
 
 ### License (multi-tenant only)
 
