@@ -10,6 +10,98 @@ automation depends on the manifest.
 
 ---
 
+## Unreleased — worktree batch: object storage, OpenAPI, N+1
+
+### Added — object storage, with local disk still the default
+
+`libs/storage` exposes put/get/getStream/delete/exists — five methods derived
+from the four places the codebase actually touches stored bytes, not from what
+S3 offers. There is deliberately **no `getSignedUrl`**. `/uploads/` carries a
+`sandbox` CSP and `nosniff` precisely because uploads are attacker-influenced
+bytes on a same-origin path; a bucket-signed URL points the browser at an
+origin where neither header exists and the provider picks the Content-Type. So
+bytes leave through the API in both modes, and the signing that already existed
+— an HMAC over the `/uploads/` route, not over a bucket object — is unchanged.
+
+No new dependency: `@aws-sdk/client-s3` would pull ~40 transitive packages for
+four verbs of plain HTTP on one object. SigV4 is ~90 lines of `node:crypto`,
+pinned against AWS's published _GET Object_ vector — canonical request,
+string-to-sign and signature all match, with no network, credentials or bucket
+involved.
+
+Storage keys are the stored URL minus `/uploads/`, so **no migration**: the
+roadmap's flagged "high risk — data migration of existing files" does not
+exist, and populating a bucket is a file copy.
+
+Verified on the merged tree: unsigned GET 403; signed GET 200 carrying the full
+sandbox CSP, `nosniff` and `accept-ranges`; percent-encoded traversal 403.
+
+`backup.sh` changed and had to. Its old comment claimed object storage "has its
+own replication" and needed no backup — wrong in its dangerous half, since
+durability protects against hardware failure, not against deletion, a bad
+migration, or ransomware, all of which replicate faithfully. Under
+`STORAGE_DRIVER=S3` the script now says loudly that it does not cover uploads
+instead of tarring an empty directory and reporting success.
+
+**Not yet switched on.** The S3 adapter has never run against a live endpoint;
+a bucket, a scoped IAM principal, a file copy and a real round-trip remain.
+
+### Fixed — the three documented N+1 loops (F1–F3)
+
+Reported-not-fixed last batch because each changes financial posting or
+reporting code. §81's order held: 38 golden tests committed in three commits
+**before** the refactor, verified passing against the unmodified code, then
+passing unchanged after it.
+
+- **F1** — the nightly accrual's per-instalment lookup becomes one chunked
+  batched read: **8,281 queries and 169s down to 17 queries and 1.35s (125×)**,
+  output byte-identical at 2,556 entries. `postIfAbsent` is untouched — the
+  batched read computes the delta, it does not guard the insert, so the unique
+  index still arbitrates. A second run posted 0.
+- **F2** — **the prescribed fix was wrong, and checking it caught that.**
+  `claimedRefIds` reads the very columns the loop writes, so the set is
+  per-line invariant but _not_ loop invariant. Freezing it fails four golden
+  tests: a payment double-matched, a disbursement double-matched, and a later
+  line losing a match an earlier claim should have enabled. Re-proved at
+  integration by freezing the sets by hand — exactly those four fail. Read once
+  and maintain incrementally instead: 2 queries rather than 2N, same answers.
+  Separately reported: there is no unique constraint on
+  `(matchedType, matchedRefId)`, so the old per-line re-read was never a
+  guarantee either — closing that needs a schema change.
+- **F3** — `ledgerLines` stops materialising every journal line ever written
+  and uses `groupBy`; 3,165 ms and 800k rows spilling 5,259 temp blocks becomes
+  888 ms and 5 rows. §11 holds because the columns are `Decimal(14,2)` and the
+  builders `round2` after every line.
+
+Three latent oddities were pinned rather than absorbed: `accountBalance`
+accumulates in float and returns `-66.66999999999999` (both callers wrap it in
+`round2`, and the SQL path lands on the identical double, so nothing moved);
+`buildTrialBalance` leaks an internal `net` accumulator into rows its own type
+does not declare; and `accruedPenaltiesFor` had no coverage at all despite
+three API consumers.
+
+### Added — OpenAPI: the remaining nine feature groups
+
+291 of 339 operations carry a real response shape (was 240). `authenticate`
+moved to `onRequest` in eight groups. **co-maker stays public**: a borrower's
+co-maker has no account, the invite token _is_ the authorization, and an
+unauthenticated POST correctly reaches body validation — 400, not 401.
+
+`PUT /system/notification-providers` is the find worth keeping: its own comment
+promised the masked provider view "so the UI can refresh from the response
+without an extra round-trip", and the handler has only ever sent `{ ok: true }`
+with an `X-Refresh-Needed` header. A schema written from the comment would have
+passed every test while publishing a body the route has never sent. The schema
+follows the code; the comment was corrected.
+
+Known mechanism gap, reported not patched: `ERRORS` has no **410** or **413**.
+All four co-maker routes answer 410 for a lapsed invite — meaningfully distinct
+from 404, since the link was real — and the upload route answers 413 over the
+size cap. Both left undeclared rather than hand-rolling a second error
+envelope.
+
+---
+
 ## Unreleased — worktree batch: OpenAPI, drift repair, profitability
 
 ### Added — product profitability (§54 / GAP-30)
