@@ -31,12 +31,62 @@ import { join } from "node:path";
 
 import { config } from "../../config";
 import { storeUpload } from "../uploads/store";
+import { routeSchema } from "../../lib/openapi";
 import { CoMakerConsentService, parseInviteToken } from "./consent.service";
-import { respondSchema, documentSchema } from "./consent.schemas";
+import {
+  consentViewResponseSchema,
+  documentResponseSchema,
+  documentSchema,
+  respondResponseSchema,
+  respondSchema,
+  tokenParamSchema,
+  uploadResponseSchema,
+} from "./consent.schemas";
+
+const TAGS = ["co-maker"];
 
 const rateLimit = {
   config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
 };
+
+/*
+ * ─── Auth posture: NONE, and that is correct ──────────────────────────
+ *
+ * No `app.authenticate` hook anywhere in this file, unlike every other
+ * group documented in this batch. A borrower's co-maker is not a user
+ * of this system — they have no account, no session and no password —
+ * and the invite token IS the authorization. Adding authentication here
+ * would not harden the endpoint, it would break the only way a co-maker
+ * can ever answer.
+ *
+ * So the usual 401→400 trap does not apply and **401 is not declared on
+ * any operation below**. Declaring it would be a lie in the direction
+ * that matters most: an integrator reading 401 would go looking for
+ * credentials that do not exist.
+ *
+ * Attaching request schemas does still move validation ahead of the
+ * handler's token lookup, so a malformed body against an unknown token
+ * now answers 400 rather than 404. That is harmless here — the shapes
+ * are already public API for an anonymous form, and the change reveals
+ * nothing about whether the token was real.
+ *
+ * ─── Two statuses these operations send that the spec cannot say ─────
+ *
+ * `ERRORS` in lib/openapi.ts has no 410 and no 413, and both are
+ * genuinely reachable:
+ *
+ *   • 410 Gone — every route here answers it for an EXPIRED invite, and
+ *     it is a meaningful distinction from 404 (the link was real; it
+ *     lapsed). An integrator wants to tell "resend the invite" from
+ *     "this link never existed".
+ *   • 413 — /upload returns it when `storeUpload` rejects an oversized
+ *     file.
+ *
+ * Left undeclared rather than hand-rolled: a second error envelope
+ * defined locally would be exactly the divergence the shared components
+ * exist to prevent. Both are reported for a follow-up that adds them to
+ * `ERRORS` centrally.
+ */
 
 export async function coMakerConsentRoutes(app: FastifyInstance) {
   const uploadsDir = config.uploadsDir || join(process.cwd(), "uploads");
@@ -79,7 +129,18 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { token: string } }>(
     "/:token",
-    rateLimit,
+    {
+      ...rateLimit,
+      schema: routeSchema({
+        summary:
+          "What this co-maker is being asked to agree to. Anonymous — " +
+          "the invite token is the authorization. 410 once it expires.",
+        tags: TAGS,
+        params: tokenParamSchema,
+        response: consentViewResponseSchema,
+        errors: [404, 429],
+      }),
+    },
     async (req: FastifyRequest<{ Params: { token: string } }>, reply) => {
       const prisma = await clientFor(req.params.token, reply);
       if (!prisma) return;
@@ -150,7 +211,19 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { token: string } }>(
     "/:token/respond",
-    rateLimit,
+    {
+      ...rateLimit,
+      schema: routeSchema({
+        summary:
+          "Approve or decline. A decline needs a reason. 409 once " +
+          "answered — the decision is not revisable; 410 if expired.",
+        tags: TAGS,
+        params: tokenParamSchema,
+        body: respondSchema,
+        response: respondResponseSchema,
+        errors: [400, 404, 409, 429],
+      }),
+    },
     async (req: FastifyRequest<{ Params: { token: string } }>, reply) => {
       const prisma = await clientFor(req.params.token, reply);
       if (!prisma) return;
@@ -187,7 +260,29 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { token: string } }>(
     "/:token/upload",
-    rateLimit,
+    {
+      ...rateLimit,
+      /*
+       * No `body` here, deliberately. This is a multipart upload read
+       * via `req.file()` — attaching a JSON body schema would make
+       * Fastify validate the multipart stream as an object and reject
+       * every real request. The response is documented; the request is
+       * a file, which routeSchema has no way to describe.
+       *
+       * The 413 this can answer is not in ERRORS — see the note at the
+       * top of this file.
+       */
+      schema: routeSchema({
+        summary:
+          "Upload a supporting file (multipart). Answers the stored URL, " +
+          "which /documents then records. 413 if it exceeds the cap.",
+        tags: TAGS,
+        params: tokenParamSchema,
+        response: uploadResponseSchema,
+        status: 201,
+        errors: [400, 404, 429],
+      }),
+    },
     async (req: FastifyRequest<{ Params: { token: string } }>, reply) => {
       const prisma = await clientFor(req.params.token, reply);
       if (!prisma) return;
@@ -219,7 +314,20 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { token: string } }>(
     "/:token/documents",
-    rateLimit,
+    {
+      ...rateLimit,
+      schema: routeSchema({
+        summary:
+          "Record an uploaded file against this co-maker. 409 if they " +
+          "already declined — a declined co-maker has nothing to file.",
+        tags: TAGS,
+        params: tokenParamSchema,
+        body: documentSchema,
+        response: documentResponseSchema,
+        status: 201,
+        errors: [400, 404, 409, 429],
+      }),
+    },
     async (req: FastifyRequest<{ Params: { token: string } }>, reply) => {
       const prisma = await clientFor(req.params.token, reply);
       if (!prisma) return;

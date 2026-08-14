@@ -14,7 +14,42 @@
 import { AnnualDocumentRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
-import { createSchema, listExpiringQuerySchema } from "./schemas";
+import { routeSchema } from "../../lib/openapi";
+
+import {
+  annualDocListResponseSchema,
+  annualDocResponseSchema,
+  createSchema,
+  docIdParamSchema,
+  expiringListResponseSchema,
+  listExpiringQuerySchema,
+  loanIdParamSchema,
+  refreshStatusesResponseSchema,
+} from "./schemas";
+
+const TAGS = ["annual-docs"];
+
+/*
+ * Shared by BOTH plugins below.
+ *
+ * onRequest, not preHandler — routes in this feature carry request
+ * schemas, and Fastify validates at preValidation, BEFORE preHandler.
+ * With `authenticate` at preHandler an unauthenticated caller posting a
+ * malformed document got a 400 describing the schema instead of a 401.
+ * See decision-rules.routes.ts for the full account.
+ *
+ * This feature registers as two plugins against different prefixes, so
+ * the hook order has to be established twice — hence the helper rather
+ * than two copies that can drift apart.
+ */
+function attachAuth(app: FastifyInstance) {
+  app.addHook("onRequest", app.authenticate);
+  app.addHook("preHandler", app.resolveTenant);
+  // Annual / renewable docs are a PROFESSIONAL-tier feature. The gate
+  // reads req.tenantCtx, so resolveTenant must run before it.
+  app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
+  app.addHook("preHandler", attachAnnualDocsRepo());
+}
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -29,22 +64,41 @@ function attachAnnualDocsRepo() {
 }
 
 export async function annualDocsLoanRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
-  app.addHook("preHandler", app.resolveTenant);
-  // Annual / renewable docs are a PROFESSIONAL-tier feature. The gate
-  // reads req.tenantCtx, so resolveTenant must run before it.
-  app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
-  app.addHook("preHandler", attachAnnualDocsRepo());
+  attachAuth(app);
 
   app.get<{ Params: { loanId: string } }>(
     "/:loanId/annual-docs",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary:
+          "Renewable documents tracked on one loan — insurance, OR/CR, " +
+          "RPT — soonest expiry first.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        response: annualDocListResponseSchema,
+        errors: [401, 402, 403],
+      }),
+    },
     async (req) => req.annualDocsRepo!.listForLoan(req.params.loanId),
   );
 
   app.post<{ Params: { loanId: string } }>(
     "/:loanId/annual-docs",
-    { preHandler: app.requirePermission("loans.docs_renew") },
+    {
+      preHandler: app.requirePermission("loans.docs_renew"),
+      schema: routeSchema({
+        summary:
+          "Record a renewable document against a loan. Status is derived " +
+          "from expiresAt at insert. 400 if it is not after effectiveFrom.",
+        tags: TAGS,
+        params: loanIdParamSchema,
+        body: createSchema,
+        response: annualDocResponseSchema,
+        status: 201,
+        errors: [400, 401, 402, 403],
+      }),
+    },
     async (req, reply) => {
       const parsed = createSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -76,14 +130,22 @@ export async function annualDocsLoanRoutes(app: FastifyInstance) {
 
 /** Cross-loan endpoints — separate prefix so the route shapes stay clean. */
 export async function annualDocsRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
-  app.addHook("preHandler", app.resolveTenant);
-  app.addHook("preHandler", app.requireFeature("compliance.annual_docs"));
-  app.addHook("preHandler", attachAnnualDocsRepo());
+  attachAuth(app);
 
   app.get(
     "/expiring",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary:
+          "Documents expiring within ?days (default 30) across all loans, " +
+          "soonest first. INCLUDES already-expired rows.",
+        tags: TAGS,
+        querystring: listExpiringQuerySchema,
+        response: expiringListResponseSchema,
+        errors: [400, 401, 402, 403],
+      }),
+    },
     async (req, reply) => {
       const parsed = listExpiringQuerySchema.safeParse(req.query);
       if (!parsed.success) {
@@ -97,7 +159,17 @@ export async function annualDocsRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>(
     "/:id",
-    { preHandler: app.requirePermission("loans.docs_renew") },
+    {
+      preHandler: app.requirePermission("loans.docs_renew"),
+      schema: routeSchema({
+        summary:
+          "Delete a tracked document. Answers 204 with no body; 400 if " +
+          "the row does not exist.",
+        tags: TAGS,
+        params: docIdParamSchema,
+        errors: [400, 401, 402, 403],
+      }),
+    },
     async (req, reply) => {
       try {
         await req.annualDocsRepo!.remove(req.params.id);
@@ -117,7 +189,17 @@ export async function annualDocsRoutes(app: FastifyInstance) {
    */
   app.post(
     "/jobs/refresh-statuses",
-    { preHandler: app.requirePermission("loans.docs_renew") },
+    {
+      preHandler: app.requirePermission("loans.docs_renew"),
+      schema: routeSchema({
+        summary:
+          "Recompute every document's status now instead of waiting for " +
+          "the nightly job. Answers the corpus counted by new status.",
+        tags: TAGS,
+        response: refreshStatusesResponseSchema,
+        errors: [401, 402, 403],
+      }),
+    },
     async (req) => req.annualDocsRepo!.refreshStatuses(),
   );
 }

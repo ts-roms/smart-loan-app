@@ -29,7 +29,16 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 // folders up at src/config.ts and the LLM provider factory at src/lib/llm.ts.
 import { config } from "../../config";
 import { createLLMProvider, type LLMProvider } from "../../lib/llm";
-import { draftSchema, explainSchema, summarizeSchema } from "./schemas";
+import { routeSchema } from "../../lib/openapi";
+import {
+  completionResponseSchema,
+  draftSchema,
+  explainSchema,
+  pingResponseSchema,
+  summarizeSchema,
+} from "./schemas";
+
+const TAGS = ["assistant"];
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -46,7 +55,14 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
     model: config.ollamaModel,
   });
 
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * onRequest, not preHandler — routes in this group carry request
+   * schemas, and Fastify validates at preValidation, BEFORE preHandler.
+   * With `authenticate` at preHandler an unauthenticated caller posting
+   * a malformed body got a 400 describing the schema instead of a 401.
+   * See decision-rules.routes.ts for the full account.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
@@ -70,7 +86,17 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get(
     "/ping",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary:
+          "Is a model reachable behind this panel. Answers 200 with " +
+          "ok:false when it is not — an unreachable backend is a state.",
+        tags: TAGS,
+        response: pingResponseSchema,
+        errors: [401, 402, 403],
+      }),
+    },
     async () => {
       const status = await llm.ping();
       return {
@@ -84,7 +110,18 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   // ── Explain a loan's decisioning verdict ────────────────────────
   app.post(
     "/explain-decision",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary:
+          "Plain-language account of why a loan reached its status. " +
+          "Draft output — check isMock before showing it to anyone.",
+        tags: TAGS,
+        body: explainSchema,
+        response: completionResponseSchema,
+        errors: [400, 401, 402, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const parsed = explainSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -124,7 +161,18 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   // ── Draft a demand letter ───────────────────────────────────────
   app.post(
     "/draft-demand-letter",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary:
+          "First-pass demand-letter body for a loan and stage. Contains " +
+          "<PLACEHOLDERS> the officer fills in; never dispatch as-is.",
+        tags: TAGS,
+        body: draftSchema,
+        response: completionResponseSchema,
+        errors: [400, 401, 402, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const parsed = draftSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -165,7 +213,18 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   // ── Summarize a customer's account history ─────────────────────
   app.post(
     "/summarize-account",
-    { preHandler: app.requirePermission("loans.read") },
+    {
+      preHandler: app.requirePermission("loans.read"),
+      schema: routeSchema({
+        summary:
+          "Narrative summary of a borrower's history over their ten most " +
+          "recent loans. Draft output — check isMock.",
+        tags: TAGS,
+        body: summarizeSchema,
+        response: completionResponseSchema,
+        errors: [400, 401, 402, 403, 404],
+      }),
+    },
     async (req, reply) => {
       const parsed = summarizeSchema.safeParse(req.body);
       if (!parsed.success) {

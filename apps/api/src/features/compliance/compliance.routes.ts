@@ -18,9 +18,24 @@
 import { AuditLogRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { routeSchema } from "../../lib/openapi";
+
 import { ComplianceController } from "./compliance.controller";
 import { ComplianceService } from "./compliance.service";
+import {
+  retentionPolicyResponseSchema,
+  retentionPolicyUpdateSchema,
+  retentionPurgeResponseSchema,
+} from "./retention.schemas";
 import { RetentionService } from "./retention.service";
+import {
+  customerIdParamSchema,
+  eraseRequestSchema,
+  eraseResponseSchema,
+  exportResponseSchema,
+} from "./schemas";
+
+const TAGS = ["compliance"];
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -32,7 +47,14 @@ declare module "fastify" {
 }
 
 export async function complianceRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * onRequest, not preHandler — routes in this group carry request
+   * schemas, and Fastify validates at preValidation, BEFORE preHandler.
+   * With `authenticate` at preHandler an unauthenticated caller posting
+   * a malformed erasure got a 400 describing the schema instead of a
+   * 401. See decision-rules.routes.ts for the full account.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
@@ -48,32 +70,104 @@ export async function complianceRoutes(app: FastifyInstance) {
   // ─── DSAR ─────────────────────────────────────────────────────────
   app.post<{ Params: { id: string } }>(
     "/customers/:id/export",
-    { preHandler: app.requirePermission("admin.compliance") },
+    {
+      preHandler: app.requirePermission("admin.compliance"),
+      /*
+       * RESPONSE DOCUMENTED, REQUEST BODY DELIBERATELY NOT — and the
+       * omission is load-bearing rather than an oversight.
+       *
+       * `exportRequestSchema` has one optional field, so the controller
+       * parses `req.body ?? {}` and a POST with NO body at all is a
+       * legal call. Attaching the body schema moves validation ahead of
+       * the handler, and Fastify validates an absent body as
+       * `undefined` against `type: "object"` — verified: a bodyless
+       * POST answers 400 "body must be object" with the schema
+       * attached, and 200 without it.
+       *
+       * That is the 401→400 trap wearing different clothes: documenting
+       * a request would have narrowed what the endpoint accepts. The
+       * `reason` field is described in schemas.ts for whoever wants to
+       * send one; the wire contract stays as permissive as it has been.
+       */
+      schema: routeSchema({
+        summary:
+          "Subject-access export — everything the system holds on one " +
+          "customer, flat by table, sent as a JSON file download. " +
+          "Optional body: { reason } to tie the export to a ticket.",
+        tags: TAGS,
+        params: customerIdParamSchema,
+        response: exportResponseSchema,
+        errors: [400, 401, 403, 404],
+      }),
+    },
     ctrl.exportCustomer,
   );
 
   app.post<{ Params: { id: string } }>(
     "/customers/:id/erase",
-    { preHandler: app.requirePermission("admin.compliance") },
+    {
+      preHandler: app.requirePermission("admin.compliance"),
+      schema: routeSchema({
+        summary:
+          "Irreversibly redact a customer's PII in place. Financial " +
+          "records are retained; 409 if they were already erased.",
+        tags: TAGS,
+        params: customerIdParamSchema,
+        body: eraseRequestSchema,
+        response: eraseResponseSchema,
+        errors: [400, 401, 403, 404, 409],
+      }),
+    },
     ctrl.eraseCustomer,
   );
 
   // ─── retention ────────────────────────────────────────────────────
   app.get(
     "/retention-policy",
-    { preHandler: app.requirePermission("admin.compliance") },
+    {
+      preHandler: app.requirePermission("admin.compliance"),
+      schema: routeSchema({
+        summary:
+          "The data-retention windows driving the nightly purge, plus " +
+          "whether the audit window sits below the AMLA §9 floor.",
+        tags: TAGS,
+        response: retentionPolicyResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     ctrl.getRetentionPolicy,
   );
 
   app.put(
     "/retention-policy",
-    { preHandler: app.requirePermission("admin.compliance") },
+    {
+      preHandler: app.requirePermission("admin.compliance"),
+      schema: routeSchema({
+        summary:
+          "Set the retention windows. 0 means never purge. The AMLA " +
+          "floor is warned about, not enforced — the change is audited.",
+        tags: TAGS,
+        body: retentionPolicyUpdateSchema,
+        response: retentionPolicyResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     ctrl.updateRetentionPolicy,
   );
 
   app.post(
     "/retention-purge",
-    { preHandler: app.requirePermission("admin.compliance") },
+    {
+      preHandler: app.requirePermission("admin.compliance"),
+      schema: routeSchema({
+        summary:
+          "Run the retention purge now rather than waiting for the " +
+          "nightly tick. Answers the cutoffs used and the rows deleted.",
+        tags: TAGS,
+        response: retentionPurgeResponseSchema,
+        errors: [401, 403],
+      }),
+    },
     ctrl.runRetentionPurge,
   );
 }
