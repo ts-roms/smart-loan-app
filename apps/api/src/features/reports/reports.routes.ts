@@ -66,7 +66,31 @@ function parseDateParam(
 }
 
 export async function reportRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * onRequest, not preHandler — and in this group it was not merely a
+   * latent hazard, it was live.
+   *
+   * Fastify's order is onRequest -> preValidation -> preHandler. With
+   * `authenticate` at preHandler, `/roll-rate` and
+   * `/product-profitability` — the two routes here that carry a
+   * `querystring` schema — validated that schema for an ANONYMOUS
+   * caller and answered 400 before ever checking who they were.
+   * Measured before the fix:
+   *
+   *   GET /reports/roll-rate?from=a&from=b   (no Authorization header)
+   *   -> 400 {"error":"ValidationError",
+   *           "issues":[{"path":["from"],"message":"must be string",
+   *                      "in":"querystring"}]}
+   *
+   * A repeated parameter is what Fastify parses into an array, so the
+   * string check fails — and the refusal named the parameter, its
+   * expected type and where it lives to a caller holding no token. With
+   * the hook at onRequest the same request answers 401.
+   *
+   * `jwtVerify` reads the Authorization header only, so it is safe this
+   * early. `resolveTenant` needs `req.user` and stays at preHandler.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;

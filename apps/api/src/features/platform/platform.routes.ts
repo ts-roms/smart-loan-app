@@ -181,22 +181,53 @@ export async function platformRoutes(app: FastifyInstance) {
     );
 
     // ─── tenants ────────────────────────────────────────────────────
+    /*
+     * ── The three "PLATFORM_SALES and above" reads ──────────────────
+     *
+     * `GET /tenants`, `GET /tenants/:slug` and
+     * `GET /tenants/:slug/licenses` said "PLATFORM_SALES and above" in
+     * their summaries and carried no `requirePlatformRole`. The
+     * documentation batch reported that as a gate the summary claimed
+     * and the code did not enforce, and left it alone on the grounds
+     * that tightening a gate is an access-control decision.
+     *
+     * Resolved by enforcing it, because on this enum it is not a
+     * tightening. `PlatformRole` has exactly two members —
+     * PLATFORM_ADMIN and PLATFORM_SALES (schema.prisma) — so
+     * "PLATFORM_SALES and above" and "any authenticated platform role"
+     * denote the SAME SET. The gate below accepts both roles; every
+     * caller who reaches these routes today still reaches them
+     * tomorrow. Nobody loses access.
+     *
+     * What changes is the default. An ungated route admits whatever
+     * roles exist, so adding a PLATFORM_SUPPORT or PLATFORM_READONLY
+     * later would silently hand it the full tenant list and every
+     * issued licence token, in the commit that added the enum member
+     * and nowhere near this file. The explicit list refuses it instead,
+     * and someone has to choose to add it here.
+     *
+     * It also makes the `403` these three already declared reachable:
+     * `platformAuthenticate` only ever 401s and the controller never
+     * sends 403, so until now that entry described a response no code
+     * path could produce.
+     *
+     * Gated exactly like `POST /licenses` below, which carries the same
+     * SALES+ intent and has always spelled it out.
+     */
+    const salesAndAbove = {
+      preHandler: requirePlatformRole("PLATFORM_ADMIN", "PLATFORM_SALES"),
+    };
+    const SALES_AND_ABOVE = ["PLATFORM_ADMIN", "PLATFORM_SALES"];
+
     scoped.get(
       "/tenants",
       {
+        ...salesAndAbove,
         schema: routeSchema({
           summary: "Every tenant, newest first. PLATFORM_SALES and above.",
           tags: TAGS,
           auth: "platform",
-          /*
-           * No `platformRole`, and that is the TRUTH rather than an
-           * oversight in this file: the summary above says PLATFORM_SALES
-           * and above, but there is no `requirePlatformRole` preHandler on
-           * this route, so any authenticated platform role reaches it.
-           * Documenting the summary's claim would publish a gate that does
-           * not exist. Reported, not silently tightened — changing who can
-           * call it is an access-control decision, not a documentation one.
-           */
+          platformRole: SALES_AND_ABOVE,
           response: tenantListResponseSchema,
           errors: [401, 403],
         }),
@@ -206,19 +237,12 @@ export async function platformRoutes(app: FastifyInstance) {
     scoped.get<{ Params: { slug: string } }>(
       "/tenants/:slug",
       {
+        ...salesAndAbove,
         schema: routeSchema({
           summary: "One tenant by slug. PLATFORM_SALES and above.",
           tags: TAGS,
           auth: "platform",
-          /*
-           * No `platformRole`, and that is the TRUTH rather than an
-           * oversight in this file: the summary above says PLATFORM_SALES
-           * and above, but there is no `requirePlatformRole` preHandler on
-           * this route, so any authenticated platform role reaches it.
-           * Documenting the summary's claim would publish a gate that does
-           * not exist. Reported, not silently tightened — changing who can
-           * call it is an access-control decision, not a documentation one.
-           */
+          platformRole: SALES_AND_ABOVE,
           params: tenantSlugParamSchema,
           response: tenantResponseSchema,
           errors: [401, 403, 404],
@@ -388,22 +412,15 @@ export async function platformRoutes(app: FastifyInstance) {
     scoped.get<{ Params: { slug: string } }>(
       "/tenants/:slug/licenses",
       {
+        ...salesAndAbove,
         schema: routeSchema({
           summary:
             "Licence history for one tenant, newest first. Each row " +
             "carries the full signed `token`, so a licence can be " +
-            "resent without re-issuing it.",
+            "resent without re-issuing it. PLATFORM_SALES and above.",
           tags: TAGS,
           auth: "platform",
-          /*
-           * No `platformRole`, and that is the TRUTH rather than an
-           * oversight in this file: the summary above says PLATFORM_SALES
-           * and above, but there is no `requirePlatformRole` preHandler on
-           * this route, so any authenticated platform role reaches it.
-           * Documenting the summary's claim would publish a gate that does
-           * not exist. Reported, not silently tightened — changing who can
-           * call it is an access-control decision, not a documentation one.
-           */
+          platformRole: SALES_AND_ABOVE,
           params: tenantSlugParamSchema,
           response: tenantLicenseListResponseSchema,
           errors: [401, 403],
