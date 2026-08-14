@@ -40,16 +40,21 @@ beforeAll(async () => {
   // Imported after the env is set — config reads JWT_SECRET at module
   // load, and the signature has to be computed with the same one the
   // plugin verifies against.
-  const [{ default: Fastify }, { uploadStaticPlugin }, signing] =
+  const [{ default: Fastify }, { uploadStaticPlugin }, signing, storage] =
     await Promise.all([
       import("fastify"),
       import("./static.plugin"),
       import("./signing"),
+      import("@loan/storage"),
     ]);
   signUploadPath = signing.signUploadPath;
 
   app = Fastify({ logger: false });
-  await app.register(uploadStaticPlugin, { root: uploadsDir });
+  // The local-disk backend, which is what every deployment runs today
+  // and what `@fastify/static` is handed under the covers.
+  await app.register(uploadStaticPlugin, {
+    storage: new storage.LocalDiskStorage({ root: uploadsDir }),
+  });
   await app.ready();
 });
 
@@ -193,5 +198,107 @@ describe("served files cannot execute", () => {
     const res = await app.inject({ method: "GET", url: LOGO_PATH });
 
     expect(res.body).toBe("<svg/>");
+  });
+});
+
+/**
+ * The same guarantees, on a NON-LOCAL backend.
+ *
+ * This is the point of the whole exercise. Serving from a bucket is
+ * where an object-storage migration usually loses its security posture:
+ * the tempting implementation redirects the browser at a
+ * provider-signed URL, and at that moment the signature gate, the
+ * sandbox CSP and `nosniff` all stop applying, because they are
+ * properties of a response this origin no longer sends.
+ *
+ * So the remote path streams bytes through the API behind the same two
+ * hooks, and these tests hold it to that. `InMemoryStorage` reports no
+ * `localRoot`, which is exactly how a real S3 backend presents itself —
+ * so this exercises the streaming branch without a network, a
+ * credential or a bucket.
+ */
+describe("remote backend keeps every guarantee", () => {
+  let remote: FastifyInstance;
+
+  const csp = (res: { headers: Record<string, unknown> }) => {
+    const h = res.headers["content-security-policy"];
+    return Array.isArray(h) ? h.join(" ") : typeof h === "string" ? h : "";
+  };
+
+  beforeAll(async () => {
+    const [{ default: Fastify }, { uploadStaticPlugin }, storage] =
+      await Promise.all([
+        import("fastify"),
+        import("./static.plugin"),
+        import("@loan/storage"),
+      ]);
+
+    const backend = new storage.InMemoryStorage();
+    // Presents as a remote backend — no filesystem root to hand off to
+    // @fastify/static, so the streaming branch is what runs.
+    expect(backend.localRoot).toBeUndefined();
+    await backend.put("kyc/id-front.png", Buffer.from(KYC_BYTES));
+    await backend.put("branding/logo.svg", Buffer.from("<svg/>"));
+
+    remote = Fastify({ logger: false });
+    await remote.register(uploadStaticPlugin, { storage: backend });
+    await remote.ready();
+  });
+
+  afterAll(async () => {
+    await remote?.close();
+  });
+
+  it("serves a signed file", async () => {
+    const { url } = signUploadPath(KYC_PATH);
+    const res = await remote.inject({ method: "GET", url });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe(KYC_BYTES);
+  });
+
+  it("still refuses an unsigned request", async () => {
+    const res = await remote.inject({ method: "GET", url: KYC_PATH });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).not.toContain(KYC_BYTES);
+  });
+
+  it("still sandboxes a signed file", async () => {
+    const { url } = signUploadPath(KYC_PATH);
+    const res = await remote.inject({ method: "GET", url });
+    expect(res.statusCode).toBe(200);
+    expect(csp(res)).toContain("sandbox");
+    expect(csp(res)).toContain("default-src 'none'");
+  });
+
+  it("still sandboxes the public branding path", async () => {
+    const res = await remote.inject({ method: "GET", url: LOGO_PATH });
+    expect(res.statusCode).toBe(200);
+    expect(csp(res)).toContain("sandbox");
+  });
+
+  it("still sends nosniff", async () => {
+    const res = await remote.inject({ method: "GET", url: LOGO_PATH });
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+  });
+
+  it("types the response from the extension rather than guessing", async () => {
+    const res = await remote.inject({ method: "GET", url: LOGO_PATH });
+    expect(res.headers["content-type"]).toContain("image/svg+xml");
+  });
+
+  it("404s a missing object", async () => {
+    const { url } = signUploadPath("/uploads/kyc/not-there.png");
+    const res = await remote.inject({ method: "GET", url });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("404s a traversal-shaped key rather than fetching it", async () => {
+    // Signed deliberately, so the signature gate lets it reach the
+    // handler — the key validator is what has to refuse it.
+    const path = "/uploads/kyc/../../etc/passwd";
+    const { url } = signUploadPath(path);
+    const res = await remote.inject({ method: "GET", url });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).not.toContain("root:");
   });
 });

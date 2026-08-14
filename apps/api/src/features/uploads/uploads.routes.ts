@@ -1,11 +1,14 @@
 /**
  * Generic multipart file upload — `POST /uploads-api/:subdir`.
  *
- * Saves the file to `UPLOADS_DIR/<subdir>/<uuid><ext>` and returns the
+ * Saves the file at storage key `<subdir>/<uuid><ext>` and returns the
  * public URL (`/uploads/<subdir>/<uuid><ext>`), which `app.ts` serves
- * via `@fastify/static`. Callers store that URL on whatever row it
- * belongs to — KycSubmission, LoanApplication.selfieUrl,
+ * through the configured storage backend. Callers store that URL on
+ * whatever row it belongs to — KycSubmission, LoanApplication.selfieUrl,
  * User.defaultSignatureUrl, SystemConfig.companyLogoUrl.
+ *
+ * The URL is the key plus a `/uploads/` prefix, which is what lets the
+ * backend change without migrating a single database row.
  *
  * ## Authorization
  *
@@ -34,20 +37,18 @@
  * disk as an orphan.
  */
 
-import { join } from "node:path";
-
 import type { FastifyInstance } from "fastify";
 
-import { config } from "../../config";
+import { uploadStorage } from "./backend";
 import { isProtectedUploadPath, signUploadPath } from "./signing";
 import { storeUpload } from "./store";
 
 export async function uploadRoutes(app: FastifyInstance) {
-  const baseDir = config.uploadsDir || join(process.cwd(), "uploads");
+  const storage = uploadStorage(app.log);
 
   // No `resolveTenant`: nothing here touches Prisma. Uploads share one
-  // filesystem across tenants — safe because names are UUIDs, and the
-  // static server is unauthenticated anyway so a per-tenant directory
+  // namespace across tenants — safe because names are UUIDs, and the
+  // static server is unauthenticated anyway so a per-tenant prefix
   // would add no isolation, only a URL shape change that existing rows
   // wouldn't match.
   app.addHook("preHandler", app.authenticate);
@@ -57,7 +58,7 @@ export async function uploadRoutes(app: FastifyInstance) {
     if (!file) {
       return reply.code(400).send({ error: "BadRequest", message: "No file" });
     }
-    const result = await storeUpload(file, req.params.subdir, baseDir);
+    const result = await storeUpload(file, req.params.subdir, storage);
     if (!result.ok) {
       return reply.code(result.code).send({
         error: result.code === 413 ? "TooLarge" : "BadRequest",

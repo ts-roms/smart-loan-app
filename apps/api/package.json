@@ -38,6 +38,7 @@
     "@loan/screening": "workspace:*",
     "@loan/shared-types": "workspace:*",
     "@loan/shared-utils": "workspace:*",
+    "@loan/storage": "workspace:*",
     "@sentry/node": "^10.69.0",
     "dotenv": "^16.6.1",
     "fastify": "^5.11.0",

@@ -8,16 +8,57 @@
  *
  * See signing.ts for why a query-string signature rather than Bearer
  * auth, and for what this does and doesn't scope.
+ *
+ * ## Why bytes still leave through the API after roadmap 3.1
+ *
+ * The obvious thing to do with an object store is to redirect the
+ * browser at a bucket-signed URL and stop proxying bytes. This
+ * deliberately does not, because both protections below are properties
+ * of *this origin's response* and neither survives the redirect: the
+ * bucket sets its own Content-Type, sends no CSP, and has never heard
+ * of the HMAC gate. A KYC document is attacker-influenced bytes, so the
+ * sandbox is not optional.
+ *
+ * The cost is that the API stays on the data path — it is a proxy, not
+ * a redirector. For 5 MB documents rendered a dozen at a time on a
+ * review screen that is an acceptable trade, and it keeps the security
+ * posture identical across both backends.
  */
 
 import staticPlugin from "@fastify/static";
+import type { StorageBackend } from "@loan/storage";
 import type { FastifyInstance } from "fastify";
 
+import { keyFromUrl } from "./backend";
 import { isProtectedUploadPath, verifyUploadSignature } from "./signing";
 
 export interface UploadStaticOptions {
-  /** Directory to serve. */
-  root: string;
+  /** Backend holding the stored files. */
+  storage: StorageBackend;
+}
+
+/**
+ * Content types for the closed set of extensions `store.ts` admits.
+ *
+ * Only consulted on the non-local path — `@fastify/static` does its own
+ * inference, and changing that would be a behaviour change for every
+ * deployment running today. Anything unrecognised is served as opaque
+ * bytes rather than guessed at.
+ */
+const CONTENT_TYPES = new Map<string, string>([
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".png", "image/png"],
+  [".webp", "image/webp"],
+  [".pdf", "application/pdf"],
+  [".heic", "image/heic"],
+  [".svg", "image/svg+xml"],
+]);
+
+function contentTypeFor(key: string): string {
+  const dot = key.lastIndexOf(".");
+  const ext = dot === -1 ? "" : key.slice(dot).toLowerCase();
+  return CONTENT_TYPES.get(ext) ?? "application/octet-stream";
 }
 
 export async function uploadStaticPlugin(
@@ -64,6 +105,10 @@ export async function uploadStaticPlugin(
    * default-src 'none' on top of that stops a served document fetching
    * anything at all: no beacon, no exfiltration, nothing to see if a
    * file does contain something it should not.
+   *
+   * This hook is backend-independent by design: it runs on every
+   * `/uploads/` response whether the bytes came from `@fastify/static`
+   * or from a storage stream, so the two paths cannot drift apart.
    */
   app.addHook("onSend", async (req, reply) => {
     if (!req.url.startsWith("/uploads/")) return;
@@ -76,9 +121,30 @@ export async function uploadStaticPlugin(
     reply.header("X-Content-Type-Options", "nosniff");
   });
 
-  await app.register(staticPlugin, {
-    root: opts.root,
-    prefix: "/uploads/",
-    decorateReply: false,
+  if (opts.storage.localRoot !== undefined) {
+    // Local disk: hand off to @fastify/static exactly as before. It
+    // brings Range requests, ETags and conditional GETs, and every
+    // deployment running today is served by it — reimplementing that
+    // over the storage interface would be a silent regression.
+    await app.register(staticPlugin, {
+      root: opts.storage.localRoot,
+      prefix: "/uploads/",
+      decorateReply: false,
+    });
+    return;
+  }
+
+  // Remote backend: stream the object through. Registered as a wildcard
+  // GET rather than a plugin so it sits behind the same two hooks above.
+  app.get<{ Params: { "*": string } }>("/uploads/*", async (req, reply) => {
+    const key = keyFromUrl(req.url);
+    if (key === null) {
+      return reply.code(404).send({ error: "NotFound" });
+    }
+    const stream = await opts.storage.getStream(key);
+    if (stream === null) {
+      return reply.code(404).send({ error: "NotFound" });
+    }
+    return reply.type(contentTypeFor(key)).send(stream);
   });
 }

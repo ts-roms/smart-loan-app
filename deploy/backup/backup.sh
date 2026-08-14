@@ -29,9 +29,11 @@
 # Optional env:
 #   BACKUP_DIR            local directory (default /var/backups/smart-loan)
 #   UPLOADS_DIR           directory holding uploaded files. When set and
-#                          present, each run also archives it. Leave unset
-#                          if uploads live in object storage, which has its
-#                          own durability story.
+#                          present, each run also archives it.
+#   STORAGE_DRIVER        when "S3", uploads live in a bucket and this
+#                          script does NOT back them up — it says so
+#                          loudly. Bucket versioning + replication are
+#                          the operator's job; durability is not a backup.
 #   BACKUP_KEEP_DAYS      daily retention (default 14)
 #   BACKUP_KEEP_WEEKS     weekly retention (default 8) — Sunday dumps
 #                          are also tagged "weekly" and kept longer
@@ -169,10 +171,38 @@ fi
 # step a restore produces a database referencing documents that no longer
 # exist: every row intact, every file gone.
 #
-# Skipped silently when UPLOADS_DIR is unset or absent, which is the
-# correct behaviour once uploads move to object storage — that has its own
-# replication and does not want a nightly tar of the same bytes.
-if [[ -n "$UPLOADS_DIR" ]]; then
+# ── When STORAGE_DRIVER=S3, this script does NOT cover uploads ──
+#
+# Roadmap 3.1 made the storage backend swappable. Local disk is still the
+# default and everything below works exactly as it did. But once uploads
+# are addressed to a bucket, the local directory is empty or stale, and
+# tarring it produces a backup that LOOKS successful and restores
+# nothing. That is worse than no backup, so the S3 case is called out
+# loudly rather than skipped quietly.
+#
+# The old comment here claimed object storage "has its own replication"
+# and needed no backup. That is half right and the dangerous half:
+# S3-class durability protects against hardware failure, NOT against a
+# deletion, an application bug, a ransomware event or a bad migration —
+# all of which replicate faithfully to every copy. Uploads in a bucket
+# need bucket versioning plus either a lifecycle policy or cross-region
+# replication, configured on the bucket. None of that is this script's
+# job, and none of it happens by default.
+STORAGE_DRIVER_UPPER="$(printf '%s' "${STORAGE_DRIVER:-}" | tr '[:lower:]' '[:upper:]')"
+
+if [[ "$STORAGE_DRIVER_UPPER" == "S3" ]]; then
+  log "!! STORAGE_DRIVER=S3 — uploaded files are in a bucket and are NOT covered by this script"
+  log "!! ensure bucket versioning + replication are enabled; object durability is not a backup"
+  if [[ -n "$UPLOADS_DIR" && -d "$UPLOADS_DIR" ]]; then
+    # Both configured at once. Archive it anyway — it may hold files
+    # written before the switch — but do not let it read as coverage.
+    uploads_target="$BACKUP_DIR/daily/${TS}-uploads-legacy.tar.gz"
+    log "→ archiving PRE-MIGRATION uploads from ${UPLOADS_DIR} to ${uploads_target}"
+    log "!! this archive covers only files written before STORAGE_DRIVER=S3 was set"
+    tar -czf "$uploads_target" -C "$UPLOADS_DIR" .
+    PRODUCED+=("$uploads_target")
+  fi
+elif [[ -n "$UPLOADS_DIR" ]]; then
   if [[ -d "$UPLOADS_DIR" ]]; then
     uploads_target="$BACKUP_DIR/daily/${TS}-uploads.tar.gz"
     log "→ archiving uploads from ${UPLOADS_DIR} to ${uploads_target}"
