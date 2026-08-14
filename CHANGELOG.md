@@ -10,6 +10,93 @@ automation depends on the manifest.
 
 ---
 
+## Unreleased — worktree batch: append-only audit, auth declarations, suite stability
+
+### Added — the audit log is append-only in the database, not by convention
+
+`AuditLogRepository` exposed no update path, but that is a convention and the
+application role holds full DML. A `BEFORE UPDATE OR DELETE` row trigger plus a
+`BEFORE TRUNCATE` statement trigger now refuse both; verified against the dev
+database, where a plain DELETE and a plain UPDATE both return SQLSTATE
+**AP001** and the row count is unmoved.
+
+`REVOKE` and `SECURITY DEFINER` were rejected for a structural reason: both
+need a second role, and roles are cluster-global while everything else here is
+per-tenant, so a role-based guard cannot live in a migration replayed once per
+schema.
+
+**The opt-in carries the current transaction id, not a boolean.** `SET LOCAL`
+alone does not protect against someone writing plain `SET`, which on a pooled
+connection silently arms every later borrower — including another tenant's
+request. A leaked value names a committed transaction and grants nothing.
+Redaction is a separate window and cannot rewrite: the trigger checks the row's
+shape as jsonb-minus-two-keys, so columns added later are covered by
+construction.
+
+The two branches' lists compose with no hole — and the finding is that **six of
+the seven protected financial actions are safe only because the disposable list
+is closed**, not because anyone labelled them. Asserted per action in CI, so
+inverting it fails loudly.
+
+**Deployment precondition, in the migration header:** the app must not connect
+as a superuser, which can disable the trigger outright. The dev role is one, so
+in dev this guard is advisory. Alert on `AP001` in production.
+
+### Fixed — three auth declarations, one of which was not a defect
+
+`POST /auth/logout`'s declared 401 is **real**. It comes from
+`resolveTenantFromBody`, which short-circuits when `multiTenant` is false — so
+the probe returning 204 was run against the single-tenant default. Removing the
+declaration would have made the spec wrong for every multi-tenant deployment.
+
+Three platform routes did lack `requirePlatformRole`, and enforcing it locks
+nobody out: `PlatformRole` has exactly two members, so "SALES and above" and
+"any platform role" denote the same set. What changes is the default — a role
+added later is refused rather than silently inheriting the tenant list and every
+issued licence token.
+
+Auth moved to `onRequest` in `documents`, `ecl` and `reports`; the 401→400
+hazard was live in two. Two corrections to the original report: `ecl` carries no
+request schema at all — the **body parser** also runs ahead of `preHandler` —
+and it is a **repeated** query param that trips Fastify's coercion, not an
+unknown one.
+
+Also: `.env.example` documented `API_PORT`; `config.ts` reads `PORT`. Setting
+the documented variable did nothing and the server took the 3001 default, which
+is how two processes end up fighting over one port.
+
+### Fixed — the suite was starving itself, and one test wrote to the repo
+
+Every project ran bare `vitest run`, taking vitest's default `maxWorkers` of
+`availableParallelism() - 1` — 15 forks on a 16-core box — while Nx runs three
+projects at once. Up to **45 forked processes on 16 cores**, with 57–83 node
+processes measured during a run, against a 5s default `testTimeout`. Test bodies
+doing nothing but file I/O missed the budget, which is why failures arrived
+without assertion messages and moved between projects.
+
+The fan-out was not buying speed: `@loan/api` alone measured **87s at 15 workers
+against 65s at 4**, because each fork re-pays the whole transform and import
+cost.
+
+Separately, `store.test.ts` resolved a string target to the configured backend,
+whose `uploadsDir` falls back to cwd — so every run left a real
+`apps/api/uploads/kyc/<uuid>.png` behind. **That directory is gitignored, which
+is exactly why it went unnoticed.** `UPLOADS_DIR` is now a fresh `mkdtemp` per
+spec file, set in a setup file because `config` snapshots env at module load.
+No assertion changed.
+
+Eight consecutive clean cold parallel runs (five by the author, three at
+integration) at 1m39s–1m55s against a ~2m10s baseline — faster as well as
+stabler.
+
+**Outstanding:** `integrity-constraints.test.ts` runs against the **live dev
+database** on a normal checkout, because Nx loads `.env` into task env. Every
+case is wrapped in a rolled-back transaction and it is the only real coverage of
+two DB constraints, so it was left alone — but it wants a dedicated test
+database before many worktrees run concurrently.
+
+---
+
 ## Unreleased — worktree batch: three P1 defects
 
 ### Fixed — ECL re-runs were double-posting to the general ledger
