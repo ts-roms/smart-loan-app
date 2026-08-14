@@ -271,7 +271,18 @@ export interface EclRunResult {
     ecl: number;
   }>;
   delta: number;
+  /**
+   * The entry carrying this PERIOD's movement — posted by this run, or
+   * found already posted by an earlier one.
+   */
   journalEntryId: string | null;
+  /**
+   * What the run did to the ledger. `ALREADY_POSTED` means the window
+   * was booked before and nothing was booked again; the recomputed
+   * figures are still saved. Do not infer "posted" from a non-null
+   * `journalEntryId` alone.
+   */
+  posting: "POSTED" | "ALREADY_POSTED" | "NO_MOVEMENT" | "NOT_ATTRIBUTED";
 }
 
 export const eclKeys = {
