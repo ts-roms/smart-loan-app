@@ -35,6 +35,7 @@ import { LoanWorkflowController } from "./loans.controller";
 import { LoanWorkflowService } from "./loans.service";
 import { notifyApproversForStep } from "./notify-approvers";
 
+import { auditFor } from "../../lib/audit-context";
 import { routeSchema } from "../../lib/openapi";
 
 // All zod request schemas live in ./schemas.ts. They're inferred here
@@ -844,6 +845,9 @@ export async function loanRoutes(app: FastifyInstance) {
             reference: parsed.data.reference,
             recordedById: req.user.sub,
             idempotencyKey,
+            // §56 — the audit row is written inside recordPayment's
+            // transaction, alongside the payment and its journal entry.
+            audit: req.loanCtx!.audit,
           }),
         );
       } catch (err) {
@@ -1806,7 +1810,10 @@ function buildLoanCtx(app: FastifyInstance) {
     const coMakers = new CoMakerRepository(prisma);
     const rules = new DecisionRuleRepository(prisma);
     const exposure = new CustomerExposureRepository(prisma);
-    const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
+    // `auditFor` rather than a bare `new AuditLogRepository`: it also
+    // supplies the §56 request context (tenant, IP, user agent, request
+    // id) and the pino logger. See apps/api/src/lib/audit-context.ts.
+    const audit = auditFor(req, prisma);
     const delegations = new DelegationRepository(prisma);
     const drafts = new LoanDraftRepository(prisma);
     const notifications = app.notifications(prisma);

@@ -1,4 +1,8 @@
-import type { AccountingRepository, AuditLogRepository } from "@loan/db";
+import type {
+  AccountingRepository,
+  AuditLogRepository,
+  PrismaClient,
+} from "@loan/db";
 import { buildEntry } from "@loan/accounting";
 
 import type {
@@ -74,6 +78,13 @@ export class JournalService {
   constructor(
     private readonly accounting: AccountingRepository,
     private readonly audit: AuditLogRepository,
+    /**
+     * Needed only so `post()` can put the entry and its §56 audit row in
+     * one transaction. Optional so the existing two-argument
+     * construction in tests keeps working; when absent, `post()` falls
+     * back to writing the audit row immediately after the entry.
+     */
+    private readonly prisma?: PrismaClient,
   ) {}
 
   /**
@@ -81,6 +92,13 @@ export class JournalService {
    * invariant (debits === credits, no negatives, no single-sided
    * lines); the repo persists it inside a transaction with the period
    * close-gate check.
+   *
+   * §56: a manual journal entry is an operator moving money on the
+   * ledger by hand, with no loan or payment behind it to explain it —
+   * the single most reviewable action in the accounting module, and
+   * until now the only write here that left no audit row (reverse and
+   * reverseBulk already did). It is audited inside the same transaction
+   * as the entry, so an entry cannot exist without its record.
    */
   async post(input: EntryInput, actorId: string): Promise<PostEntryResult> {
     try {
@@ -90,9 +108,36 @@ export class JournalService {
         source: "MANUAL",
         lines: input.lines,
       });
-      const entry = await this.accounting.postEntry(validated, {
-        postedById: actorId,
-      });
+      const write = async (tx?: PrismaClient) => {
+        const entry = await this.accounting.postEntry(validated, {
+          postedById: actorId,
+          tx,
+        });
+        await this.audit.recordRequired({
+          action: "JOURNAL_POST",
+          actorId,
+          targetType: "JournalEntry",
+          targetId: entry.id,
+          tx,
+          reason: input.memo ?? null,
+          newValue: {
+            entryDate: entry.entryDate,
+            memo: entry.memo,
+            source: "MANUAL",
+            // The lines are the entry. Without them the audit row says
+            // "someone posted something", which is not an audit trail.
+            lines: validated.lines.map((l) => ({
+              accountCode: l.accountCode,
+              debit: l.debit,
+              credit: l.credit,
+            })),
+          },
+        });
+        return entry;
+      };
+      const entry = this.prisma
+        ? await this.prisma.$transaction((tx) => write(tx as PrismaClient))
+        : await write();
       return { ok: true, entry };
     } catch (err) {
       return {

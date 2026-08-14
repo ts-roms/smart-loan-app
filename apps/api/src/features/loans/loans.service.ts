@@ -730,6 +730,13 @@ export class LoanWorkflowService {
 
     const disbursed = await this.loans.disburse(idOrNumber, {
       disbursedById: actorId,
+      /*
+       * §56 — handed down so the audit row lands inside the repository's
+       * disbursement transaction, not after it. Recording here instead
+       * (after the await) would leave a window where the money has moved
+       * and nothing says who moved it.
+       */
+      audit: this.audit,
     });
 
     try {

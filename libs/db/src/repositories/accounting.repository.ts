@@ -49,6 +49,7 @@ import {
   resolvePaging,
 } from "../lib/pagination";
 import { isUniqueViolation } from "../lib/prisma-errors";
+import type { AuditLogRepository } from "./audit-log.repository";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -284,26 +285,96 @@ export class AccountingRepository {
     });
   }
 
+  /**
+   * Close an accounting period.
+   *
+   * Idempotent: closing an already-closed period returns it unchanged
+   * and — deliberately — writes no audit row. The period did not
+   * change, so there is nothing to record; the *first* close is the
+   * event. (This differs from `JournalService.reverse`, which logs its
+   * no-ops on purpose because repeated reversal attempts are themselves
+   * a signal. A repeated period close is not.)
+   */
   async closePeriod(
     year: number,
     month: number,
     userId: string,
+    opts: { audit?: AuditLogRepository } = {},
   ): Promise<AccountingPeriod> {
     const p = await this.ensurePeriod(year, month);
     if (p.status === "CLOSED") return p;
-    return this.prisma.accountingPeriod.update({
-      where: { id: p.id },
-      data: { status: "CLOSED", closedAt: new Date(), closedById: userId },
+    return this.prisma.$transaction(async (tx) => {
+      const closed = await tx.accountingPeriod.update({
+        where: { id: p.id },
+        data: { status: "CLOSED", closedAt: new Date(), closedById: userId },
+      });
+      // §56 — inside the transaction. Closing a period freezes a month
+      // of the ledger against further posting; it is a privileged
+      // financial control action and must not be able to happen
+      // anonymously.
+      await opts.audit?.recordRequired({
+        action: "ACCOUNTING_PERIOD_CLOSE",
+        actorId: userId,
+        targetType: "AccountingPeriod",
+        targetId: closed.id,
+        tx,
+        oldValue: { status: p.status, closedAt: p.closedAt },
+        newValue: { status: closed.status, closedAt: closed.closedAt },
+        payload: { year, month },
+      });
+      return closed;
     });
   }
 
-  async reopenPeriod(year: number, month: number): Promise<AccountingPeriod> {
+  /**
+   * Reopen a closed period so entries can be posted into it again.
+   *
+   * `actorId` is required for the audit row. Reopening is the more
+   * sensitive half of the pair — it un-freezes a month that was
+   * declared final, which is how a closed book gets quietly restated —
+   * and until now it recorded nothing at all about who did it: the
+   * update even clears `closedById`, erasing the only trace of the
+   * close. The audit row is the sole surviving record of the reopen.
+   */
+  async reopenPeriod(
+    year: number,
+    month: number,
+    opts: {
+      actorId?: string;
+      audit?: AuditLogRepository;
+      /** Operator justification, where the route collects one. */
+      reason?: string | null;
+    } = {},
+  ): Promise<AccountingPeriod> {
     const p = await this.findPeriod(year, month);
     if (!p) throw new Error(`Period ${year}-${month} does not exist.`);
     if (p.status === "OPEN") return p;
-    return this.prisma.accountingPeriod.update({
-      where: { id: p.id },
-      data: { status: "OPEN", closedAt: null, closedById: null },
+    return this.prisma.$transaction(async (tx) => {
+      const reopened = await tx.accountingPeriod.update({
+        where: { id: p.id },
+        data: { status: "OPEN", closedAt: null, closedById: null },
+      });
+      if (opts.audit && opts.actorId) {
+        await opts.audit.recordRequired({
+          action: "ACCOUNTING_PERIOD_REOPEN",
+          actorId: opts.actorId,
+          targetType: "AccountingPeriod",
+          targetId: reopened.id,
+          tx,
+          reason: opts.reason ?? null,
+          // The old values are the point: they are about to be nulled by
+          // this very update, so this row is where "it was closed on the
+          // 3rd by Maria" survives.
+          oldValue: {
+            status: p.status,
+            closedAt: p.closedAt,
+            closedById: p.closedById,
+          },
+          newValue: { status: reopened.status },
+          payload: { year, month },
+        });
+      }
+      return reopened;
     });
   }
 
