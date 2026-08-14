@@ -15,6 +15,7 @@ import {
   loanApprovalResponseSchema,
   loanIdParamSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 const TAGS = ["loans"];
 
@@ -243,7 +244,7 @@ function buildApprovalCtx() {
     req.approvalCtx = {
       loans: new LoanRepository(prisma),
       approvals: new LoanApprovalRepository(prisma),
-      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
+      audit: auditFor(req, prisma),
     };
   };
 }

@@ -41,7 +41,50 @@ export class AuthController {
       parsed.data,
       req.tenantCtx.slug,
     );
-    if (result.ok) return this.tokenResponse(result.tokens, result.user);
+
+    /*
+     * §56 — every login attempt is recorded, success or failure.
+     *
+     * Both halves matter and they go to different places. The
+     * LoginAttempt row is written for EVERY attempt including the ones
+     * against addresses that do not exist, which is the brute-force
+     * case and the one AuditEvent structurally cannot hold (its
+     * `actorId` is a NOT NULL foreign key to User). The AuditEvent is
+     * written only on success, where there is a real user to attribute
+     * it to.
+     *
+     * `failureReason` is the precise server-side kind, which is
+     * deliberately MORE specific than what the caller is told —
+     * `mapLoginError` keeps the response vague so the endpoint is not
+     * an account-existence oracle. The precise reason belongs in the
+     * security log, where only staff can read it.
+     *
+     * Best-effort, and awaited but never fatal: a login must not be
+     * refused because the security log is unavailable. That is the
+     * opposite of the call the money path makes — refusing a
+     * disbursement is safe, but refusing every login turns a logging
+     * outage into a total outage.
+     */
+    const attempts = req.authServices!.loginAttempts;
+    if (result.ok) {
+      await attempts.record({
+        email: parsed.data.email,
+        userId: result.user.id,
+        success: true,
+      });
+      await req.authServices!.audit.record({
+        action: "AUTH_LOGIN",
+        actorId: result.user.id,
+        targetType: "User",
+        targetId: result.user.id,
+      });
+      return this.tokenResponse(result.tokens, result.user);
+    }
+    await attempts.record({
+      email: parsed.data.email,
+      success: false,
+      failureReason: result.kind,
+    });
     return this.mapLoginError(result, reply);
   };
 
@@ -82,7 +125,26 @@ export class AuthController {
   logout = async (req: FastifyRequest, reply: FastifyReply) => {
     const parsed = refreshSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(204).send();
-    await req.authServices!.auth.logout(parsed.data.refreshToken);
+    const userId = await req.authServices!.auth.logout(
+      parsed.data.refreshToken,
+    );
+    /*
+     * §56 — audited only when a live token was actually revoked.
+     *
+     * A null userId means the token matched nothing: expired, already
+     * revoked, or never valid. The endpoint still answers 204 (it must
+     * not become an oracle), but there is no session that ended, so
+     * there is nothing to record — and there is no actor id to hang an
+     * AuditEvent on in any case.
+     */
+    if (userId) {
+      await req.authServices!.audit.record({
+        action: "AUTH_LOGOUT",
+        actorId: userId,
+        targetType: "User",
+        targetId: userId,
+      });
+    }
     return reply.code(204).send();
   };
 

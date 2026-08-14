@@ -2,6 +2,7 @@ import { endOfDay, startOfDay } from "@loan/accounting";
 import { AccountingRepository, AuditLogRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { auditFor } from "../../lib/audit-context";
 import { routeSchema } from "../../lib/openapi";
 import { validationError } from "../../lib/validation-error";
 import { JournalController } from "./journal.controller";
@@ -101,6 +102,8 @@ function parseFrom(
 
 interface AccountingCtx {
   accounting: AccountingRepository;
+  /** Request-scoped, §56-populated. Used directly by the period routes. */
+  audit: AuditLogRepository;
   journal: JournalService;
 }
 
@@ -144,10 +147,13 @@ export async function accountingRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     const accounting = new AccountingRepository(prisma);
-    const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
+    // `auditFor` also supplies the §56 request context (tenant, IP, user
+    // agent, request id) and the pino logger.
+    const audit = auditFor(req, prisma);
     req.accountingCtx = {
       accounting,
-      journal: new JournalService(accounting, audit),
+      audit,
+      journal: new JournalService(accounting, audit, prisma),
     };
   });
 
@@ -556,6 +562,7 @@ export async function accountingRoutes(app: FastifyInstance) {
         year,
         month,
         req.user.sub,
+        { audit: req.accountingCtx!.audit },
       );
     },
   );
@@ -588,7 +595,10 @@ export async function accountingRoutes(app: FastifyInstance) {
           .send({ error: "BadRequest", message: "Invalid year/month" });
       }
       try {
-        return await req.accountingCtx!.accounting.reopenPeriod(year, month);
+        return await req.accountingCtx!.accounting.reopenPeriod(year, month, {
+          actorId: req.user.sub,
+          audit: req.accountingCtx!.audit,
+        });
       } catch (err) {
         return reply.code(404).send({
           error: "NotFound",

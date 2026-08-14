@@ -10,11 +10,7 @@
  * Layered: routes → controller → service → repos + audit.
  */
 
-import {
-  AuditLogRepository,
-  PermissionRepository,
-  RoleRepository,
-} from "@loan/db";
+import { PermissionRepository, RoleRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { routeSchema } from "../../lib/openapi";
@@ -51,6 +47,7 @@ import {
   userRoleListResponseSchema,
   userRoleParamSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -81,7 +78,7 @@ export async function rbacRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
     const roles = new RoleRepository(prisma);
-    const audit = new AuditLogRepository(prisma, req.user?.impersonatedBy);
+    const audit = auditFor(req, prisma);
     req.rbacServices = {
       rbac: new RbacService(
         prisma,

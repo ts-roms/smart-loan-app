@@ -154,6 +154,7 @@ export * from "./repositories/accounting.repository";
 export * from "./repositories/collections.repository";
 export * from "./repositories/payment-intent.repository";
 export * from "./repositories/audit-log.repository";
+export * from "./repositories/login-attempt.repository";
 export * from "./repositories/job.repository";
 export * from "./repositories/notification.repository";
 export * from "./repositories/screening.repository";

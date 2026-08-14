@@ -3,6 +3,7 @@ import type {
   KycSubmission,
   PrismaClient,
 } from "@prisma/client";
+import type { AuditLogRepository } from "./audit-log.repository";
 import { idOrNumberWhere, nextKycNumber } from "../lib/reference-numbers";
 import {
   resolvePaging,
@@ -23,6 +24,11 @@ export interface KycDecideInput {
   status: "VERIFIED" | "REJECTED";
   reason?: string;
   decidedById: string;
+  /**
+   * §56 audit sink. Optional so the repository stays constructible
+   * without one; every request-driven path passes it.
+   */
+  audit?: AuditLogRepository;
 }
 
 /**
@@ -207,6 +213,13 @@ export class KycRepository {
 
   async decide(id: string, input: KycDecideInput): Promise<KycSubmission> {
     return this.prisma.$transaction(async (tx) => {
+      // Read before the update so the audit row can carry what the
+      // decision actually changed. Inside the transaction, so it is the
+      // state this decision is replacing and not a racing one's.
+      const before = await tx.kycSubmission.findUnique({
+        where: { id },
+        select: { status: true, reason: true, decidedById: true },
+      });
       const updated = await tx.kycSubmission.update({
         where: { id },
         data: {
@@ -241,6 +254,42 @@ export class KycRepository {
         where: { id: updated.customerId },
         data: { kycStatus: rollup },
       });
+
+      /*
+       * §56 — inside the transaction, alongside both writes.
+       *
+       * A KYC decision is the gate on onboarding a borrower: verifying a
+       * forged ID, or rejecting a legitimate applicant, is exactly the
+       * act an AML examiner reconstructs after the fact. The customer
+       * rollup change is recorded too, because that is the part with
+       * downstream effect — it is what unblocks lending to this person,
+       * and one submission's decision can flip it.
+       */
+      await input.audit?.recordRequired({
+        action: "KYC_DECIDE",
+        actorId: input.decidedById,
+        targetType: "KycSubmission",
+        targetId: updated.id,
+        tx,
+        reason: input.reason ?? null,
+        oldValue: {
+          status: before?.status ?? null,
+          reason: before?.reason ?? null,
+          decidedById: before?.decidedById ?? null,
+        },
+        newValue: {
+          status: updated.status,
+          reason: updated.reason,
+          decidedById: updated.decidedById,
+        },
+        payload: {
+          customerId: updated.customerId,
+          documentType: updated.documentType,
+          // The recomputed customer-level rollup this decision produced.
+          customerKycStatus: rollup,
+        },
+      });
+
       return updated;
     });
   }

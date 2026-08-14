@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { routeSchema } from "../../lib/openapi";
 import { approvalChainResponseSchema, productCodeParamSchema } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 const stepSchema = z.object({
   order: z.number().int().min(1),
@@ -48,7 +49,7 @@ export async function loanApprovalChainRoutes(
     const prisma = req.tenantCtx.prisma;
     req.approvalChainCtx = {
       approvals: new LoanApprovalRepository(prisma),
-      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
+      audit: auditFor(req, prisma),
     };
   });
 

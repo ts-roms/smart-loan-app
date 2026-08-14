@@ -77,6 +77,8 @@ export class KycController {
     return req.kycServices!.kyc.decide(req.params.id, {
       ...parsed.data,
       decidedById: req.user.sub,
+      // §56 — written inside the repository's decide transaction.
+      audit: req.kycServices!.audit,
     });
   };
 

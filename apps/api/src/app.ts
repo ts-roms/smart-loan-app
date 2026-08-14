@@ -15,6 +15,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import Fastify, { type FastifyError } from "fastify";
 import { mkdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 
 import { config } from "./config";
 import { decorateFeatureGate } from "./features/licensing/feature-gate.plugin";
@@ -49,6 +50,48 @@ export async function buildApp() {
   const sentry = await initSentry();
 
   const app = Fastify({
+    /*
+     * Request id: inbound `X-Request-Id` if the caller supplied a usable
+     * one, otherwise a fresh UUID.
+     *
+     * Fastify's default is an in-process counter — `req-1`, `req-2`,
+     * restarting from 1 on every boot and running independently in every
+     * replica. As a correlation id that is actively misleading: two
+     * different requests on two instances share an id, and an audit row
+     * stamped `req-7` cannot be tied to anything. §56 asks for a request
+     * id on every audit record, and the id has to be globally
+     * distinguishable for that to mean anything.
+     *
+     * Seeding from the header lets a correlation id set at the edge (load
+     * balancer, gateway, or the web app) span the whole call chain, so a
+     * support ticket quoting one id finds the API log lines, the audit
+     * rows, and the upstream trace together.
+     *
+     * The inbound value is validated before it is trusted: it is
+     * attacker-controlled, it ends up in log lines and in a response
+     * header, and it is written to an audit column. Anything with
+     * whitespace, control characters or CR/LF (header injection) or over
+     * 128 chars is discarded in favour of a generated UUID. Discarding is
+     * the right response rather than sanitising — a caller sending a
+     * malformed id gets a valid one back and nothing is silently
+     * rewritten under them.
+     */
+    genReqId(req) {
+      const header = req.headers["x-request-id"];
+      const candidate = Array.isArray(header) ? header[0] : header;
+      if (
+        typeof candidate === "string" &&
+        candidate.length > 0 &&
+        candidate.length <= 128 &&
+        // Printable ASCII minus space — covers UUIDs, ULIDs, W3C
+        // traceparent values and the hex ids most gateways emit, while
+        // excluding CR/LF and other control characters outright.
+        /^[\x21-\x7e]+$/.test(candidate)
+      ) {
+        return candidate;
+      }
+      return randomUUID();
+    },
     // In production we want structured JSON logs (log aggregators parse them
     // natively). Pretty output is dev-only — production runs cost cycles on
     // pino-pretty's transform and can't be parsed by log shippers.
@@ -204,6 +247,21 @@ export async function buildApp() {
    * Both exemptions are by prefix rather than by route so a new path
    * under either inherits the right answer.
    */
+  /*
+   * Echo the request id back to the caller.
+   *
+   * Without this the id is only ever visible server-side, which makes it
+   * useless for the thing it is for: a user reporting "my disbursement
+   * failed" can quote the header, and support can go straight to the log
+   * lines and the audit rows for that exact request. Set in `onRequest`
+   * so it is present even on responses that never reach a route handler
+   * — 404s, rate-limit 429s and error-handler 500s are the ones people
+   * actually open tickets about.
+   */
+  app.addHook("onRequest", async (req, reply) => {
+    reply.header("X-Request-Id", req.id);
+  });
+
   app.addHook("onSend", async (req, reply) => {
     if (req.url.startsWith("/docs") || req.url.startsWith("/uploads/")) return;
     reply.header(
@@ -211,7 +269,15 @@ export async function buildApp() {
       "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
     );
   });
-  await app.register(cors, { origin: config.webOrigin, credentials: true });
+  await app.register(cors, {
+    origin: config.webOrigin,
+    credentials: true,
+    // Without this the browser hides X-Request-Id from the web app, and
+    // the id can only be recovered from server logs — which defeats the
+    // point of echoing it. Exposing it lets the SPA show the id on an
+    // error screen so the user can quote it in a ticket.
+    exposedHeaders: ["X-Request-Id"],
+  });
   await app.register(sensible);
   await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } });
 

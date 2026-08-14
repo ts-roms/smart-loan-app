@@ -1852,6 +1852,55 @@ model AuditEvent {
   impersonatedById    String?
   impersonatedByEmail String?
 
+  // ─── §56 request provenance ────────────────────────────────────────────
+  //
+  // Four columns that answer "who, from where, under which request". They
+  // are populated from the per-request audit context (see
+  // `AuditRequestContext` in audit-log.repository.ts), which the API
+  // extracts once per request and hands to the repository's constructor —
+  // libs/db never sees a Fastify request.
+  //
+  // All four are nullable, and deliberately so: rows written before this
+  // migration have no context to backfill, and job-driven writes have no
+  // inbound request at all. A NOT NULL default would have turned "we don't
+  // know" into a fabricated value, which is worse than a null in an audit
+  // record.
+
+  /// Tenant slug this action was performed against (`req.tenantCtx.slug`).
+  /// Redundant with the schema the row lives in under schema-per-tenant,
+  /// and recorded anyway: audit extracts get aggregated across tenants for
+  /// regulator submissions, and once rows leave their schema the only thing
+  /// carrying the tenant is the column. Also catches the class of bug where
+  /// a request resolves one tenant and writes to another.
+  tenantId            String?
+  /// Client IP as seen by the API (`req.ip`, which honours trustProxy).
+  /// Sized as text rather than inet: the value can be an IPv4, an IPv6, or
+  /// — behind a misconfigured proxy — something that is neither, and an
+  /// audit row must record what actually arrived, not reject it.
+  ipAddress           String?
+  /// Raw `User-Agent` header, truncated to 512 chars by the repository.
+  userAgent           String?
+  /// Correlation id for the HTTP request that caused this action — the
+  /// same value echoed to the caller in the `X-Request-Id` response header
+  /// and stamped on every pino log line for the request. This is what turns
+  /// a support ticket into a log query.
+  requestId           String?
+
+  // ─── §56 structured change record ──────────────────────────────────────
+  //
+  // `payload` stays exactly as it is — twenty-odd call sites write ad-hoc
+  // shapes into it and none of them are being rewritten here. These three
+  // are the structured slots §56 asks for, so that "what changed" is
+  // answerable without knowing each call site's private payload convention.
+
+  /// State before the action, for mutations. Null for creates.
+  oldValue            Json?
+  /// State after the action, for mutations. Null for deletes.
+  newValue            Json?
+  /// Operator-supplied justification, where the action collects one
+  /// (write-off, penalty waiver, KYC rejection, period reopen).
+  reason              String?
+
   actor User @relation("AuditActor", fields: [actorId], references: [id])
   // AuditEvent_impersonatedById_idx exists in every database but is NOT
   // declared here, on purpose. 20260523100000_audit_impersonation built it
@@ -1865,6 +1914,66 @@ model AuditEvent {
   @@index([actorId, createdAt(sort: Desc)])
   @@index([targetType, targetId])
   @@index([action])
+  // "Show me everything that happened under request X" — the query a
+  // support ticket turns into once the caller quotes the X-Request-Id they
+  // were given. No tenantId index: under schema-per-tenant every row in a
+  // given schema has the same value, so an index on it would never narrow
+  // anything.
+  @@index([requestId])
+}
+
+// ─── Login attempts (security log) ───────────────────────────────────────────
+//
+// Separate from AuditEvent for one hard reason: `AuditEvent.actorId` is a
+// NOT NULL foreign key to User, and the failed login that matters most — the
+// one against an address that does not exist — has no user to point at. A
+// brute-force sweep across a thousand invented addresses is precisely the
+// event that cannot be represented as an AuditEvent, and precisely the event
+// §56 wants recorded.
+//
+// So this table records the *credential presentation*, not the user: it holds
+// the email as typed, and `userId` as a plain nullable column with NO foreign
+// key. That is deliberate. An FK would (a) be unsatisfiable for the unknown-
+// address case, and (b) couple the security log to the lifecycle of the User
+// row, so that erasing a user under §71 would either cascade away the evidence
+// of attacks against their account or block the erasure outright. The security
+// log has to outlive the account it describes.
+//
+// Successful logins are recorded here too, not only failures: "this address
+// failed forty times then succeeded" is the signal worth having, and it is
+// invisible if only the failures are stored.
+model LoginAttempt {
+  id            String   @id @default(uuid())
+  /// The email as typed by the caller, lowercased. Kept even when it matches
+  /// no account — that is the brute-force case.
+  email         String
+  /// Resolved user, when the address matched one. No FK, on purpose — see
+  /// the model comment.
+  userId        String?
+  /// Did the attempt end in an issued token?
+  success       Boolean
+  /// Why it failed: the `kind` discriminant returned by AuthService.login
+  /// ("InvalidCredentials", "Invalid2faCode", "InvalidRecoveryCode",
+  /// "Requires2fa", "Inactive"). Null on success.
+  ///
+  /// NOTE: this is the reason as known to the server. The response to the
+  /// caller stays deliberately vague ("invalid credentials") so the endpoint
+  /// does not become an account-existence oracle; the precise reason lives
+  /// here, where only staff can read it.
+  failureReason String?
+  /// Same request provenance as AuditEvent, same source.
+  tenantId      String?
+  ipAddress     String?
+  userAgent     String?
+  requestId     String?
+  createdAt     DateTime @default(now())
+
+  /// "Is this account under attack?" — the lockout/alerting query.
+  @@index([email, createdAt(sort: Desc)])
+  /// "Is this source sweeping us?" — the same question asked per origin,
+  /// which is the one that catches a spray across many addresses.
+  @@index([ipAddress, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
 }
 
 // ─── Background jobs (scheduler) ─────────────────────────────────────────────

@@ -38,6 +38,7 @@ import {
 } from "../lib/late-fee-accruals";
 import { isUniqueViolation } from "../lib/prisma-errors";
 import { AccountingRepository } from "./accounting.repository";
+import type { AuditLogRepository } from "./audit-log.repository";
 import {
   idOrNumberWhere,
   nextPropertyNumber,
@@ -248,6 +249,16 @@ export interface RecordPaymentInput {
    * is unchanged — which is why every existing caller still compiles.
    */
   idempotencyKey?: string;
+  /**
+   * §56 audit sink. Optional so the repository stays constructible
+   * without one (scripts, the bulk importer, tests), but every
+   * request-driven path passes it.
+   *
+   * Per call rather than per repository because the audit repo carries
+   * the caller's IP, user agent and request id, which are per-request,
+   * while LoanRepository is built from the tenant client alone.
+   */
+  audit?: AuditLogRepository;
 }
 
 export interface BulkPaymentRow {
@@ -1068,7 +1079,20 @@ export class LoanRepository {
    */
   async disburse(
     idOrNumber: string,
-    input: { disbursedById: string },
+    input: {
+      disbursedById: string;
+      /**
+       * §56 audit sink. Optional so the repository stays constructible
+       * without one (scripts, tests, the bulk importer), but every
+       * request-driven path passes it — see `buildLoanCtx`.
+       *
+       * Passed per call rather than held on the repository because the
+       * audit repo is per-request (it carries the caller's IP, user
+       * agent and request id) while LoanRepository is constructed from
+       * the tenant client alone.
+       */
+      audit?: AuditLogRepository;
+    },
   ): Promise<LoanApplication> {
     return this.prisma.$transaction(async (tx) => {
       const loan = await tx.loanApplication.findFirst({
@@ -1335,6 +1359,50 @@ export class LoanRepository {
         });
       }
 
+      /*
+       * §56 audit — written INSIDE this transaction, on the same `tx`
+       * handle as the status change, the journal entry and the schedule
+       * rows.
+       *
+       * That placement is the whole point. Recording after the
+       * transaction commits would leave a window in which money has
+       * moved and nothing says who moved it, and a crash in that window
+       * produces exactly the state a regulator asks about: a
+       * disbursement with no actor, no IP and no request id. Inside the
+       * transaction, "disbursed but unaudited" is not a state the
+       * database can hold.
+       *
+       * `recordRequired` rather than `record`: a failed audit write
+       * aborts the disbursement. See the reasoning on
+       * AuditLogRepository.recordRequired — briefly, a refused
+       * disbursement is visible and retryable, an untraceable one is
+       * neither.
+       */
+      await input.audit?.recordRequired({
+        action: "LOAN_DISBURSE",
+        actorId: input.disbursedById,
+        targetType: "LoanApplication",
+        targetId: id,
+        tx,
+        oldValue: { status: loan.status, disbursedAt: loan.disbursedAt },
+        newValue: {
+          status: updated.status,
+          disbursedAt: updated.disbursedAt,
+          disbursedById: updated.disbursedById,
+        },
+        payload: {
+          loanNumber: loan.number,
+          principal,
+          productCode: loan.productCode,
+          customerId: loan.customerId,
+          // Money withheld from the borrower to settle the loan this one
+          // renews. Null for a normal disbursement; the number a
+          // borrower disputes when it is not.
+          renewalPayoffAmount: renewalPayoff,
+          renewedFromId: loan.renewedFromId,
+        },
+      });
+
       return updated;
     });
   }
@@ -1588,6 +1656,53 @@ export class LoanRepository {
           data: { status: "CLOSED", closedAt: new Date() },
         });
       }
+
+      /*
+       * §56 audit — inside the transaction, for the same reason as
+       * disburse: money must not be able to commit without its record.
+       *
+       * The allocation is captured because it is the part a borrower
+       * actually disputes. "You took 900 of my 1,000 as interest" is
+       * answerable from this row alone; from the LoanPayment row it is
+       * not, because the split lives spread across the schedule rows the
+       * payment touched.
+       *
+       * Note this fires on the real write path only. An idempotent
+       * replay returns the original payment without re-entering this
+       * transaction, so a retried payment does not produce a second
+       * audit row for a single movement of money — which is correct:
+       * the replay moved nothing.
+       */
+      await input.audit?.recordRequired({
+        action: "LOAN_PAYMENT_RECORD",
+        actorId: input.recordedById,
+        targetType: "LoanPayment",
+        targetId: payment.id,
+        tx,
+        newValue: {
+          loanId,
+          amount: Number(input.amount),
+          paidOn: input.paidOn,
+          reference: input.reference ?? null,
+        },
+        payload: {
+          loanNumber: loan.number,
+          loanStatusBefore: loan.status,
+          allocation: {
+            interest: allocation.interest,
+            principal: allocation.principal,
+            fees: allocation.fees ?? 0,
+            penalties: allocation.penalties ?? 0,
+            overpayment: allocation.overpayment,
+          },
+          // A payment on a WRITTEN_OFF loan books as bad-debt recovery,
+          // not as a liability. Recorded because the two produce very
+          // different ledger entries from the same API call.
+          badDebtRecovery: loan.status === "WRITTEN_OFF",
+          idempotencyKey: input.idempotencyKey ?? null,
+        },
+      });
+
       return payment;
     });
   }

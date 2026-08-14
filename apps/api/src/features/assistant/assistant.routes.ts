@@ -37,6 +37,7 @@ import {
   pingResponseSchema,
   summarizeSchema,
 } from "./schemas";
+import { auditFor } from "../../lib/audit-context";
 
 const TAGS = ["assistant"];
 
@@ -68,7 +69,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
     const prisma = req.tenantCtx.prisma;
     req.assistantCtx = {
       loans: new LoanRepository(prisma),
-      audit: new AuditLogRepository(prisma, req.user?.impersonatedBy),
+      audit: auditFor(req, prisma),
     };
   });
 

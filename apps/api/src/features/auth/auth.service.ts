@@ -329,12 +329,33 @@ export class AuthService {
    * silently succeed even if the token is unknown so we don't leak
    * validity to an attacker probing the endpoint.
    */
-  async logout(refreshToken: string): Promise<void> {
+  /**
+   * Revoke the presented refresh token.
+   *
+   * Returns the user the token belonged to, or null when it matched
+   * nothing live. The caller needs the id to write the §56 AUTH_LOGOUT
+   * audit row — `AuditEvent.actorId` is a foreign key to User, so an
+   * audit row cannot be written from the opaque token alone.
+   *
+   * Note this deliberately does NOT change the endpoint's behaviour:
+   * /auth/logout still answers 204 for a token that was never valid, so
+   * it cannot be used as an oracle. A null here simply means there is
+   * no logout to audit.
+   */
+  async logout(refreshToken: string): Promise<string | null> {
     const hash = hashRefreshToken(refreshToken);
+    // Read before the update — `updateMany` reports how many rows it
+    // touched but not which user they belonged to, and after the write
+    // the `revokedAt: null` filter no longer matches.
+    const row = await this.prisma.refreshToken.findFirst({
+      where: { tokenHash: hash, revokedAt: null },
+      select: { userId: true },
+    });
     await this.prisma.refreshToken.updateMany({
       where: { tokenHash: hash, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    return row?.userId ?? null;
   }
 
   // ── /me — identity + permissions ───────────────────────────────────
