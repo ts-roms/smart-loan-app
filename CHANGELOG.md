@@ -10,6 +10,130 @@ automation depends on the manifest.
 
 ---
 
+## Unreleased — worktree batch: allocation, exposure, pagination, §67
+
+### Fixed — a live PII leak, and the collections queue crashing at volume
+
+**Notification bodies were written to stdout in every environment.**
+`MockNotificationProvider` logged the recipient and the full body — borrower
+name, outstanding balance, due date, plus password-reset links and co-maker
+consent tokens. A reset link in a log file is a live credential. Three things
+compounded: `console.log` bypasses pino so none of the eight `redact` paths
+applied; both tenant provider builders discard their config and return a mock,
+so real credentials did not route around it; and neither `twilio` nor
+`@sendgrid` is in any `package.json`, so every notification path terminates
+there. Now logs a masked recipient and a body length. `libs/notifications` had
+no test target at all; it has one now, and the regression test was proven by
+reverting to the old implementation.
+
+**Separately, and still open: no email or SMS has ever been delivered.** The
+system stores and masks Twilio and SendGrid credentials for providers that do
+not exist. Borrowers receive no payment-due or overdue reminders. That needs a
+provider decision and credentials.
+
+**The collections queue hard-failed above ~16,000 overdue accounts.** It named
+every queue loan twice — `in` on customerIds plus `notIn` on loan ids —
+sending 44,276 bind variables against Postgres' 32,767 cap and returning
+P2035. Not a slow response: a hard failure, pre-existing, invisible because no
+test had crossed the threshold. Found only by seeding realistic volume.
+
+### Added — configurable payment allocation (§26), which moves nothing yet
+
+All four tiers and three orders are implemented, and not one peso moves — the
+finding rather than a shortcut. **Fees are never owed as a balance**
+(processing, DST and origination are netted out of disbursement proceeds), and
+**penalties are half-modelled**: accrual is real and per-instalment, but there
+is no collected-to-date figure per instalment and loan-level waivers cannot be
+attributed back to a row. Wiring the tier up without the former would
+re-collect the same penalty on every partial payment. A test asserts the three
+orders agree, so it fails the day the balances become real.
+
+Order is **snapshotted onto `LoanApplication`**, not read from `LoanProduct`.
+Configuring on the product alone would reprice every live loan mid-contract
+from a single edit with nothing in the audit trail. A test double throws if the
+payment path ever reads the product. All 10 loans and 4 products backfilled to
+the legacy order.
+
+§81 held: 42 assertions committed against the unmodified implementation first,
+and the allocation golden files are byte-identical across the refactor. §11:
+allocation now runs in integer centavos parsed from decimal text — `Number(d)`
+was the step being removed, so rounding a double afterwards would not have
+counted.
+
+**Reported, not fixed: a borrower cannot pay their late fee at all.**
+Allocation only ever credits Loans Receivable by principal, so an accrued fee
+leaves only by waiver or write-off.
+
+### Added — consolidated exposure reaches decisioning (§53), inertly
+
+There was **no server-side DTI at all** — the only debt-to-income figure was a
+client-side hint against a hardcoded ceiling, sent nowhere, and the engine's
+whole view of other debts was a _count_: `4` for a member ₱2.15M in and `4` for
+one ₱40,000 in. §16 now runs server-side, with qualifying income and payroll
+deductions as explicit zeros stated at the call site rather than hidden.
+
+The shipped ceiling rule is inert twice over — `active: false` **and** a
+₱999,999,999 threshold. A sweep across every tier, AML, KYC and principal
+combination proves a ₱2.15M borrower and a first-time one get the same action,
+rule and version, and pins the uncomfortable case deliberately: a tier-A member
+₱2M in is still fast-tracked. When that assertion fails, someone has set a
+policy on purpose — which is where §50 says the decision belongs.
+
+### Fixed — the three whole-book reads (F4), with two of my own fixes reverted
+
+Measurement changed the answer three times. Chunking the aging read was **67×
+worse** (22,186 → 1,490,394 buffers) because `ORDER BY id` discards the index
+serving the filter; chunking the queue bounded nothing. Both reverted. Payloads
+over HTTP: queue **84,349,240 → 192,858 bytes**, aging **5,626,737 → 18,116**.
+
+The queue's ranking is unchanged. Scoring within a page was rejected
+explicitly: it looks right — sorted, scores attached — while putting the
+book's worst account on page 7 ranked first.
+
+### Added — §67 authentication, authorization and idempotency
+
+The spec was **not silent** about authentication; it was wrong in the more
+damaging direction. A global `security` requirement meant all 24 anonymous
+operations inherited "needs a bearer token", telling integrators that
+`/public/leads` and the gateway settlement callback require a JWT. Now
+**291 bearerAuth + 13 platformAuth + 24 public + 11 inheriting = 339**.
+
+Idempotency turned out to be three mechanisms, and saying so matters more than
+declaring a header everywhere: payments read `Idempotency-Key`; payment intents
+read a **body field** and ignore the header, minting a UUID when absent, so
+generalising from the first gets you a second intent and no error; webhooks
+derive their own. Four §13-relevant routes are not idempotent and now say so —
+notably disburse, where a retry is _refused_ 409, because a conditional-update
+claim is not idempotency.
+
+### Added — scorecard version history UI (§20)
+
+`catalogVersion` was stamped on every score and read by nothing. The badge shows
+the score's **own** version, never the current catalog — the inverse would
+defeat the point, so it is tested both ways. A score predating versioning reads
+"scorecard not recorded" rather than inventing one.
+
+### Verified — ten phases read against code, with citations
+
+The trackers had gone stale six times; nine more occurrences here, and for the
+first time one was stale **pessimistic**. The two documents also contradicted
+each other on OpenAPI coverage. Named the mechanism: rows go stale when they
+record a **symptom string** — a flag, a count, a quoted line — rather than a
+behaviour. The string outlives the fix.
+
+Both §50 negative requirements verified rather than assumed: the assistant has
+no tools array, no function-calling and no write path; erasure preserves
+financial records.
+
+**Open P1 found: ECL re-runs double-post to the GL.** `postIfAbsent` keys on a
+freshly-minted `EclRun.id`, so the idempotency guard never fires, there is no
+uniqueness on the period, and the UI tells the operator "This is idempotent —
+safe to re-run." Each entry balances internally, so the trial balance still
+ties. Not fixed here: `eclProvisionEntry` was owned by another branch this
+batch, and it is financial posting code that needs golden tests first.
+
+---
+
 ## Unreleased — worktree batch: delete constraints, schedule audit, OpenAPI complete
 
 ### Fixed — ten relations that reached money on delete
