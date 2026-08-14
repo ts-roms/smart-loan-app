@@ -14,6 +14,14 @@ import { getApiClient } from "../client";
 
 export const scoringCatalogKeys = {
   all: ["scoring", "catalog"] as const,
+  /**
+   * Nested under `all` on purpose: every catalog mutation invalidates
+   * `all`, and TanStack matches query keys by prefix — so an edit that
+   * mints a new revision refreshes the history without the mutation
+   * helper having to know the history exists.
+   */
+  history: ["scoring", "catalog", "versions"] as const,
+  version: (v: number | null) => ["scoring", "catalog", "versions", v] as const,
 };
 
 export type SurveyQuestionKind = "CHOICE" | "NUMBER" | "BOOLEAN";
@@ -56,6 +64,100 @@ export function useScoringCatalog() {
     queryKey: scoringCatalogKeys.all,
     queryFn: () =>
       getApiClient().get<ScoringCatalogResponse>("/scoring/catalog"),
+  });
+}
+
+/* ─── history ───────────────────────────────────────────────────────── */
+
+export type ScoringCatalogChangeType =
+  | "BASELINE"
+  | "FACTOR_ADDED"
+  | "FACTOR_CHANGED"
+  | "FACTOR_REMOVED"
+  | "QUESTION_ADDED"
+  | "QUESTION_CHANGED"
+  | "QUESTION_REMOVED"
+  | "REORDERED";
+
+/**
+ * One scorecard revision, without its snapshot.
+ *
+ * The whole catalog is one version, not one per factor: points normalize
+ * against a fixed total, so raising one factor's weight lowers every
+ * other factor's points. There is no edit that touches one factor.
+ */
+export interface ScoringCatalogVersionSummary {
+  id: string;
+  /** 1-based and dense. This is what `CreditScore.catalogVersion` holds. */
+  version: number;
+  factorCount: number;
+  questionCount: number;
+  /** Half-open window [effectiveFrom, effectiveTo). */
+  effectiveFrom: string;
+  /** Null on the version in force now. */
+  effectiveTo: string | null;
+  changeType: ScoringCatalogChangeType;
+  /** Server-generated one-liner, e.g. `weight changed on "income"`. */
+  changeSummary: string | null;
+  changeNote: string | null;
+  /** Not a foreign key — staff leave, the history outlives them. */
+  changedById: string | null;
+}
+
+/**
+ * The frozen catalog a revision holds — the shape `computeCreditScore`
+ * takes, so a stored snapshot is runnable rather than a reconstruction.
+ */
+export interface ScoringCatalogSnapshot {
+  factors: Array<{
+    /** The factor KEY, not a row id — stored breakdowns reference it. */
+    id: string;
+    label: string;
+    weight: number;
+    computed?: boolean;
+  }>;
+  questions: Array<{
+    id: string;
+    label: string;
+    factorId: string;
+  }>;
+}
+
+export interface ScoringCatalogVersionDetail extends ScoringCatalogVersionSummary {
+  snapshot: ScoringCatalogSnapshot;
+}
+
+/**
+ * Every scorecard revision, newest first.
+ *
+ * Reading this is `customers.read`, not the admin key — an officer
+ * explaining a score needs to know which scorecard produced it, which is
+ * a different act from editing one.
+ */
+export function useScoringCatalogHistory(enabled = true) {
+  return useQuery({
+    queryKey: scoringCatalogKeys.history,
+    queryFn: () =>
+      getApiClient().get<ScoringCatalogVersionSummary[]>(
+        "/scoring/catalog/versions",
+      ),
+    enabled,
+  });
+}
+
+/**
+ * One revision WITH its snapshot. Lazy — the snapshot is the whole
+ * catalog, so it is fetched only when someone asks to see what a
+ * particular revision actually said.
+ */
+export function useScoringCatalogVersion(version: number | null) {
+  return useQuery({
+    queryKey: scoringCatalogKeys.version(version),
+    queryFn: () =>
+      getApiClient().get<ScoringCatalogVersionDetail>(
+        `/scoring/catalog/versions/${version}`,
+      ),
+    enabled: version !== null,
   });
 }
 
