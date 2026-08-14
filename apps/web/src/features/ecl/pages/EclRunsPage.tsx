@@ -31,6 +31,13 @@ import { usePermission } from "../../../hooks/use-permission";
  * each loan, writes an EclRun summary row, and books the period-on-period
  * delta to the GL (DR Impairment Loss / CR Allowance for Doubtful).
  *
+ * The ledger movement for a period is booked ONCE — the journal entry is
+ * keyed on the period, so a re-run recomputes everything and posts no
+ * second entry. This page used to promise the opposite ("idempotent —
+ * safe to re-run") while the backend booked again on every click, which
+ * is why the copy here now reads `result.posting` rather than inferring
+ * a posting from a non-null journal id.
+ *
  * Permissions: `accounting.read` to view, `accounting.accrue` to run.
  */
 export function EclRunsPage() {
@@ -45,16 +52,32 @@ export function EclRunsPage() {
     const ok = await confirm({
       title: "Run ECL provisioning?",
       message:
-        "Computes the expected credit loss for every active loan as of today and books the period-on-period movement to the GL. This is idempotent — safe to re-run.",
+        "Computes the expected credit loss for every active loan as of today and books the period-on-period movement to the GL. The movement for a period is booked once: re-running recomputes every loan's stage and provision, but posts no second entry. To restate a period already booked, reverse its journal entry first.",
       confirmLabel: "Run ECL",
     });
     if (!ok) return;
     try {
       const result = await runEcl.mutateAsync({});
       setLastResult(result);
-      toast.success(
-        `ECL run posted. Total provision ${formatMoney(result.totalEcl)} (Δ ${formatMoney(result.delta)})`,
-      );
+      /*
+       * The toast reports what actually reached the ledger. Announcing
+       * "posted" off a non-null journalEntryId would describe a second
+       * booking on every re-run — the promise this page used to make
+       * ("idempotent — safe to re-run") while the backend booked again.
+       */
+      if (result.posting === "ALREADY_POSTED") {
+        toast.info(
+          `Recomputed. This period was already booked — no second entry posted. Total provision ${formatMoney(result.totalEcl)}.`,
+        );
+      } else if (result.posting === "NO_MOVEMENT") {
+        toast.success(
+          `ECL recomputed. No movement to book. Total provision ${formatMoney(result.totalEcl)}.`,
+        );
+      } else {
+        toast.success(
+          `ECL run posted. Total provision ${formatMoney(result.totalEcl)} (Δ ${formatMoney(result.delta)})`,
+        );
+      }
     } catch (err) {
       toast.error((err as Error).message ?? "ECL run failed");
     }
@@ -204,9 +227,34 @@ function LastRunSummary({ result }: { result: EclRunResult }) {
           />
           <Stat
             label="Journal entry"
-            value={result.journalEntryId ? "Posted" : "None (Δ ≈ 0)"}
+            value={
+              result.posting === "POSTED"
+                ? "Posted"
+                : result.posting === "ALREADY_POSTED"
+                  ? "Already booked"
+                  : result.posting === "NOT_ATTRIBUTED"
+                    ? "Not posted"
+                    : "None (Δ ≈ 0)"
+            }
           />
         </div>
+
+        {result.posting === "ALREADY_POSTED" && (
+          <div className="rounded-md border border-info/40 bg-info/10 px-3 py-2 text-xs text-info flex items-center gap-2">
+            <ShieldCheck className="h-3 w-3" />
+            This period's movement was already booked, so no second entry was
+            posted. Loan stages and provisions above are freshly computed. To
+            restate the period, reverse{" "}
+            {result.journalEntryId ? (
+              <JournalEntryLink id={result.journalEntryId}>
+                the existing entry
+              </JournalEntryLink>
+            ) : (
+              "the existing entry"
+            )}{" "}
+            and run again.
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3 text-xs">
           {(["STAGE_1", "STAGE_2", "STAGE_3"] as const).map((s) => {

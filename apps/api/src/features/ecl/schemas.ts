@@ -50,7 +50,12 @@ export const eclRunResponseSchema = z.object({
   stage1Ecl: z.string(),
   stage2Ecl: z.string(),
   stage3Ecl: z.string(),
-  /** The provision entry this run posted, when the delta was non-zero. */
+  /**
+   * The provision entry THIS run posted. Null when the delta was zero,
+   * and also null on a re-run of a window an earlier run already booked
+   * — that run holds the link, and duplicating it here would make the
+   * one movement look like two.
+   */
   journalEntryId: z.string().uuid().nullable(),
   computedById: z.string().uuid().nullable(),
   notes: z.string().nullable(),
@@ -98,6 +103,26 @@ export const eclRunResultResponseSchema = z.object({
   ),
   /** Signed movement against the previous run. Positive = provision built. */
   delta: z.number(),
-  /** Null when `delta` rounded to zero, or no actor was recorded. */
+  /**
+   * The entry carrying this PERIOD's movement — posted by this run, or
+   * found already posted by an earlier one. Null when `delta` rounded to
+   * zero, or no actor was recorded. Read it together with `posting`.
+   */
   journalEntryId: z.string().uuid().nullable(),
+  /**
+   * What this run did to the ledger.
+   *
+   * `ALREADY_POSTED` means the window was booked before and this run
+   * added no second entry — the recomputed stages and per-loan
+   * provisions are still saved. A period's movement is posted once;
+   * restating a booked period means reversing `journalEntryId` first
+   * (§12). Callers that render "posted" off a non-null `journalEntryId`
+   * alone will report a second booking that did not happen.
+   */
+  posting: z.enum([
+    "POSTED",
+    "ALREADY_POSTED",
+    "NO_MOVEMENT",
+    "NOT_ATTRIBUTED",
+  ]),
 });

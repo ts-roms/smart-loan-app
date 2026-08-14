@@ -6,13 +6,12 @@ import { EclRepository } from "./ecl.repository";
 /**
  * GOLDEN TESTS — IFRS 9 ECL run (`EclRepository.run`).
  *
- * Written against the CURRENT implementation and committed passing BEFORE
- * the re-run double-post fix, per §81. The figures pinned here are the
- * output of one run; they must be identical after the change. The only
- * assertions expected to move are the ones describing what a SECOND run
- * for an ALREADY-POSTED period does — those are marked "CURRENT
- * BEHAVIOUR (DEFECT)" so the change is visible in the diff rather than
- * asserted in prose.
+ * Written against the implementation as it stood and committed passing
+ * BEFORE the re-run double-post fix, per §81. The figures pinned here
+ * are the output of one run and are UNCHANGED by that fix — every
+ * assertion in the first two blocks below is byte-identical to the
+ * commit that introduced this file. Only the final block moved, which is
+ * the point: the change in behaviour is visible in this file's diff.
  *
  * ── What the current implementation does, exactly ──────────────────────
  *
@@ -37,19 +36,21 @@ import { EclRepository } from "./ecl.repository";
  *  4. Delta = round2(totalEcl − previous.totalEcl), where `previous` is the
  *     most recent EclRun with `periodEnd < input.periodEnd`. Strictly
  *     less-than: a run for a period that already has one does NOT see it.
- *  5. Creates a NEW EclRun row, then builds the journal entry from that
- *     row's freshly-minted id and calls `postIfAbsent`.
+ *  5. Creates a NEW EclRun row and calls `postIfAbsent` with an entry
+ *     keyed on the period — "<periodStart>:<periodEnd>", UTC dates,
+ *     under sourceRefType "EclPeriod".
  *  6. Entry direction: delta > 0 → Dr 5050 Impairment Loss / Cr 1190
  *     Allowance for Doubtful. delta < 0 → the reverse. |delta| < 0.01 →
  *     no entry at all. No entry either when `computedById` is absent.
  *
- * ── The defect these tests pin ─────────────────────────────────────────
+ * ── The defect these tests pinned ──────────────────────────────────────
  *
- * Step 5 derives the journal idempotency key from a row step 5 has just
- * created, so the key is new on every call and the unique index on
- * (source, sourceRefType, sourceRefId) can never fire. Re-running a period
- * books the movement again. Each entry balances on its own, so the trial
- * balance still ties and no downstream check sees it.
+ * Step 5 used to derive the journal idempotency key from the EclRun row
+ * step 5 had just created, so the key was new on every call and the
+ * unique index on (source, sourceRefType, sourceRefId) could never fire.
+ * Re-running a period booked the movement again. Each entry balances on
+ * its own, so the trial balance still tied and no downstream check saw
+ * it. The final block below carries the before/after.
  *
  * ── Fixture ────────────────────────────────────────────────────────────
  *
@@ -449,6 +450,7 @@ describe("EclRepository.run — golden figures for a single run", () => {
     // No prior run, so the delta is the entire closing provision.
     expect(result.delta).toBe(780);
     expect(result.journalEntryId).toBe("je-1");
+    expect(result.posting).toBe("POSTED");
   });
 
   it("pins the journal lines and the direction of a build", async () => {
@@ -522,6 +524,7 @@ describe("EclRepository.run — golden figures for a single run", () => {
     expect(result.totalEcl).toBe(780);
     expect(result.delta).toBe(780);
     expect(result.journalEntryId).toBeNull();
+    expect(result.posting).toBe("NOT_ATTRIBUTED");
     expect(db.entries).toHaveLength(0);
   });
 });
@@ -622,6 +625,7 @@ describe("EclRepository.run — successive periods", () => {
     expect(august.totalEcl).toBe(580);
     expect(august.delta).toBe(0);
     expect(august.journalEntryId).toBeNull();
+    expect(august.posting).toBe("NO_MOVEMENT");
     // The run itself is still recorded — only the posting is skipped.
     expect(db.eclEntries()).toHaveLength(2);
     expect(db.eclRuns).toHaveLength(3);
@@ -633,19 +637,27 @@ describe("EclRepository.run — successive periods", () => {
 
 describe("EclRepository.run — re-running an already-posted period", () => {
   /**
-   * CURRENT BEHAVIOUR (DEFECT). The journal idempotency key is
-   * `EclRun.id`, minted by the same call that posts, so it is new every
-   * time and the unique index on (source, sourceRefType, sourceRefId)
-   * never fires. Re-running June books the 780.00 movement a second
-   * time: the allowance ends at 1,560.00 for a movement of 780.00, and
-   * because each entry balances internally the trial balance still ties.
+   * The defect these tests were written to pin, and its fix.
    *
-   * The delta does not reset either — `previous` is the newest run with
-   * `periodEnd < input.periodEnd`, and the run just written has
-   * `periodEnd == input.periodEnd`, so the second call cannot see it and
-   * recomputes the same 780.00 against the same empty history.
+   * BEFORE: the journal idempotency key was `EclRun.id`, minted by the
+   * same call that posted, so it was new every time and the unique index
+   * on (source, sourceRefType, sourceRefId) never fired. Re-running June
+   * booked the 780.00 movement a second time — allowance 1,560.00 for a
+   * movement of 780.00 — and a fourth run took it to 3,120.00. Each
+   * entry balanced on its own, so the trial balance still tied.
+   *
+   * AFTER: the key is the period, so the second insert collides with the
+   * first and `postIfAbsent` hands back the entry already there. The
+   * allowance stays at 780.00 however many times the run is repeated.
+   *
+   * The delta still recomputes to 780.00 on the second call, and that is
+   * correct rather than incidental: `previous` is the newest run with
+   * `periodEnd < input.periodEnd`, the run just written has
+   * `periodEnd == input.periodEnd`, so a re-cut of a window measures the
+   * same movement against the same prior period. What changed is that
+   * measuring it twice no longer books it twice.
    */
-  it("books the movement a second time", async () => {
+  it("books the movement once, and reports the second run as already posted", async () => {
     const db = fakeDb(fixtureLoans());
     const repo = new EclRepository(db.prisma);
 
@@ -655,33 +667,43 @@ describe("EclRepository.run — re-running an already-posted period", () => {
     expect(first.delta).toBe(780);
     expect(second.delta).toBe(780);
 
-    expect(db.eclEntries()).toHaveLength(2);
-    expect(second.journalEntryId).toBe("je-2");
-    expect(second.journalEntryId).not.toBe(first.journalEntryId);
+    expect(first.posting).toBe("POSTED");
+    expect(second.posting).toBe("ALREADY_POSTED");
 
-    // The number that matters: 1,560.00 of allowance for a 780.00 movement.
-    expect(db.allowanceBuilt()).toBe(1_560);
+    // One entry, and the re-run points at the one that governs the period.
+    expect(db.eclEntries()).toHaveLength(1);
+    expect(first.journalEntryId).toBe("je-1");
+    expect(second.journalEntryId).toBe("je-1");
+
+    // The number that matters: 780.00 of allowance for a 780.00 movement.
+    expect(db.allowanceBuilt()).toBe(780);
   });
 
-  it("keys each entry on the run row it just created, so no two keys collide", async () => {
+  it("keys the entry on the period, so a re-cut of the window collides", async () => {
     const db = fakeDb(fixtureLoans());
     const repo = new EclRepository(db.prisma);
 
     await repo.run({ ...JUNE, computedById: "user-1" });
     await repo.run({ ...JUNE, computedById: "user-1" });
 
-    const [one, two] = db.eclEntries();
-    expect(one!.sourceRefType).toBe("EclRun");
-    expect(two!.sourceRefType).toBe("EclRun");
-    expect(one!.sourceRefId).toBe("run-1");
-    expect(two!.sourceRefId).toBe("run-2");
-    // Two EclRun rows for one period, each claiming its own posting.
+    const [one, ...rest] = db.eclEntries();
+    expect(rest).toHaveLength(0);
+    expect(one!.sourceRefType).toBe("EclPeriod");
+    expect(one!.sourceRefId).toBe("2026-06-01:2026-06-30");
+
+    /*
+     * Both computations are still recorded — a run row is evidence the
+     * portfolio was assessed, and deleting one to re-run was the advice
+     * this fix removed. Only the run that actually posted carries the
+     * journal link, so aggregating over run history cannot count the one
+     * movement twice.
+     */
     expect(db.eclRuns).toHaveLength(2);
     expect(db.eclRuns[0]!.journalEntryId).toBe("je-1");
-    expect(db.eclRuns[1]!.journalEntryId).toBe("je-2");
+    expect(db.eclRuns[1]!.journalEntryId).toBeNull();
   });
 
-  it("books again on every further re-run, without bound", async () => {
+  it("stays at one entry however many times it is re-run", async () => {
     const db = fakeDb(fixtureLoans());
     const repo = new EclRepository(db.prisma);
 
@@ -689,7 +711,40 @@ describe("EclRepository.run — re-running an already-posted period", () => {
       await repo.run({ ...JUNE, computedById: "user-1" });
     }
 
-    expect(db.eclEntries()).toHaveLength(4);
-    expect(db.allowanceBuilt()).toBe(3_120);
+    expect(db.eclEntries()).toHaveLength(1);
+    expect(db.allowanceBuilt()).toBe(780);
+  });
+
+  /**
+   * The §12 case, and the reason a re-run reports rather than silently
+   * succeeding. LN-B pays down 1,000 of principal between the two calls,
+   * so the recomputed provision is genuinely lower — but June is already
+   * booked at 780.00 and the ledger keeps that figure. The per-loan
+   * provisions are re-saved, the caller is told `ALREADY_POSTED`, and
+   * restating the period means reversing the entry first.
+   */
+  it("does not book a correction when the recomputed figures move", async () => {
+    const db = fakeDb(fixtureLoans());
+    const repo = new EclRepository(db.prisma);
+
+    const first = await repo.run({ ...JUNE, computedById: "user-1" });
+
+    const b = db.loans.find((l) => l.id === "loan-b")!;
+    b.schedule[0]!.principalPaid = "1500.00";
+
+    const second = await repo.run({ ...JUNE, computedById: "user-1" });
+
+    expect(first.totalEcl).toBe(780);
+    expect(second.totalEcl).toBe(680);
+    expect(second.delta).toBe(680);
+
+    // The recomputation is persisted…
+    expect(
+      db.loanWrites.filter((w) => w.id === "loan-b").at(-1)!.data.eclProvision,
+    ).toBe(400);
+    // …but the ledger still carries only June's original 780.00.
+    expect(second.posting).toBe("ALREADY_POSTED");
+    expect(db.eclEntries()).toHaveLength(1);
+    expect(db.allowanceBuilt()).toBe(780);
   });
 });

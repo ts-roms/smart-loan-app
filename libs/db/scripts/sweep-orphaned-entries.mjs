@@ -92,7 +92,21 @@ const OWNER_TABLE = {
   OtherIncome: "OtherIncome",
   BigBrotherAccount: "BigBrotherAccount",
   LeaseAgreement: "LeaseAgreement",
+  /**
+   * Historical: ECL entries posted before the provision movement was
+   * re-keyed onto the period carry an EclRun id here. Kept mapped so
+   * those older entries are still checked against the table they really
+   * do point at.
+   */
   EclRun: "EclRun",
+  /*
+   * No owner by design. An ECL provision movement is keyed by the WINDOW
+   * it covers ("2026-06-01:2026-06-30"), not by a row — that is what
+   * makes re-running a period idempotent. There is no table to join
+   * against, and mapping it to "EclRun" would resolve every one of these
+   * to nothing and sweep the entire impairment history.
+   */
+  EclPeriod: null,
   /** No owner by design — see the note above. */
   FixtureOpeningCapital: null,
   /*

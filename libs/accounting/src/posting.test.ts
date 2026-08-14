@@ -429,9 +429,14 @@ describe("lateFeeAccrualEntry", () => {
 });
 
 describe("eclProvisionEntry", () => {
+  const APRIL = {
+    periodStart: new Date("2026-04-01"),
+    periodEnd: new Date("2026-04-30"),
+  };
+
   it("books the positive-delta case (provisioning more)", () => {
     const e = eclProvisionEntry({
-      eclRunId: "R1",
+      ...APRIL,
       postedAt: new Date("2026-04-30"),
       delta: 1_500, // ECL increased by 1,500 since last run
     });
@@ -445,7 +450,8 @@ describe("eclProvisionEntry", () => {
 
   it("books the negative-delta case (writing back)", () => {
     const e = eclProvisionEntry({
-      eclRunId: "R2",
+      periodStart: new Date("2026-05-01"),
+      periodEnd: new Date("2026-05-31"),
       postedAt: new Date("2026-05-31"),
       delta: -800, // ECL dropped by 800
     });
@@ -458,11 +464,51 @@ describe("eclProvisionEntry", () => {
 
   it("returns null when the delta is sub-penny (no movement to post)", () => {
     const e = eclProvisionEntry({
-      eclRunId: "R3",
+      periodStart: new Date("2026-06-01"),
+      periodEnd: new Date("2026-06-30"),
       postedAt: new Date("2026-06-30"),
       delta: 0.001,
     });
     expect(e).toBeNull();
+  });
+
+  /*
+   * The idempotency key. These two assertions are the difference between
+   * a guard that fires and one that cannot: the ref has to be a function
+   * of the period alone, so that re-cutting a window collides with the
+   * entry already posted for it, while a later window does not.
+   */
+  it("keys the entry on the period, identically for the same window", () => {
+    const args = { postedAt: new Date("2026-04-30"), delta: 1_500 };
+    const first = eclProvisionEntry({ ...APRIL, ...args });
+    // A re-run computes a different delta and posts at a different
+    // instant; neither may change the key.
+    const second = eclProvisionEntry({
+      ...APRIL,
+      postedAt: new Date("2026-05-02"),
+      delta: 1_900,
+    });
+
+    expect(first!.sourceRefType).toBe("EclPeriod");
+    expect(first!.sourceRefId).toBe("2026-04-01:2026-04-30");
+    expect(second!.sourceRefId).toBe(first!.sourceRefId);
+  });
+
+  it("gives a different window a different key", () => {
+    const april = eclProvisionEntry({
+      ...APRIL,
+      postedAt: new Date("2026-04-30"),
+      delta: 1_500,
+    });
+    const may = eclProvisionEntry({
+      periodStart: new Date("2026-05-01"),
+      periodEnd: new Date("2026-05-31"),
+      postedAt: new Date("2026-05-31"),
+      delta: 1_500,
+    });
+
+    expect(may!.sourceRefId).toBe("2026-05-01:2026-05-31");
+    expect(may!.sourceRefId).not.toBe(april!.sourceRefId);
   });
 });
 

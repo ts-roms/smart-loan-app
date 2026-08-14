@@ -673,6 +673,24 @@ export function leaseBuyoutEntry(args: {
 }
 
 /**
+ * The idempotency key for one period's provision movement.
+ *
+ * Named rather than inlined below because it is the format of a stored
+ * key: every ECL entry in the ledger carries one of these strings, so
+ * anything that later has to FIND a period's entry — reversing it to
+ * restate the period is the obvious case — must build the ref the same
+ * way. A second, subtly different implementation would look up nothing
+ * and conclude the period was never booked.
+ *
+ * UTC date components, matching the memo the repository writes beside
+ * it, so the key and the human-readable text always name the same
+ * window.
+ */
+export function eclPeriodRef(periodStart: Date, periodEnd: Date): string {
+  return `${periodStart.toISOString().slice(0, 10)}:${periodEnd.toISOString().slice(0, 10)}`;
+}
+
+/**
  * ECL provision movement for the period.
  *
  * We post the *delta* from the previous run, not the absolute level —
@@ -689,12 +707,44 @@ export function leaseBuyoutEntry(args: {
  *
  *   delta == 0: no entry; caller skips the post.
  *
- * Tagged by EclRun id so re-running for the same period (if the caller
- * deletes the prior run first) doesn't double-book; `postIfAbsent` in
- * the repository covers that.
+ * ── Why the key is the PERIOD and not the run ──────────────────────────
+ *
+ * This used to be tagged `EclRun:<id>`, and the id came from a row the
+ * caller created moments earlier in the same method. That made the
+ * idempotency key new on every call, so the unique index on
+ * (source, sourceRefType, sourceRefId) — the thing that stops every
+ * other auto-posted entry in this system from doubling — had nothing to
+ * catch. Re-running a period booked the movement again, and because each
+ * entry balances on its own the trial balance still tied: a duplicate no
+ * check could see. The old comment told callers to delete the prior run
+ * first, which is advice to destroy financial history in order to work
+ * around a guard that was never armed.
+ *
+ * An idempotency key has to name the EVENT, not a row minted while
+ * recording it. The event here is "the provision moved over this
+ * window", and the window is what makes two postings the same posting.
+ * So the ref is the period, and re-cutting the same window now collides
+ * with itself exactly as a repeated payment or accrual does.
+ *
+ * The consequence worth stating: a period can be booked ONCE. If the
+ * figures genuinely change after that, the correction is a reversal of
+ * the entry and a fresh post (§12) — not a second movement quietly
+ * layered on top of the first. `postIfAbsent` returns the existing entry
+ * with `created: false`, and the repository reports that to the caller
+ * rather than pretending it posted.
+ *
+ * `sourceRefType` is "EclPeriod" rather than "EclRun" because the ref is
+ * no longer a row id, and leaving it as "EclRun" would have been an
+ * active hazard: `sweep-orphaned-entries` resolves each type against its
+ * owning table and deletes entries whose owner is missing. A period key
+ * matches no EclRun row, so every ECL entry would have looked orphaned
+ * and been swept. "EclPeriod" is mapped there as owned-by-nothing, which
+ * is the truth — a period is a window, not a row.
  */
 export function eclProvisionEntry(args: {
-  eclRunId: string;
+  /** The window the movement belongs to — together, the idempotency key. */
+  periodStart: Date;
+  periodEnd: Date;
   delta: number;
   postedAt: Date;
   memo?: string;
@@ -709,8 +759,8 @@ export function eclProvisionEntry(args: {
   return buildEntry({
     entryDate: args.postedAt,
     source: "ECL_PROVISION",
-    sourceRefType: "EclRun",
-    sourceRefId: args.eclRunId,
+    sourceRefType: "EclPeriod",
+    sourceRefId: eclPeriodRef(args.periodStart, args.periodEnd),
     memo,
     lines: isIncrease
       ? [

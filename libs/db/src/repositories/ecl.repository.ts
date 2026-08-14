@@ -51,9 +51,46 @@ export interface EclRunResult {
   }>;
   /** Movement from prior period (positive = build, negative = release). */
   delta: number;
-  /** Journal entry id, or null when delta == 0 or no caller id provided. */
+  /**
+   * The journal entry carrying THIS PERIOD's provision movement — the one
+   * this run posted, or the one it found already there. Null when there
+   * is no such entry.
+   *
+   * Deliberately the period's state rather than this run's: an operator
+   * who re-runs needs a link to the entry that governs the period, and
+   * `posting` below says whether this run is the one that wrote it. The
+   * `EclRun.journalEntryId` COLUMN answers the narrower question and is
+   * set only on the run that actually posted, so summing across runs
+   * cannot count one movement twice.
+   */
   journalEntryId: string | null;
+  /** What this run did to the general ledger. See `EclPostingOutcome`. */
+  posting: EclPostingOutcome;
 }
+
+/**
+ * What a run did to the ledger — the four distinguishable outcomes.
+ *
+ * `ALREADY_POSTED` is the one that carries policy. Posted financial
+ * history is corrected by reversal, not by re-posting (§12), so a second
+ * run over a window that is already booked recomputes and re-stages every
+ * loan — which is safe and idempotent — but books nothing. If the figures
+ * genuinely moved, the honest correction is to reverse the existing entry
+ * and post again, and the caller is told plainly so it can say so.
+ */
+export type EclPostingOutcome =
+  /** This run posted the period's movement. */
+  | "POSTED"
+  /** The period was already booked; this run added no second entry. */
+  | "ALREADY_POSTED"
+  /** The delta rounded to zero — there was nothing to book. */
+  | "NO_MOVEMENT"
+  /**
+   * A movement existed but no `computedById` was supplied to attribute
+   * the posting to. Repository-level callers only — every API path
+   * carries an actor.
+   */
+  | "NOT_ATTRIBUTED";
 
 type Stage = "STAGE_1" | "STAGE_2" | "STAGE_3";
 
@@ -78,8 +115,15 @@ export class EclRepository {
    * stage + provision on each loan, and write an EclRun summary row.
    *
    * Idempotent at the loan level (always overwrites with the latest
-   * computation). Re-running for the same period creates another EclRun
-   * row — callers should treat the latest by periodEnd as authoritative.
+   * computation) and now at the LEDGER level too: the provision movement
+   * for a given (periodStart, periodEnd) is booked exactly once, however
+   * many times this is called. A re-run recomputes everything and returns
+   * `posting: "ALREADY_POSTED"` with the existing entry's id.
+   *
+   * Re-running still writes another EclRun row — each row is the record
+   * of a computation, and the latest by `periodEnd` is authoritative for
+   * the figures. Only the first row for a window carries
+   * `journalEntryId`, because only that run posted.
    */
   async run(input: EclRunInput): Promise<EclRunResult> {
     const asOf = input.asOf ?? input.periodEnd;
@@ -166,8 +210,22 @@ export class EclRepository {
     const previousEcl = previous ? Number(previous.totalEcl) : 0;
     const delta = +(totalEcl - previousEcl).toFixed(2);
 
-    // Create the run row first (without journal id) so the journal entry
-    // can reference it via sourceRefId.
+    /*
+     * The entry is built BEFORE the run row exists, and that ordering is
+     * the fix rather than an incidental tidy-up. Its idempotency key is
+     * the period the movement represents, so it no longer depends on a
+     * row this method is about to mint — see `eclProvisionEntry`.
+     */
+    const entry = eclProvisionEntry({
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      delta,
+      postedAt: asOf,
+      memo: `ECL movement for ${input.periodStart.toISOString().slice(0, 10)} → ${input.periodEnd.toISOString().slice(0, 10)}`,
+    });
+
+    // Every computation is recorded, including one that books nothing:
+    // the run row is the evidence that the portfolio was assessed.
     const run = await this.prisma.eclRun.create({
       data: {
         periodStart: input.periodStart,
@@ -186,29 +244,48 @@ export class EclRepository {
       },
     });
 
-    // Post the journal movement. eclProvisionEntry returns null when the
-    // delta rounds to zero — no entry needed in that case.
+    /*
+     * Post the movement. `entry` is null when the delta rounds to zero —
+     * a period that did not move has nothing to book, and that is not the
+     * same as a period that was already booked.
+     *
+     * Now that the key is the period, `postIfAbsent` genuinely guards the
+     * re-run: the unique index on (source, sourceRefType, sourceRefId)
+     * rejects the second insert and hands back the entry that is already
+     * there. That also holds for two runs racing, which a read-then-write
+     * check never could.
+     *
+     * A second run therefore books NOTHING and says so. It is not an
+     * error — recomputing stages and per-loan provisions is legitimate
+     * and has already happened above. But the ledger movement for this
+     * window is written once; if the figures genuinely changed, §12 wants
+     * the existing entry reversed and a fresh one posted, not a second
+     * movement stacked on the first.
+     */
     let journalEntryId: string | null = null;
-    const entry = eclProvisionEntry({
-      eclRunId: run.id,
-      delta,
-      postedAt: asOf,
-      memo: `ECL movement for ${input.periodStart.toISOString().slice(0, 10)} → ${input.periodEnd.toISOString().slice(0, 10)}`,
-    });
-    if (entry && input.computedById) {
-      // postIfAbsent makes the run idempotent at the journal level: a
-      // re-run with the same EclRun.id won't double-book. (A new EclRun
-      // row, though, would book again — callers managing re-runs should
-      // delete the prior run first.)
+    let posting: EclPostingOutcome = "NO_MOVEMENT";
+    if (entry && !input.computedById) {
+      posting = "NOT_ATTRIBUTED";
+    } else if (entry && input.computedById) {
       const accounting = new AccountingRepository(this.prisma);
-      const { entry: posted } = await accounting.postIfAbsent(entry, {
+      const { entry: posted, created } = await accounting.postIfAbsent(entry, {
         postedById: input.computedById,
       });
       journalEntryId = posted.id;
-      await this.prisma.eclRun.update({
-        where: { id: run.id },
-        data: { journalEntryId },
-      });
+      posting = created ? "POSTED" : "ALREADY_POSTED";
+      /*
+       * The column records what THIS run did, so it is written only by
+       * the run that actually posted. A later run over the same window
+       * leaves it null: it booked nothing, and a row claiming a journal
+       * link it did not create would double-count the movement to anyone
+       * aggregating over run history.
+       */
+      if (created) {
+        await this.prisma.eclRun.update({
+          where: { id: run.id },
+          data: { journalEntryId },
+        });
+      }
     }
 
     return {
@@ -223,6 +300,7 @@ export class EclRepository {
       perLoan,
       delta,
       journalEntryId,
+      posting,
     };
   }
 }

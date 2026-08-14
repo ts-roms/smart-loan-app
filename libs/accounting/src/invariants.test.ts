@@ -285,7 +285,8 @@ describe("invariant: every journal entry balances", () => {
       for (const delta of [amount, -amount]) {
         expectBalanced(
           eclProvisionEntry({
-            eclRunId: "r1",
+            periodStart: new Date("2026-01-01"),
+            periodEnd: new Date("2026-01-31"),
             delta,
             postedAt: new Date("2026-01-31"),
           })!,
