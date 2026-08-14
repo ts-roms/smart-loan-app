@@ -797,54 +797,70 @@ export class AccountingRepository {
    * by the time the page is cut, which is the case offset costs nothing
    * for. Callers page a table and want "page 3 of 12".
    *
-   * ─── What changed about the read itself ────────────────────────────
+   * ─── The instalment scan is NOT chunked, and that was measured ─────
    *
-   * The instalment scan is now walked in bounded chunks
-   * (`forEachBookChunk`) and folded as it arrives, instead of hydrating
-   * every open instalment in the book before the first addition. The
-   * rows visited, and therefore every number produced, are identical —
-   * see whole-book-reads.golden.test.ts.
+   * A chunked keyset walk was implemented here and then REVERTED,
+   * because it made the read 67x more expensive in I/O. On the scratch
+   * book (1.32M instalments, 123,524 of them open on live loans) the
+   * whole operation cost 22,186 buffers unbounded and 1,490,394 buffers
+   * walked in chunks of 10,000.
+   *
+   * The reason is the ordering. Unbounded, the planner uses
+   * `LoanSchedule_paidInFullAt_dueDate_idx` for `paidInFullAt IS NULL`
+   * and hash-joins 120k loans once:
+   *
+   *   Hash Join (actual rows=123524)
+   *     Bitmap Index Scan on LoanSchedule_paidInFullAt_dueDate_idx
+   *     Hash -> Seq Scan on LoanApplication
+   *    Buffers: shared hit=5470 read=13506   Execution Time: 250 ms
+   *
+   * Adding `ORDER BY id` to page by keyset throws that away: no index
+   * leads with `id` AND carries `paidInFullAt`, so the planner walks the
+   * primary key and probes `LoanApplication` once per row —
+   * 194,286 buffers for a SINGLE chunk of 10,000.
+   *
+   * Making the walk cheap needs an index that can serve the filter and
+   * the order together — `LoanSchedule(paidInFullAt, id)`, or a keyset
+   * on `(dueDate, id)` against the existing composite. Adding an index
+   * is out of scope for this batch (another branch owns schema.prisma),
+   * so this is reported rather than done. Until then the honest position
+   * is that the unbounded scan is the cheaper of the two, and the
+   * defect that IS fixed here is the response size.
+   *
+   * The fold is incremental regardless (`createAgingAccumulator`), so it
+   * holds one entry per LOAN rather than one per INSTALMENT — 32,052
+   * against 123,524 on the measured book. That much is free.
    */
   async loanPortfolioAging(asOf: Date, paging: PageParams = {}) {
-    const accumulator = createAgingAccumulator(asOf);
-
-    await forEachBookChunk(
-      (resumeAfterId, take) =>
-        this.prisma.loanSchedule.findMany({
-          where: {
-            paidInFullAt: null,
-            loan: { status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] } },
-          },
-          include: {
-            loan: {
-              select: {
-                id: true,
-                number: true,
-                customer: { select: { firstName: true, lastName: true } },
-              },
-            },
-          },
-          orderBy: { id: "asc" },
-          take,
-          ...resumeAfter(resumeAfterId),
-        }),
-      (rows) => {
-        for (const r of rows) {
-          accumulator.add({
-            loanId: r.loan.id,
-            loanNumber: r.loan.number,
-            customerName: `${r.loan.customer.firstName} ${r.loan.customer.lastName}`,
-            installmentNo: r.installmentNo,
-            dueDate: r.dueDate,
-            totalDue:
-              Number(r.totalDue) -
-              Number(r.principalPaid) -
-              Number(r.interestPaid),
-            paidInFullAt: r.paidInFullAt,
-          });
-        }
+    const rows = await this.prisma.loanSchedule.findMany({
+      where: {
+        paidInFullAt: null,
+        loan: { status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] } },
       },
-    );
+      include: {
+        loan: {
+          select: {
+            id: true,
+            number: true,
+            customer: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+
+    const accumulator = createAgingAccumulator(asOf);
+    for (const r of rows) {
+      accumulator.add({
+        loanId: r.loan.id,
+        loanNumber: r.loan.number,
+        customerName: `${r.loan.customer.firstName} ${r.loan.customer.lastName}`,
+        installmentNo: r.installmentNo,
+        dueDate: r.dueDate,
+        totalDue:
+          Number(r.totalDue) - Number(r.principalPaid) - Number(r.interestPaid),
+        paidInFullAt: r.paidInFullAt,
+      });
+    }
 
     const report = accumulator.finish();
     const resolved = resolvePaging(paging, AGING_PAGING);
@@ -888,6 +904,24 @@ export class AccountingRepository {
      * R1 also established that the sequential scan is the correct plan
      * for reading 90% of a table, so this is not trying to make the scan
      * selective — only to stop buffering its entire result.
+     *
+     * Measured on the scratch book (110,400 in-scope loans, 1,214,400
+     * instalments behind them):
+     *
+     *   BEFORE  unbounded          8 queries    116,750 buffers   42.2 s
+     *   AFTER   chunked @ 10,000  27 queries    215,649 buffers   26.7 s
+     *
+     * 1.85x the buffers, and that cost is stated rather than buried: the
+     * keyset order walks the primary key instead of the sequential scan
+     * R1 endorsed. It is accepted here because the resident set drops
+     * from 1.2M hydrated instalments to at most one chunk's worth, and
+     * because the wall clock improved 37% rather than regressing.
+     *
+     * The same trade was NOT accepted for `loanPortfolioAging`, where the
+     * identical change cost 67x the buffers — see the note there. Which
+     * way it goes depends entirely on whether an index can serve the
+     * filter and the keyset order at once, so it has to be measured per
+     * query rather than assumed.
      */
     await forEachBookChunk(
       (resumeAfterId, take) =>

@@ -203,6 +203,124 @@ describe("overdueQueuePage — a window onto the global ranking", () => {
   });
 });
 
+describe("overdueQueue — the repayment-history lookup is bounded", () => {
+  /*
+   * Regression for a defect the volume measurement surfaced, which no
+   * unit test had ever crossed the threshold of.
+   *
+   * The lookup used to name every queue loan TWICE — once as
+   * `customerId IN (...)`, once as `id NOT IN (queueLoanIds)`. Each id is
+   * a bind variable, Postgres caps a prepared statement at 32,767, and at
+   * 22,136 overdue accounts the real database rejected the query with
+   * P2035: "too many bind variables ... received 44276". The whole queue
+   * failed — not slowly, just entirely, and only on books past a certain
+   * size.
+   *
+   * The fake cannot reproduce a Postgres bind limit, so what is asserted
+   * is the shape that caused it: distinct customers only, chunked, and no
+   * `notIn` list at all.
+   */
+  it("names each customer once per chunk and never lists loan ids", async () => {
+    const big = makeBook(120);
+    const { prisma } = inMemoryBook(big);
+    const seen: Array<Record<string, unknown>> = [];
+    const client = prisma as unknown as {
+      loanApplication: {
+        groupBy: (args: {
+          where?: Record<string, unknown>;
+        }) => Promise<unknown[]>;
+      };
+    };
+    const realGroupBy = client.loanApplication.groupBy.bind(
+      client.loanApplication,
+    );
+    client.loanApplication.groupBy = (args) => {
+      seen.push(args.where ?? {});
+      return realGroupBy(args);
+    };
+
+    await new CollectionsRepository(prisma).overdueQueue(AS_OF);
+
+    expect(seen.length).toBeGreaterThan(0);
+    for (const where of seen) {
+      // The half that doubled the bind count is gone.
+      expect(where).not.toHaveProperty("id");
+      const ids = (where.customerId as { in: string[] }).in;
+      // Distinct, and bounded by the chunk size.
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids.length).toBeLessThanOrEqual(10_000);
+    }
+  });
+
+  it("still refuses to let a defaulted loan be its own bad history", async () => {
+    // The `notIn` became a subtraction; this is the property it protected.
+    // Covered on real numbers in whole-book-reads.golden.test.ts, and
+    // restated here because it is what the fix could plausibly break.
+    const { prisma } = inMemoryBook({
+      customers: [
+        {
+          id: "c1",
+          firstName: "Ana",
+          lastName: "Reyes",
+          city: "Cebu City",
+          province: "Cebu",
+          phone: "+63 917 000 0001",
+          secondaryPhone: null,
+          email: null,
+          creditTier: null,
+        },
+      ],
+      loans: [
+        {
+          id: "l-queue",
+          number: "LN-Q",
+          customerId: "c1",
+          productCode: "SALARY",
+          principal: "5000.00",
+          status: "DEFAULTED",
+          disbursedAt: new Date("2025-01-01T00:00:00.000Z"),
+          closedAt: null,
+          writtenOffAt: null,
+          schedule: [
+            {
+              id: "s-q",
+              installmentNo: 1,
+              dueDate: new Date("2026-01-01T00:00:00.000Z"),
+              principalDue: "3000.00",
+              interestDue: "2000.00",
+              totalDue: "5000.00",
+              principalPaid: "0.00",
+              interestPaid: "0.00",
+              paidInFullAt: null,
+            },
+          ],
+        },
+        {
+          id: "l-prior",
+          number: "LN-P",
+          customerId: "c1",
+          productCode: "SALARY",
+          principal: "4000.00",
+          status: "WRITTEN_OFF",
+          disbursedAt: new Date("2024-01-01T00:00:00.000Z"),
+          closedAt: null,
+          writtenOffAt: new Date("2025-06-01T00:00:00.000Z"),
+          schedule: [],
+        },
+      ],
+    });
+
+    const rows = await new CollectionsRepository(prisma).overdueQueue(AS_OF);
+    const history = rows[0]!.priority.factors.find(
+      (f) => f.factorId === "repaymentHistory",
+    )!;
+    // 1 of 1 — the queue loan's own DEFAULTED row is subtracted back out.
+    expect(history.source).toBe(
+      "1 of 1 prior loan(s) defaulted or written off",
+    );
+  });
+});
+
 describe("overdueQueue — area filtering happens in SQL", () => {
   it("narrows to a province across the whole book, not just a page", async () => {
     const { prisma } = book();

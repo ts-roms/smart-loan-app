@@ -31,7 +31,6 @@ import type {
   PromiseToPay,
 } from "@prisma/client";
 
-import { forEachBookChunk, resumeAfter } from "../lib/chunked-scan";
 import {
   feeIncomeCreditOf,
   lateFeeAccrualsBySchedule,
@@ -117,6 +116,16 @@ export type OverdueQueueRow = LoanApplication & {
  * right screen.
  */
 const QUEUE_PAGING: PagingBounds = { defaultPageSize: 50, maxPageSize: 200 };
+
+/**
+ * Ids per `IN (...)` list in the repayment-history lookup.
+ *
+ * Postgres caps a prepared statement at 32,767 bind variables. Well
+ * under it, because the cost of an extra round trip here is nothing next
+ * to the cost of the query failing outright — which is what it did
+ * before this bound existed. See the lookup for the whole story.
+ */
+const HISTORY_ID_CHUNK = 10_000;
 
 /** The area half of the queue's `where`, or nothing when unfiltered. */
 function areaWhere(filter: OverdueQueueFilter) {
@@ -219,123 +228,159 @@ export class CollectionsRepository {
     filter: OverdueQueueFilter = {},
   ): Promise<OverdueQueueRow[]> {
     /*
-     * Walked in bounded chunks rather than fetched whole.
+     * Fetched whole, deliberately — chunking was MEASURED AND REJECTED
+     * here, unlike in the aging and roll-rate reads.
      *
-     * This is NOT a page of the queue — every matching loan is still
-     * visited, scored, and ranked against every other one. See
-     * `overdueQueuePage` for why the ranking cannot be computed any
-     * other way, and what a page means here.
+     * Every matching loan has to be resident at once: the §29 ranking
+     * compares each account against every other, so the fold retains
+     * everything it is given. Walking the same rows in chunks therefore
+     * moves the same bytes into the same array and changes nothing about
+     * the peak — measured on the scratch book (22,136 overdue accounts,
+     * 94,714 open instalments) at 328 MB retained either way, for 7 round
+     * trips whole against 22 chunked and ~19% more wall clock.
+     * `forEachBookChunk` pays for itself only where the accumulator
+     * discards, which is why the other two reads use it and this one
+     * does not.
      *
-     * The chunking is worth doing even so. Each row drags six relations
-     * behind it — the borrower, every open instalment, the assignment,
-     * every promise-to-pay, the newest note, and both collateral
-     * tables — so the hydrated footprint per loan is large even though
-     * the pre-filter is selective.
+     * What genuinely bounds this read is a pre-filter that already
+     * existed and is already indexed: `status IN (ACTIVE, DISBURSED,
+     * DEFAULTED)` with `schedule some (paidInFullAt IS NULL AND dueDate <
+     * asOf)`. Only loans actually past due, served by
+     * LoanSchedule(paidInFullAt, dueDate) from
+     * 20260813090000_query_plan_indexes. The queue is tens of thousands
+     * of accounts, not the 120,000-loan book — which is what makes
+     * scoring all of it affordable, and what `overdueQueuePage` relies on.
      *
-     * The pre-filter is the real bound and it already existed:
-     * `status IN (ACTIVE, DISBURSED, DEFAULTED)` with `schedule some
-     * (paidInFullAt IS NULL AND dueDate < asOf)` is 0.7% of instalments
-     * at the volume the query doc measured — 8,472 of 1,296,000 — and
-     * `LoanSchedule(paidInFullAt, dueDate)` from
-     * 20260813090000_query_plan_indexes serves it. The queue is
-     * thousands of loans, not hundreds of thousands. That is why
-     * scoring all of it stays affordable.
+     * The unbounded thing this read really had was its RESPONSE: 84 MB of
+     * JSON for the measured queue, on an on-demand endpoint. That is
+     * bounded now — see `overdueQueuePage`.
      */
-    const fetchChunk = (resumeAfterId: string | null, take: number) =>
-      this.prisma.loanApplication.findMany({
-        where: {
-          status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] },
-          schedule: { some: { paidInFullAt: null, dueDate: { lt: asOf } } },
-          ...(filter.collectorId
-            ? { collectionAssignment: { collectorId: filter.collectorId } }
-            : {}),
-          ...(filter.unassignedOnly ? { collectionAssignment: null } : {}),
-          ...areaWhere(filter),
-        },
-        include: {
-          customer: {
-            select: {
-              firstName: true,
-              lastName: true,
-              city: true,
-              province: true,
-              // Contactability inputs — which channels exist for this
-              // borrower at all.
-              phone: true,
-              secondaryPhone: true,
-              email: true,
-              // Risk grade: the most recent scorecard result, if ever run.
-              creditScores: {
-                select: { tier: true },
-                orderBy: { computedAt: "desc" },
-                take: 1,
-              },
+    const rows = await this.prisma.loanApplication.findMany({
+      where: {
+        status: { in: ["ACTIVE", "DISBURSED", "DEFAULTED"] },
+        schedule: { some: { paidInFullAt: null, dueDate: { lt: asOf } } },
+        ...(filter.collectorId
+          ? { collectionAssignment: { collectorId: filter.collectorId } }
+          : {}),
+        ...(filter.unassignedOnly ? { collectionAssignment: null } : {}),
+        ...areaWhere(filter),
+      },
+      include: {
+        customer: {
+          select: {
+            firstName: true,
+            lastName: true,
+            city: true,
+            province: true,
+            // Contactability inputs — which channels exist for this
+            // borrower at all.
+            phone: true,
+            secondaryPhone: true,
+            email: true,
+            // Risk grade: the most recent scorecard result, if ever run.
+            creditScores: {
+              select: { tier: true },
+              orderBy: { computedAt: "desc" },
+              take: 1,
             },
           },
-          schedule: {
-            where: { paidInFullAt: null },
-            orderBy: { dueDate: "asc" },
-          },
-          collectionAssignment: {
-            include: { collector: { select: { name: true } } },
-          },
-          // Promise reliability — kept vs broken, and any open commitment.
-          promisesToPay: { select: { status: true, promisedDate: true } },
-          // Contact recency. Only the newest is needed: the score asks
-          // "how long since anyone tried", not for the whole log.
-          collectionNotes: {
-            select: { createdAt: true },
-            orderBy: { createdAt: "desc" },
-            take: 1,
-          },
-          // Collateral, at most one of the two by construction.
-          vehicle: { select: { appraisedValue: true } },
-          property: { select: { appraisedValue: true } },
         },
-        orderBy: { id: "asc" },
-        take,
-        ...resumeAfter(resumeAfterId),
-      });
-
-    const rows: Awaited<ReturnType<typeof fetchChunk>> = [];
-    await forEachBookChunk(fetchChunk, (chunk) => {
-      rows.push(...chunk);
+        schedule: {
+          where: { paidInFullAt: null },
+          orderBy: { dueDate: "asc" },
+        },
+        collectionAssignment: {
+          include: { collector: { select: { name: true } } },
+        },
+        // Promise reliability — kept vs broken, and any open commitment.
+        promisesToPay: { select: { status: true, promisedDate: true } },
+        // Contact recency. Only the newest is needed: the score asks
+        // "how long since anyone tried", not for the whole log.
+        collectionNotes: {
+          select: { createdAt: true },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        // Collateral, at most one of the two by construction.
+        vehicle: { select: { appraisedValue: true } },
+        property: { select: { appraisedValue: true } },
+      },
+      // Deterministic, so two requests a second apart return the same
+      // order for accounts whose scores tie. The final ordering is the
+      // §29 sort below; this only makes the tie-break stable.
+      orderBy: { id: "asc" },
     });
 
     /*
-     * Customer repayment history, in ONE query rather than per row.
+     * Customer repayment history, grouped in SQL rather than per row.
      *
-     * `notIn` the loans already on the queue so an account cannot count
-     * itself as its own bad history — a DEFAULTED loan is eligible for
-     * the queue, and without this exclusion it would score itself worse
-     * for being the very loan being ranked.
+     * ─── Why this is chunked, and why the exclusion became a subtraction
+     *
+     * This query used to name every queue loan twice: once as
+     * `customerId IN (...)` and once as `id NOT IN (queueLoanIds)`. Each
+     * id is a bind variable and Postgres refuses a prepared statement
+     * with more than 32,767 of them, so on a book with more than ~16,000
+     * overdue accounts the whole queue failed outright with P2035 —
+     * "too many bind variables ... received 44276" at the volume this
+     * was measured on. Not slow: broken, and only above a threshold no
+     * test had ever crossed.
+     *
+     * Both halves are fixed here.
+     *
+     * The `notIn` is gone entirely, replaced by an exact subtraction.
+     * Its job was to stop an account counting itself as its own bad
+     * history — a DEFAULTED loan is eligible for the queue, and without
+     * the exclusion it would score itself worse for being the very loan
+     * being ranked. But the only status a queue loan and this filter can
+     * share is DEFAULTED: the queue is ACTIVE/DISBURSED/DEFAULTED and
+     * the filter is CLOSED/DEFAULTED/WRITTEN_OFF. So counting everything
+     * and then subtracting each customer's own DEFAULTED queue loans is
+     * the same number, and costs no bind variables at all.
+     *
+     * The `customerId IN (...)` list is chunked. Distinct customers, so
+     * a borrower with several overdue accounts is named once.
      */
-    const queueLoanIds = rows.map((l) => l.id);
-    const priorLoans =
-      queueLoanIds.length === 0
-        ? []
-        : await this.prisma.loanApplication.groupBy({
-            by: ["customerId", "status"],
-            where: {
-              customerId: { in: rows.map((l) => l.customerId) },
-              id: { notIn: queueLoanIds },
-              status: { in: ["CLOSED", "DEFAULTED", "WRITTEN_OFF"] },
-            },
-            _count: { _all: true },
-          });
+    const queueCustomerIds = [...new Set(rows.map((l) => l.customerId))];
 
     const historyByCustomer = new Map<
       string,
       { priorLoansClosed: number; priorLoansDefaulted: number }
     >();
-    for (const group of priorLoans) {
-      const acc = historyByCustomer.get(group.customerId) ?? {
-        priorLoansClosed: 0,
-        priorLoansDefaulted: 0,
-      };
-      if (group.status === "CLOSED") acc.priorLoansClosed += group._count._all;
-      else acc.priorLoansDefaulted += group._count._all;
-      historyByCustomer.set(group.customerId, acc);
+    const historyOf = (customerId: string) => {
+      let acc = historyByCustomer.get(customerId);
+      if (!acc) {
+        acc = { priorLoansClosed: 0, priorLoansDefaulted: 0 };
+        historyByCustomer.set(customerId, acc);
+      }
+      return acc;
+    };
+
+    for (let i = 0; i < queueCustomerIds.length; i += HISTORY_ID_CHUNK) {
+      const batch = queueCustomerIds.slice(i, i + HISTORY_ID_CHUNK);
+      const groups = await this.prisma.loanApplication.groupBy({
+        by: ["customerId", "status"],
+        where: {
+          customerId: { in: batch },
+          status: { in: ["CLOSED", "DEFAULTED", "WRITTEN_OFF"] },
+        },
+        _count: { _all: true },
+      });
+      for (const group of groups) {
+        const acc = historyOf(group.customerId);
+        if (group.status === "CLOSED") {
+          acc.priorLoansClosed += group._count._all;
+        } else {
+          acc.priorLoansDefaulted += group._count._all;
+        }
+      }
+    }
+
+    // The subtraction that replaces `notIn`: a DEFAULTED loan on the
+    // queue counted itself above, and must not.
+    for (const l of rows) {
+      if (l.status === "DEFAULTED") {
+        historyOf(l.customerId).priorLoansDefaulted -= 1;
+      }
     }
 
     const out = rows.map((l) => {

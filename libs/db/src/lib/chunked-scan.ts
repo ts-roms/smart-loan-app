@@ -23,6 +23,37 @@
  * The set of rows visited is identical, and so is every number derived
  * from it. That is the property the golden tests police.
  *
+ * ## When this helps — MEASURE BEFORE USING IT
+ *
+ * Two conditions have to hold together, and exactly one of the three
+ * whole-book reads satisfies both. The numbers below are whole-operation
+ * buffer counts from pg_stat_database on the scratch book, not estimates.
+ *
+ * 1. The fold must DISCARD. If the accumulator keeps everything it is
+ *    given, chunking moves the same bytes into the same array and bounds
+ *    nothing. The collections queue holds every scored row so it can rank
+ *    them against each other — 328 MB resident either way, 7 round trips
+ *    against 22. `overdueQueue` therefore does not use this.
+ *
+ * 2. An index must serve the FILTER and the KEYSET ORDER together.
+ *    `ORDER BY id` is not free: if no index leads with `id` while also
+ *    carrying the filtered column, the planner abandons the index it was
+ *    using and walks the primary key instead.
+ *
+ *      loanPortfolioAging   22,186 → 1,490,394 buffers   (67x WORSE)
+ *      rollRate            116,750 →   215,649 buffers   (1.85x, accepted)
+ *
+ *    Aging filters on `paidInFullAt`, served by
+ *    `LoanSchedule(paidInFullAt, dueDate)` — which `ORDER BY id` throws
+ *    away. Roll-rate reads ~90% of `LoanApplication` and was correctly
+ *    sequential-scanning anyway (rejection R1), so ordering by its
+ *    primary key costs comparatively little. The aging walk was written,
+ *    measured, and reverted; the roll-rate one was kept.
+ *
+ * The lesson is that this helper is not a safe default. A chunked walk
+ * that cannot use an index is strictly worse than the unbounded query it
+ * replaces.
+ *
  * ## Why keyset (`cursor`) and not `skip`
  *
  * This is the one place in this repository that does NOT use the offset
@@ -51,8 +82,22 @@
  * addition is exact well past any book this system will hold.
  */
 
-/** Rows per round trip. */
-export const BOOK_CHUNK_SIZE = 2_000;
+/**
+ * Rows per round trip.
+ *
+ * Chosen by measurement on the scratch book (120k loans / 1.32M
+ * instalments), not by taste. Prisma resolves a relation `include` with a
+ * separate query per relation, so the round-trip count is chunks ×
+ * relations and small chunks get expensive fast:
+ *
+ *   aging fold      2,000 → 187 round trips      10,000 → 39
+ *   roll-rate fold  2,000 → 115 round trips      10,000 → 26
+ *
+ * 10,000 keeps the resident chunk an order of magnitude below the whole
+ * book while costing tens of queries rather than hundreds. Going further
+ * (50,000) halves the round trips again but starts to defeat the purpose.
+ */
+export const BOOK_CHUNK_SIZE = 10_000;
 
 /**
  * Walk every row matching a query, `chunkSize` at a time, folding as we
