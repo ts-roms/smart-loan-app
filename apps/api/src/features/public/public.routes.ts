@@ -22,15 +22,60 @@
  * Rate limit: tight (5/minute per IP). Anonymous endpoints are the
  * obvious abuse surface; the global 600/minute limit doesn't help
  * here. Per-route override beats the global one.
+ *
+ * ## Auth posture, stated because documenting nearly broke it
+ *
+ * There is NO `app.authenticate` hook in this file and there must not
+ * be one. Every other group that gained request schemas had to move its
+ * auth hook from `preHandler` to `onRequest`, because Fastify validates
+ * between the two and an anonymous caller would otherwise get a 400
+ * about their body instead of the 401 they earned. **That fix does not
+ * apply here and applying it would be the bug**: these routes are
+ * anonymous by design — the marketing site and the self-service signup
+ * flow call them with no credentials at all — so there is no 401 to
+ * protect. Consequently **401 is not declared on any operation below**.
+ * Declaring it would send an integrator hunting for a token that does
+ * not exist.
+ *
+ * `429` IS declared on all three, and is the failure a caller here will
+ * actually meet. Note it arrives in two different shapes: the rate
+ * limiter's own body, and — on `/leads` only — a `DuplicateRecent`
+ * refusal the handler raises for a repeat submission within five
+ * minutes. Both are `{ error, message }`, which is what the shared
+ * component describes.
+ *
+ * ## Two statuses these routes send that the spec cannot say
+ *
+ * `ERRORS` has no 501 and no 500, and both are reachable:
+ * `/signup` and `/signup/confirm` answer **501 ModeDisabled** when the
+ * server is not in multi-tenant mode, and `/signup/confirm` answers
+ * **500 ProvisioningFailed** when schema creation fails part-way. They
+ * are left undeclared rather than hand-rolled locally, on the same
+ * grounds the co-maker routes used for 410/413 before those were added
+ * centrally: a second error envelope defined in a feature file is the
+ * divergence the shared components exist to prevent. Reported rather
+ * than patched — 501 in particular is a mode signal, not a failure, and
+ * whether it belongs in a shared `ERRORS` table is a design call.
  */
 
 import type { FastifyInstance } from "fastify";
 
 import { config } from "../../config";
+import { routeSchema } from "../../lib/openapi";
 import { createNotificationProvider } from "../../providers";
 import { PlatformService } from "../platform/platform.service";
 import { PublicController } from "./public.controller";
 import { PublicService } from "./public.service";
+import {
+  captureLeadResponseSchema,
+  captureLeadSchema,
+  confirmSignupResponseSchema,
+  confirmSignupSchema,
+  signupResponseSchema,
+  signupTenantSchema,
+} from "./schemas";
+
+const TAGS = ["public"];
 
 export async function publicRoutes(app: FastifyInstance) {
   // Signup provisions tenants through the same service the vendor
@@ -60,6 +105,18 @@ export async function publicRoutes(app: FastifyInstance) {
       // per IP is more than any genuine human needs; spammers get a
       // 429 quickly without us having to hand-write retry logic.
       config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
+      schema: routeSchema({
+        summary:
+          "Capture a marketing lead. Anonymous. Answers `{ ok: true }` " +
+          "and no id on purpose — an unauthenticated caller should not " +
+          "leave with a handle on the row. 429 covers both the rate " +
+          "limit and a repeat submission within five minutes.",
+        tags: TAGS,
+        body: captureLeadSchema,
+        response: captureLeadResponseSchema,
+        status: 201,
+        errors: [400, 429],
+      }),
     },
     ctrl.captureLead,
   );
@@ -74,6 +131,20 @@ export async function publicRoutes(app: FastifyInstance) {
        * using us as a mailer.
        */
       config: { rateLimit: { max: 5, timeWindow: "1 hour" } },
+      schema: routeSchema({
+        summary:
+          "Request a tenant. Answers 202, not 201 — nothing is " +
+          "provisioned yet. A confirmation link goes to `adminEmail` " +
+          "and lapses at `expiresAt`; the token is never in this body. " +
+          "409 if the slug is taken. Also answers 501 when the server " +
+          "is not in multi-tenant mode (not declarable — see the note " +
+          "at the top of this file).",
+        tags: TAGS,
+        body: signupTenantSchema,
+        response: signupResponseSchema,
+        status: 202,
+        errors: [400, 409, 429],
+      }),
     },
     ctrl.requestSignup,
   );
@@ -91,6 +162,20 @@ export async function publicRoutes(app: FastifyInstance) {
        * link in their inbox.
        */
       config: { rateLimit: { max: 3, timeWindow: "1 hour" } },
+      schema: routeSchema({
+        summary:
+          "Redeem the confirmation link and provision the tenant. " +
+          "`bootstrapPassword` is shown once and never again. A " +
+          "malformed token and an unknown one both answer 400 " +
+          "`InvalidToken`, deliberately indistinguishable; 409 means " +
+          "the link was already used. 500/501 are also reachable — see " +
+          "the note at the top of this file.",
+        tags: TAGS,
+        body: confirmSignupSchema,
+        response: confirmSignupResponseSchema,
+        status: 201,
+        errors: [400, 409, 429],
+      }),
     },
     ctrl.confirmSignup,
   );

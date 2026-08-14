@@ -20,7 +20,16 @@ declare module "fastify" {
  * fresh per request against `req.tenantCtx.prisma`.
  */
 export async function kycRoutes(app: FastifyInstance): Promise<void> {
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * `onRequest`, not `preHandler` — see the note in kyc.routes.ts.
+   * Fastify validates the request between the two, so authenticating at
+   * `preHandler` would let an anonymous caller with a malformed body
+   * get a 400 describing the schema instead of the 401 they earned.
+   * `resolveTenant` stays at `preHandler`: it reads the JWT claim this
+   * hook verifies, so it must run after it, and it never rejects a
+   * request for its shape.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const repo = new KycRepository(req.tenantCtx.prisma);

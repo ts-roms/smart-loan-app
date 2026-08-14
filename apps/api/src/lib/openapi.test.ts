@@ -169,9 +169,29 @@ describe("error bodies are not stripped by their own schema", () => {
   };
 
   it("lets an error envelope carry fields it does not name", () => {
-    for (const code of [401, 403, 404, 409] as const) {
+    /*
+     * 410 and 413 are in this list from the day they were added, not
+     * from the day something broke. Both were introduced for the
+     * co-maker consent routes, and 410's body carries the same
+     * `{ error, message }` every other refusal does — the whole reason
+     * they went into ERRORS centrally rather than being hand-rolled in
+     * the feature file was to keep exactly this invariant shared.
+     */
+    for (const code of [401, 403, 404, 409, 410, 413] as const) {
       expect(bodyOf(code).additionalProperties, String(code)).toBe(true);
     }
+  });
+
+  it("explains 410 as a lapsed thing, not a missing one", () => {
+    /*
+     * The distinction the status exists to carry. An integrator who
+     * collapses 410 into 404 tells a co-maker their invite never
+     * existed, when the answer they need is "ask for a new link" — so
+     * the description has to say the difference out loud, the same way
+     * 409's does.
+     */
+    expect(ERRORS[410].description).toMatch(/lapsed/i);
+    expect(ERRORS[410].description).toMatch(/404/);
   });
 
   it("lets each validation ISSUE keep its contents", () => {
