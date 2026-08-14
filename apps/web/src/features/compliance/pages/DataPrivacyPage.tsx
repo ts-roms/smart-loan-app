@@ -322,6 +322,7 @@ function RetentionCard() {
   const [audit, setAudit] = useState<number | null>(null);
   const [notif, setNotif] = useState<number | null>(null);
   const [jobs, setJobs] = useState<number | null>(null);
+  const [logins, setLogins] = useState<number | null>(null);
   const [purgeResult, setPurgeResult] = useState<RetentionPurgeResult | null>(
     null,
   );
@@ -334,10 +335,12 @@ function RetentionCard() {
   const vAudit = audit ?? p.auditRetentionDays;
   const vNotif = notif ?? p.notificationRetentionDays;
   const vJobs = jobs ?? p.jobRunRetentionDays;
+  const vLogins = logins ?? p.loginAttemptRetentionDays;
   const dirty =
     vAudit !== p.auditRetentionDays ||
     vNotif !== p.notificationRetentionDays ||
-    vJobs !== p.jobRunRetentionDays;
+    vJobs !== p.jobRunRetentionDays ||
+    vLogins !== p.loginAttemptRetentionDays;
 
   const onSave = async () => {
     try {
@@ -345,10 +348,12 @@ function RetentionCard() {
         auditRetentionDays: vAudit,
         notificationRetentionDays: vNotif,
         jobRunRetentionDays: vJobs,
+        loginAttemptRetentionDays: vLogins,
       });
       setAudit(null);
       setNotif(null);
       setJobs(null);
+      setLogins(null);
       toast.success("Retention policy saved.");
     } catch (err) {
       toast.error((err as Error).message ?? "Could not save the policy");
@@ -360,8 +365,20 @@ function RetentionCard() {
       const r = await purge.mutateAsync();
       setPurgeResult(r);
       const total =
-        r.deleted.auditEvents + r.deleted.notifications + r.deleted.jobRuns;
-      toast.success(`Purge complete — ${total} row(s) deleted.`);
+        r.deleted.auditEvents +
+        r.deleted.notifications +
+        r.deleted.jobRuns +
+        r.deleted.loginAttempts;
+      // Redactions are reported alongside, never added in. "12 deleted"
+      // and "12 redacted" are different events and an operator reading a
+      // single summed number cannot tell which one happened to the audit
+      // log — which is the one thing they most need to know.
+      const redacted = r.redacted.auditEvents;
+      toast.success(
+        redacted > 0
+          ? `Purge complete — ${total} row(s) deleted, ${redacted} audit row(s) redacted.`
+          : `Purge complete — ${total} row(s) deleted.`,
+      );
     } catch (err) {
       toast.error((err as Error).message ?? "Purge failed");
     }
@@ -387,7 +404,7 @@ function RetentionCard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <DaysField
             label="Audit events"
             value={vAudit}
@@ -406,7 +423,20 @@ function RetentionCard() {
             onChange={setJobs}
             sub="Scheduler history"
           />
+          <DaysField
+            label="Login attempts"
+            value={vLogins}
+            onChange={setLogins}
+            sub="Security log"
+          />
         </div>
+
+        <p className="text-xs text-fg-muted">
+          Audit records covered by AMLA §9 are never deleted by this sweep at
+          any setting — only report and assistant rows are. Past the audit
+          window the records that stay have their IP address and browser string
+          cleared instead, which is counted separately below.
+        </p>
 
         <div className="flex items-center gap-2">
           <Button onClick={onSave} disabled={!dirty} loading={update.isPending}>
@@ -460,6 +490,23 @@ function RetentionCard() {
                 {purgeResult.cutoffs.jobRun
                   ? ` (before ${formatDateTime(purgeResult.cutoffs.jobRun)})`
                   : " (window is 0 — never purged)"}
+              </li>
+              <li>
+                Login attempts: {purgeResult.deleted.loginAttempts} deleted
+                {purgeResult.cutoffs.loginAttempt
+                  ? ` (before ${formatDateTime(purgeResult.cutoffs.loginAttempt)})`
+                  : " (window is 0 — never purged)"}
+              </li>
+              {/*
+                Its own line rather than a second number on the audit line.
+                An operator scanning this list is checking one thing — that
+                the audit log did not lose records — and a redaction count
+                sitting next to a deletion count reads as if it did.
+              */}
+              <li>
+                Audit PII redacted: {purgeResult.redacted.auditEvents} row
+                {purgeResult.redacted.auditEvents === 1 ? "" : "s"} kept, IP
+                address and browser string cleared
               </li>
             </ul>
           </div>

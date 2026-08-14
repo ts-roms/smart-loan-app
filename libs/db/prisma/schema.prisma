@@ -1902,6 +1902,30 @@ model AuditEvent {
   reason              String?
 
   actor User @relation("AuditActor", fields: [actorId], references: [id])
+  // ─── APPEND-ONLY IS ENFORCED IN THE DATABASE ─────────────────────────
+  //
+  // 20260814160000_audit_append_only puts a BEFORE UPDATE OR DELETE row
+  // trigger and a BEFORE TRUNCATE statement trigger on this table. Prisma
+  // cannot express a trigger, so the migration is the source of truth —
+  // the same arrangement as the partial indexes below.
+  //
+  // What that means for anyone writing code against this model:
+  //
+  //   * `prisma.auditEvent.update/updateMany/delete/deleteMany` FAIL with
+  //     SQLSTATE AP001 unless the transaction has claimed a window. There
+  //     is no repository method for either and there should not be one.
+  //   * Deleting is the retention purge's privilege alone
+  //     (`claimAuditPurgeWindow`), and even it may only reach the closed
+  //     operational action list in apps/api/.../audit-retention.ts.
+  //   * The ONLY permitted update is nulling `ipAddress` and `userAgent`
+  //     together under `claimAuditRedactionWindow` — the §71 redaction
+  //     path. The trigger checks the shape, not just the flag, so that
+  //     window cannot be used to rewrite `action` or `payload`.
+  //   * Correcting a wrong audit row means WRITING A NEW ROW that
+  //     describes the correction. That is what append-only means.
+  //
+  // Both helpers live in libs/db/src/lib/audit-append-only.ts.
+  //
   // AuditEvent_impersonatedById_idx exists in every database but is NOT
   // declared here, on purpose. 20260523100000_audit_impersonation built it
   // as a PARTIAL index (WHERE "impersonatedById" IS NOT NULL — skinny,
@@ -1968,6 +1992,29 @@ model LoginAttempt {
   requestId     String?
   createdAt     DateTime @default(now())
 
+  // ─── Two things that look like omissions and are not ─────────────────
+  //
+  // 1. NO APPEND-ONLY TRIGGER, unlike AuditEvent. The guard added by
+  //    20260814160000_audit_append_only stops at the table §56 names.
+  //    Extending it here would buy little and cost a lot: this table has
+  //    exactly one writer (LoginAttemptRepository.record, insert-only),
+  //    no update path anywhere in the codebase, and the two legitimate
+  //    mutations it does have — the erasure carve-out below and its own
+  //    retention sweep — are on the §71 erasure path and the nightly job
+  //    respectively. Putting a hard database error in front of a
+  //    right-to-erasure request, to protect a table nothing mutates, is
+  //    the wrong trade. Revisit if a second writer ever appears.
+  //
+  // 2. `userId` HAS NO FOREIGN KEY (see the model comment above), so no
+  //    cascade reaches these rows when a User goes. An erasure routine
+  //    that deletes "rows where userId = X" by column name WOULD reach
+  //    them, and would destroy the evidence of attacks AGAINST that user
+  //    — the forty failures before the success are a record about the
+  //    attacker, not about the account holder. So erasure NULLS `userId`
+  //    and keeps the row: ComplianceService.eraseCustomer unlinks here
+  //    rather than deleting. Anything else added later that erases a user
+  //    must do the same.
+  //
   /// "Is this account under attack?" — the lockout/alerting query.
   @@index([email, createdAt(sort: Desc)])
   /// "Is this source sweeping us?" — the same question asked per origin,
@@ -3527,6 +3574,16 @@ model SystemConfig {
   notificationRetentionDays Int @default(365)
   /// JobRun retention. Default 90 days; pure telemetry.
   jobRunRetentionDays       Int @default(90)
+  /// LoginAttempt retention. Default 730 days.
+  ///
+  /// Its own knob rather than a share of the audit one: the audit window
+  /// is pinned to the AMLA §9 five-year floor because of what audit rows
+  /// evidence, while the security log is high-volume and almost entirely
+  /// personal data (an IP and a typed email per row, most belonging to
+  /// people who are not customers). Those pull opposite ways and one
+  /// number cannot serve both. Two years still spans a credential-stuffing
+  /// campaign that crosses an annual review.
+  loginAttemptRetentionDays Int @default(730)
 
   // ── Per-tenant notification providers ──────────────────────────────
   // Each tenant can bring its own Twilio + SendGrid credentials. When

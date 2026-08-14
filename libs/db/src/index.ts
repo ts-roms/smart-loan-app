@@ -124,6 +124,13 @@ export {
   type AdoptExistingOptions,
   type AdoptExistingResult,
 } from "./lib/adopt-existing";
+export {
+  AUDIT_PURGE_SETTING,
+  AUDIT_REDACTION_SETTING,
+  claimAuditPurgeWindow,
+  claimAuditRedactionWindow,
+  type AuditWindowClient,
+} from "./lib/audit-append-only";
 export { contains, searchTokens, tokenizedWhere } from "./lib/search";
 export {
   resolvePaging,

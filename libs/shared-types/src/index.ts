@@ -2325,6 +2325,13 @@ export interface RetentionPolicyView {
   notificationRetentionDays: number;
   jobRunRetentionDays: number;
   /**
+   * The login-attempt security log's own window. Separate from the audit
+   * one on purpose: the audit window is pinned to the AMLA §9 floor by
+   * what audit rows evidence, and this log is high-volume personal data
+   * with no such floor under it.
+   */
+  loginAttemptRetentionDays: number;
+  /**
    * True when the audit window is under the AMLA §9 five-year floor.
    * The server computes it; the UI's job is to make it unmissable, not
    * to re-derive it.
@@ -2339,18 +2346,34 @@ export interface RetentionPurgeResult {
     auditRetentionDays: number;
     notificationRetentionDays: number;
     jobRunRetentionDays: number;
+    loginAttemptRetentionDays: number;
   };
   /** Null when a window is 0 ("never purge") — nothing was cut off. */
   cutoffs: {
     audit: string | null;
     notification: string | null;
     jobRun: string | null;
+    loginAttempt: string | null;
   };
   deleted: {
     auditEvents: number;
     notifications: number;
     jobRuns: number;
+    loginAttempts: number;
   };
+  /**
+   * Audit rows whose `ipAddress`/`userAgent` were nulled in place rather
+   * than deleted — the §71 path for records §56 will not let go.
+   *
+   * Kept out of `deleted` deliberately: "we minimised the personal data on
+   * a record we kept" and "we destroyed a record" are different answers to
+   * a regulator, and one number cannot carry both.
+   */
+  redacted: {
+    auditEvents: number;
+  };
+  /** The closed list of audit actions the run was permitted to delete. */
+  auditActionsInScope: string[];
 }
 
 /**
