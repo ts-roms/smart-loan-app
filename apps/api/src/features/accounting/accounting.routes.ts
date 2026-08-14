@@ -29,6 +29,8 @@ import {
   periodResponseSchema,
   portfolioSummaryResponseSchema,
   rangeQuerySchema,
+  reverseBulkResponseSchema,
+  reverseBulkSchema,
   reverseSingleResponseSchema,
   seedChartResponseSchema,
   trialBalanceResponseSchema,
@@ -314,14 +316,34 @@ export async function accountingRoutes(app: FastifyInstance) {
     journal.reverse,
   );
   /*
-   * No schema on reverse-bulk. It answers 207 Multi-Status — partial
-   * failure is the point — and `routeSchema` has slots for 200/201/202
-   * only. Documenting it as a 200 would publish a status the route never
-   * sends, which is worse than the honest blank; see the report note.
+   * 207 Multi-Status, and now documented as such.
+   *
+   * This was the last undocumented operation in the group, left blank
+   * because `routeSchema` had slots for 200/201/202 only and publishing
+   * a 200 it never sends would have been worse than saying nothing. The
+   * slot exists now, so the honest blank is no longer the honest answer.
+   *
+   * Unlike `/journal/:id/reverse` above, the body here is NOT optional —
+   * `reverseBulk` parses `req.body` with no `?? {}` fallback and
+   * `entryIds` is required — so attaching the schema rejects nothing the
+   * handler accepts today.
    */
   app.post(
     "/journal/reverse-bulk",
-    { preHandler: app.requirePermission("accounting.reverse") },
+    {
+      preHandler: app.requirePermission("accounting.reverse"),
+      schema: routeSchema({
+        summary:
+          "Reverse many entries in one call. Answers 207 Multi-Status: " +
+          "per-entry results plus succeeded/failed counts, because a " +
+          "batch routinely lands in part. Retry only the failed rows.",
+        tags: TAGS,
+        body: reverseBulkSchema,
+        response: reverseBulkResponseSchema,
+        status: 207,
+        errors: [400, 401, 403],
+      }),
+    },
     journal.reverseBulk,
   );
 

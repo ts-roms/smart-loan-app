@@ -183,6 +183,18 @@ export const ERRORS = {
       "Retrying the same request unchanged will fail the same way.",
     ...content(ERROR_BODY),
   },
+  410: {
+    description:
+      "The thing existed and has lapsed. Distinct from 404 on purpose: " +
+      "the link was real, so the answer is to issue a new one, not to " +
+      "conclude it never existed. Every co-maker consent operation " +
+      "answers this once the invite passes its expiry.",
+    ...content(ERROR_BODY),
+  },
+  413: {
+    description: "The uploaded file exceeds the size cap.",
+    ...content(ERROR_BODY),
+  },
   429: { description: "Rate limited.", ...content(ERROR_BODY) },
 } as const;
 

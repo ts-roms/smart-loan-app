@@ -70,22 +70,20 @@ const rateLimit = {
  * are already public API for an anonymous form, and the change reveals
  * nothing about whether the token was real.
  *
- * ─── Two statuses these operations send that the spec cannot say ─────
+ * ─── Two statuses these operations send, now declared ────────────────
  *
- * `ERRORS` in lib/openapi.ts has no 410 and no 413, and both are
- * genuinely reachable:
+ * `ERRORS` in lib/openapi.ts had no 410 and no 413, so for two batches
+ * both were reachable here and absent from the spec. They were left
+ * undeclared rather than hand-rolled locally — a second error envelope
+ * defined in this file would be exactly the divergence the shared
+ * components exist to prevent. They are now central, and declared:
  *
- *   • 410 Gone — every route here answers it for an EXPIRED invite, and
- *     it is a meaningful distinction from 404 (the link was real; it
- *     lapsed). An integrator wants to tell "resend the invite" from
- *     "this link never existed".
- *   • 413 — /upload returns it when `storeUpload` rejects an oversized
- *     file.
- *
- * Left undeclared rather than hand-rolled: a second error envelope
- * defined locally would be exactly the divergence the shared components
- * exist to prevent. Both are reported for a follow-up that adds them to
- * `ERRORS` centrally.
+ *   • 410 Gone — EVERY route in this file answers it for an expired
+ *     invite, and it is a meaningful distinction from 404 (the link was
+ *     real; it lapsed). An integrator needs to tell "resend the invite"
+ *     from "this link never existed", and 404 cannot carry that.
+ *   • 413 — /upload only, when `storeUpload` rejects an oversized file.
+ *     The other three routes never touch a file and never send it.
  */
 
 export async function coMakerConsentRoutes(app: FastifyInstance) {
@@ -138,7 +136,7 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
         tags: TAGS,
         params: tokenParamSchema,
         response: consentViewResponseSchema,
-        errors: [404, 429],
+        errors: [404, 410, 429],
       }),
     },
     async (req: FastifyRequest<{ Params: { token: string } }>, reply) => {
@@ -221,7 +219,7 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
         params: tokenParamSchema,
         body: respondSchema,
         response: respondResponseSchema,
-        errors: [400, 404, 409, 429],
+        errors: [400, 404, 409, 410, 429],
       }),
     },
     async (req: FastifyRequest<{ Params: { token: string } }>, reply) => {
@@ -269,8 +267,8 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
        * every real request. The response is documented; the request is
        * a file, which routeSchema has no way to describe.
        *
-       * The 413 this can answer is not in ERRORS — see the note at the
-       * top of this file.
+       * This is the only route in the file that can answer 413, and it
+       * is declared below.
        */
       schema: routeSchema({
         summary:
@@ -280,7 +278,7 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
         params: tokenParamSchema,
         response: uploadResponseSchema,
         status: 201,
-        errors: [400, 404, 429],
+        errors: [400, 404, 410, 413, 429],
       }),
     },
     async (req: FastifyRequest<{ Params: { token: string } }>, reply) => {
@@ -325,7 +323,7 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
         body: documentSchema,
         response: documentResponseSchema,
         status: 201,
-        errors: [400, 404, 409, 429],
+        errors: [400, 404, 409, 410, 429],
       }),
     },
     async (req: FastifyRequest<{ Params: { token: string } }>, reply) => {

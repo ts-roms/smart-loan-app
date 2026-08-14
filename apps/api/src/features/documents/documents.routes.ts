@@ -29,6 +29,26 @@
  * `loan.customerId === customerId` before rendering a byte. Ownership
  * IS the authorization there, so `portal.self` would be redundant
  * ceremony on top of a check that already can't be bypassed.
+ *
+ * ## Why NONE of these six carry a response schema
+ *
+ * Every route in this file answers `application/pdf` bytes — see
+ * `sendPdf` in helpers.ts, which sets the content type and writes a
+ * Buffer. `routeSchema` describes an `application/json` body and
+ * nothing else, so there are exactly two things it could say here and
+ * both are false: a JSON object shape these routes never send, or (by
+ * omitting `response`) a `204 No body` for a call whose entire purpose
+ * is the body.
+ *
+ * So they are deliberately blank, on the same grounds as
+ * `portal/ledger.pdf` and `customers/:id/ledger.pdf`. This is the
+ * documented exception, not an unfinished corner — describing a PDF
+ * stream needs a non-JSON content-type slot in `routeSchema`, which is
+ * a change to the mechanism rather than to these routes.
+ *
+ * The 404 they can answer (unknown loan, or a portal caller asking for
+ * someone else's loan) is real but cannot be declared on its own:
+ * `errors` only ever appears alongside a described success.
  */
 
 import { LoanRepository } from "@loan/db";

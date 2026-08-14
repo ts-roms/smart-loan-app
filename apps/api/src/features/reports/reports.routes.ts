@@ -202,6 +202,31 @@ export async function reportRoutes(app: FastifyInstance) {
     },
   );
 
+  /*
+   * No schema on the dispatcher, and unlike its two siblings above that
+   * is not an omission.
+   *
+   * `/:type` serves every compliance report through one handler, and
+   * the row shape differs per type — the CSV serializer below it takes
+   * the UNION of all keys precisely because "rows may have different
+   * shape". There is no single object to describe. The only schema that
+   * would fit all of them is `z.array(z.record(z.unknown()))`, which
+   * publishes "an array of objects" and stops: exactly the schema
+   * written to hit a coverage target that openapi.coverage.test.ts
+   * warns about in its header.
+   *
+   * `?format=csv` also streams `text/csv`, though on its own that would
+   * not have been disqualifying — `/customers/:id/ledger` documents its
+   * JSON shape and notes the CSV variant in the summary. The difference
+   * there is that the ledger HAS one shape.
+   *
+   * `/roll-rate` and `/product-profitability` are documented above for
+   * the same reason inverted: each has exactly one payload, which is
+   * why they were pulled out as static routes to begin with.
+   *
+   * Recorded in the UNDESCRIBED list in openapi.coverage.test.ts, which
+   * asserts the count so this cannot quietly become two.
+   */
   app.get<{ Params: { type: string } }>(
     "/:type",
     { preHandler: app.requirePermission("reports.read") },

@@ -28,8 +28,18 @@ import {
 } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { routeSchema } from "../../lib/openapi";
 import { PreAssessmentController } from "./pre-assessment.controller";
 import { PreAssessmentService } from "./pre-assessment.service";
+import {
+  preAssessmentIdParamSchema,
+  preAssessmentListResponseSchema,
+  preAssessmentQuerySchema,
+  preAssessmentResponseSchema,
+  preAssessmentSchema,
+} from "./schemas";
+
+const TAGS = ["pre-assessment"];
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -38,7 +48,14 @@ declare module "fastify" {
 }
 
 export async function preAssessmentRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", app.authenticate);
+  /*
+   * `onRequest`, because all three routes now carry request schemas and
+   * Fastify validates between `onRequest` and `preHandler`. At
+   * `preHandler` an anonymous POST with a bad body would answer 400
+   * describing the underwriting terms — internal policy — to a caller
+   * who never authenticated.
+   */
+  app.addHook("onRequest", app.authenticate);
   app.addHook("preHandler", app.resolveTenant);
   app.addHook("preHandler", async (req: FastifyRequest) => {
     const prisma = req.tenantCtx.prisma;
@@ -62,17 +79,53 @@ export async function preAssessmentRoutes(app: FastifyInstance) {
 
   app.post(
     "/",
-    { preHandler: app.requirePermission("pre_assessment.run") },
+    {
+      preHandler: app.requirePermission("pre_assessment.run"),
+      schema: routeSchema({
+        summary:
+          "Run the decisioning rules before an application exists, and " +
+          "keep the answer. Subject is either a customer on file (FULL " +
+          "basis) or a walk-in prospect (INDICATIVE). 404 names an " +
+          "unknown `customerId`.",
+        tags: TAGS,
+        body: preAssessmentSchema,
+        response: preAssessmentResponseSchema,
+        status: 201,
+        errors: [400, 401, 403, 404],
+      }),
+    },
     ctrl.run,
   );
   app.get(
     "/",
-    { preHandler: app.requirePermission("pre_assessment.read") },
+    {
+      preHandler: app.requirePermission("pre_assessment.read"),
+      schema: routeSchema({
+        summary:
+          "Recent pre-assessments, newest first. Every filter is " +
+          "optional; the default is the 50 most recent.",
+        tags: TAGS,
+        querystring: preAssessmentQuerySchema,
+        response: preAssessmentListResponseSchema,
+        errors: [400, 401, 403],
+      }),
+    },
     ctrl.list,
   );
   app.get<{ Params: { id: string } }>(
     "/:id",
-    { preHandler: app.requirePermission("pre_assessment.read") },
+    {
+      preHandler: app.requirePermission("pre_assessment.read"),
+      schema: routeSchema({
+        summary:
+          'One pre-assessment, by uuid or by its "PA-…" number, with ' +
+          "the customer joined in.",
+        tags: TAGS,
+        params: preAssessmentIdParamSchema,
+        response: preAssessmentResponseSchema,
+        errors: [401, 403, 404],
+      }),
+    },
     ctrl.get,
   );
 }

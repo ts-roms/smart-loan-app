@@ -396,3 +396,39 @@ export const accrueResponseSchema = z.object({
   posted: z.number().int(),
   skipped: z.number().int(),
 });
+
+/**
+ * Bulk reversal, reported per entry — the body of a **207 Multi-Status**.
+ *
+ * 207 because partial failure is the normal outcome here rather than an
+ * edge case: a batch of twenty entries where three are already reversed
+ * and one sits in a closed period succeeds sixteen times and fails four,
+ * in a single call. A 200 would say the whole batch landed and a 400
+ * would say none of it did; both are wrong most of the time.
+ *
+ * `succeeded`/`failed` are the counts a UI puts in a toast. `results`
+ * is what makes the call actionable — it says which entry got which
+ * answer, so an operator can retry exactly the ones that did not land
+ * instead of re-submitting the batch and double-reversing the rest.
+ *
+ * `reversalId`/`reversalNumber` appear only on a row that succeeded and
+ * `error` only on one that did not, so all three are optional rather
+ * than nullable — the handler omits them rather than sending null.
+ * `reversalNumber` is declared even though today's repository never
+ * populates it: the service's row type carries it, and an undeclared
+ * field would be silently stripped on the day it starts being set.
+ */
+export const reverseBulkResponseSchema = z.object({
+  results: z.array(
+    z.object({
+      entryId: z.string().uuid(),
+      ok: z.boolean(),
+      reversalId: z.string().uuid().optional(),
+      reversalNumber: z.string().optional(),
+      /** The refusal, verbatim, when `ok` is false. */
+      error: z.string().optional(),
+    }),
+  ),
+  succeeded: z.number().int(),
+  failed: z.number().int(),
+});

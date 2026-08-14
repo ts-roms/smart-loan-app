@@ -10,8 +10,15 @@
 import { AuditLogRepository, EclRepository } from "@loan/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import { routeSchema } from "../../lib/openapi";
 import { EclController } from "./ecl.controller";
 import { EclService } from "./ecl.service";
+import {
+  eclRunListResponseSchema,
+  eclRunResultResponseSchema,
+} from "./schemas";
+
+const TAGS = ["ecl"];
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -39,13 +46,53 @@ export async function eclRoutes(app: FastifyInstance) {
 
   app.get(
     "/runs",
-    { preHandler: app.requirePermission("accounting.read") },
+    {
+      preHandler: app.requirePermission("accounting.read"),
+      schema: routeSchema({
+        summary:
+          "ECL run history, newest period first, capped at 60. Money is " +
+          "returned as exact decimal STRINGS — these are the stored " +
+          "Decimal columns, unprojected.",
+        tags: TAGS,
+        response: eclRunListResponseSchema,
+        errors: [401, 402, 403],
+      }),
+    },
     ctrl.list,
   );
 
+  /*
+   * No `body` schema, deliberately, and this is the trap the previous
+   * two batches measured rather than guessed.
+   *
+   * The controller parses `req.body ?? {}` and every field of
+   * `runSchema` is optional, so `POST /ecl/runs` with no body at all is
+   * a legal call that recomputes the current month. Attaching the body
+   * schema would make Fastify reject that bodyless request with
+   * `body must be object` — turning a working call into a 400 as a side
+   * effect of documenting it. The response is described; the request
+   * stays open because the handler genuinely accepts nothing.
+   *
+   * With no request schema on either route in this group there is also
+   * nothing for Fastify to validate ahead of `preHandler`, which is why
+   * `app.authenticate` can stay where it is above while every group
+   * that DID gain a request schema had to move to `onRequest`.
+   */
   app.post(
     "/runs",
-    { preHandler: app.requirePermission("accounting.accrue") },
+    {
+      preHandler: app.requirePermission("accounting.accrue"),
+      schema: routeSchema({
+        summary:
+          "Recompute expected credit loss and post the provision delta. " +
+          "Body is optional — omitted, it runs the current month. Money " +
+          "here is a NUMBER, unlike the stored history above.",
+        tags: TAGS,
+        response: eclRunResultResponseSchema,
+        status: 201,
+        errors: [400, 401, 402, 403],
+      }),
+    },
     ctrl.run,
   );
 }

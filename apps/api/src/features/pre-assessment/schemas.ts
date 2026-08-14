@@ -77,3 +77,112 @@ export const preAssessmentQuerySchema = z.object({
   take: z.coerce.number().int().min(1).max(200).optional(),
 });
 export type PreAssessmentQuery = z.infer<typeof preAssessmentQuerySchema>;
+
+/* ─── Responses ────────────────────────────────────────────────────────*/
+
+/** `:id` on the detail route — a uuid OR a "PA-2026-000123" number. */
+export const preAssessmentIdParamSchema = z.object({
+  /** Not `.uuid()`: `findByIdOrNumber` accepts the human number too. */
+  id: z.string().min(1),
+});
+
+/**
+ * One pre-assessment, as the service hands it out.
+ *
+ * **Money is a NUMBER here, not a decimal string** — the usual rule for
+ * this codebase inverted, and deliberately so. `principal`,
+ * `annualInterestRate` and `monthlyIncome` are `Decimal` columns, but
+ * `toWire` runs every one of them through `Number(...)` before the
+ * payload leaves the service, so no Decimal ever reaches the
+ * serialiser. Declaring them as strings would be exactly as wrong as
+ * declaring the ECL history's stored Decimals as numbers.
+ *
+ * `basis` is derived rather than stored: FULL when the subject is a
+ * customer on file (score, AML and KYC all readable), INDICATIVE for a
+ * walk-in prospect where there is nothing to read.
+ */
+const anomalyFlagSchema = z.object({
+  code: z.enum([
+    "PRINCIPAL_OUTLIER",
+    "TERM_OUTLIER",
+    "RATE_OUTLIER",
+    "APPLICANT_VELOCITY",
+    "PRINCIPAL_TO_INCOME",
+    "INSUFFICIENT_BASELINE",
+  ]),
+  severity: z.enum(["low", "medium", "high"]),
+  message: z.string(),
+  zScore: z.number().nullable(),
+  observed: z.number().nullable(),
+  baseline: z.number().nullable(),
+});
+
+export const preAssessmentResponseSchema = z.object({
+  id: z.string().uuid(),
+  /** "PA-2026-000123". */
+  number: z.string(),
+  source: z.enum(["PORTAL", "OFFICER"]),
+  customerId: z.string().uuid().nullable(),
+  prospectName: z.string().nullable(),
+  prospectPhone: z.string().nullable(),
+  prospectEmail: z.string().nullable(),
+  productCode: z.string(),
+  /** Number, not a decimal string — see the note above. */
+  principal: z.number(),
+  termMonths: z.number().int(),
+  /** Decimal fraction: 0.24 = 24% APR. */
+  annualInterestRate: z.number(),
+  monthlyIncome: z.number(),
+  applicantAge: z.number().int(),
+  verdict: z.enum(["APPROVE", "REVIEW", "REJECT"]),
+  reason: z.string(),
+  matchedRuleId: z.string().nullable(),
+  matchedRuleName: z.string().nullable(),
+  matchedRuleVersion: z.number().int().nullable(),
+  /** FULL for a customer on file; INDICATIVE for a walk-in prospect. */
+  basis: z.enum(["FULL", "INDICATIVE"]),
+  /** Null for a prospect — there is no record to check AML or KYC against. */
+  gates: z
+    .object({
+      amlMatch: z.boolean(),
+      kycComplete: z.boolean(),
+      missingKycDocs: z.array(z.string()),
+      rejectedKycDocs: z.array(z.string()),
+    })
+    .nullable(),
+  /** Always an array, empty rather than absent. */
+  anomalies: z.array(anomalyFlagSchema),
+  context: z.object({
+    principal: z.number(),
+    termMonths: z.number().int(),
+    annualInterestRate: z.number(),
+    productCode: z.string(),
+    creditScore: z.number().nullable(),
+    tier: z.string().nullable(),
+    monthlyIncome: z.number(),
+    existingActiveLoans: z.number().int(),
+  }),
+  /** Set once this assessment became a real application. */
+  loanId: z.string().uuid().nullable(),
+  convertedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+  createdById: z.string().uuid().nullable(),
+  /**
+   * Always present as a key, null for a prospect. Also null on the POST
+   * response specifically: the create path does no relation include, so
+   * the customer is only populated by the two read routes.
+   */
+  customer: z
+    .object({
+      id: z.string().uuid(),
+      number: z.string(),
+      firstName: z.string(),
+      lastName: z.string(),
+    })
+    .nullable(),
+});
+
+/** The list route — a bare array, newest first, no paging envelope. */
+export const preAssessmentListResponseSchema = z.array(
+  preAssessmentResponseSchema,
+);

@@ -453,6 +453,12 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: "/api/v1/kyc",
     permission: "kyc.submit",
     roles: ["LOAN_OFFICER", "ADMIN"],
+    // See `payload` on StaffRoute above.
+    payload: {
+      customerId: CUSTOMER_ID,
+      documentType: "ID_FRONT",
+      documentUrl: "/uploads/kyc/probe.jpg",
+    },
   },
   {
     group: "kyc",
@@ -460,6 +466,7 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: `/api/v1/kyc/${LOAN_ID}/decide`,
     permission: "kyc.decide",
     roles: ["LOAN_OFFICER", "ADMIN"],
+    payload: { status: "VERIFIED" },
   },
   {
     group: "kyc",
@@ -586,6 +593,21 @@ const STAFF_ROUTES: StaffRoute[] = [
     url: "/api/v1/pre-assessments",
     permission: "pre_assessment.run",
     roles: ["LOAN_OFFICER", "ADMIN"],
+    /*
+     * See `payload` on StaffRoute above. Only the four terms are
+     * required by the PUBLISHED schema — the "customerId, or prospect
+     * details" rule is a zod `.refine`, which does not survive the
+     * translation to JSON Schema and is still enforced by the
+     * controller's own parse. `customerId` is sent anyway so this body
+     * is one a real caller could send, not merely one Fastify admits.
+     */
+    payload: {
+      customerId: CUSTOMER_ID,
+      productCode: "SALARY",
+      principal: 50000,
+      termMonths: 12,
+      annualInterestRate: 0.24,
+    },
   },
 
   // ── payments intents ─────────────────────────────────────────────

@@ -88,3 +88,48 @@ export const confirmSignupSchema = z.object({
     .regex(/^[a-f0-9]+$/, "Malformed token"),
 });
 export type ConfirmSignupInput = z.infer<typeof confirmSignupSchema>;
+
+/* ─── Responses ────────────────────────────────────────────────────────*/
+
+/**
+ * `POST /public/leads` — deliberately says almost nothing.
+ *
+ * `{ ok: true }` and no id. The endpoint is anonymous and rate-limited,
+ * and echoing a record identifier back to an unauthenticated caller
+ * would hand them a handle on a row they have no other way to reach.
+ */
+export const captureLeadResponseSchema = z.object({ ok: z.boolean() });
+
+/**
+ * `POST /public/signup` — 202 Accepted, because nothing is provisioned yet.
+ *
+ * The status is the contract: a tenant has NOT been created at this
+ * point. A confirmation link has been mailed to `adminEmail` and it
+ * lapses at `expiresAt` (24h). **No token appears in this response** —
+ * it only ever travels by mail, which is the entire reason signup is
+ * two steps.
+ */
+export const signupResponseSchema = z.object({
+  ok: z.boolean(),
+  /** Trimmed and lower-cased; the address the link was sent to. */
+  adminEmail: z.string(),
+  expiresAt: z.string().datetime(),
+});
+
+/**
+ * `POST /public/signup/confirm` — 201, the tenant now exists.
+ *
+ * `bootstrapPassword` is shown ONCE and never again; it is null when
+ * provisioning reused an admin that already existed. `licensed` is
+ * false when the trial licence could not be issued — the tenant is
+ * still usable, it just starts without one.
+ */
+export const confirmSignupResponseSchema = z.object({
+  ok: z.boolean(),
+  slug: z.string(),
+  name: z.string(),
+  adminEmail: z.string(),
+  /** Shown once. Null when an existing admin was reused. */
+  bootstrapPassword: z.string().nullable(),
+  licensed: z.boolean(),
+});
