@@ -170,6 +170,31 @@ export const config = {
   paymentProvider: enumOf("PAYMENT_PROVIDER", PAYMENT_PROVIDERS, "MOCK"),
   amlProvider: enumOf("AML_PROVIDER", AML_PROVIDERS, "MOCK"),
 
+  /*
+   * Platform-shared notification credentials. A tenant that sets its
+   * own on SystemConfig overrides these per channel; see
+   * features/system/notification-providers.ts. These are the fallback
+   * every tenant without their own uses, and the only ones the
+   * scheduled reminder jobs see.
+   */
+  sendgridApiKey: str("SENDGRID_API_KEY", ""),
+  sendgridFromEmail: str("SENDGRID_FROM_EMAIL", ""),
+  sendgridFromName: str("SENDGRID_FROM_NAME", ""),
+  twilioAccountSid: str("TWILIO_ACCOUNT_SID", ""),
+  twilioAuthToken: str("TWILIO_AUTH_TOKEN", ""),
+  twilioFromPhone: str("TWILIO_FROM_PHONE", ""),
+  /**
+   * Per-request ceiling on a notification provider call.
+   *
+   * It exists because several call sites await a dispatch inside the
+   * HTTP request path *after* the financial write has committed —
+   * `loans.service.ts` does it for LOAN_DISBURSED. A provider socket
+   * that hangs would hang that response with the money already moved.
+   * Ten seconds is well beyond either provider's normal latency and
+   * well under any sane reverse-proxy timeout.
+   */
+  notificationTimeoutMs: num("NOTIFICATION_TIMEOUT_MS", 10_000),
+
   // ── Local LLM (Ollama) ─────────────────────────────────────────────
   /**
    * When unset, the assistant routes return canned "configure Ollama"
@@ -278,6 +303,43 @@ export function validateConfig(log?: {
         message: `NOTIFICATION_PROVIDER=${config.notificationProvider} but missing: ${missing.join(", ")}`,
       });
     }
+  }
+
+  /*
+   * The mock delivers nothing, and it is the default — so a production
+   * deployment that never set NOTIFICATION_PROVIDER gets it, silently.
+   * That is how "no email or SMS has ever been delivered on any
+   * deployment" went unnoticed: the borrower's payment-due reminder
+   * became a `console.log` and a `Notification` row marked SENT, which
+   * is indistinguishable in the UI from a real delivery.
+   *
+   * A warning is not enough, for the same reason STORAGE_DRIVER=S3 with
+   * no bucket is not a warning: the operator believes messages are going
+   * out, and nothing in the product contradicts them. Refuse to boot and
+   * name the fix.
+   *
+   * SES is grouped with MOCK deliberately. It is a valid value of
+   * NOTIFICATION_PROVIDER with no adapter behind it, so selecting it in
+   * production yields the same silent mock by a different route. When an
+   * SES adapter lands, move it out of this list.
+   */
+  const unimplemented: NotificationProviderName[] = ["SES"];
+  if (isProd && config.notificationProvider === "MOCK") {
+    issues.push({
+      level: "error",
+      message:
+        "NOTIFICATION_PROVIDER=MOCK in production — the mock delivers nothing " +
+        "while recording every send as SENT. Set SENDGRID (email) or TWILIO " +
+        "(SMS) with their credentials, or set it explicitly for a deployment " +
+        "that genuinely sends no notifications.",
+    });
+  } else if (isProd && unimplemented.includes(config.notificationProvider)) {
+    issues.push({
+      level: "error",
+      message:
+        `NOTIFICATION_PROVIDER=${config.notificationProvider} has no adapter ` +
+        "and falls back to the mock, which delivers nothing. Use SENDGRID or TWILIO.",
+    });
   }
   if (config.paymentProvider !== "MOCK") {
     const missing = expectedPaymentCreds(config.paymentProvider);

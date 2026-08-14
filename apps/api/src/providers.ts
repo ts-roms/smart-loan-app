@@ -3,9 +3,8 @@
  * dependency based on env config. Returns the same interface either way
  * so callers don't branch.
  *
- * Today every real provider is a TODO that falls back to its mock; the
- * factory shape is in place so wiring a real one later is a single-file
- * change.
+ * SENDGRID and TWILIO are real; SES is still a TODO that falls back to
+ * its mock. AML is mock-only.
  *
  * Pattern:
  *   const provider = createNotificationProvider(config.notificationProvider);
@@ -16,9 +15,12 @@
  * by routes/payments.ts. We don't duplicate it here.
  */
 
+import { config } from "./config";
 import type { AmlProviderName, NotificationProviderName } from "./config";
 import {
   MockNotificationProvider,
+  SendGridProvider,
+  TwilioProvider,
   type NotificationProvider,
 } from "@loan/notifications";
 import { MockAmlProvider, type AmlProvider } from "@loan/screening";
@@ -27,12 +29,20 @@ import { MockAmlProvider, type AmlProvider } from "@loan/screening";
  * Notification provider factory. Switch on env at boot; the result is a
  * single instance held for the life of the process.
  *
- * Wiring a real provider:
- *   1. Add a class implementing NotificationProvider in @loan/notifications
- *      (e.g. SendGridProvider).
+ * The credential checks here are a floor, not the gate. `validateConfig`
+ * already refuses to boot in production when a named provider's
+ * credentials are missing, and refuses MOCK in production outright. This
+ * function has to stay total for development, where an operator may have
+ * set the provider name before pasting the keys — so it degrades to the
+ * mock with a warning rather than throwing, and production never reaches
+ * that branch because boot already failed.
+ *
+ * Wiring another provider:
+ *   1. Add a class implementing NotificationProvider in @loan/notifications.
  *   2. Add the case below.
- *   3. Document the required env vars in .env.example + config.ts.
- *   4. Set NOTIFICATION_PROVIDER=SENDGRID in the deploy env.
+ *   3. Document the required env vars in .env.example + config.ts, and add
+ *      them to `expectedNotificationCreds`.
+ *   4. Remove it from the `unimplemented` list in validateConfig.
  */
 export function createNotificationProvider(
   name: NotificationProviderName,
@@ -41,8 +51,39 @@ export function createNotificationProvider(
   switch (name) {
     case "MOCK":
       return new MockNotificationProvider();
-    case "SENDGRID":
-    case "TWILIO":
+
+    case "SENDGRID": {
+      if (!config.sendgridApiKey || !config.sendgridFromEmail) {
+        return degrade(name, "SENDGRID_API_KEY + SENDGRID_FROM_EMAIL", log);
+      }
+      return new SendGridProvider({
+        apiKey: config.sendgridApiKey,
+        fromEmail: config.sendgridFromEmail,
+        fromName: config.sendgridFromName || undefined,
+        timeoutMs: config.notificationTimeoutMs,
+      });
+    }
+
+    case "TWILIO": {
+      if (
+        !config.twilioAccountSid ||
+        !config.twilioAuthToken ||
+        !config.twilioFromPhone
+      ) {
+        return degrade(
+          name,
+          "TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_FROM_PHONE",
+          log,
+        );
+      }
+      return new TwilioProvider({
+        accountSid: config.twilioAccountSid,
+        authToken: config.twilioAuthToken,
+        fromNumber: config.twilioFromPhone,
+        timeoutMs: config.notificationTimeoutMs,
+      });
+    }
+
     case "SES":
       log?.warn?.(
         {},
@@ -50,6 +91,24 @@ export function createNotificationProvider(
       );
       return new MockNotificationProvider();
   }
+}
+
+/**
+ * Development-only fallback. Never reached in production: `validateConfig`
+ * turns the same missing-credential condition into a refusal to boot.
+ */
+function degrade(
+  name: string,
+  needed: string,
+  log?: { warn: (obj: object, msg: string) => void },
+): NotificationProvider {
+  log?.warn?.(
+    {},
+    `[providers] NOTIFICATION_PROVIDER=${name} but ${needed} not set — ` +
+      "falling back to MOCK, which delivers nothing. " +
+      "This is a hard failure in production; see config.ts.",
+  );
+  return new MockNotificationProvider();
 }
 
 /**

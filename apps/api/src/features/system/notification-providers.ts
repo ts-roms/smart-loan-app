@@ -23,17 +23,22 @@
  * onboarding gradually shouldn't have to fill in every column to
  * start sending email. Each channel decides independently.
  *
- * ## Today's reality vs. tomorrow's
+ * ## Design: a provider per send, not per tenant
  *
- * The actual Twilio + SendGrid clients are still placeholders in
- * `providers.ts` — when `NOTIFICATION_PROVIDER=TWILIO` is set, the
- * factory falls back to MOCK with a warn-log. This file wires the
- * CREDENTIAL PATH so the moment a real provider class lands, the
- * per-tenant override flows through without changes elsewhere.
+ * The builders below construct a `TwilioProvider` /
+ * `SendGridProvider` on each dispatch rather than caching one per
+ * tenant. Both are stateless value objects over a `fetch` — no
+ * socket pool, no handshake, no client to warm — so construction is
+ * an object literal, and caching them would reintroduce exactly the
+ * invalidation problem the per-call SystemConfig read exists to
+ * avoid.
  *
- * The columns on SystemConfig + the admin endpoints are the
- * shippable piece TODAY. The real-provider implementation is a
- * separate commit.
+ * ## Today's reality
+ *
+ * The real adapters now exist in `@loan/notifications`
+ * (`sendgrid.ts`, `twilio.ts`) and the builders below construct
+ * them from the tenant's own credentials. Neither has been run
+ * against a live account — see the header of each adapter.
  */
 
 import type {
@@ -42,8 +47,14 @@ import type {
   SendResult,
   Channel,
 } from "@loan/notifications";
-import { MockNotificationProvider } from "@loan/notifications";
+import { SendGridProvider, TwilioProvider } from "@loan/notifications";
 import type { PrismaClient } from "@loan/db";
+
+/** Injection seam for tests; nothing in production passes these. */
+export interface TenantProviderOptions {
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}
 
 interface TenantProviderConfig {
   twilioAccountSid: string | null;
@@ -59,11 +70,10 @@ interface TenantProviderConfig {
  * `send()`, checks SystemConfig to decide whether to use the
  * tenant's own provider for the requested channel or the fallback.
  *
- * Pure stub today: when a tenant has Twilio creds configured, the
- * SMS branch logs `provider:twilio (tenant)` instead of `mock`. When
- * the real Twilio client class lands in @loan/notifications, swap
- * the `buildTenantProvider*` helpers below to construct + dispatch
- * through it.
+ * When a tenant has Twilio creds configured, the SMS branch builds a
+ * real `TwilioProvider` over those credentials; likewise SendGrid
+ * for EMAIL. Anything else — IN_APP, or a channel whose credentials
+ * are absent or partial — goes to the platform-shared fallback.
  */
 export class TenantAwareNotificationProvider implements NotificationProvider {
   readonly name = "tenant-aware";
@@ -72,6 +82,7 @@ export class TenantAwareNotificationProvider implements NotificationProvider {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly fallback: NotificationProvider,
+    private readonly opts: TenantProviderOptions = {},
   ) {}
 
   async send(input: SendInput): Promise<SendResult> {
@@ -104,10 +115,10 @@ export class TenantAwareNotificationProvider implements NotificationProvider {
     cfg: TenantProviderConfig,
   ): NotificationProvider {
     if (channel === "SMS" && hasTwilio(cfg)) {
-      return buildTenantTwilioProvider(cfg);
+      return buildTenantTwilioProvider(cfg, this.opts);
     }
     if (channel === "EMAIL" && hasSendgrid(cfg)) {
-      return buildTenantSendgridProvider(cfg);
+      return buildTenantSendgridProvider(cfg, this.opts);
     }
     return this.fallback;
   }
@@ -134,52 +145,45 @@ function hasSendgrid(cfg: TenantProviderConfig): cfg is TenantProviderConfig & {
 
 // ─── Provider builders ───────────────────────────────────────────────
 //
-// Today's implementations are MOCK-with-attribution: they log the
-// tenant-overridden send so operators can verify the override is
-// active. When the real Twilio + SendGrid clients land, replace
-// the bodies below with the real client constructors. The signatures
-// stay the same.
+// Real adapters over the tenant's own credentials. The `name` each
+// carries — `twilio (tenant)` / `sendgrid (tenant)` — is what lands
+// in error messages and lets an operator reading a FAILED
+// Notification row tell a tenant-credential problem from a
+// platform-credential one. That attribution was the only genuinely
+// useful thing the old tagged mock did, so it is kept.
 
-function buildTenantTwilioProvider(cfg: {
-  twilioAccountSid: string;
-  twilioAuthToken: string;
-  twilioFromNumber: string;
-}): NotificationProvider {
-  // Pure stub. When @loan/notifications gets a real TwilioProvider
-  // class, do:
-  //   return new TwilioProvider({
-  //     accountSid: cfg.twilioAccountSid,
-  //     authToken: cfg.twilioAuthToken,
-  //     fromNumber: cfg.twilioFromNumber,
-  //   });
-  void cfg;
-  return new TaggedMockProvider("twilio (tenant)");
+function buildTenantTwilioProvider(
+  cfg: {
+    twilioAccountSid: string;
+    twilioAuthToken: string;
+    twilioFromNumber: string;
+  },
+  opts: TenantProviderOptions = {},
+): NotificationProvider {
+  return new TwilioProvider({
+    accountSid: cfg.twilioAccountSid,
+    authToken: cfg.twilioAuthToken,
+    fromNumber: cfg.twilioFromNumber,
+    name: "twilio (tenant)",
+    fetchImpl: opts.fetchImpl,
+    timeoutMs: opts.timeoutMs,
+  });
 }
 
-function buildTenantSendgridProvider(cfg: {
-  sendgridApiKey: string;
-  sendgridFromEmail: string;
-  sendgridFromName?: string | null;
-}): NotificationProvider {
-  void cfg;
-  return new TaggedMockProvider("sendgrid (tenant)");
-}
-
-/**
- * Mock provider that reports a custom name in the audit trail. Used
- * until real Twilio/SendGrid clients are implemented. Lets the
- * Notification row's `provider` column show `twilio (tenant)` vs
- * `MOCK` so operators can verify the per-tenant override is
- * actually taking effect.
- */
-class TaggedMockProvider implements NotificationProvider {
-  readonly channels: ReadonlySet<Channel> = new Set(["EMAIL", "SMS", "IN_APP"]);
-  constructor(public readonly name: string) {}
-
-  async send(input: SendInput): Promise<SendResult> {
-    // Inherit the mock's behavior — log + return a synthetic
-    // providerRef so the Notification row stays consistent.
-    const inner = new MockNotificationProvider();
-    return inner.send(input);
-  }
+function buildTenantSendgridProvider(
+  cfg: {
+    sendgridApiKey: string;
+    sendgridFromEmail: string;
+    sendgridFromName?: string | null;
+  },
+  opts: TenantProviderOptions = {},
+): NotificationProvider {
+  return new SendGridProvider({
+    apiKey: cfg.sendgridApiKey,
+    fromEmail: cfg.sendgridFromEmail,
+    fromName: cfg.sendgridFromName,
+    name: "sendgrid (tenant)",
+    fetchImpl: opts.fetchImpl,
+    timeoutMs: opts.timeoutMs,
+  });
 }
