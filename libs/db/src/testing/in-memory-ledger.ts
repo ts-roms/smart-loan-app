@@ -75,12 +75,28 @@ export interface FakeSchedule {
   };
 }
 
+export interface FakeLoanApp {
+  id: string;
+  number: string;
+  /** Ids of this loan's `LoanSchedule` rows. */
+  scheduleIds: string[];
+}
+
+export interface FakeWaiver {
+  loanId: string;
+  /** Exact 2-decimal string, as `Decimal(14,2)` stores it. */
+  waivedAmount: string;
+}
+
 export interface LedgerFixture {
   accounts: FakeAccount[];
   entries: FakeEntry[];
   lines: FakeLine[];
   /** Only needed by the late-fee accrual tests (F1). */
   schedules?: FakeSchedule[];
+  /** Only needed by the accrued-penalty read-path tests. */
+  loans?: FakeLoanApp[];
+  waivers?: FakeWaiver[];
 }
 
 export interface QueryCounts {
@@ -349,6 +365,33 @@ export function inMemoryLedger(fixture: LedgerFixture): {
             },
           }));
         return Promise.resolve(rows);
+      },
+    },
+
+    loanApplication: {
+      findFirst: (args: { where: { id?: string; number?: string } }) => {
+        const found = (fixture.loans ?? []).find(
+          (l) =>
+            (args.where.id !== undefined && l.id === args.where.id) ||
+            (args.where.number !== undefined && l.number === args.where.number),
+        );
+        if (!found) return Promise.resolve(null);
+        return Promise.resolve({
+          id: found.id,
+          number: found.number,
+          schedule: found.scheduleIds.map((id) => ({ id })),
+        });
+      },
+    },
+
+    penaltyWaiver: {
+      findMany: (args: { where?: { loanId?: string } }) => {
+        const loanId = args.where?.loanId;
+        return Promise.resolve(
+          (fixture.waivers ?? [])
+            .filter((w) => loanId === undefined || w.loanId === loanId)
+            .map((w) => ({ waivedAmount: new Prisma.Decimal(w.waivedAmount) })),
+        );
       },
     },
 
