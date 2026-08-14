@@ -10,6 +10,94 @@ automation depends on the manifest.
 
 ---
 
+## Unreleased — worktree batch: three P1 defects
+
+### Fixed — ECL re-runs were double-posting to the general ledger
+
+`run()` minted an `EclRun` row and keyed the journal entry on the id it had
+just created, so the unique index had nothing to catch and `postIfAbsent` could
+never fire. The delta did not reset either — `previous` looks for a run with
+`periodEnd <` this one's, and the row just written has `periodEnd` equal — so
+a re-run measured the same movement against the same empty history. **Four runs
+of a ₱780 movement left ₱3,120 of allowance**, with the trial balance still
+tying because each entry balanced internally. The UI told operators "This is
+idempotent — safe to re-run."
+
+The key is now the period the movement represents. A second run recomputes and
+re-stages every loan and returns `ALREADY_POSTED` — not a refusal, because the
+recomputation succeeded; not a second movement, because §12 corrects posted
+history by reversal.
+
+**The obvious fix would have destroyed data.** `sweep-orphaned-entries.mjs`
+joins each `sourceRefType` to its owning table and _deletes_ entries whose
+owner is missing. A period key matches no `EclRun` row, so simply changing the
+key would have made every impairment entry look orphaned and swept the lot.
+`EclPeriod` is mapped as owned-by-nothing.
+
+§81 held: 13 golden tests committed first, driving the real `postEntry` and
+`postIfAbsent` with a stand-in that raises P2002 on a repeated tuple. No
+first-run figure moved — the only assertions that changed are in tests whose
+names described the defect.
+
+### Fixed — the money path now writes audit rows
+
+§56 wants thirteen fields; `AuditEvent` carried six. Worse, disbursement,
+payment, journal post and period close emitted **nothing at all**, so "which IP
+disbursed this loan, under which request" had no answer.
+
+Request context reaches `libs/db` through the seam that already existed — the
+repository takes a per-request impersonator from the route factory, so it takes
+a per-request context the same way. Threading `ip`/`ua`/`requestId` through
+`record()` was rejected: the services that call it sit several frames below the
+route, so every signature would widen and each one would be a place to forget.
+**Fields that exist but stay null on the paths that matter are worse than
+absent fields, because they read as solved.**
+
+`LoginAttempt` is a separate model because it has to be: `AuditEvent.actorId`
+is a NOT NULL FK to `User`, so a failed login against an address that does not
+exist — the brute-force case — cannot be represented at all.
+
+**Financial actions fail closed.** An action that succeeds unaudited is not a
+degraded trail but an undetectable one. Auth is deliberately on the other side:
+refusing a disbursement is safe; refusing every login turns a logging outage
+into a total outage.
+
+Found in passing: `reopenPeriod` took no actor and its update **nulled**
+`closedById`, so reopening a closed month erased the only trace of who closed
+it. And payment reversal does not exist anywhere in the codebase — that §56
+line was unachievable rather than missed.
+
+### Fixed — erasure removes the files it claims to remove
+
+The erasure response told data subjects their uploads were "cleared separately
+by retention job". `runPurge` deleted `auditEvent`, `jobRun` and `notification`
+and never touched storage, so ID photos, payslips and selfies persisted
+indefinitely. Under the Data Privacy Act that is a false statement in a
+regulated reply.
+
+The `KycSubmission` header row stays — it evidences that verification happened
+and AMLA applies to it as to a journal entry. The file behind `documentUrl`
+goes. Delete-then-clear per row, so a cleared column is a true assertion that
+the bytes are gone and a storage failure leaves the pointer as the retry queue.
+`dryRun` **defaults to true**, so forgetting the flag previews rather than
+deletes.
+
+The audit carve-out inverts the obvious design: the disposable set is a
+**closed list** (`action: { in: [...] }`), so anything unrecognised —
+including actions that do not exist yet — is preserved. A protected list with
+`notIn` fails open, and the day someone adds a financial action and forgets it,
+the nightly job would start deleting financial records. This way the mistake
+costs disk. The AMLA floor was a boolean nothing read; a below-floor window is
+now refused.
+
+Four items flagged for legal validation rather than decided: whether
+collection-contact rows are noise or the disputed contact log; whether a legal
+opinion may override the below-floor refusal; the 1,825-day figure itself; and
+whether `RETENTION_PURGE` should stay disposable now its payload records file
+deletions.
+
+---
+
 ## Unreleased — worktree batch: allocation, exposure, pagination, §67
 
 ### Fixed — a live PII leak, and the collections queue crashing at volume
