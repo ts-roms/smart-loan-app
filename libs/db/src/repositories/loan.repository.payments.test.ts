@@ -187,6 +187,18 @@ function makeClient(db: FakeDb): PrismaClient {
         db.schedules
           .filter((s) => s.loanId === where.loanId && s.paidInFullAt === null)
           .sort((a, b) => a.installmentNo - b.installmentNo),
+      /*
+       * Coerces the money columns back to numbers on the way in, because
+       * this fixture models `LoanSchedule` with plain numbers and a real
+       * `Decimal(14, 2)` column does not care what shape the client sent.
+       *
+       * `recordPayment` now writes the progress columns as exact decimal
+       * TEXT ("200.00") rather than a JS float — §11, so the value never
+       * becomes a double on its way to a Decimal column. Postgres stores
+       * both identically; only a stub that assigns whatever it is handed
+       * can tell them apart, and a stub that reports a difference the
+       * database cannot is testing itself rather than the repository.
+       */
       update: async ({
         where,
         data,
@@ -195,7 +207,13 @@ function makeClient(db: FakeDb): PrismaClient {
         data: Record<string, unknown>;
       }) => {
         const row = db.schedules.find((s) => s.id === where.id)!;
-        Object.assign(row, data);
+        const stored = Object.fromEntries(
+          Object.entries(data).map(([k, v]) => [
+            k,
+            k === "interestPaid" || k === "principalPaid" ? Number(v) : v,
+          ]),
+        );
+        Object.assign(row, stored);
         return row;
       },
       /*

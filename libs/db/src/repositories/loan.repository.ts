@@ -1,8 +1,10 @@
 import {
+  addMoney,
   agentCommissionEntry,
   allocatePayment,
   badDebtRecoveryEntry,
   loanDisbursementEntry,
+  isAtLeast,
   loanPaymentEntry,
   preTerminationFeeEntry,
 } from "@loan/accounting";
@@ -854,6 +856,15 @@ export class LoanRepository {
           purpose: input.purpose,
           creditScoreAtApply: input.creditScoreAtApply,
           tierAtApply: input.tierAtApply,
+          /*
+           * §26. Snapshotted from the product HERE, at creation, and never
+           * read from it again — `recordPayment` uses this column alone.
+           * Copying it means a later edit to the product cannot change how
+           * this borrower's payments are applied, which is the difference
+           * between offering a new policy and repricing a signed contract.
+           * Same reasoning as `kycDeclarations` one line below.
+           */
+          paymentAllocationOrder: product.paymentAllocationOrder,
           status: initialStatus,
           decisionReason: input.initialDecisionReason,
           decisionRuleId: input.decisionRule?.id ?? null,
@@ -1438,14 +1449,38 @@ export class LoanRepository {
         orderBy: { installmentNo: "asc" },
       });
 
+      /*
+       * §11: no money through float. The amount and every schedule figure
+       * are handed to the allocator as `Prisma.Decimal` and parsed from
+       * their decimal text — `Number(o.interestDue)` was the conversion
+       * this comment used to sit above, and `round2` laundered the error
+       * rather than removing it.
+       *
+       * §26: the order comes from the LOAN, never from its product. The
+       * product's setting is a default for new applications; reading it
+       * here would let a product edit change how an in-flight borrower's
+       * payments are applied. Legacy rows are backfilled to
+       * INTEREST_PRINCIPAL, which is what they were already doing, so this
+       * line changes nothing for any loan written before §26.
+       *
+       * `feeDue` / `penaltyDue` are deliberately not passed: no
+       * per-instalment fee or penalty balance is modelled anywhere in this
+       * system, so there is nothing truthful to put in them. Both tiers
+       * therefore resolve to zero and an order carrying them allocates
+       * exactly as the legacy order does. See the note on `allocatePayment`
+       * for what closing that gap requires — in particular that collecting
+       * penalties needs a collected-to-date figure per instalment, without
+       * which every partial payment would re-collect the same penalty.
+       */
       const allocation = allocatePayment(
-        Number(input.amount),
+        input.amount,
         open.map((o) => ({
-          interestDue: Number(o.interestDue),
-          principalDue: Number(o.principalDue),
-          interestPaid: Number(o.interestPaid),
-          principalPaid: Number(o.principalPaid),
+          interestDue: o.interestDue,
+          principalDue: o.principalDue,
+          interestPaid: o.interestPaid,
+          principalPaid: o.principalPaid,
         })),
+        loan.paymentAllocationOrder,
       );
 
       // Persist the per-installment progress. `perInstallment[].index` maps
@@ -1453,13 +1488,28 @@ export class LoanRepository {
       // are present.
       for (const slice of allocation.perInstallment) {
         const inst = open[slice.index]!;
-        const interestPaid = round2(Number(inst.interestPaid) + slice.interest);
-        const principalPaid = round2(
-          Number(inst.principalPaid) + slice.principal,
-        );
+        /*
+         * Summed in centavos, for the same reason the allocation is. The
+         * figures written back are the same 2-decimal values `round2`
+         * produced — `centavos / 100` is the division it ended with — so
+         * the schedule columns are byte-identical to before.
+         */
+        const interestPaid = addMoney(inst.interestPaid, slice.interest);
+        const principalPaid = addMoney(inst.principalPaid, slice.principal);
+        /*
+         * Settled when paid-to-date covers the due on BOTH tiers.
+         *
+         * The old test was `paid + 0.005 >= due`, a half-centavo float
+         * tolerance. In centavos it is exact and the tolerance is not
+         * merely unnecessary but unreachable: both sides come from
+         * Decimal(14,2), so there is no representable value between
+         * `due - 0.01` (which must not settle) and `due` (which must).
+         * The golden tests pin both of those cases, and they pass
+         * unchanged — an instalment a centavo short still stays open.
+         */
         const settled =
-          interestPaid + 0.005 >= Number(inst.interestDue) &&
-          principalPaid + 0.005 >= Number(inst.principalDue);
+          isAtLeast(interestPaid, inst.interestDue) &&
+          isAtLeast(principalPaid, inst.principalDue);
         await tx.loanSchedule.update({
           where: { id: inst.id },
           data: {
@@ -1502,6 +1552,15 @@ export class LoanRepository {
               amount: Number(input.amount),
               interestPortion: allocation.interest,
               principalPortion: allocation.principal,
+              /*
+               * Zero on every order today, since nothing populates a fee or
+               * penalty balance to allocate against. Passed through anyway
+               * so the entry is already correct — and already balanced —
+               * on the day those balances become real, rather than the
+               * ledger being the last thing anyone remembers to update.
+               */
+              feePortion: allocation.fees ?? 0,
+              penaltyPortion: allocation.penalties ?? 0,
               advancePortion: allocation.overpayment,
               paidOn: input.paidOn,
             }),
@@ -2204,6 +2263,15 @@ export class LoanRepository {
         purpose: input.purpose,
         creditScoreAtApply: input.creditScoreAtApply,
         tierAtApply: input.tierAtApply,
+        /*
+         * §26, same snapshot as `apply()`. This path also serves
+         * `restructure()`, and taking the product's CURRENT default there
+         * is deliberate: a restructure is a new contract on new terms, not
+         * a continuation of the old one, so it is the one moment a loan may
+         * legitimately arrive on a different allocation order. The loan it
+         * replaced keeps its own order on its own row, untouched.
+         */
+        paymentAllocationOrder: product.paymentAllocationOrder,
         status: initialStatus,
         decisionReason: input.initialDecisionReason,
         decisionRuleId: input.decisionRule?.id ?? null,

@@ -894,6 +894,19 @@ model LoanProduct {
   interestMethod   InterestMethod   @default(DECLINING)
   paymentFrequency PaymentFrequency @default(MONTHLY)
 
+  /// Allocation order handed to loans written under this product FROM NOW
+  /// ON (§26). It is a default for new applications and nothing more.
+  ///
+  /// It does NOT govern any loan already on the books. Each
+  /// LoanApplication snapshots its own order at creation and pays under
+  /// that, so editing this field cannot change how an in-flight borrower's
+  /// payments are applied — which is the entire reason the snapshot exists.
+  /// Same reasoning as `kycQuestions` vs `LoanApplication.kycDeclarations`.
+  ///
+  /// Defaults to the legacy order so an existing product that nobody has
+  /// touched keeps writing loans that behave exactly as before.
+  paymentAllocationOrder PaymentAllocationOrder @default(INTEREST_PRINCIPAL)
+
   // ── Tier-based pricing (optional) ──────────────────────────────────
   /// JSON map of credit tier → rate. Format: { "A": 0.08, "B": 0.10, … }
   /// If set, apply uses tierAtApply to look up the rate.
@@ -1039,6 +1052,28 @@ enum PaymentFrequency {
   MONTHLY
   BIWEEKLY
   WEEKLY
+}
+
+/// Order in which a payment is applied to what a borrower owes (§26).
+///
+/// Named whole orders rather than a free-form list of buckets. Four tiers
+/// permute twenty-four ways and most of those are not policies anyone would
+/// sanction — an enum makes the illegal ones unrepresentable in the column
+/// rather than leaving it to validation nobody runs on a backfill. The
+/// canonical tier sequences live in `@loan/accounting` `ALLOCATION_ORDERS`;
+/// these names are the same strings.
+enum PaymentAllocationOrder {
+  /// Interest then principal, within each instalment. What every loan
+  /// written before §26 pays under, and the default for anything that does
+  /// not say otherwise. Never remove this value: rows point at it.
+  INTEREST_PRINCIPAL
+
+  /// §26's stated default — fees, penalties, interest, principal.
+  FEES_PENALTIES_INTEREST_PRINCIPAL
+
+  /// The inverse: the payment reduces the debt first and charges are
+  /// settled only once the instalment is otherwise current.
+  INTEREST_PRINCIPAL_FEES_PENALTIES
 }
 
 // ─── Collateral (typed per kind) ─────────────────────────────────────────────
@@ -1206,6 +1241,28 @@ model LoanApplication {
   // Underwriting context — frozen at application time
   creditScoreAtApply Int?
   tierAtApply        CreditTier?
+
+  /// The order this loan's payments are applied in (§26). THE authority —
+  /// `recordPayment` reads this column and nothing else.
+  ///
+  /// Snapshot, not reference. Copied from the product when the application
+  /// is created and never re-read from it, because the product is a mutable
+  /// row shared by every loan written under it: if allocation were looked
+  /// up through `product.paymentAllocationOrder`, an admin editing the
+  /// SALARY product would change how much of every future payment kills
+  /// principal on every live SALARY loan, mid-contract, with no record that
+  /// it happened. That is a change to a borrower's economics, and it must
+  /// not be reachable as a side effect of a product edit.
+  ///
+  /// Every row that existed before this column was added is backfilled to
+  /// INTEREST_PRINCIPAL — what those loans were actually paying — so no
+  /// in-flight loan changed behaviour when §26 landed. See
+  /// 20260814120000_payment_allocation_order.
+  ///
+  /// Changing an in-flight loan's order therefore means writing THIS
+  /// column, on THAT loan, deliberately — an act that shows up in an audit
+  /// trail rather than a config edit that silently reprices a book.
+  paymentAllocationOrder PaymentAllocationOrder @default(INTEREST_PRINCIPAL)
 
   /// Snapshot of the product's KYC declaration questionnaire + answers
   /// as attested: `{ items: [{id,label,type,required,answer}],

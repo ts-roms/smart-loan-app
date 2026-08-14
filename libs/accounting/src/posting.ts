@@ -8,6 +8,7 @@
  */
 
 import { ACCOUNT_CODES, bucketToAccount } from "./chart";
+import { type MoneyInput, fromCentavos, toCentavos } from "./money";
 
 export interface JournalLineInput {
   /** Account code from the chart (resolved to id by the repository). */
@@ -281,6 +282,29 @@ export function loanPaymentEntry(args: {
   amount: number;
   interestPortion: number;
   principalPortion: number;
+  /**
+   * Fee and penalty portions (§26). Both credit Loans Receivable, NOT Fee
+   * Income — and that is the whole point of them being separate arguments.
+   *
+   * A late fee is recognized as income the moment it accrues:
+   * `lateFeeAccrualEntry` posts Dr Loans Receivable / Cr Fee Income, so by
+   * the time the borrower pays it the income is already on the books and
+   * the charge is sitting in the receivable. Collecting it is Dr Cash / Cr
+   * Loans Receivable — the asset converting to cash. Crediting Fee Income
+   * again here would recognize the same peso of income twice.
+   *
+   * They are separate from `principalPortion` even though they hit the same
+   * account because the memo has to say which is which — a receivable
+   * credit that reads "Principal" when it settled a penalty makes the
+   * subledger impossible to tie out against the schedule.
+   *
+   * This assumes the accrue-then-collect convention that every charge in
+   * this system currently follows. A fee that is charged and collected in
+   * the same breath, never having been accrued, would need to credit Fee
+   * Income instead; no such fee is modelled today.
+   */
+  feePortion?: number;
+  penaltyPortion?: number;
   /** Excess over the full remaining balance. Booked as a liability. */
   advancePortion?: number;
   paidOn: Date;
@@ -293,6 +317,22 @@ export function loanPaymentEntry(args: {
       memo: `Payment on ${args.loanNumber}`,
     },
   ];
+  if ((args.feePortion ?? 0) > 0) {
+    lines.push({
+      accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
+      debit: 0,
+      credit: args.feePortion!,
+      memo: `Fees on ${args.loanNumber}`,
+    });
+  }
+  if ((args.penaltyPortion ?? 0) > 0) {
+    lines.push({
+      accountCode: ACCOUNT_CODES.LOANS_RECEIVABLE,
+      debit: 0,
+      credit: args.penaltyPortion!,
+      memo: `Penalties on ${args.loanNumber}`,
+    });
+  }
   if (args.interestPortion > 0) {
     lines.push({
       accountCode: ACCOUNT_CODES.INTEREST_INCOME,
@@ -704,18 +744,113 @@ export function eclProvisionEntry(args: {
   });
 }
 
+// ─── Payment allocation (§26) ────────────────────────────────────────────
+
+/**
+ * The four buckets a payment can be applied to, in the vocabulary §26 uses.
+ *
+ * FEES and PENALTIES are distinct on purpose even though both credit the
+ * same account today: a penalty is a late-payment charge that accrued
+ * against a specific overdue installment, a fee is a service charge. A
+ * cooperative that wants to collect one before the other must be able to
+ * say so, and a report that lumps them together cannot be unlumped later.
+ */
+export type AllocationTier = "FEES" | "PENALTIES" | "INTEREST" | "PRINCIPAL";
+
+/**
+ * The allocation orders a loan may be written under.
+ *
+ * Named whole orders rather than a free-form array of tiers. Twenty-four
+ * permutations of four tiers exist and most of them are not policies anyone
+ * would sanction — "principal before interest, fees last" is not a
+ * configuration, it is a mistake someone is about to make with a borrower's
+ * money. A closed set makes the illegal states unrepresentable and lets the
+ * database enforce it as an enum rather than leaving it to validation.
+ *
+ * Adding a genuinely-wanted order is a new entry here, a new enum value in
+ * the schema, and a migration — deliberately more friction than editing a
+ * JSON column, because each one is a promise to a borrower about how their
+ * money will be applied.
+ */
+export type PaymentAllocationOrder = keyof typeof ALLOCATION_ORDERS;
+
+export const ALLOCATION_ORDERS = {
+  /**
+   * Interest, then principal, within each installment. What every loan on
+   * the books before §26 was written under, and the default for anything
+   * that does not say otherwise.
+   */
+  INTEREST_PRINCIPAL: ["INTEREST", "PRINCIPAL"],
+
+  /**
+   * §26's stated default: fees, then penalties, then interest, then
+   * principal. Collects what the borrower owes for falling behind before
+   * anything reduces the debt itself.
+   */
+  FEES_PENALTIES_INTEREST_PRINCIPAL: [
+    "FEES",
+    "PENALTIES",
+    "INTEREST",
+    "PRINCIPAL",
+  ],
+
+  /**
+   * The borrower-friendly inverse: the payment kills the loan first and
+   * charges are settled only once the installment is otherwise current.
+   * Slower to recover fee income, faster to get a borrower out of arrears.
+   */
+  INTEREST_PRINCIPAL_FEES_PENALTIES: [
+    "INTEREST",
+    "PRINCIPAL",
+    "FEES",
+    "PENALTIES",
+  ],
+} as const satisfies Record<string, readonly AllocationTier[]>;
+
+/** The order every loan written before §26 pays under. */
+export const DEFAULT_ALLOCATION_ORDER: PaymentAllocationOrder =
+  "INTEREST_PRINCIPAL";
+
 export interface InstallmentDue {
-  interestDue: number;
-  principalDue: number;
+  interestDue: MoneyInput;
+  principalDue: MoneyInput;
   /**
    * Interest already collected on this installment by earlier payments.
    * Defaults to 0. Callers holding persisted payment progress MUST pass
    * this — otherwise a second partial payment re-allocates against interest
    * that has already been recognized as income.
    */
-  interestPaid?: number;
+  interestPaid?: MoneyInput;
   /** Principal already collected on this installment. Defaults to 0. */
-  principalPaid?: number;
+  principalPaid?: MoneyInput;
+  /**
+   * Service fees payable on this installment, and how much of them has
+   * already been collected. Both default to 0.
+   *
+   * NOTHING IN THIS SYSTEM POPULATES THESE YET. No per-installment fee
+   * balance is modelled — processing fees, documentary stamp tax and
+   * origination fees are all netted out of the disbursement proceeds, so a
+   * borrower never owes them as a separate balance, and the pre-termination
+   * fee is taken in cash at closure. The tier is here so the order is
+   * expressible and the arithmetic is tested; see the note on
+   * `allocatePayment` for what closing the gap would take.
+   */
+  feeDue?: MoneyInput;
+  feePaid?: MoneyInput;
+  /**
+   * Late-payment penalties accrued against this installment, and how much
+   * has been collected. Both default to 0.
+   *
+   * ALSO NOT POPULATED YET, but for a different reason than fees: the
+   * accrued side is real and derivable (`LATE_FEE_ACCRUAL` journal entries
+   * are keyed by schedule id), while the collected side has nowhere to live
+   * and loan-level `PenaltyWaiver` rows cannot be attributed back to an
+   * installment. Wiring this tier up without a collected-to-date figure
+   * would re-collect the same penalty on every partial payment — the exact
+   * defect `repair-payment-allocations.ts` exists to clean up after.
+   */
+  penaltyDue?: MoneyInput;
+  penaltyPaid?: MoneyInput;
 }
 
 export interface InstallmentAllocation {
@@ -723,6 +858,17 @@ export interface InstallmentAllocation {
   index: number;
   interest: number;
   principal: number;
+  /**
+   * Present only when this slice actually carried fee or penalty money.
+   *
+   * Omitted rather than zero so that a loan on `INTEREST_PRINCIPAL` gets
+   * back exactly the object it got back before §26 — same keys, same
+   * values. That equality is asserted by the allocation golden tests, and
+   * it is what makes "existing loans are untouched" checkable rather than
+   * merely claimed. Read them as `slice.fee ?? 0`.
+   */
+  fee?: number;
+  penalty?: number;
 }
 
 export interface PaymentAllocation {
@@ -730,73 +876,158 @@ export interface PaymentAllocation {
   interest: number;
   /** Total principal applied across all installments. */
   principal: number;
+  /**
+   * Totals for the two tiers §26 added. Present only when the allocation
+   * actually applied money to them — the same rule as `InstallmentAllocation`:
+   * a tier appears in the result when it carried money, and not otherwise.
+   *
+   * That rule is not cosmetic. It is what makes an allocation on
+   * `INTEREST_PRINCIPAL` deep-equal to the pre-§26 result, key for key, so
+   * the golden tests committed before this change could be re-run against
+   * it without a single edit. Read them as `allocation.fees ?? 0`.
+   */
+  fees?: number;
+  penalties?: number;
   /** Amount left over after every installment is fully settled. */
   overpayment: number;
   /** Per-installment slices, in the order the installments were passed. */
   perInstallment: InstallmentAllocation[];
 }
 
+/** Running centavo totals, one per tier. */
+type TierTotals = Record<AllocationTier, number>;
+
 /**
- * Split a flat payment amount between interest and principal across the
- * open installments in order. Interest comes first within each installment
- * (standard amortization).
+ * Split a flat payment across the open installments in order, applying the
+ * tiers within each installment in the order the loan was written under.
  *
- * Allocation runs against each installment's *remaining* due — i.e.
- * `interestDue - interestPaid`, then `principalDue - principalPaid`. That
- * is what makes repeated partial payments add up correctly: without the
- * paid-to-date figures a borrower paying one installment in five slices
- * would have interest recognized five times over.
+ * ── Order ───────────────────────────────────────────────────────────────
+ *
+ * The walk is installment-major: every tier of installment 1, then every
+ * tier of installment 2. It is NOT tier-major — a payment does not clear
+ * the penalties on the whole schedule before touching installment 1's
+ * principal. That matters and is a deliberate choice: installment-major is
+ * what the pre-§26 code did (interest then principal, per installment), it
+ * is the conventional servicing behaviour, and tier-major would make a
+ * partial payment from a borrower in arrears settle charges across every
+ * overdue installment before reducing any debt at all.
+ *
+ * `order` defaults to `INTEREST_PRINCIPAL`, which is what every loan on the
+ * books before §26 pays under. Callers that hold a loan's snapshotted order
+ * pass it; callers that do not get the legacy behaviour, unchanged.
+ *
+ * ── Arithmetic ──────────────────────────────────────────────────────────
+ *
+ * Everything runs in integer centavos (§11). Amounts arrive as
+ * `Prisma.Decimal`, decimal strings or numbers and are parsed from their
+ * decimal text, so no value is ever routed through a float. The figures
+ * handed back are the same 2-decimal doubles as before — `centavos / 100`
+ * is bit-for-bit the division `round2` ended with.
+ *
+ * Allocation runs against each installment's *remaining* due — e.g.
+ * `interestDue - interestPaid`. That is what makes repeated partial
+ * payments add up correctly: without the paid-to-date figures a borrower
+ * paying one installment in five slices would have interest recognized five
+ * times over. Each remaining balance is clamped at 0, so an over-credited
+ * row (repair scripts, manual edits) cannot hand back negative headroom and
+ * silently inflate the next installment's slice.
  *
  * `perInstallment` carries the slice applied to each installment so the
  * caller can persist the progress; installments that received nothing are
  * omitted. Anything left after every installment is settled comes back as
  * `overpayment` — the caller books that as a customer advance, not principal.
+ *
+ * ── The FEES and PENALTIES tiers are inert today ────────────────────────
+ *
+ * Both resolve to a zero balance on every installment, because neither is
+ * modelled as a payable per-installment amount (see `InstallmentDue`).
+ * `FEES_PENALTIES_INTEREST_PRINCIPAL` therefore allocates identically to
+ * `INTEREST_PRINCIPAL` right now — which is the safe place for this to
+ * land, since it means selecting §26's order cannot move a peso until the
+ * balances behind it are real. Closing the penalty half needs a
+ * collected-to-date figure per installment and a rule attributing
+ * loan-level waivers back to installments; neither is invented here.
  */
 export function allocatePayment(
-  amount: number,
+  amount: MoneyInput,
   installments: InstallmentDue[],
+  order: PaymentAllocationOrder = DEFAULT_ALLOCATION_ORDER,
 ): PaymentAllocation {
-  let remaining = round2(amount);
-  let interest = 0;
-  let principal = 0;
+  const tiers = ALLOCATION_ORDERS[order];
+  let remaining = toCentavos(amount);
+  const totals: TierTotals = {
+    FEES: 0,
+    PENALTIES: 0,
+    INTEREST: 0,
+    PRINCIPAL: 0,
+  };
   const perInstallment: InstallmentAllocation[] = [];
 
   for (let index = 0; index < installments.length; index++) {
     if (remaining <= 0) break;
     const inst = installments[index]!;
 
-    // Clamp at 0: an over-credited row (repair scripts, manual edits) must
-    // not hand back negative headroom and silently inflate the next slice.
-    const interestOpen = Math.max(
-      0,
-      round2(inst.interestDue - (inst.interestPaid ?? 0)),
-    );
-    const principalOpen = Math.max(
-      0,
-      round2(inst.principalDue - (inst.principalPaid ?? 0)),
-    );
+    const open = openByTier(inst);
+    const part: TierTotals = {
+      FEES: 0,
+      PENALTIES: 0,
+      INTEREST: 0,
+      PRINCIPAL: 0,
+    };
 
-    const interestPart = Math.min(remaining, interestOpen);
-    remaining = round2(remaining - interestPart);
-    const principalPart = Math.min(remaining, principalOpen);
-    remaining = round2(remaining - principalPart);
+    let touched = false;
+    for (const tier of tiers) {
+      const take = Math.min(remaining, open[tier]);
+      if (take <= 0) continue;
+      part[tier] = take;
+      totals[tier] += take;
+      remaining -= take;
+      touched = true;
+      if (remaining <= 0) break;
+    }
 
-    if (interestPart <= 0 && principalPart <= 0) continue;
-    interest = round2(interest + interestPart);
-    principal = round2(principal + principalPart);
-    perInstallment.push({
-      index,
-      interest: interestPart,
-      principal: principalPart,
-    });
+    if (!touched) continue;
+    perInstallment.push(slice(index, part));
   }
 
-  return {
-    interest,
-    principal,
-    overpayment: round2(remaining),
+  const out: PaymentAllocation = {
+    interest: fromCentavos(totals.INTEREST),
+    principal: fromCentavos(totals.PRINCIPAL),
+    overpayment: fromCentavos(remaining),
     perInstallment,
   };
+  if (totals.FEES > 0) out.fees = fromCentavos(totals.FEES);
+  if (totals.PENALTIES > 0) out.penalties = fromCentavos(totals.PENALTIES);
+  return out;
+}
+
+/** What is still owed on this installment, per tier, in centavos, clamped at 0. */
+function openByTier(inst: InstallmentDue): TierTotals {
+  const owed = (due: MoneyInput | undefined, paid: MoneyInput | undefined) =>
+    Math.max(0, toCentavos(due ?? 0) - toCentavos(paid ?? 0));
+  return {
+    FEES: owed(inst.feeDue, inst.feePaid),
+    PENALTIES: owed(inst.penaltyDue, inst.penaltyPaid),
+    INTEREST: owed(inst.interestDue, inst.interestPaid),
+    PRINCIPAL: owed(inst.principalDue, inst.principalPaid),
+  };
+}
+
+/**
+ * Builds one `perInstallment` entry. `interest` and `principal` are always
+ * present — they always were — while `fee` and `penalty` appear only when
+ * non-zero, so a legacy-order allocation is indistinguishable from the
+ * pre-§26 output.
+ */
+function slice(index: number, part: TierTotals): InstallmentAllocation {
+  const out: InstallmentAllocation = {
+    index,
+    interest: fromCentavos(part.INTEREST),
+    principal: fromCentavos(part.PRINCIPAL),
+  };
+  if (part.FEES > 0) out.fee = fromCentavos(part.FEES);
+  if (part.PENALTIES > 0) out.penalty = fromCentavos(part.PENALTIES);
+  return out;
 }
 
 // ─── Cooperative posting helpers ─────────────────────────────────────────
