@@ -60,8 +60,89 @@ export interface DecisioningContext {
   kycComplete: boolean;
   customerAge: number;
   monthlyIncome: number;
-  /** Customer's count of currently-active loans (excluding this one). */
+  /**
+   * Customer's count of currently-active loans (excluding this one).
+   *
+   * A COUNT, and left exactly as it was. The exposure fields below
+   * measure the same borrower in pesos and it is tempting to redefine
+   * this in their terms — it counts DISBURSED / ACTIVE / DEFAULTED,
+   * while exposure also counts APPROVED, so the two legitimately
+   * disagree by one on a borrower with a granted-but-undisbursed loan.
+   * Reconciling them would silently move every rule already written
+   * against this field, which is the one thing adding exposure must not
+   * do. They are different questions; both are answered.
+   */
   existingActiveLoans: number;
+
+  // ── Consolidated exposure (§53) ──────────────────────────────────
+  //
+  // What the lender is ALREADY into this borrower for, across their
+  // whole book — not just the application in front of the engine.
+  // Every figure comes from `consolidatedExposure` in @loan/loans via
+  // the caller; nothing here recomputes a balance.
+  //
+  // Plain numbers rather than the ConsolidatedExposure shape on
+  // purpose: the rule DSL matches on scalar fields, so anything a rule
+  // can be written against has to be a scalar. It also keeps this
+  // package free of a dependency on the loan-arithmetic library.
+
+  /**
+   * Principal still owed across every counted loan — APPROVED,
+   * DISBURSED, ACTIVE and DEFAULTED. The §53 headline.
+   *
+   * Excludes CLOSED (repaid), RESTRUCTURED (superseded by a successor
+   * that IS counted) and WRITTEN_OFF (already expensed to Bad Debt);
+   * see `exposure.ts` for why each. Zero for a first-time borrower.
+   */
+  existingExposure: number;
+  /** The same debt including scheduled interest still to run. */
+  existingExposureOutstanding: number;
+  /** Unpaid and already past due, across the whole book. */
+  existingPastDue: number;
+  /** How many loans `existingExposure` is made of. */
+  existingExposureLoans: number;
+  /**
+   * What this borrower has previously had written off to Bad Debt.
+   *
+   * Outside `existingExposure` by construction — the receivable is gone
+   * and the loss is taken — but the single most important fact about
+   * the borrower, and carried here so a rule can refuse on it rather
+   * than the figure being visible only on a profile page nobody opened.
+   */
+  existingWrittenOff: number;
+  /**
+   * `existingExposure + principal` — what the lender would be into this
+   * borrower for if this application were granted.
+   *
+   * The field a total-exposure ceiling is written against. No ceiling
+   * ships configured; see the note on DEFAULT_RULES.
+   */
+  totalExposureAfterLoan: number;
+
+  // ── Affordability (§16) ──────────────────────────────────────────
+
+  /**
+   * Monthly amortization on debt the borrower already holds, summed
+   * across the counted loans above. §16's "Existing Obligations".
+   */
+  existingMonthlyObligations: number;
+  /** This application's own monthly amortization. */
+  newLoanInstallment: number;
+  /**
+   * §16: net salary + qualifying income − existing obligations −
+   * payroll deductions. Before the new loan, so it reads as what the
+   * borrower has available to service it with.
+   *
+   * Negative when the borrower is already over-committed, which is not
+   * clamped — see `assessAffordability`.
+   */
+  disposableIncome: number;
+  /**
+   * `(existingMonthlyObligations + newLoanInstallment) / income`.
+   * Zero when income is zero — a figure, not NaN. See
+   * `assessAffordability` for why that distinction is load-bearing.
+   */
+  debtToIncomeRatio: number;
 }
 
 export interface DecisioningResult {
@@ -93,6 +174,20 @@ export const DECISIONING_FIELDS: ReadonlyArray<{
   { field: "customerAge", type: "number" },
   { field: "monthlyIncome", type: "number" },
   { field: "existingActiveLoans", type: "number" },
+  // Consolidated exposure (§53) and the affordability figures derived
+  // from it (§16). Listed here so the rule editor offers them: a policy
+  // an operator cannot express in the UI is one they will ask an
+  // engineer to hard-code, which is what §50 exists to prevent.
+  { field: "existingExposure", type: "number" },
+  { field: "existingExposureOutstanding", type: "number" },
+  { field: "existingPastDue", type: "number" },
+  { field: "existingExposureLoans", type: "number" },
+  { field: "existingWrittenOff", type: "number" },
+  { field: "totalExposureAfterLoan", type: "number" },
+  { field: "existingMonthlyObligations", type: "number" },
+  { field: "newLoanInstallment", type: "number" },
+  { field: "disposableIncome", type: "number" },
+  { field: "debtToIncomeRatio", type: "number" },
 ];
 
 /**
@@ -180,7 +275,32 @@ function matchesCondition(
  *   100 · A tier ≤ 200k + clean  AUTO_APPROVE
  *   110 · B tier ≤ 100k + clean  AUTO_APPROVE
  *   1000 · catch-all             MANUAL_REVIEW
+ *
+ * Plus one rule that is shipped OFF — see
+ * `TOTAL_EXPOSURE_CEILING_PLACEHOLDER`.
  */
+
+/**
+ * The threshold on the shipped total-exposure rule, and the reason that
+ * rule is inactive.
+ *
+ * There is no correct single-borrower limit to ship. It is a policy
+ * number — a coop's board sets it against its own capital, and §50 is
+ * explicit that automation must not independently decide who is
+ * approved. Picking a plausible-looking default here would mean this
+ * commit started declining real borrowers on a figure nobody chose,
+ * which is the one outcome wiring exposure into decisioning must not
+ * produce.
+ *
+ * So the rule ships `active: false` AND at a threshold no application
+ * reaches. Two independent reasons it cannot bite: a reviewer who
+ * switches it on without reading it still changes nothing, and has to
+ * type a real number before it does anything at all. The row exists so
+ * that the primitive is discoverable in the rule editor rather than
+ * something an operator has to know to ask for.
+ */
+export const TOTAL_EXPOSURE_CEILING_PLACEHOLDER = 999_999_999;
+
 /** Version is assigned by the catalog on insert; these are the text. */
 export const DEFAULT_RULES: Omit<DecisionRule, "id" | "version">[] = [
   {
@@ -244,4 +364,49 @@ export const DEFAULT_RULES: Omit<DecisionRule, "id" | "version">[] = [
     reason: "Tier B applicant, principal ≤ ₱100k, KYC verified, AML clear.",
     active: true,
   },
+  /*
+   * Total consolidated exposure ceiling — SHIPPED OFF, AND UNREACHABLE.
+   *
+   * The §53 capability made concrete: a borrower's whole book, plus the
+   * loan being asked for, tested against one number. Priority 50 puts
+   * it ahead of both fast-tracks, which is where a ceiling belongs — a
+   * tier-A member ₱2M into the coop should not be auto-approved past a
+   * limit because their score is good.
+   *
+   * It decides nothing as shipped. `active: false` keeps it out of
+   * `listActive()` and out of `evaluateRules`, and the threshold is
+   * `TOTAL_EXPOSURE_CEILING_PLACEHOLDER` — read the note there for why
+   * both, rather than either.
+   *
+   * MANUAL_REVIEW rather than AUTO_REJECT deliberately. Breaching a
+   * concentration limit is a question for an officer — there are good
+   * answers to it, like collateral or a board approval — and §50 does
+   * not want the engine closing it unilaterally.
+   */
+  {
+    name: "Total exposure ceiling (inactive — set your limit)",
+    priority: 50,
+    conditions: [
+      {
+        field: "totalExposureAfterLoan",
+        op: ">",
+        value: TOTAL_EXPOSURE_CEILING_PLACEHOLDER,
+      },
+    ],
+    action: "MANUAL_REVIEW",
+    reason:
+      "Total exposure to this borrower would exceed the configured " +
+      "single-borrower ceiling — officer review required.",
+    active: false,
+  },
 ];
+
+// §16's disposable-income arithmetic, which turns consolidated exposure
+// into the affordability fields on the context above. Pure numbers; see
+// the module header for why the mapping from a loan book lives at the
+// call site rather than inside it.
+export {
+  assessAffordability,
+  type Affordability,
+  type AffordabilityInput,
+} from "./affordability";

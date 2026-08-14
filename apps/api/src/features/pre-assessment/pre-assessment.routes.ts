@@ -22,6 +22,7 @@
 
 import {
   CreditScoreRepository,
+  CustomerExposureRepository,
   DecisionRuleRepository,
   KycRepository,
   PreAssessmentRepository,
@@ -69,6 +70,10 @@ export async function preAssessmentRoutes(app: FastifyInstance) {
           scores: new CreditScoreRepository(prisma),
           kyc: new KycRepository(prisma),
           rules: new DecisionRuleRepository(prisma),
+          // §53 — the same consolidated exposure the real decision
+          // reads, so a quoted assessment and the submission that
+          // follows it cannot disagree about the borrower's other loans.
+          exposure: new CustomerExposureRepository(prisma),
         },
         new PreAssessmentRepository(prisma),
       ),

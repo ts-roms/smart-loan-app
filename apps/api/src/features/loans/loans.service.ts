@@ -3,6 +3,7 @@ import type {
   AuditLogRepository,
   CoMakerRepository,
   CreditScoreRepository,
+  CustomerExposureRepository,
   DecisionRuleRepository,
   KycRepository,
   LoanApplication,
@@ -27,7 +28,11 @@ import {
 } from "@loan/kyc";
 
 import { computeAnomalyFlags } from "../../lib/anomaly";
-import { evaluateForCustomer } from "../../lib/pre-decision";
+import {
+  buildExposureContext,
+  evaluateForCustomer,
+  newLoanInstallment,
+} from "../../lib/pre-decision";
 import type { ApplyInput, DecideInput } from "./schemas";
 
 /**
@@ -181,6 +186,13 @@ export class LoanWorkflowService {
     private readonly prisma: PrismaClient,
     private readonly screening: ScreeningRepository,
     private readonly notifications: NotificationRepository,
+    /**
+     * Consolidated exposure (§53) — a decisioning input, not a report.
+     * Required rather than optional: a service constructed without it
+     * would underwrite every application as though the borrower held no
+     * other loans, silently, which is the exact defect this closes.
+     */
+    private readonly exposure: CustomerExposureRepository,
     private readonly log: ServiceLogger,
     /**
      * `notifyApproversForStep` needs the FastifyInstance + tenant
@@ -770,6 +782,7 @@ export class LoanWorkflowService {
         scores: this.scores,
         kyc: this.kyc,
         rules: this.rules,
+        exposure: this.exposure,
       },
       input.customerId,
       {
@@ -818,20 +831,31 @@ export class LoanWorkflowService {
     input: ApplyInput,
     amlStatus: string | null,
   ): Promise<DecisioningContext> {
-    const [score, customer, docs, product, activeLoans] = await Promise.all([
-      this.scores.latestForCustomer(input.customerId),
-      this.prisma.customer.findUnique({ where: { id: input.customerId } }),
-      this.kyc.listForCustomer(input.customerId),
-      this.prisma.loanProduct.findUnique({
-        where: { code: input.productCode },
-      }),
-      this.prisma.loanApplication.count({
-        where: {
-          customerId: input.customerId,
-          status: { in: ["DISBURSED", "ACTIVE", "DEFAULTED"] },
-        },
-      }),
-    ]);
+    const [score, customer, docs, product, activeLoans, exposure] =
+      await Promise.all([
+        this.scores.latestForCustomer(input.customerId),
+        this.prisma.customer.findUnique({ where: { id: input.customerId } }),
+        this.kyc.listForCustomer(input.customerId),
+        this.prisma.loanProduct.findUnique({
+          where: { code: input.productCode },
+        }),
+        this.prisma.loanApplication.count({
+          where: {
+            customerId: input.customerId,
+            status: { in: ["DISBURSED", "ACTIVE", "DEFAULTED"] },
+          },
+        }),
+        /*
+         * §53: what the lender is already into this borrower for.
+         *
+         * Fetched here, once, alongside every other input — not looked
+         * up again downstream. The whole point of a consolidated figure
+         * is that there is one of it, and a decision that read exposure
+         * twice could stamp one number onto the record and act on
+         * another if a payment landed between the two reads.
+         */
+        this.exposure.forDecision(input.customerId),
+      ]);
 
     const extras = (product?.requiredKycDocs ?? []) as KycDocumentType[];
     const kycRes = validateKyc(docs, extras);
@@ -840,19 +864,39 @@ export class LoanWorkflowService {
           (Date.now() - customer.dateOfBirth.getTime()) / (365.25 * 86_400_000),
         )
       : 0;
-
-    return {
+    const monthlyIncome = customer ? Number(customer.monthlyIncome) : 0;
+    const terms = {
       productCode: input.productCode,
       principal: input.principal,
       termMonths: input.termMonths,
       annualInterestRate: input.annualInterestRate,
+    };
+
+    return {
+      ...terms,
       tierAtApply: score?.tier ?? null,
       creditScoreAtApply: score?.score ?? null,
       amlStatus: amlStatus as DecisioningContext["amlStatus"],
       kycComplete: kycRes.complete,
       customerAge,
-      monthlyIncome: customer ? Number(customer.monthlyIncome) : 0,
+      monthlyIncome,
       existingActiveLoans: activeLoans,
+      /*
+       * The same fold the dry-run preview and the pre-assessment run —
+       * see lib/pre-decision.ts. Sharing it is what stops an officer
+       * being shown one affordability picture in the wizard and the
+       * engine deciding on another when they press Submit.
+       *
+       * These figures land verbatim in `decisionContext` at the call
+       * site in apply(), which is what §20 asks for: the inputs as the
+       * engine saw them, beside the rule version that read them.
+       */
+      ...buildExposureContext({
+        snapshot: exposure,
+        monthlyIncome,
+        principal: input.principal,
+        newLoanInstallment: newLoanInstallment(terms, product),
+      }),
     };
   }
 }

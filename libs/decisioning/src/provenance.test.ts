@@ -33,6 +33,19 @@ const ctx: DecisioningContext = {
   customerAge: 34,
   monthlyIncome: 40_000,
   existingActiveLoans: 0,
+  // No other loans. Provenance is about the rule that fired, not about
+  // exposure — these are here so the fixture type-checks, and nothing
+  // in this file asserts on them.
+  existingExposure: 0,
+  existingExposureOutstanding: 0,
+  existingPastDue: 0,
+  existingExposureLoans: 0,
+  existingWrittenOff: 0,
+  totalExposureAfterLoan: 50_000,
+  existingMonthlyObligations: 0,
+  newLoanInstallment: 4_582.01,
+  disposableIncome: 40_000,
+  debtToIncomeRatio: 0.1146,
 };
 
 const rule = (over: Partial<DecisionRule> = {}): DecisionRule => ({

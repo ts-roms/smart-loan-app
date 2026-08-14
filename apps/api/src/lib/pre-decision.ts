@@ -26,17 +26,26 @@
 
 import type {
   CreditScoreRepository,
+  CustomerExposureRepository,
   DecisionRuleRepository,
+  ExposureForDecision,
   KycRepository,
   PrismaClient,
   ScreeningRepository,
 } from "@loan/db";
 import {
+  assessAffordability,
   evaluateRules,
   type DecisioningContext,
   type RuleAction,
 } from "@loan/decisioning";
 import { validateKyc, type KycDocumentType } from "@loan/kyc";
+import {
+  computeAmortizationFor,
+  periodsPerYear,
+  type InterestMethod,
+  type PaymentFrequency,
+} from "@loan/loans";
 
 import { computeAnomalyFlags, type AnomalyFlag } from "./anomaly";
 
@@ -55,6 +64,140 @@ export interface PreDecisionDeps {
   scores: CreditScoreRepository;
   kyc: KycRepository;
   rules: DecisionRuleRepository;
+  /**
+   * Consolidated exposure (§53). Injected rather than constructed from
+   * `prisma` so the whole borrower book stays one query path — the
+   * repository is the only thing in the codebase allowed to answer
+   * "what is this member already into us for", and a second assembly
+   * here would be exactly the drift its own header warns about.
+   */
+  exposure: CustomerExposureRepository;
+}
+
+/**
+ * Product fields the instalment depends on. A bare shape rather than
+ * the Prisma row so both callers — one of which already has the row,
+ * one of which does not — can satisfy it, and so a missing product
+ * degrades to the same defaults `/loans/quote` uses.
+ */
+export interface InstallmentProduct {
+  interestMethod: InterestMethod;
+  paymentFrequency: PaymentFrequency;
+}
+
+/**
+ * What this application would cost the borrower per month.
+ *
+ * Built from the same `computeAmortizationFor` that writes the real
+ * schedule at disbursement, with the product's own interest method and
+ * payment frequency — not a declining-balance approximation. A FLAT
+ * product's instalment is materially larger than the declining formula
+ * suggests, and a DTI computed off the wrong one is wrong in the
+ * lenient direction on exactly the products PH coops sell most.
+ *
+ * Normalised to a MONTHLY figure, because §16's disposable income is
+ * monthly and a weekly loan's ₱500 instalment is not comparable to a
+ * monthly loan's ₱500 one. A bi-weekly loan costs 26/12 of its
+ * instalment each month; a weekly one 52/12.
+ */
+export function newLoanInstallment(
+  terms: PreDecisionTerms,
+  product: InstallmentProduct | null,
+): number {
+  const method = product?.interestMethod ?? "DECLINING";
+  const frequency = product?.paymentFrequency ?? "MONTHLY";
+  const schedule = computeAmortizationFor(
+    terms.principal,
+    terms.annualInterestRate,
+    terms.termMonths,
+    { method, frequency },
+  );
+  // The contractual instalment is the first row's. The last row absorbs
+  // rounding drift and is a few centavos off by construction, so it is
+  // the wrong one to quote a borrower's monthly commitment from.
+  const perPeriod = schedule[0]?.payment ?? 0;
+  const monthly = perPeriod * (periodsPerYear(frequency) / 12);
+  return Number.isFinite(monthly) ? Math.round(monthly * 100) / 100 : 0;
+}
+
+/** The §53 + §16 half of the context, and the only place it is built. */
+export type ExposureContext = Pick<
+  DecisioningContext,
+  | "existingExposure"
+  | "existingExposureOutstanding"
+  | "existingPastDue"
+  | "existingExposureLoans"
+  | "existingWrittenOff"
+  | "totalExposureAfterLoan"
+  | "existingMonthlyObligations"
+  | "newLoanInstallment"
+  | "disposableIncome"
+  | "debtToIncomeRatio"
+>;
+
+/**
+ * Fold a borrower's consolidated exposure into the fields the rules can
+ * see, and run §16 over the result.
+ *
+ * One implementation, three callers — `apply()`, `/loans/dry-run` and
+ * `/pre-assessments`. That is not tidiness: a borrower told "you'd
+ * likely be approved" by the preview and then declined on submission,
+ * because two copies of this fold disagreed about what their other
+ * loans cost, is the specific failure this file already exists to
+ * prevent for every other input.
+ *
+ * ─── Where §16's four terms come from ───────────────────────────────
+ *
+ *   Net Salary          `Customer.monthlyIncome`, the only verified
+ *                       income figure on the record.
+ *   Qualifying Income   0. There is no second income column, and no
+ *                       schema change is in scope to add one. Passed
+ *                       explicitly rather than folded away so the term
+ *                       is visible on the decision record as a zero
+ *                       someone chose, not one nobody noticed.
+ *   Existing Obligations  the monthly cost of the borrower's live
+ *                       loans — see `forDecision`.
+ *   Payroll Deductions  0, same reason as qualifying income. Nothing
+ *                       in the schema records SSS / PhilHealth /
+ *                       Pag-IBIG per member.
+ *
+ * The two zeros pull disposable income UP, i.e. they make the borrower
+ * look more affordable than they are. That is the wrong direction to be
+ * wrong in, and it is stated here rather than hidden: it is still
+ * strictly better than the previous state, where existing obligations
+ * were zero too.
+ */
+export function buildExposureContext(args: {
+  snapshot: ExposureForDecision | null;
+  monthlyIncome: number;
+  principal: number;
+  newLoanInstallment: number;
+}): ExposureContext {
+  const total = args.snapshot?.exposure.total;
+  const excluded = args.snapshot?.exposure.excluded;
+  const existingExposure = total?.principalOutstanding ?? 0;
+
+  const affordability = assessAffordability({
+    netSalary: args.monthlyIncome,
+    qualifyingIncome: 0,
+    existingObligations: args.snapshot?.monthlyObligations ?? 0,
+    payrollDeductions: 0,
+    newLoanInstallment: args.newLoanInstallment,
+  });
+
+  return {
+    existingExposure,
+    existingExposureOutstanding: total?.outstanding ?? 0,
+    existingPastDue: total?.pastDue ?? 0,
+    existingExposureLoans: total?.activeLoans ?? 0,
+    existingWrittenOff: excluded?.writtenOffPrincipal ?? 0,
+    totalExposureAfterLoan:
+      Math.round((existingExposure + args.principal) * 100) / 100,
+    existingMonthlyObligations: affordability.existingObligations,
+    newLoanInstallment: affordability.newLoanInstallment,
+    disposableIncome: affordability.disposableIncome,
+    debtToIncomeRatio: affordability.debtToIncomeRatio,
+  };
 }
 
 /**
@@ -100,9 +243,11 @@ export async function evaluateForCustomer(
   customerId: string,
   terms: PreDecisionTerms,
 ): Promise<PreDecisionOutcome | null> {
-  // All six lookups are independent. The dry-run path hits this on every
-  // debounced keystroke in the wizard, so they run in parallel.
-  const [latestScreen, score, customer, docs, product, activeLoans] =
+  // All seven lookups are independent. The dry-run path hits this on
+  // every debounced keystroke in the wizard, so they run in parallel —
+  // exposure included: it is a decisioning input like any other and
+  // sequencing it behind the rest would show up as wizard lag.
+  const [latestScreen, score, customer, docs, product, activeLoans, exposure] =
     await Promise.all([
       deps.screening.latestForCustomer(customerId),
       deps.scores.latestForCustomer(customerId),
@@ -117,12 +262,14 @@ export async function evaluateForCustomer(
           status: { in: ["DISBURSED", "ACTIVE", "DEFAULTED"] },
         },
       }),
+      deps.exposure.forDecision(customerId),
     ]);
 
   if (!customer) return null;
 
   const extras = (product?.requiredKycDocs ?? []) as KycDocumentType[];
   const kycRes = validateKyc(docs, extras);
+  const monthlyIncome = Number(customer.monthlyIncome);
 
   const context: DecisioningContext = {
     ...terms,
@@ -131,8 +278,14 @@ export async function evaluateForCustomer(
     amlStatus: latestScreen?.status ?? null,
     kycComplete: kycRes.complete,
     customerAge: ageFrom(customer.dateOfBirth),
-    monthlyIncome: Number(customer.monthlyIncome),
+    monthlyIncome,
     existingActiveLoans: activeLoans,
+    ...buildExposureContext({
+      snapshot: exposure,
+      monthlyIncome,
+      principal: terms.principal,
+      newLoanInstallment: newLoanInstallment(terms, product),
+    }),
   };
 
   return finish(deps, context, {
@@ -162,6 +315,17 @@ export async function evaluateForProspect(
   subject: { monthlyIncome: number; applicantAge: number },
   terms: PreDecisionTerms,
 ): Promise<PreDecisionOutcome> {
+  /*
+   * The product is fetched — the only lookup on this path — so the
+   * quoted instalment uses the product's real interest method. A
+   * prospect being sized up for a FLAT product would otherwise be told
+   * a declining-balance instalment, understating what they would
+   * actually pay each month on the one figure they care about.
+   */
+  const product = await deps.prisma.loanProduct.findUnique({
+    where: { code: terms.productCode },
+  });
+
   const context: DecisioningContext = {
     ...terms,
     tierAtApply: null,
@@ -171,6 +335,19 @@ export async function evaluateForProspect(
     customerAge: subject.applicantAge,
     monthlyIncome: subject.monthlyIncome,
     existingActiveLoans: 0,
+    /*
+     * No Customer row means no loan book to consolidate, so exposure is
+     * genuinely zero rather than unknown — a prospect cannot hold a loan
+     * with this lender by definition. What is unknown is debt held
+     * ELSEWHERE, which this system has never seen for anybody, prospect
+     * or member. Callers already label a prospect verdict indicative.
+     */
+    ...buildExposureContext({
+      snapshot: null,
+      monthlyIncome: subject.monthlyIncome,
+      principal: terms.principal,
+      newLoanInstallment: newLoanInstallment(terms, product),
+    }),
   };
 
   return finish(deps, context, { gates: null });
