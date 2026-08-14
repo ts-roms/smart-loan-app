@@ -57,6 +57,7 @@ import { CustomerLedgerPanel } from "../components/CustomerLedgerPanel";
 import { CustomerLoansPanel } from "../components/CustomerLoansPanel";
 import { DorsiScreenBanner } from "../components/DorsiScreenBanner";
 import { EditCustomerDialog } from "../components/EditCustomerDialog";
+import { ScorecardVersionBadge } from "../components/ScorecardVersionBadge";
 import { CAMERA_MODE, DOC_TYPES, DOC_TYPE_LABELS } from "../constants";
 
 // Re-exported here for back-compat with anything that still imports
@@ -365,8 +366,18 @@ export function CustomerDetailPage() {
                   </div>
                   <TierBadge tier={score.data.tier} />
                 </div>
-                <div className="text-xs text-fg-muted">
-                  Last scored {formatDate(score.data.computedAt)}
+                {/*
+                  The scorecard that produced THIS number — read off the
+                  score row, never off the current catalog. A score from
+                  March was computed with March's weights, and showing
+                  today's version here would be the exact error this
+                  badge exists to prevent.
+                */}
+                <div className="flex items-center gap-1.5 text-xs text-fg-muted">
+                  <span>Last scored {formatDate(score.data.computedAt)}</span>
+                  <ScorecardVersionBadge
+                    catalogVersion={score.data.catalogVersion}
+                  />
                 </div>
                 <ul className="text-xs divide-y divide-default">
                   {score.data.breakdown.slice(0, 6).map((b) => (

@@ -332,6 +332,16 @@ export interface CreditScore {
   tier: CreditTier;
   breakdown: FactorBreakdown[];
   sourceSurveyId: string | null;
+  /**
+   * Which scorecard revision produced this score.
+   *
+   * Null on scores computed before the catalog was versioned. That is a
+   * fact about the record, not a gap to paper over with the current
+   * version — the scorecard of the day was never written down, and a UI
+   * that filled it in would be inventing the audit trail it claims to
+   * show.
+   */
+  catalogVersion: number | null;
   computedAt: string;
 }
 
