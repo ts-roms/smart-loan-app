@@ -254,7 +254,13 @@ model AgentPayout {
 model AgentPayoutItem {
   id       String      @id @default(uuid())
   payoutId String
-  payout   AgentPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. A payout line is commission cash that left
+  /// the building. Voiding a payout still clears its items — `voidPayout`
+  /// deletes them explicitly, which is what frees the loan to be paid on
+  /// a corrected run — so nothing legitimate relied on the cascade; it
+  /// only meant a stray DELETE on the payout took the evidence too.
+  /// See 20260814090000_financial_record_restrict.
+  payout   AgentPayout @relation(fields: [payoutId], references: [id], onDelete: Restrict)
 
   /// The loan whose commission this line settles.
   loanId String
@@ -275,7 +281,8 @@ model AgentPayoutItem {
    * until this one.
    * Scoped to the loan and not to (payout, loan), because the point is
    * one payment per loan ACROSS all payouts, not per payout. Voiding
-   * cascades the items away, which is what frees the loan to be paid
+   * clears the items — `voidPayout` deletes them explicitly, it never
+   * relied on the FK cascade — which is what frees the loan to be paid
    * again on a corrected run.
    */
   @@unique([loanId])
@@ -1360,7 +1367,12 @@ model LoanSchedule {
   /// Set once `principalPaid >= principalDue AND interestPaid >= interestDue`.
   paidInFullAt  DateTime?
 
-  loan LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. This row IS the receivable — what was owed on
+  /// this instalment and how much of it has been collected. Deleting the
+  /// loan used to take the whole amortisation with it, and with it every
+  /// trace of what the borrower had already paid down.
+  /// See 20260814090000_financial_record_restrict.
+  loan LoanApplication @relation(fields: [loanId], references: [id], onDelete: Restrict)
 
   @@unique([loanId, installmentNo])
   @@index([dueDate])
@@ -1394,7 +1406,12 @@ model LoanPayment {
   idempotencyKey String?  @unique
   recordedById   String
 
-  loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. A posted payment is reversed, never deleted
+  /// (§12) — and deleting a LoanApplication reads like discarding a form,
+  /// which is exactly why it must not silently take the cash the borrower
+  /// handed over with it.
+  /// See 20260814090000_financial_record_restrict.
+  loan       LoanApplication @relation(fields: [loanId], references: [id], onDelete: Restrict)
   recordedBy User            @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
   intent     PaymentIntent?
 
@@ -1597,7 +1614,14 @@ model JournalLine {
   credit    Decimal @default(0) @db.Decimal(14, 2)
   memo      String?
 
-  entry   JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. Debits and credits ARE the books — there is
+  /// nothing below a journal line that could regenerate it. The ledger is
+  /// append-only and corrections are reversing entries (§12), so a delete
+  /// that reaches this table is already wrong; this makes it fail loudly.
+  /// Deleting lines explicitly still works, which is all
+  /// libs/db/scripts/sweep-orphaned-entries.mjs ever did.
+  /// See 20260814090000_financial_record_restrict.
+  entry   JournalEntry @relation(fields: [entryId], references: [id], onDelete: Restrict)
   account Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
   @@index([entryId])
@@ -1732,7 +1756,11 @@ model PaymentIntent {
   updatedAt      DateTime            @updatedAt
   createdById    String
 
-  loan      LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. This is the record that a borrower's card or
+  /// wallet was actually debited — amount, provider, provider-side id.
+  /// The gateway keeps its own copy; ours is the only one that ties it to
+  /// a loan. See 20260814090000_financial_record_restrict.
+  loan      LoanApplication @relation(fields: [loanId], references: [id], onDelete: Restrict)
   payment   LoanPayment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
   createdBy User            @relation("PaymentIntentBy", fields: [createdById], references: [id])
 
@@ -1768,11 +1796,6 @@ model AuditEvent {
   impersonatedByEmail String?
 
   actor User @relation("AuditActor", fields: [actorId], references: [id])
-
-  @@index([createdAt(sort: Desc)])
-  @@index([actorId, createdAt(sort: Desc)])
-  @@index([targetType, targetId])
-  @@index([action])
   // AuditEvent_impersonatedById_idx exists in every database but is NOT
   // declared here, on purpose. 20260523100000_audit_impersonation built it
   // as a PARTIAL index (WHERE "impersonatedById" IS NOT NULL — skinny,
@@ -1780,6 +1803,11 @@ model AuditEvent {
   // partial index: Prisma also skips partial indexes at introspection, so
   // declaring a plain @@index here made `migrate diff` report a phantom
   // "missing" index forever. The migration is the source of truth.
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@index([action])
 }
 
 // ─── Background jobs (scheduler) ─────────────────────────────────────────────
@@ -2643,6 +2671,20 @@ model BankStatementLine {
   matchNote      String?
 
   statement BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  // bank_line_match_unique exists in every database but is NOT declared
+  // here, on purpose. 20260814100000_bank_line_match_unique built it as a
+  // PARTIAL unique index (on (matchedType, matchedRefId) WHERE both are
+  // NOT NULL — unmatched lines are the normal state and there are many of
+  // them, and MANUAL-style matches carry no refId and may legitimately
+  // repeat). `@@unique()` cannot express a partial index, and Prisma skips
+  // partial indexes at introspection, so declaring a plain @@unique here
+  // would make `migrate diff` report phantom drift forever. The migration
+  // is the source of truth.
+  //
+  // It is what makes one-to-one reconciliation real: autoMatch's in-memory
+  // claim set and manualMatch's pre-check are both check-then-act, correct
+  // alone and useless against a concurrent writer. Both now insert and
+  // catch P2002 instead of trusting the read.
 
   @@index([statementId])
   @@index([txnDate])
@@ -2790,7 +2832,14 @@ model FundTransaction {
   notes          String?
   journalEntryId String?
 
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  /// RESTRICT, not SetNull. The column stays nullable — plenty of inflows
+  /// are not member-attributable and carry NULL, and RESTRICT has nothing
+  /// to say about those. But where a member IS named, SetNull did not
+  /// destroy the money so much as silently orphan it: the coop's cash
+  /// stayed on the books attributed to nobody. Same hole as Contribution
+  /// and SavingsTransaction, one column over.
+  /// See 20260814090000_financial_record_restrict.
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([sourceOfFunds, txnDate])
   @@index([customerId])
@@ -2806,7 +2855,11 @@ model FundWithdrawal {
   authorId       String?
   journalEntryId String?
 
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  /// RESTRICT, not SetNull — same reasoning as FundTransaction. A
+  /// withdrawal names the member the money went to; detaching that on
+  /// delete leaves cash out of the fund with nobody's name on it.
+  /// See 20260814090000_financial_record_restrict.
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([sourceOfFunds, txnDate])
   @@index([customerId])
@@ -2899,7 +2952,11 @@ model PenaltyWaiver {
   waivedById        String
   waivedAt          DateTime @default(now())
 
-  loan         LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. A waiver is money written off, and it carries
+  /// an FK to the GL reversal that booked it — cascading it away left the
+  /// journal entry standing with nothing to explain it.
+  /// See 20260814090000_financial_record_restrict.
+  loan         LoanApplication @relation(fields: [loanId], references: [id], onDelete: Restrict)
   waivedBy     User            @relation("PenaltyWaivedBy", fields: [waivedById], references: [id])
   journalEntry JournalEntry?   @relation(fields: [journalEntryId], references: [id])
 
@@ -3151,7 +3208,12 @@ model RepossessionCase {
   cancelledById      String?
   cancellationReason String?   @db.VarChar(500)
 
-  loan                 LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. The case carries the auction proceeds, the
+  /// outstanding balance at recovery and the resulting deficiency booked
+  /// as bad debt, plus an FK to the settlement entry. That is the
+  /// disposal of collateral — the last money event on a defaulted loan.
+  /// See 20260814090000_financial_record_restrict.
+  loan                 LoanApplication @relation(fields: [loanId], references: [id], onDelete: Restrict)
   identifiedBy         User            @relation("RepoIdentified", fields: [identifiedById], references: [id])
   bmApprovedBy         User?           @relation("RepoBmApproved", fields: [bmApprovedById], references: [id])
   creditHeadApprovedBy User?           @relation("RepoCreditApproved", fields: [creditHeadApprovedById], references: [id])
@@ -3387,7 +3449,12 @@ model LeaseAgreement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  loan         LoanApplication @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  /// RESTRICT, not Cascade. The lease carries the residual due at
+  /// end-of-term and what was actually paid to buy the unit out, plus an
+  /// FK to the buyout entry. Losing it loses the settlement of a contract
+  /// the coop is a party to.
+  /// See 20260814090000_financial_record_restrict.
+  loan         LoanApplication @relation(fields: [loanId], references: [id], onDelete: Restrict)
   buyoutBy     User?           @relation("LeaseBuyoutBy", fields: [buyoutById], references: [id])
   pulledOutBy  User?           @relation("LeasePulledOutBy", fields: [pulledOutById], references: [id])
   journalEntry JournalEntry?   @relation(fields: [buyoutJournalEntryId], references: [id])

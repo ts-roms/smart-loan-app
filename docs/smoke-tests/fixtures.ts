@@ -108,6 +108,34 @@ const PEOPLE: Array<[string, LoanStatus[]]> = [
   ["Rico Redemption", ["DEFAULTED", "ACTIVE"]], // tier 2 — both flags true
 ];
 
+/**
+ * Clear the money hanging off a set of loans, so the loans themselves can
+ * be deleted.
+ *
+ * These six used to cascade. 20260814090000_financial_record_restrict
+ * made them RESTRICT, because in production deleting a loan and taking
+ * its payments with it is exactly the accident the constraint exists to
+ * prevent — a posted payment is reversed, never deleted. This script is
+ * the one place in the repo that legitimately deletes loans, and it now
+ * has to say so out loud, one table at a time.
+ *
+ * That is the point rather than an inconvenience: the same "by hand"
+ * treatment the journal entries above already needed. Nothing here runs
+ * against a real book — these are PICKER-* fixtures this script created
+ * on its last run.
+ */
+async function deleteLoanMoney(loanIds: string[]) {
+  if (loanIds.length === 0) return;
+  const where = { loanId: { in: loanIds } };
+  // Intents before payments: PaymentIntent.paymentId points at LoanPayment.
+  await prisma.paymentIntent.deleteMany({ where });
+  await prisma.loanPayment.deleteMany({ where });
+  await prisma.loanSchedule.deleteMany({ where });
+  await prisma.penaltyWaiver.deleteMany({ where });
+  await prisma.repossessionCase.deleteMany({ where });
+  await prisma.leaseAgreement.deleteMany({ where });
+}
+
 async function main() {
   const officer = await prisma.user.findFirstOrThrow({
     where: { role: "LOAN_OFFICER" },
@@ -184,11 +212,17 @@ async function main() {
         where: { refType: "LoanApplication", refId: { in: refIds } },
       });
     }
+    await deleteLoanMoney(doomed.map((l) => l.id));
     await prisma.loanApplication.deleteMany({
       where: { customerId: { in: fixtureCustomerIds } },
     });
   }
   // Belt and braces: a PICKER-* loan whose customer was already removed.
+  const strays = await prisma.loanApplication.findMany({
+    where: { number: { startsWith: "PICKER-" } },
+    select: { id: true },
+  });
+  await deleteLoanMoney(strays.map((l) => l.id));
   await prisma.loanApplication.deleteMany({
     where: { number: { startsWith: "PICKER-" } },
   });

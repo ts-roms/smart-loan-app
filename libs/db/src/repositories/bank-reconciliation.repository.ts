@@ -16,6 +16,7 @@ import type {
   PrismaClient,
   Prisma,
 } from "@prisma/client";
+import { isUniqueViolation } from "../lib/prisma-errors";
 
 export interface BankStatementCreateInput {
   label: string;
@@ -148,6 +149,48 @@ export class BankReconciliationRepository {
     return new Set(rows.map((r) => r.matchedRefId!));
   }
 
+  /**
+   * Write a claim, and let the database say whether we got it.
+   *
+   * Returns true if the line now holds (type, refId), false if another
+   * line already did. The check is the INSERT, not a SELECT before it:
+   * `bank_line_match_unique` is a partial unique index over
+   * (matchedType, matchedRefId) where both are non-null, so exactly one
+   * writer can win and the loser learns it from Postgres rather than
+   * from a read that was already stale when it returned.
+   *
+   * P2002 is matched structurally via `isUniqueViolation` — not
+   * `instanceof PrismaClientKnownRequestError` — because under pnpm the
+   * API and the repositories can resolve separate copies of
+   * @prisma/client and an instanceof across two copies silently returns
+   * false, which here would turn a handled race into a 500. Same
+   * reasoning, same helper, as `postIfAbsent`.
+   *
+   * BankStatementLine has exactly one other unique constraint, its
+   * primary key, and we update BY that key — so a P2002 on this
+   * statement can only be the match index.
+   */
+  private async claimLine(
+    lineId: string,
+    type: string,
+    refId: string,
+  ): Promise<boolean> {
+    try {
+      await this.prisma.bankStatementLine.update({
+        where: { id: lineId },
+        data: {
+          matchedType: type,
+          matchedRefId: refId,
+          matchedAt: new Date(),
+        },
+      });
+      return true;
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      return false;
+    }
+  }
+
   async autoMatch(statementId: string): Promise<AutoMatchResult> {
     const lines = await this.prisma.bankStatementLine.findMany({
       where: { statementId, matchedAt: null },
@@ -177,13 +220,19 @@ export class BankReconciliationRepository {
      * answers, 2 queries instead of 2N.
      *
      * What this does NOT preserve is visibility of claims made by a
-     * *concurrent* process mid-loop. That is worth stating plainly rather
-     * than glossing: there is no unique constraint on
-     * (matchedType, matchedRefId), so the old per-line re-read was never a
-     * guarantee either — between its SELECT and its UPDATE another run could
-     * claim the same payment. It narrowed an already-open window; this
-     * widens it back to the length of one autoMatch run. Closing it properly
-     * needs a unique index, which is a schema change and its own review.
+     * *concurrent* process mid-loop — and no arrangement of reads could,
+     * because a read is not a claim. The old per-line re-read was never a
+     * guarantee either: between its SELECT and its UPDATE another run could
+     * take the same payment. It narrowed an already-open window; this
+     * widens it back to the length of one autoMatch run.
+     *
+     * The window is now closed at the other end, where it can be. The
+     * partial unique index `bank_line_match_unique` (added by
+     * 20260814100000_bank_line_match_unique) makes a second claim on the
+     * same (matchedType, matchedRefId) impossible, so these sets no longer
+     * carry the correctness of the feature — they only spare us the
+     * doomed UPDATE and keep the loop's own writes visible to itself.
+     * `claimLine` below is what actually arbitrates.
      */
     const claimedPayments = await this.claimedRefIds("LoanPayment");
     const claimedLoans = await this.claimedRefIds("LoanDisbursement");
@@ -214,23 +263,34 @@ export class BankReconciliationRepository {
         }
         if (!match && candidates.length === 1) match = candidates[0];
         if (match) {
-          await this.prisma.bankStatementLine.update({
-            where: { id: line.id },
-            data: {
+          const won = await this.claimLine(line.id, "LoanPayment", match.id);
+          // Keeps the set in step with the write we just made, exactly as
+          // the old per-line re-read did. Added either way: if a
+          // concurrent run holds the payment, this run must not offer it
+          // to a later line in this same loop.
+          claimedPayments.add(match.id);
+          if (won) {
+            matchedLines++;
+            matchedAmount += amount;
+            details.push({
+              lineId: line.id,
               matchedType: "LoanPayment",
               matchedRefId: match.id,
-              matchedAt: new Date(),
-            },
-          });
-          // Keeps the set in step with the write we just made, exactly as
-          // the old per-line re-read did.
-          claimedPayments.add(match.id);
-          matchedLines++;
-          matchedAmount += amount;
+            });
+            continue;
+          }
+          /*
+           * Lost the race. The line stays unmatched, which is the honest
+           * outcome: a payment someone else has already reconciled is not
+           * an explanation for this credit, and quietly matching it to
+           * something else would invent one. It surfaces in the unmatched
+           * queue for a human, exactly as an unexplained credit should.
+           */
           details.push({
             lineId: line.id,
-            matchedType: "LoanPayment",
-            matchedRefId: match.id,
+            matchedType: null,
+            matchedRefId: null,
+            note: "Candidate payment was claimed by another line while this run was in progress.",
           });
           continue;
         }
@@ -247,21 +307,24 @@ export class BankReconciliationRepository {
           })
         ).filter((l) => !claimedLoans.has(l.id));
         if (candidates.length === 1) {
-          await this.prisma.bankStatementLine.update({
-            where: { id: line.id },
-            data: {
+          const loanId = candidates[0]!.id;
+          const won = await this.claimLine(line.id, "LoanDisbursement", loanId);
+          claimedLoans.add(loanId);
+          if (won) {
+            matchedLines++;
+            matchedAmount += Math.abs(amount);
+            details.push({
+              lineId: line.id,
               matchedType: "LoanDisbursement",
-              matchedRefId: candidates[0]!.id,
-              matchedAt: new Date(),
-            },
-          });
-          claimedLoans.add(candidates[0]!.id);
-          matchedLines++;
-          matchedAmount += Math.abs(amount);
+              matchedRefId: loanId,
+            });
+            continue;
+          }
           details.push({
             lineId: line.id,
-            matchedType: "LoanDisbursement",
-            matchedRefId: candidates[0]!.id,
+            matchedType: null,
+            matchedRefId: null,
+            note: "Candidate disbursement was claimed by another line while this run was in progress.",
           });
           continue;
         }
@@ -287,17 +350,21 @@ export class BankReconciliationRepository {
      * `MANUAL` and other free-text types carry no refId and are exempt:
      * they mean "explained, not tied to a record" (a bank fee, an
      * interest credit), and several lines may legitimately be explained
-     * the same way.
+     * the same way. The partial index's WHERE clause exempts them for the
+     * same reason, so code and constraint agree on what "claimed" means.
+     *
+     * This read is not the guarantee and never was — another request
+     * walks between it and the UPDATE below. It stays because it is the
+     * common case and it is the only place we can name WHICH line holds
+     * the record, which is the whole value of the error message. The
+     * guarantee is `bank_line_match_unique`, applied on the write.
      */
     if (input.refId) {
-      const claimedBy = await this.prisma.bankStatementLine.findFirst({
-        where: {
-          matchedType: input.type,
-          matchedRefId: input.refId,
-          id: { not: lineId },
-        },
-        select: { id: true, txnDate: true, description: true },
-      });
+      const claimedBy = await this.findClaimant(
+        lineId,
+        input.type,
+        input.refId,
+      );
       if (claimedBy) {
         throw new BankLineAlreadyMatchedError(
           claimedBy.id,
@@ -306,15 +373,51 @@ export class BankReconciliationRepository {
         );
       }
     }
-    return this.prisma.bankStatementLine.update({
-      where: { id: lineId },
-      data: {
-        matchedType: input.type,
-        matchedRefId: input.refId ?? null,
-        matchedAt: new Date(),
-        matchedById: input.userId,
-        matchNote: input.note ?? null,
-      },
+    try {
+      return await this.prisma.bankStatementLine.update({
+        where: { id: lineId },
+        data: {
+          matchedType: input.type,
+          matchedRefId: input.refId ?? null,
+          matchedAt: new Date(),
+          matchedById: input.userId,
+          matchNote: input.note ?? null,
+        },
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err) || !input.refId) throw err;
+      /*
+       * Someone claimed it between the read and the write. Go back for
+       * the winner so the operator still gets a message naming the line
+       * that has it rather than a raw constraint error.
+       */
+      const claimedBy = await this.findClaimant(
+        lineId,
+        input.type,
+        input.refId,
+      );
+      // A unique violation with nothing to find afterwards would mean the
+      // conflict came from somewhere else entirely, which is a real error
+      // and must not be dressed up as a reconciliation conflict.
+      if (!claimedBy) throw err;
+      throw new BankLineAlreadyMatchedError(
+        claimedBy.id,
+        claimedBy.description,
+        claimedBy.txnDate,
+      );
+    }
+  }
+
+  /** The line already holding (type, refId), if any — shared by the fast
+   * path and the race loser. */
+  private findClaimant(
+    lineId: string,
+    type: string,
+    refId: string,
+  ): Promise<{ id: string; txnDate: Date; description: string } | null> {
+    return this.prisma.bankStatementLine.findFirst({
+      where: { matchedType: type, matchedRefId: refId, id: { not: lineId } },
+      select: { id: true, txnDate: true, description: true },
     });
   }
 
