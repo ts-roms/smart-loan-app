@@ -358,6 +358,15 @@ export class ComplianceService {
       "yearsAtCurrentJob",
     ];
 
+    // The portal users belonging to this customer, read before the
+    // transaction because the LoginAttempt carve-out below needs their ids
+    // and `LoginAttempt.userId` carries no foreign key to follow.
+    const portalUsers = await this.prisma.user.findMany({
+      where: { customerId: args.customerId },
+      select: { id: true },
+    });
+    const portalUserIds = portalUsers.map((u) => u.id);
+
     await this.prisma.$transaction([
       this.prisma.customer.update({
         where: { id: args.customerId },
@@ -406,6 +415,38 @@ export class ComplianceService {
         where: { customerId: args.customerId },
         data: { active: false },
       }),
+      // UNLINK the security log. Do not delete it.
+      //
+      // `LoginAttempt.userId` has no foreign key (deliberately — see the
+      // model comment), so nothing cascades here and the rows would
+      // otherwise survive untouched, still pointing at an erased person.
+      // The obvious fix, `deleteMany({ where: { userId } })`, is the wrong
+      // one: most of what is stored against a user id is the record of
+      // attacks AGAINST that account — forty failures from one address,
+      // then a success — and that is evidence about an attacker, not
+      // personal data about the data subject. Erasing it would destroy the
+      // only trace of an intrusion at the request of the person who was
+      // intruded upon.
+      //
+      // Nulling the id severs the link to the erased identity, which is
+      // what §71 asks for, and keeps the row so the attack is still
+      // reconstructable by address, origin and time.
+      //
+      // NOTE for legal review (§70): `LoginAttempt.email` is left as
+      // typed. It is the join key for every brute-force query and nulling
+      // it would blind the lockout logic entirely, but it is also the
+      // erased customer's address where the attempt was genuine. Whether a
+      // DSAR erasure must reach it is a question for counsel, not for this
+      // service, and the row's own retention clock (default 730 days) is
+      // what currently bounds it.
+      ...(portalUserIds.length > 0
+        ? [
+            this.prisma.loginAttempt.updateMany({
+              where: { userId: { in: portalUserIds } },
+              data: { userId: null },
+            }),
+          ]
+        : []),
     ]);
 
     // Delete the uploaded files. AFTER the column redaction, because
@@ -454,6 +495,12 @@ export class ComplianceService {
         "Contribution",
         "SavingsTransaction",
         "AmlScreening",
+        // Unlinked, not deleted: `userId` is nulled so the rows no longer
+        // point at the erased identity, and the rows themselves stay
+        // because they are the record of attacks against the account, not
+        // personal data about its holder. Bounded by their own retention
+        // clock (SystemConfig.loginAttemptRetentionDays).
+        "LoginAttempt (userId unlinked; the attempt records themselves are retained as security evidence)",
         // The header row is the compliance record — it evidences that
         // identity verification happened, who decided it and when, and
         // AMLA §9 retention applies to it exactly as to a journal entry.

@@ -25,6 +25,18 @@ export const retentionPolicyUpdateSchema = z.object({
     .min(RETENTION_MIN)
     .max(RETENTION_MAX),
   jobRunRetentionDays: z.number().int().min(RETENTION_MIN).max(RETENTION_MAX),
+  /**
+   * OPTIONAL where the other three are required. Not an oversight: this knob
+   * was added after the endpoint shipped, and making it mandatory would 400
+   * every body written against the old contract. Omitted means "leave the
+   * stored value alone" — see `RetentionService.updatePolicy`.
+   */
+  loginAttemptRetentionDays: z
+    .number()
+    .int()
+    .min(RETENTION_MIN)
+    .max(RETENTION_MAX)
+    .optional(),
 });
 
 export type RetentionPolicyUpdateInput = z.infer<
@@ -57,6 +69,12 @@ export const retentionPolicyResponseSchema = z.object({
   auditRetentionDays: z.number().int(),
   notificationRetentionDays: z.number().int(),
   jobRunRetentionDays: z.number().int(),
+  /**
+   * The security log's own window. Separate from the audit one because the
+   * audit window is anchored to the AMLA §9 floor and this is high-volume
+   * personal data with no such floor under it.
+   */
+  loginAttemptRetentionDays: z.number().int(),
   /** True only when the audit window is set, and set below 1,825 days. */
   auditBelowAmlaFloor: z.boolean(),
 });
@@ -81,17 +99,33 @@ export const retentionPurgeResponseSchema = z.object({
     auditRetentionDays: z.number().int(),
     notificationRetentionDays: z.number().int(),
     jobRunRetentionDays: z.number().int(),
+    loginAttemptRetentionDays: z.number().int(),
   }),
   /** Per-table cutoff instants. Null = opted out, nothing attempted. */
   cutoffs: z.object({
     audit: z.string().nullable(),
     notification: z.string().nullable(),
     jobRun: z.string().nullable(),
+    loginAttempt: z.string().nullable(),
   }),
   deleted: z.object({
     auditEvents: z.number().int(),
     notifications: z.number().int(),
     jobRuns: z.number().int(),
+    loginAttempts: z.number().int(),
+  }),
+  /**
+   * Rows the run REDACTED rather than deleted — protected audit records past
+   * the audit cutoff whose `ipAddress`/`userAgent` were nulled in place.
+   *
+   * Contractual, and deliberately NOT folded into `deleted`. The two numbers
+   * answer to different obligations: a count here is evidence that §71
+   * minimisation ran over the rows §56 will not let go, and a count in
+   * `deleted.auditEvents` is evidence that a record went away. Summing them
+   * would make an operator unable to tell which happened.
+   */
+  redacted: z.object({
+    auditEvents: z.number().int(),
   }),
   /**
    * The closed list of audit actions this run was allowed to delete.

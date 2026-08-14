@@ -223,3 +223,84 @@ export function purgeableAuditWhere(cutoff: Date): {
     impersonatedById: null,
   };
 }
+
+/**
+ * The actions the `libs/db` money-path branch named as records that must
+ * never come off the general audit clock.
+ *
+ * This list is NOT what protects them — nothing reads it at runtime except
+ * the test that asserts the two halves compose. Protection comes from
+ * `OPERATIONAL_AUDIT_ACTIONS` being closed, which preserves these (and
+ * everything else unlisted) by default. The list exists so that the claim
+ * "none of these is disposable" is checked by CI rather than by eye, and so
+ * that adding one of them to the operational list fails a test instead of
+ * quietly widening the purge.
+ *
+ * Every entry classifies as FINANCIAL or UNCLASSIFIED today; both are
+ * preserved classes. See audit-retention.test.ts.
+ */
+export const MONEY_PATH_AUDIT_ACTIONS: readonly string[] = [
+  "LOAN_DISBURSE",
+  "LOAN_PAYMENT_RECORD",
+  "JOURNAL_POST",
+  "JOURNAL_REVERSE",
+  "ACCOUNTING_PERIOD_CLOSE",
+  "ACCOUNTING_PERIOD_REOPEN",
+  "KYC_DECIDE",
+];
+
+/**
+ * The `where` clause for the §71 PII redaction pass — the retention path for
+ * audit rows that are NOT allowed to be deleted.
+ *
+ * ## Why redaction exists at all
+ *
+ * `ipAddress` and `userAgent` are personal data. §71 says personal data does
+ * not get kept forever; §56 says the audit row does. Both are satisfied by
+ * nulling those two columns and keeping everything else — the row still
+ * evidences that an actor took an action at a time, which is what §56 asks of
+ * it, and the two columns that identify a device and a network location are
+ * gone. Deleting the row would satisfy §71 by destroying the §56 record, which
+ * is not a trade this codebase gets to make.
+ *
+ * The database enforces the same asymmetry independently: the append-only
+ * trigger permits exactly this update (both columns to NULL, nothing else
+ * touched) and refuses every other one, so a bug in this predicate cannot turn
+ * into a rewritten `action` or a lost row.
+ *
+ * ## Which rows
+ *
+ * The exact complement of `purgeableAuditWhere` within the same cutoff, minus
+ * rows that have nothing to redact:
+ *
+ *   1. `createdAt < cutoff` — the same clock. Redaction is not a second,
+ *      shorter window, because the point at which the row's provenance stops
+ *      being needed is the point at which the row itself would have expired
+ *      had it been ordinary. It also means a regulatory hold
+ *      (`auditRetentionDays = 0`) freezes redaction too, which is correct:
+ *      under a hold, nothing is minimised.
+ *
+ *   2. `NOT (operational AND non-impersonated)` — i.e. everything the purge
+ *      may NOT delete. Written as the explicit negation rather than relying on
+ *      the purge having already run, so the two passes are order-independent
+ *      and each reads as a complete statement of what it touches.
+ *
+ *   3. At least one of the two columns is non-null. Skips the rows written
+ *      before 20260814140000 added the columns, and every job-driven row that
+ *      never had an inbound request — which is most of the table today, and
+ *      updating them would be a no-op that still pays the trigger's row check.
+ */
+export function redactableAuditWhere(cutoff: Date): {
+  createdAt: { lt: Date };
+  NOT: { action: { in: string[] }; impersonatedById: null };
+  OR: [{ ipAddress: { not: null } }, { userAgent: { not: null } }];
+} {
+  return {
+    createdAt: { lt: cutoff },
+    NOT: {
+      action: { in: [...OPERATIONAL_AUDIT_ACTIONS] },
+      impersonatedById: null,
+    },
+    OR: [{ ipAddress: { not: null } }, { userAgent: { not: null } }],
+  };
+}

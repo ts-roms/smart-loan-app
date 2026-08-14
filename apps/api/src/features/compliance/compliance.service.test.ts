@@ -49,6 +49,24 @@ function makePrisma(opts: {
 }) {
   const update = vi.fn(async () => ({}));
   const userUpdateMany = vi.fn(async () => ({ count: 0 }));
+  /**
+   * The customer's portal logins. Read by `eraseCustomer` before its
+   * transaction so the LoginAttempt carve-out has ids to unlink — the
+   * `userId` column carries no foreign key, so there is nothing to follow.
+   */
+  const userFindMany = vi.fn(async () => [{ id: "portal-user-1" }]);
+  /**
+   * The carve-out itself. `updateMany`, never `deleteMany`: the rows are the
+   * record of attacks AGAINST the erased account, which is evidence about an
+   * attacker rather than personal data about the data subject.
+   */
+  const loginAttemptUpdateMany = vi.fn(
+    async (_arg: {
+      where: { userId: { in: string[] } };
+      data: { userId: null };
+    }) => ({ count: 3 }),
+  );
+  const loginAttemptDeleteMany = vi.fn(async (_arg: unknown) => ({ count: 0 }));
   const kyc = opts.kyc ?? [];
   const apps = opts.apps ?? [];
 
@@ -107,7 +125,11 @@ function makePrisma(opts: {
       findUnique: vi.fn(async () => opts.customer ?? null),
       update,
     },
-    user: { updateMany: userUpdateMany },
+    user: { updateMany: userUpdateMany, findMany: userFindMany },
+    loginAttempt: {
+      updateMany: loginAttemptUpdateMany,
+      deleteMany: loginAttemptDeleteMany,
+    },
     // Every relation read returns [] (or the seeded rows) so the export
     // test runs against an "empty-but-existing" customer. We're not
     // testing what's returned; we're testing that the gate before the
@@ -132,6 +154,8 @@ function makePrisma(opts: {
     }),
     _customerUpdate: update,
     _userUpdateMany: userUpdateMany,
+    _loginAttemptUpdateMany: loginAttemptUpdateMany,
+    _loginAttemptDeleteMany: loginAttemptDeleteMany,
     _kyc: kyc,
     _apps: apps,
   };
@@ -252,6 +276,20 @@ describe("ComplianceService", () => {
       // Update transaction + portal-login deactivation both fired.
       expect(prisma._customerUpdate).toHaveBeenCalledTimes(1);
       expect(prisma._userUpdateMany).toHaveBeenCalledTimes(1);
+
+      // The security-log carve-out: the link to the erased identity is cut,
+      // and the rows stay. Deleting them would erase the evidence of attacks
+      // against the account at the request of the person attacked.
+      expect(prisma._loginAttemptDeleteMany).not.toHaveBeenCalled();
+      expect(prisma._loginAttemptUpdateMany).toHaveBeenCalledTimes(1);
+      expect(prisma._loginAttemptUpdateMany.mock.calls[0]![0]).toEqual({
+        where: { userId: { in: ["portal-user-1"] } },
+        data: { userId: null },
+      });
+      expect(
+        result.ok && result.retainedTables.some((t) => t.startsWith("Login")),
+        "the response must say the security log was kept",
+      ).toBe(true);
       // Audit row carries the reason + cleared fields.
       expect(audit.record).toHaveBeenCalledTimes(1);
       const call = audit.record.mock.calls[0]![0] as unknown as {

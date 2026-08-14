@@ -35,6 +35,8 @@ export function useUpdateRetentionPolicy() {
       auditRetentionDays: number;
       notificationRetentionDays: number;
       jobRunRetentionDays: number;
+      /** Optional on the wire — omitted leaves the stored value alone. */
+      loginAttemptRetentionDays?: number;
     }) =>
       getApiClient().request<RetentionPolicyView>(
         "/compliance/retention-policy",

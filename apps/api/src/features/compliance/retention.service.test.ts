@@ -38,10 +38,25 @@ interface AuditDeleteWhere {
   impersonatedById?: null;
 }
 
+/** The complement of `AuditDeleteWhere` — the rows redaction reaches. */
+interface AuditRedactWhere {
+  createdAt: { lt: Date };
+  NOT: { action: { in: string[] }; impersonatedById: null };
+  OR: unknown[];
+}
+
+/** The only column patch the append-only trigger will accept. */
+interface AuditRedactData {
+  ipAddress: null;
+  userAgent: null;
+}
+
 function makePrisma(opts: {
   auditRetentionDays: number;
   notificationRetentionDays: number;
   jobRunRetentionDays: number;
+  /** Defaults to 730, matching the SystemConfig default. */
+  loginAttemptRetentionDays?: number;
   /** When supplied, `auditEvent.deleteMany` really filters these. */
   auditRows?: AuditRow[];
 }) {
@@ -51,12 +66,32 @@ function makePrisma(opts: {
     auditRetentionDays: opts.auditRetentionDays,
     notificationRetentionDays: opts.notificationRetentionDays,
     jobRunRetentionDays: opts.jobRunRetentionDays,
+    loginAttemptRetentionDays: opts.loginAttemptRetentionDays ?? 730,
   };
   const auditRows = opts.auditRows;
-  return {
+  const client = {
     systemConfig: {
       upsert: vi.fn(async () => cfg),
     },
+    /**
+     * The GUC claim. A stand-in cannot prove the trigger accepts it — that is
+     * what libs/db/src/lib/audit-append-only.test.ts is for, against a real
+     * Postgres. What this CAN prove, and does below, is that the claim is
+     * issued on the transaction client and issued BEFORE the write, which is
+     * the half of the contract that lives in this file.
+     */
+    $executeRawUnsafe: vi.fn(async (_sql: string) => 1),
+    /**
+     * Interactive transaction. Hands the callback this same object, so the
+     * claim and the write are recorded against one call log and their ORDER
+     * is observable.
+     */
+    $transaction: vi.fn(
+      async (
+        fn: (tx: unknown) => Promise<unknown>,
+        _opts?: { timeout?: number },
+      ) => fn(client),
+    ),
     auditEvent: {
       // With no seeded rows this keeps the historical fixed count, so
       // the pre-existing tests keep asserting what they always did.
@@ -75,6 +110,11 @@ function makePrisma(opts: {
         for (const row of doomed) auditRows.splice(auditRows.indexOf(row), 1);
         return { count: doomed.length };
       }),
+      updateMany: vi.fn(
+        async (_arg: { where: AuditRedactWhere; data: AuditRedactData }) => ({
+          count: 5,
+        }),
+      ),
     },
     notification: {
       deleteMany: vi.fn(
@@ -88,7 +128,13 @@ function makePrisma(opts: {
         }),
       ),
     },
+    loginAttempt: {
+      deleteMany: vi.fn(
+        async (_arg: { where: { createdAt: { lt: Date } } }) => ({ count: 9 }),
+      ),
+    },
   };
+  return client;
 }
 
 function makeAudit() {
@@ -112,7 +158,10 @@ describe("RetentionService.runPurge", () => {
       auditEvents: 42,
       notifications: 7,
       jobRuns: 100,
+      loginAttempts: 9,
     });
+    // Redactions are reported next to deletions, never inside them.
+    expect(r.redacted).toEqual({ auditEvents: 5 });
     // Cutoffs are present for all three tables.
     expect(r.cutoffs.audit).not.toBeNull();
     expect(r.cutoffs.notification).not.toBeNull();
@@ -431,5 +480,210 @@ describe("RetentionService.runPurge — audit carve-out", () => {
     expect(r.auditActionsInScope).toEqual([...OPERATIONAL_AUDIT_ACTIONS]);
     expect(r.auditActionsInScope).toContain("REPORT_GENERATED");
     expect(r.auditActionsInScope).not.toContain("LOAN_APPROVAL_STEP");
+  });
+});
+
+/**
+ * The half of the append-only contract that lives in this file.
+ *
+ * Whether the trigger honours a claim is a question only Postgres can answer,
+ * and libs/db/src/lib/audit-append-only.test.ts asks it there. What is
+ * checkable here is that the service holds up its end: it opens a real
+ * transaction, claims BEFORE it writes, and does both on the same client.
+ * Getting any of those wrong fails closed in production — the delete is
+ * refused — so the value of catching it here is turning a broken nightly job
+ * into a red test.
+ */
+describe("runPurge claims the database windows correctly", () => {
+  it("wraps each AuditEvent leg in its own transaction with a raised timeout", async () => {
+    const prisma = makePrisma({
+      auditRetentionDays: 1825,
+      notificationRetentionDays: 0,
+      jobRunRetentionDays: 0,
+    });
+    const svc = new RetentionService(prisma as never, makeAudit() as never);
+
+    await svc.runPurge({ actorId: "system" });
+
+    // Two: the delete leg and the redaction leg. Separate transactions so
+    // each holds only its own window — the delete cannot rewrite and the
+    // redaction cannot delete.
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    for (const call of prisma.$transaction.mock.calls) {
+      // Prisma's default interactive-transaction timeout is 5s, which a
+      // five-year sweep will exceed on any real book.
+      expect(call[1]?.timeout).toBeGreaterThan(5_000);
+    }
+  });
+
+  it("claims the purge window before deleting, and the redaction window before updating", async () => {
+    const prisma = makePrisma({
+      auditRetentionDays: 1825,
+      notificationRetentionDays: 0,
+      jobRunRetentionDays: 0,
+    });
+    const svc = new RetentionService(prisma as never, makeAudit() as never);
+
+    await svc.runPurge({ actorId: "system" });
+
+    const claims = prisma.$executeRawUnsafe.mock.calls.map((c) => c[0]);
+    expect(claims).toHaveLength(2);
+    expect(claims[0]).toContain("app.audit_retention_purge");
+    expect(claims[1]).toContain("app.audit_pii_redaction");
+    // Bound to the transaction id, not a boolean — that is what stops a
+    // session-scoped `SET` from arming a later borrower of a pooled
+    // connection.
+    for (const sql of claims) {
+      expect(sql).toContain("pg_current_xact_id()");
+      // Third argument `true` = is_local: reverts at COMMIT/ROLLBACK.
+      expect(sql).toContain("true");
+    }
+
+    // Order matters and is not incidental: a claim issued after the write
+    // authorises nothing.
+    const claimOrder = prisma.$executeRawUnsafe.mock.invocationCallOrder;
+    expect(claimOrder[0]).toBeLessThan(
+      prisma.auditEvent.deleteMany.mock.invocationCallOrder[0]!,
+    );
+    expect(claimOrder[1]).toBeLessThan(
+      prisma.auditEvent.updateMany.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("does not open a transaction or claim anything when the audit clock is off", async () => {
+    const prisma = makePrisma({
+      auditRetentionDays: 0,
+      notificationRetentionDays: 365,
+      jobRunRetentionDays: 90,
+    });
+    const svc = new RetentionService(prisma as never, makeAudit() as never);
+
+    const r = await svc.runPurge({ actorId: "system" });
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+    expect(prisma.auditEvent.updateMany).not.toHaveBeenCalled();
+    // A regulatory hold freezes minimisation too. Under a hold nothing is
+    // deleted AND nothing is redacted, which is the correct reading of a
+    // hold — not "keep the rows but scrub them".
+    expect(r.redacted.auditEvents).toBe(0);
+  });
+});
+
+describe("the §71 redaction pass", () => {
+  it("nulls only the two PII columns, and never deletes", async () => {
+    const prisma = makePrisma({
+      auditRetentionDays: 1825,
+      notificationRetentionDays: 0,
+      jobRunRetentionDays: 0,
+    });
+    const svc = new RetentionService(prisma as never, makeAudit() as never);
+
+    const r = await svc.runPurge({ actorId: "system" });
+
+    const call = prisma.auditEvent.updateMany.mock.calls[0]![0];
+    // Exactly the shape the trigger permits. Anything else is refused at
+    // the database even though the service holds the window.
+    expect(call.data).toEqual({ ipAddress: null, userAgent: null });
+    expect(r.redacted.auditEvents).toBe(5);
+  });
+
+  it("targets the rows the purge is NOT allowed to delete", async () => {
+    const prisma = makePrisma({
+      auditRetentionDays: 1825,
+      notificationRetentionDays: 0,
+      jobRunRetentionDays: 0,
+    });
+    const svc = new RetentionService(prisma as never, makeAudit() as never);
+
+    await svc.runPurge({ actorId: "system" });
+
+    const where = prisma.auditEvent.updateMany.mock.calls[0]![0].where;
+    // Same clock as the delete leg.
+    const deleteWhere = prisma.auditEvent.deleteMany.mock.calls[0]![0].where;
+    expect(where.createdAt.lt.getTime()).toBe(
+      deleteWhere.createdAt.lt.getTime(),
+    );
+    // The complement of the carve-out: protected rows, and only those.
+    expect(where.NOT.action.in).toEqual([...OPERATIONAL_AUDIT_ACTIONS]);
+    expect(where.NOT.impersonatedById).toBeNull();
+    // And only rows that actually carry something to clear.
+    expect(where.OR).toHaveLength(2);
+  });
+
+  it("keeps redaction counts out of the deletion counts", async () => {
+    // A regulator reading "42 audit events deleted" must be reading a
+    // deletion count. Folding redactions in would make the one number an
+    // operator most needs to trust unreadable.
+    const prisma = makePrisma({
+      auditRetentionDays: 1825,
+      notificationRetentionDays: 0,
+      jobRunRetentionDays: 0,
+    });
+    const svc = new RetentionService(prisma as never, makeAudit() as never);
+
+    const r = await svc.runPurge({ actorId: "system" });
+    expect(r.deleted.auditEvents).toBe(42);
+    expect(r.redacted.auditEvents).toBe(5);
+  });
+});
+
+describe("LoginAttempt runs on its own clock", () => {
+  it("sweeps by its own window, not the audit one", async () => {
+    const prisma = makePrisma({
+      auditRetentionDays: 1825,
+      notificationRetentionDays: 0,
+      jobRunRetentionDays: 0,
+      loginAttemptRetentionDays: 730,
+    });
+    const svc = new RetentionService(prisma as never, makeAudit() as never);
+
+    const r = await svc.runPurge({ actorId: "system" });
+
+    expect(r.deleted.loginAttempts).toBe(9);
+    const loginCutoff =
+      prisma.loginAttempt.deleteMany.mock.calls[0]![0].where.createdAt.lt;
+    const auditCutoff =
+      prisma.auditEvent.deleteMany.mock.calls[0]![0].where.createdAt.lt;
+    // 730 days versus 1825 — the whole point of the separate knob.
+    expect(loginCutoff.getTime()).toBeGreaterThan(auditCutoff.getTime());
+    expect(r.cutoffs.loginAttempt).toBe(loginCutoff.toISOString());
+  });
+
+  it("honours its own opt-out independently of the audit one", async () => {
+    // A regulatory hold on the security log has nothing to do with a hold
+    // on the audit log, and vice versa.
+    const prisma = makePrisma({
+      auditRetentionDays: 1825,
+      notificationRetentionDays: 0,
+      jobRunRetentionDays: 0,
+      loginAttemptRetentionDays: 0,
+    });
+    const svc = new RetentionService(prisma as never, makeAudit() as never);
+
+    const r = await svc.runPurge({ actorId: "system" });
+
+    expect(prisma.loginAttempt.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.auditEvent.deleteMany).toHaveBeenCalledTimes(1);
+    expect(r.cutoffs.loginAttempt).toBeNull();
+    expect(r.deleted.loginAttempts).toBe(0);
+  });
+
+  it("does not redact login attempts — the whole row is the personal data", async () => {
+    // Unlike an audit row, a login attempt evidences no regulated action, so
+    // there is no §56 half to preserve once the window passes. Redacting it
+    // would leave a row that says nothing.
+    const prisma = makePrisma({
+      auditRetentionDays: 0,
+      notificationRetentionDays: 0,
+      jobRunRetentionDays: 0,
+      loginAttemptRetentionDays: 730,
+    });
+    const svc = new RetentionService(prisma as never, makeAudit() as never);
+
+    await svc.runPurge({ actorId: "system" });
+
+    expect(prisma.loginAttempt.deleteMany).toHaveBeenCalledTimes(1);
+    expect(prisma.auditEvent.updateMany).not.toHaveBeenCalled();
   });
 });
