@@ -30,6 +30,10 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
+import {
+  feeIncomeCreditOf,
+  lateFeeAccrualsBySchedule,
+} from "../lib/late-fee-accruals";
 import { isUniqueViolation } from "../lib/prisma-errors";
 import { AccountingRepository } from "./accounting.repository";
 import {
@@ -2006,22 +2010,24 @@ export class LoanRepository {
     if (scheduleIds.length === 0) {
       return { originalPenalty: 0, waivedToDate: 0, outstanding: 0 };
     }
-    // Look up all LATE_FEE_ACCRUAL entries whose sourceRefId starts with any
-    // of this loan's schedule ids (the daily key is appended after a colon).
-    const accruals = await this.prisma.journalEntry.findMany({
-      where: {
-        source: "LATE_FEE_ACCRUAL",
-        sourceRefType: "LoanScheduleLateFee",
-        OR: scheduleIds.map((sid) => ({
-          sourceRefId: { startsWith: `${sid}:` },
-        })),
-      },
-      include: { lines: { include: { account: true } } },
-    });
-    const originalPenalty = accruals.reduce((sum, e) => {
-      const feeLine = e.lines.find((l) => l.account.code === "4100");
-      return sum + (feeLine ? Number(feeLine.credit) : 0);
-    }, 0);
+    /*
+     * All LATE_FEE_ACCRUAL entries whose sourceRefId starts with any of this
+     * loan's schedule ids (the daily key is appended after a colon).
+     *
+     * Shares the chunked lookup with the nightly accrual (finding F1). This
+     * call site was already a single query rather than an N+1 — the `OR` has
+     * one branch per instalment, not per book — but the branch count is
+     * unbounded for a long-tenor loan, and having one implementation of "read
+     * the accruals for these schedule ids" is worth more than the handful of
+     * lines it saves.
+     */
+    const accrualsBySchedule = await lateFeeAccrualsBySchedule(
+      this.prisma,
+      scheduleIds,
+    );
+    const originalPenalty = feeIncomeCreditOf(
+      scheduleIds.flatMap((sid) => accrualsBySchedule.get(sid) ?? []),
+    );
 
     const waivers = await this.prisma.penaltyWaiver.findMany({
       where: { loanId: loan.id },

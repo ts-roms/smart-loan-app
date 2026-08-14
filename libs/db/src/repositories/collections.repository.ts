@@ -31,6 +31,10 @@ import type {
   PromiseToPay,
 } from "@prisma/client";
 
+import {
+  feeIncomeCreditOf,
+  lateFeeAccrualsBySchedule,
+} from "../lib/late-fee-accruals";
 import { AccountingRepository } from "./accounting.repository";
 
 export interface NoteCreateInput {
@@ -487,6 +491,17 @@ export class CollectionsRepository {
     let posted = 0;
     let skipped = 0;
 
+    /*
+     * Pass 1 — the policy arithmetic, which needs no database at all.
+     *
+     * An instalment whose target fee is zero is skipped here and never
+     * reaches the accrual lookup, exactly as before: the old loop hit
+     * `continue` before issuing its query.
+     */
+    const pending: Array<{
+      inst: (typeof installments)[number];
+      targetFee: number;
+    }> = [];
     for (const inst of installments) {
       const totalDue = Number(inst.totalDue);
       // Prefer per-product policy when present; fall back to caller-passed.
@@ -507,19 +522,31 @@ export class CollectionsRepository {
         continue;
       }
 
-      // Compute fee already on the books for this installment.
-      const existing = await this.prisma.journalEntry.findMany({
-        where: {
-          source: "LATE_FEE_ACCRUAL",
-          sourceRefType: "LoanScheduleLateFee",
-          sourceRefId: { startsWith: `${inst.id}:` },
-        },
-        include: { lines: { include: { account: true } } },
-      });
-      const accrued = existing.reduce((sum, e) => {
-        const feeLine = e.lines.find((l) => l.account.code === "4100"); // Fee Income
-        return sum + (feeLine ? Number(feeLine.credit) : 0);
-      }, 0);
+      pending.push({ inst, targetFee });
+    }
+
+    /*
+     * One batched read for the whole night instead of one per instalment —
+     * finding F1. Before this, the loop body below ran a `JournalEntry`
+     * prefix query 8,472 times a night at measured volume.
+     *
+     * This is a pre-read used to compute the delta to post, NOT a guard.
+     * `postIfAbsent` below still attempts the insert and still lets the
+     * unique index on (source, sourceRefType, sourceRefId) arbitrate against
+     * a concurrent poster. Reading further ahead of the write makes the read
+     * no weaker than it was, because it was never what made the post
+     * idempotent — the same argument `postIfAbsent` makes about its own
+     * internal lookup.
+     */
+    const accrualsBySchedule = await lateFeeAccrualsBySchedule(
+      this.prisma,
+      pending.map((p) => p.inst.id),
+    );
+
+    // Pass 2 — post the delta, in the same order, with the same arithmetic.
+    for (const { inst, targetFee } of pending) {
+      // Fee already on the books for this installment (Fee Income, 4100).
+      const accrued = feeIncomeCreditOf(accrualsBySchedule.get(inst.id) ?? []);
       const delta = round2(targetFee - accrued);
       if (delta <= 0) {
         skipped += 1;

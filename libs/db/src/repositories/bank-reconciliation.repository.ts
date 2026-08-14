@@ -156,6 +156,38 @@ export class BankReconciliationRepository {
     let matchedLines = 0;
     let matchedAmount = 0;
 
+    /*
+     * Finding F2 — but NOT the fix rejection R2 proposed.
+     *
+     * R2 reads this call as loop-invariant: "called once per statement line
+     * with no per-line argument — the result is identical every time". The
+     * argument is per-line-invariant but it is not loop-invariant, because
+     * the loop WRITES the very columns `claimedRefIds` reads. Every match
+     * below sets `matchedType`/`matchedRefId`, and the next iteration's read
+     * picks that up. That feedback is what stops two statement lines
+     * reconciling against one payment — the discrepancy the comment above
+     * `claimedRefIds` says this feature exists to surface — and it also lets
+     * an earlier match narrow a later line to a single candidate.
+     *
+     * Hoisting the call and reusing one frozen set therefore changes results,
+     * in both directions. Two golden tests in
+     * bank-reconciliation.repository.automatch.golden.test.ts fail if it is.
+     *
+     * So: read once, then keep the sets in step with our own writes. Same
+     * answers, 2 queries instead of 2N.
+     *
+     * What this does NOT preserve is visibility of claims made by a
+     * *concurrent* process mid-loop. That is worth stating plainly rather
+     * than glossing: there is no unique constraint on
+     * (matchedType, matchedRefId), so the old per-line re-read was never a
+     * guarantee either — between its SELECT and its UPDATE another run could
+     * claim the same payment. It narrowed an already-open window; this
+     * widens it back to the length of one autoMatch run. Closing it properly
+     * needs a unique index, which is a schema change and its own review.
+     */
+    const claimedPayments = await this.claimedRefIds("LoanPayment");
+    const claimedLoans = await this.claimedRefIds("LoanDisbursement");
+
     for (const line of lines) {
       const amount = Number(line.amount);
       const isCredit = amount > 0;
@@ -167,7 +199,6 @@ export class BankReconciliationRepository {
       if (isCredit) {
         // Credit (money in) → most likely a customer payment.
         // Prefer reference equality, fall back to amount + date proximity.
-        const claimed = await this.claimedRefIds("LoanPayment");
         const candidates = (
           await this.prisma.loanPayment.findMany({
             where: {
@@ -176,7 +207,7 @@ export class BankReconciliationRepository {
             },
             take: 5,
           })
-        ).filter((p) => !claimed.has(p.id));
+        ).filter((p) => !claimedPayments.has(p.id));
         let match: (typeof candidates)[number] | undefined;
         if (line.reference) {
           match = candidates.find((p) => p.reference === line.reference);
@@ -191,6 +222,9 @@ export class BankReconciliationRepository {
               matchedAt: new Date(),
             },
           });
+          // Keeps the set in step with the write we just made, exactly as
+          // the old per-line re-read did.
+          claimedPayments.add(match.id);
           matchedLines++;
           matchedAmount += amount;
           details.push({
@@ -203,7 +237,6 @@ export class BankReconciliationRepository {
       } else {
         // Debit (money out) → likely a disbursement. Compare against
         // loans disbursed in the window, by principal amount.
-        const claimedLoans = await this.claimedRefIds("LoanDisbursement");
         const candidates = (
           await this.prisma.loanApplication.findMany({
             where: {
@@ -222,6 +255,7 @@ export class BankReconciliationRepository {
               matchedAt: new Date(),
             },
           });
+          claimedLoans.add(candidates[0]!.id);
           matchedLines++;
           matchedAmount += Math.abs(amount);
           details.push({

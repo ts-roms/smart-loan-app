@@ -40,22 +40,13 @@ import type {
   PrismaClient,
 } from "@prisma/client";
 
+import { scheduleIdOfLateFeeRef } from "../lib/late-fee-accruals";
 import { isUniqueViolation } from "../lib/prisma-errors";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
-}
-
-/**
- * "<scheduleId>:<periodKey>" → the schedule id (see lateFeeAccrualEntry).
- * `indexOf` + `slice` rather than `split(":")[0]` so the result is
- * provably a string under noUncheckedIndexedAccess.
- */
-function scheduleIdOfLateFeeRef(ref: string): string {
-  const i = ref.indexOf(":");
-  return i === -1 ? ref : ref.slice(0, i);
 }
 
 export interface AccountCreateInput {
@@ -575,12 +566,23 @@ export class AccountingRepository {
       }));
   }
 
+  /**
+   * Net debit balance of one account as of a date.
+   *
+   * Finding F3 again — Q16, 1.40 s and 52,075 buffers, run twice per
+   * dashboard load (cash and receivable). Same reasoning as `ledgerLines`:
+   * the sum belongs in Postgres.
+   *
+   * `SUM` over zero rows is `NULL` in SQL and Prisma surfaces that as `null`,
+   * so the `?? 0` is what makes an account with no lines read as 0 rather
+   * than `NaN`. That case is covered by a golden test.
+   */
   private async accountBalance(accountId: string, asOf: Date): Promise<number> {
-    const lines = await this.prisma.journalLine.findMany({
+    const { _sum } = await this.prisma.journalLine.aggregate({
       where: { accountId, entry: { entryDate: { lte: asOf } } },
-      select: { debit: true, credit: true },
+      _sum: { debit: true, credit: true },
     });
-    return lines.reduce((s, l) => s + (Number(l.debit) - Number(l.credit)), 0);
+    return Number(_sum.debit ?? 0) - Number(_sum.credit ?? 0);
   }
 
   // ─── Accrual jobs ────────────────────────────────────────────────────
@@ -1058,23 +1060,72 @@ export class AccountingRepository {
 
   // ─── Internals ───────────────────────────────────────────────────────
 
+  /**
+   * Per-account debit/credit totals for the window, summed in Postgres.
+   *
+   * Finding F3. This used to select every journal line in range — for
+   * `trialBalance` and `balanceSheet` that means every line ever written,
+   * since they pass only `{to: asOf}` — hydrate each one with a copy of its
+   * `Account` row, and sum them in JavaScript. 1.72 s and 73,343 buffers at
+   * 800k lines, growing linearly and without bound. Rejection R4 records that
+   * no index helps: the query genuinely asks for the whole ledger. The fix is
+   * to stop carrying it into Node.
+   *
+   * The report builders fold their input per account, so handing them one
+   * pre-summed row per account produces the same output as handing them the
+   * individual lines — provided the two summations agree exactly.
+   *
+   * WHY THEY AGREE (§11)
+   *
+   * `debit` and `credit` are `Decimal(14,2)`, so every value is exactly two
+   * decimal places and every true sum is too. Postgres sums them in `NUMERIC`
+   * and is exact. The old JavaScript path summed them as IEEE doubles, where
+   * each addition carries at most a ~1e-16 relative error — but the builders
+   * round to 2 decimals after *every* line (`round2(row.net + …)`), so that
+   * error is discarded before it can accumulate and never approaches the
+   * 0.005 that would change a rounded result. Both paths therefore land on
+   * the same 2-decimal number, which is what the golden tests assert.
+   *
+   * No float enters anywhere new: the `Number()` conversions below happen on
+   * already-exact 2-decimal sums, exactly as they used to happen on
+   * already-exact 2-decimal line amounts.
+   *
+   * Accounts with no lines in the window produce no group, so they stay out
+   * of the reports exactly as they did when they contributed no rows.
+   */
   private async ledgerLines(filter: {
     from?: Date;
     to?: Date;
   }): Promise<LedgerLineInput[]> {
-    const rows = await this.prisma.journalLine.findMany({
+    const grouped = await this.prisma.journalLine.groupBy({
+      by: ["accountId"],
       where: { entry: { entryDate: { gte: filter.from, lte: filter.to } } },
-      include: { account: true },
+      _sum: { debit: true, credit: true },
     });
-    return rows.map((r) => ({
-      accountId: r.accountId,
-      accountCode: r.account.code,
-      accountName: r.account.name,
-      accountType: r.account.type,
-      normalBalance: r.account.normalBalance,
-      debit: Number(r.debit),
-      credit: Number(r.credit),
-    }));
+    if (grouped.length === 0) return [];
+
+    const accounts = await this.prisma.account.findMany({
+      where: { id: { in: grouped.map((g) => g.accountId) } },
+    });
+    const byId = new Map(accounts.map((a) => [a.id, a]));
+
+    const out: LedgerLineInput[] = [];
+    for (const g of grouped) {
+      const account = byId.get(g.accountId);
+      // A line's account is a required FK, so this cannot fire; skipping
+      // rather than asserting keeps a corrupt row from taking down a report.
+      if (!account) continue;
+      out.push({
+        accountId: g.accountId,
+        accountCode: account.code,
+        accountName: account.name,
+        accountType: account.type,
+        normalBalance: account.normalBalance,
+        debit: Number(g._sum.debit ?? 0),
+        credit: Number(g._sum.credit ?? 0),
+      });
+    }
+    return out;
   }
 
   /** "JE-2026-000123" — same scheme as loan numbers. */
