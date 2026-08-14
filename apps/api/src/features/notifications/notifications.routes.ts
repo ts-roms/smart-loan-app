@@ -108,6 +108,7 @@ export async function notificationRoutes(app: FastifyInstance) {
           "`?customerId=` filters but does not scope — this is every " +
           "borrower's mail, hence `notifications.read`.",
         tags: TAGS,
+        permission: "notifications.read",
         querystring: listQuerySchema,
         response: notificationListResponseSchema,
         errors: [401, 403],
@@ -132,6 +133,7 @@ export async function notificationRoutes(app: FastifyInstance) {
           "answer the record it wrote. A provider failure is still a " +
           "200 — the row comes back with status FAILED and `error` set.",
         tags: TAGS,
+        permission: "notifications.test",
         body: testSchema,
         response: notificationResponseSchema,
         errors: [400, 401, 403],

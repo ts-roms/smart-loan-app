@@ -209,6 +209,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "KYC rollup for the loan's borrower against the product's " +
           "required documents.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         response: kycStatusResponseSchema,
         errors: [401, 403, 404],
@@ -321,6 +322,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Loans, newest first, with balance and borrower. Filters are " +
           "server-side; the bare call returns the 200 most recent.",
         tags: TAGS,
+        permission: "loans.read",
         querystring: loanListQuerySchema,
         response: loanListResponseSchema,
         errors: [400, 401, 403],
@@ -349,6 +351,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "One loan with schedule, payments, borrower, product and " +
           "collateral — by id or LN- number.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         response: loanDetailResponseSchema,
         errors: [401, 403, 404],
@@ -380,6 +383,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Persist a client-side face-match score. Both passes and fails " +
           "are audited.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         body: selfieMatchSchema,
         response: loanResponseSchema,
@@ -433,6 +437,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Submit a loan application: AML gate, one-live-loan check, " +
           "decisioning, approval-chain stamp.",
         tags: TAGS,
+        permission: "loans.apply",
         body: applyRequestSchema,
         // The 201 is the created row plus the engine's verdict.
         response: applyResponseSchema,
@@ -471,6 +476,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Preview the decisioning verdict for an application without " +
           "creating anything.",
         tags: TAGS,
+        permission: "loans.apply",
         body: applyRequestSchema,
         response: dryRunResponseSchema,
         // 404 is the named customer not existing — the one lookup this
@@ -498,6 +504,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Answer or amend the application's KYC declarations. Frozen " +
           "once the loan is decided.",
         tags: TAGS,
+        permission: "kyc.submit",
         params: loanIdParamSchema,
         body: declarationAnswersRequestSchema,
         response: declarationsResponseSchema,
@@ -528,6 +535,7 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "The caller's own wizard drafts, most recently touched first.",
         tags: TAGS,
+        permission: "loans.read",
         response: draftListResponseSchema,
         errors: [401, 403],
       }),
@@ -544,6 +552,7 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Save a new wizard draft. Author-scoped.",
         tags: TAGS,
+        permission: "loans.read",
         body: draftCreateSchema,
         response: draftResponseSchema,
         status: 201,
@@ -575,6 +584,7 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "One of the caller's drafts. 404 covers 'not yours' too.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         response: draftResponseSchema,
         errors: [401, 403, 404],
@@ -597,6 +607,7 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Patch a draft — step position and wizard state.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         body: draftUpdateSchema,
         response: draftResponseSchema,
@@ -627,6 +638,7 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Discard a draft. Fired by the wizard after final submit.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         // No `response` → documented as the 204 it answers.
         errors: [401, 403, 404],
@@ -654,6 +666,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Decide a pending loan. Approval re-checks KYC, declarations " +
           "and the approval chain; rejection is never gated.",
         tags: TAGS,
+        permission: "loans.decide",
         params: loanIdParamSchema,
         body: decideSchema,
         response: loanResponseSchema,
@@ -672,11 +685,29 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary:
           "Disburse an approved loan: schedule, journal entry, commission, " +
-          "renewal settlement.",
+          "renewal settlement. Accepts no idempotency key — a retry is " +
+          "REFUSED (409), not replayed.",
         tags: TAGS,
+        permission: "loans.disburse",
+        /*
+         * No `idempotency`, deliberately, and the summary says so.
+         *
+         * Disbursement is money leaving, and §13 names it alongside
+         * payments — but the protection here is a different mechanism
+         * with a different contract. `disburse` claims the loan with a
+         * conditional `updateMany ... WHERE status = 'APPROVED'`; the
+         * loser matches zero rows and is refused. That stops a
+         * concurrent double-disbursement, which is the dangerous case,
+         * and it is NOT idempotency: it cannot tell a retry from a
+         * genuine second attempt, so a caller who retries after a
+         * timeout gets a 409 naming the current status rather than the
+         * original result. Claiming idempotency here would tell them to
+         * retry blind; saying nothing would let them assume it.
+         */
         params: loanIdParamSchema,
         response: loanResponseSchema,
-        // 409 is a co-maker who has not approved — the body names them.
+        // 409 is a co-maker who has not approved — the body names them —
+        // and is also what a timed-out caller's retry receives.
         errors: [401, 403, 404, 409],
       }),
     },
@@ -705,6 +736,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Credit the loan to a field agent, move it, or clear it " +
           "(agentId: null). Idempotent.",
         tags: TAGS,
+        permission: "agents.assign",
         params: loanIdParamSchema,
         body: assignAgentSchema,
         response: loanResponseSchema,
@@ -755,6 +787,21 @@ export async function loanRoutes(app: FastifyInstance) {
           "Record a payment: allocate to the schedule, post the journal " +
           "entry. Idempotency-Key replays return the original payment.",
         tags: TAGS,
+        permission: "payments.record",
+        /*
+         * The ONE route in this API that reads `Idempotency-Key`, which
+         * is precisely why it has to say so: a caller cannot tell from a
+         * route list that this endpoint is the safe one to retry and
+         * `/payments/bulk` below is not.
+         *
+         * Declaring `header` also attaches a `headers` schema, so the
+         * key shows up as a real parameter in /docs rather than a
+         * sentence someone has to read. See IDEMPOTENCY_HEADER in
+         * lib/openapi.ts for why it is neither required nor
+         * length-bounded there — both would start rejecting requests
+         * that work today.
+         */
+        idempotency: { mode: "header", field: "idempotencyKey" },
         params: loanIdParamSchema,
         body: paymentSchema,
         response: loanPaymentResponseSchema,
@@ -830,8 +877,23 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary:
           "Record up to 500 payments in one call. Rows post independently; " +
-          "the 207 reports each row's outcome.",
+          "the 207 reports each row's outcome. NOT idempotent — see the " +
+          "description.",
         tags: TAGS,
+        permission: "payments.bulk",
+        /*
+         * NO `idempotency` here, and the summary says so out loud,
+         * because silence would be read as "probably fine".
+         *
+         * `BulkPaymentRow` has no idempotency key field and
+         * `recordPaymentsBulk` calls `recordPayment` without one, so
+         * every row lands with a NULL key — and Postgres treats NULLs
+         * as distinct. Re-posting the same CSV after a timeout
+         * double-posts all 500 rows. That is a gap in the ROUTE, not in
+         * this file; documenting it as though a key worked would be the
+         * worse error, since the caller most likely to retry a bulk
+         * import is the one who just watched it time out.
+         */
         body: bulkPaymentSchema,
         response: bulkPaymentResponseSchema,
         status: 207,
@@ -884,6 +946,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Can this loan be renewed, and what would settling it cost? " +
           "eligible:true carries payoffAmount; false carries the reason.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         response: renewalEligibilityResponseSchema,
         errors: [401, 403, 404],
@@ -940,6 +1003,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Renew a loan in good standing: a new application whose proceeds " +
           "settle the old one at disbursement.",
         tags: TAGS,
+        permission: "loans.restructure",
         params: loanIdParamSchema,
         body: renewSchema,
         response: renewResponseSchema,
@@ -1052,6 +1116,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "route answers refusals (unknown loan, wrong status, chained " +
           "restructure) as 400, not the 409 used elsewhere.",
         tags: TAGS,
+        permission: "loans.restructure",
         params: loanIdParamSchema,
         body: restructureSchema,
         response: restructureResponseSchema,
@@ -1112,6 +1177,7 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Accrued late fees minus waivers — the live penalty figure.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         response: penaltiesResponseSchema,
         errors: [401, 403],
@@ -1128,6 +1194,7 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Every waiver granted on this loan, newest first.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         response: penaltyWaiverListResponseSchema,
         errors: [401, 403],
@@ -1146,6 +1213,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Waive outstanding penalty and post the reversing entry. " +
           "Refusals (over-waive, unknown loan) answer 400 here.",
         tags: TAGS,
+        permission: "loans.waive_penalty",
         params: loanIdParamSchema,
         body: waivePenaltySchema,
         response: waivePenaltyResponseSchema,
@@ -1199,6 +1267,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Write off remaining principal to Bad Debt. Refusals (already " +
           "terminal, unknown loan) answer 400 here.",
         tags: TAGS,
+        permission: "loans.write_off",
         params: loanIdParamSchema,
         body: writeOffSchema,
         response: writeOffResponseSchema,
@@ -1346,6 +1415,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Borrower signs, officer-mediated (in-branch). Requires the " +
           "loan's UUID, not its number.",
         tags: TAGS,
+        permission: "loans.sign_officer",
         params: loanIdParamSchema,
         body: signSchema,
         response: loanResponseSchema,
@@ -1396,6 +1466,7 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Co-makers on the loan, with consent state and attachments.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         response: coMakerListResponseSchema,
         errors: [401, 403],
@@ -1419,6 +1490,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Add a registered customer as co-maker. Identity is snapshotted " +
           "from their record, never typed.",
         tags: TAGS,
+        permission: "loans.apply",
         params: loanIdParamSchema,
         body: coMakerSchema,
         response: coMakerResponseSchema,
@@ -1469,6 +1541,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Mint (or replace) a co-maker's consent link. Resending " +
           "invalidates the old link and clears any previous answer.",
         tags: TAGS,
+        permission: "loans.apply",
         params: coMakerIdParamSchema,
         response: coMakerInviteResponseSchema,
         errors: [401, 403, 404],
@@ -1531,6 +1604,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Kill a co-maker's invite link now. Success even when no link " +
           "was live — the asked-for state holds either way.",
         tags: TAGS,
+        permission: "admin.force_logout",
         params: coMakerIdParamSchema,
         response: revokeInviteResponseSchema,
         errors: [401, 403, 404],
@@ -1573,6 +1647,7 @@ export async function loanRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Remove a co-maker. Returns the deleted row.",
         tags: TAGS,
+        permission: "loans.decide",
         params: coMakerIdParamSchema,
         response: coMakerResponseSchema,
         errors: [401, 403],
@@ -1683,6 +1758,7 @@ export async function loanRoutes(app: FastifyInstance) {
           "Settle early: remaining principal plus the product's " +
           "pre-termination fee. Refusals answer 400 here.",
         tags: TAGS,
+        permission: "loans.close_early",
         params: loanIdParamSchema,
         body: closeEarlySchema,
         response: closeEarlyResponseSchema,

@@ -75,6 +75,7 @@ export async function annualDocsLoanRoutes(app: FastifyInstance) {
           "Renewable documents tracked on one loan — insurance, OR/CR, " +
           "RPT — soonest expiry first.",
         tags: TAGS,
+        permission: "loans.read",
         params: loanIdParamSchema,
         response: annualDocListResponseSchema,
         errors: [401, 402, 403],
@@ -92,6 +93,7 @@ export async function annualDocsLoanRoutes(app: FastifyInstance) {
           "Record a renewable document against a loan. Status is derived " +
           "from expiresAt at insert. 400 if it is not after effectiveFrom.",
         tags: TAGS,
+        permission: "loans.docs_renew",
         params: loanIdParamSchema,
         body: createSchema,
         response: annualDocResponseSchema,
@@ -141,6 +143,7 @@ export async function annualDocsRoutes(app: FastifyInstance) {
           "Documents expiring within ?days (default 30) across all loans, " +
           "soonest first. INCLUDES already-expired rows.",
         tags: TAGS,
+        permission: "loans.read",
         querystring: listExpiringQuerySchema,
         response: expiringListResponseSchema,
         errors: [400, 401, 402, 403],
@@ -166,6 +169,7 @@ export async function annualDocsRoutes(app: FastifyInstance) {
           "Delete a tracked document. Answers 204 with no body; 400 if " +
           "the row does not exist.",
         tags: TAGS,
+        permission: "loans.docs_renew",
         params: docIdParamSchema,
         errors: [400, 401, 402, 403],
       }),
@@ -196,6 +200,7 @@ export async function annualDocsRoutes(app: FastifyInstance) {
           "Recompute every document's status now instead of waiting for " +
           "the nightly job. Answers the corpus counted by new status.",
         tags: TAGS,
+        permission: "loans.docs_renew",
         response: refreshStatusesResponseSchema,
         errors: [401, 402, 403],
       }),

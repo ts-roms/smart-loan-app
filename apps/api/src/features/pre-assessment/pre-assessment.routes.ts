@@ -93,6 +93,7 @@ export async function preAssessmentRoutes(app: FastifyInstance) {
           "basis) or a walk-in prospect (INDICATIVE). 404 names an " +
           "unknown `customerId`.",
         tags: TAGS,
+        permission: "pre_assessment.run",
         body: preAssessmentSchema,
         response: preAssessmentResponseSchema,
         status: 201,
@@ -110,6 +111,7 @@ export async function preAssessmentRoutes(app: FastifyInstance) {
           "Recent pre-assessments, newest first. Every filter is " +
           "optional; the default is the 50 most recent.",
         tags: TAGS,
+        permission: "pre_assessment.read",
         querystring: preAssessmentQuerySchema,
         response: preAssessmentListResponseSchema,
         errors: [400, 401, 403],
@@ -126,6 +128,7 @@ export async function preAssessmentRoutes(app: FastifyInstance) {
           'One pre-assessment, by uuid or by its "PA-…" number, with ' +
           "the customer joined in.",
         tags: TAGS,
+        permission: "pre_assessment.read",
         params: preAssessmentIdParamSchema,
         response: preAssessmentResponseSchema,
         errors: [401, 403, 404],

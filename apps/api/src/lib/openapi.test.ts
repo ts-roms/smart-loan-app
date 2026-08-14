@@ -135,6 +135,19 @@ describe("the emitted dialect", () => {
   });
 });
 
+/**
+ * Read an `x-` extension off an emitted schema.
+ *
+ * `FastifySchema` names only the keys @fastify/swagger understands and
+ * has no index signature, so the extensions this helper emits cannot be
+ * indexed directly. That is the same constraint `routeSchema` works
+ * around when it builds them, and going through one reader here keeps
+ * the cast in a single place rather than at every assertion.
+ */
+function ext(s: ReturnType<typeof routeSchema>, key: string): unknown {
+  return (s as unknown as Record<string, unknown>)[key];
+}
+
 function responseSchema(
   s: ReturnType<typeof routeSchema>,
   status: number,
@@ -283,5 +296,301 @@ describe("exclusive bounds are emitted in the form AJV accepts", () => {
 
     await expect(app.ready()).resolves.toBeDefined();
     await app.close();
+  });
+});
+
+/**
+ * Invariant: every operation states its own authentication posture.
+ *
+ * The spec was NOT silent about authentication before this — `app.ts`
+ * declares a global `security: [{ bearerAuth: [] }]`, so every operation
+ * inherited "needs a token". That is the right default and the wrong
+ * answer for twenty-four of them: the document told an integrator that
+ * `POST /public/leads`, the co-maker consent links and the gateway
+ * settlement callback all require a bearer JWT. A payment gateway has no
+ * JWT to give, so the one caller who could least afford to go hunting
+ * for credentials was the one being sent to hunt.
+ *
+ * Emitting `security` positively on every operation — `[]` on the
+ * anonymous ones — is what makes the split both correct and countable.
+ */
+describe("every operation declares whether it needs a token", () => {
+  const base = { summary: "x", tags: ["t"] };
+
+  it("requires the tenant bearer token by default", () => {
+    const s = routeSchema({ ...base, response: z.object({}) });
+
+    expect(s.security).toEqual([{ bearerAuth: [] }]);
+  });
+
+  it("emits an EMPTY security list for an anonymous route", () => {
+    /*
+     * `[]` is not the same as omitting the field. Omitted, the operation
+     * inherits the global requirement; `[]` overrides it, and is the
+     * only way OpenAPI 3 has of saying "this one takes no credential".
+     */
+    const s = routeSchema({
+      ...base,
+      public: "a payment gateway carries no JWT.",
+      response: z.object({}),
+    });
+
+    expect(s.security).toEqual([]);
+  });
+
+  it("names the PLATFORM scheme for the vendor control plane", () => {
+    /*
+     * Two schemes because there are two credentials, and each side
+     * rejects the other's token. One shared `bearerAuth` would tell a
+     * cooperative's integrator that the token they already hold reaches
+     * /platform/*, which is the most expensive thing this field could
+     * get wrong.
+     */
+    const s = routeSchema({
+      ...base,
+      auth: "platform",
+      response: z.object({}),
+    });
+
+    expect(s.security).toEqual([{ platformAuth: [] }]);
+  });
+
+  it("puts the REASON a route is public into the description", () => {
+    // A bare boolean answers "is this public" and leaves "…should it
+    // be?" to a reviewer's memory.
+    const s = routeSchema({
+      ...base,
+      public: "a payment gateway carries no JWT.",
+      response: z.object({}),
+    });
+
+    expect(s.description).toContain("gateway carries no JWT");
+  });
+});
+
+describe("what the spec says about authorisation", () => {
+  const base = { summary: "x", tags: ["t"], response: z.object({}) };
+
+  it("publishes the permission key as a machine-readable extension", () => {
+    const s = routeSchema({ ...base, permission: "loans.approve" });
+
+    expect(ext(s, "x-required-permission")).toEqual(["loans.approve"]);
+    expect(s.description).toContain("`loans.approve`");
+  });
+
+  it("says a multi-key gate is ANY, not ALL", () => {
+    /*
+     * `app.requirePermission("payments.intents", "loans.read")` passes
+     * when the caller holds EITHER. An integrator who reads the pair as
+     * a required set asks an administrator for a role nobody needs.
+     */
+    const s = routeSchema({
+      ...base,
+      permission: ["payments.intents", "loans.read"],
+    });
+
+    expect(ext(s, "x-required-permission")).toEqual([
+      "payments.intents",
+      "loans.read",
+    ]);
+    expect(s.description).toMatch(/ANY ONE/);
+    expect(s.description).toMatch(/not a set that must all be held/);
+  });
+
+  it("keeps platform ROLES out of the permission field", () => {
+    /*
+     * Platform roles are a different mechanism against a different
+     * identity table and never appear in GET /auth/me/permissions.
+     * Folding them together would publish a permission key that no
+     * tenant role can hold.
+     */
+    const s = routeSchema({
+      ...base,
+      auth: "platform",
+      platformRole: "PLATFORM_ADMIN",
+    });
+
+    expect(ext(s, "x-required-platform-role")).toEqual(["PLATFORM_ADMIN"]);
+    expect(ext(s, "x-required-permission")).toBeUndefined();
+  });
+
+  it("says nothing at all when a route has no permission gate", () => {
+    /*
+     * Authenticated-but-ungated is a real posture here — `/auth/me`,
+     * `/loans/quote`, the whole delegations group. Claiming a permission
+     * that is not checked would be worse than silence.
+     */
+    const s = routeSchema(base);
+
+    expect(ext(s, "x-required-permission")).toBeUndefined();
+    expect(s.description).toBeUndefined();
+  });
+});
+
+/**
+ * Invariant: documenting idempotency must not start rejecting requests.
+ *
+ * `headers` is not a documentation-only slot any more than `body` is —
+ * Fastify compiles it with AJV and validates at preValidation. Marking
+ * `Idempotency-Key` required would turn every caller that omits it
+ * (which is all of them, the web app included) into a 400;
+ * `additionalProperties: false` would reject every request carrying any
+ * other header, i.e. every request. Both are one word away at all times,
+ * and both would turn a documentation change into an outage — the same
+ * shape of failure as the serialisation footgun at the top of this file.
+ */
+describe("the idempotency header is documented, not enforced", () => {
+  const withHeader = routeSchema({
+    summary: "x",
+    tags: ["t"],
+    idempotency: { mode: "header", field: "idempotencyKey" },
+    response: z.object({}),
+  });
+
+  it("describes the header as a parameter", () => {
+    const headers = withHeader.headers as {
+      properties: Record<string, unknown>;
+    };
+
+    expect(Object.keys(headers.properties)).toContain("idempotency-key");
+  });
+
+  it("does not make it REQUIRED", () => {
+    const headers = withHeader.headers as { required?: string[] };
+
+    expect(headers.required).toBeUndefined();
+  });
+
+  it("does not close the header object", () => {
+    const headers = withHeader.headers as { additionalProperties?: boolean };
+
+    expect(headers.additionalProperties).not.toBe(false);
+  });
+
+  it("serves a request carrying no key and unrelated headers", async () => {
+    /*
+     * The assertions above check the emitted JSON; this checks the thing
+     * that would break. AJV compiles the header schema at registration
+     * and runs it on every request, so a route that only 400s in
+     * production would still pass every schema-shaped assertion above.
+     */
+    const app = Fastify({ logger: false });
+    app.post(
+      "/pay",
+      {
+        schema: routeSchema({
+          summary: "Record a payment.",
+          tags: ["test"],
+          idempotency: { mode: "header", field: "idempotencyKey" },
+          response: z.object({ ok: z.boolean() }),
+        }),
+      },
+      async () => ({ ok: true }),
+    );
+    await app.ready();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/pay",
+      headers: { "x-request-id": "abc", "user-agent": "probe" },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("only attaches a header schema in HEADER mode", () => {
+    // The body-keyed and server-derived routes read no header at all,
+    // and a schema for one would be a documented lie.
+    const body = routeSchema({
+      summary: "x",
+      tags: ["t"],
+      idempotency: { mode: "body", field: "idempotencyKey" },
+      response: z.object({}),
+    });
+
+    expect(body.headers).toBeUndefined();
+  });
+});
+
+describe("idempotency prose tells the caller where the key goes", () => {
+  const base = { summary: "x", tags: ["t"], response: z.object({}) };
+
+  it("warns that an omitted key means NO deduplication", () => {
+    /*
+     * The failure mode is silent. With no key the column is NULL,
+     * Postgres treats NULLs as distinct, and two identical calls make
+     * two payments — with nothing raised to notice.
+     */
+    const s = routeSchema({
+      ...base,
+      idempotency: { mode: "header", field: "idempotencyKey" },
+    });
+
+    expect(s.description).toMatch(/ACCEPTED, not required/);
+    expect(s.description).toMatch(/two identical calls/i);
+  });
+
+  it("says the HEADER is ignored on a body-keyed route", () => {
+    /*
+     * `POST /payments/intents` never reads `Idempotency-Key`, and an
+     * absent body field is filled with a fresh UUID. A caller
+     * generalising from the payments endpoint gets a second intent and
+     * no error — the exact mistake this sentence exists to prevent.
+     */
+    const s = routeSchema({
+      ...base,
+      idempotency: { mode: "body", field: "idempotencyKey" },
+    });
+
+    expect(s.description).toMatch(/HEADER IS IGNORED HERE/);
+  });
+
+  it("tells a gateway it needs no dedupe layer of its own", () => {
+    const s = routeSchema({
+      ...base,
+      public: "a gateway carries no JWT.",
+      idempotency: { mode: "server", derivedFrom: "the payment intent id" },
+    });
+
+    expect(s.description).toMatch(/caller supplies nothing/);
+    expect(s.description).toContain("the payment intent id");
+  });
+
+  it("records that no route REQUIRES a key", () => {
+    const s = routeSchema({
+      ...base,
+      idempotency: { mode: "header", field: "idempotencyKey" },
+    });
+
+    expect(ext(s, "x-idempotency")).toMatchObject({
+      mode: "header",
+      required: false,
+      field: "idempotencyKey",
+    });
+  });
+});
+
+describe("the two statuses the /public batch reported as unsayable", () => {
+  it("can now declare 501, and explains it is a MODE signal", () => {
+    /*
+     * Single-tenant is the DEFAULT mode, so 501 is not an edge case on
+     * the two signup operations — it is the only answer they ever give
+     * on most deployments. A spec that documented a 202 they will never
+     * send while staying silent about the status they always do was
+     * describing a different server.
+     */
+    expect(ERRORS[501].description).toMatch(/mode signal/i);
+    expect(ERRORS[501].description).toMatch(/not a permission problem/i);
+  });
+
+  it("still has no shared 500, on purpose", () => {
+    /*
+     * `errors` is a per-route list precisely because a blanket
+     * every-error-on-every-route is noise a reader learns to skip — and
+     * EVERY route can 500. A shared entry would be the one that gets
+     * added everywhere and means nothing.
+     */
+    expect(ERRORS).not.toHaveProperty("500");
   });
 });

@@ -107,6 +107,7 @@ export async function authRoutes(app: FastifyInstance) {
           "Exchange email + password (+ 2FA code) for an access and " +
           "refresh token pair.",
         tags: TAGS,
+        public: "this is where a token comes FROM.",
         response: tokenResponseSchema,
         // 401 covers all four refusals — bad credentials, bad TOTP, bad
         // recovery code, and "second factor required". The last carries
@@ -126,6 +127,7 @@ export async function authRoutes(app: FastifyInstance) {
           "Self-register a borrower account. Creates a CUSTOMER with no " +
           "Customer record yet — /auth/me/profile completes it.",
         tags: TAGS,
+        public: "self-registration: there is no account to hold a token yet.",
         response: tokenResponseSchema,
         status: 201,
         // 409 is the address already being registered.
@@ -144,6 +146,10 @@ export async function authRoutes(app: FastifyInstance) {
           "Rotate a refresh token for a new pair. Re-using a spent token " +
           "revokes every session for that user.",
         tags: TAGS,
+        public:
+          "an EXPIRED access token is the normal reason to call this, so " +
+          "requiring a valid one would defeat the endpoint. The refresh " +
+          "token in the body is the credential.",
         response: tokenResponseSchema,
         errors: [400, 401, 429],
       }),
@@ -159,6 +165,10 @@ export async function authRoutes(app: FastifyInstance) {
           "Revoke the presented refresh token. Succeeds even for a token " +
           "that was never valid, so it cannot be used as an oracle.",
         tags: TAGS,
+        public:
+          "signing out has to work for someone whose access token has " +
+          "already expired, which is the common case. The refresh token " +
+          "being revoked travels in the body.",
         errors: [401],
       }),
     },
@@ -193,6 +203,7 @@ export async function authRoutes(app: FastifyInstance) {
           "Start a password reset. Always answers 202, whether or not the " +
           "address matches an account.",
         tags: TAGS,
+        public: "the only person who calls this is one who cannot sign in.",
         response: okResponseSchema,
         status: 202,
         errors: [401, 429],
@@ -222,12 +233,21 @@ export async function authRoutes(app: FastifyInstance) {
           "Check a reset link before showing the form. A spent or expired " +
           "link answers 410 Gone with the reason.",
         tags: TAGS,
+        public:
+          "the emailed token in the path IS the credential; a caller who " +
+          "could authenticate would not need a reset link.",
         params: resetTokenParamSchema,
         response: okResponseSchema,
-        // The 410 is real and is NOT declared: `ERRORS` in lib/openapi.ts
-        // has no entry for it, and inventing one locally would be a
-        // second definition of the error envelope. See the report.
-        errors: [401, 429],
+        /*
+         * The 410 IS declared now. It was left out when this route was
+         * documented because `ERRORS` had no entry and inventing one
+         * locally would have been a second definition of the error
+         * envelope — that was the right call, and the batch that added
+         * 410 centrally for the co-maker consent links answered it. The
+         * comment saying it cannot be declared outlived the fact by one
+         * batch, which is exactly how a spec starts lying.
+         */
+        errors: [401, 410, 429],
       }),
     },
     async (req, reply) => {
@@ -256,8 +276,13 @@ export async function authRoutes(app: FastifyInstance) {
           "Redeem a reset link and set a new password. A spent or expired " +
           "link answers 410 Gone.",
         tags: TAGS,
+        public:
+          "the emailed token in the body IS the credential. Requiring a " +
+          "bearer token would make the reset flow impossible to complete.",
         response: okResponseSchema,
-        errors: [400, 401, 429],
+        // 410 for the same reason as the GET above: the link is gone,
+        // not the credentials wrong, and the shared table can now say so.
+        errors: [400, 401, 410, 429],
       }),
     },
     async (req, reply) => {

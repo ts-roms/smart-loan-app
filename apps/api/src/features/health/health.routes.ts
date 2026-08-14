@@ -59,6 +59,10 @@ export async function healthRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Liveness probe — the process is up.",
         tags: TAGS,
+        public:
+          "a probe runs before anything can hold a token, and a liveness " +
+          "check that could fail on authentication would restart a " +
+          "perfectly healthy pod.",
         response: liveResponse,
       }),
     },
@@ -78,6 +82,9 @@ export async function healthRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Readiness probe — dependencies are reachable.",
         tags: TAGS,
+        public:
+          "the load balancer calls it with no credentials. Answers 503, " +
+          "not an error body, when a dependency is unreachable.",
         response: readyResponse,
       }),
     },
@@ -113,6 +120,7 @@ export async function healthRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Legacy alias for /health/live.",
         tags: TAGS,
+        public: "same as /health/live, which existing probes still call.",
         response: legacyResponse,
       }),
     },

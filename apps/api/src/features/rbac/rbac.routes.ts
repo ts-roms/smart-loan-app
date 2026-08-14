@@ -109,6 +109,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Re-seed the in-code permission catalog and canonical role sets. " +
           "Idempotent — safe after every deploy.",
         tags: TAGS,
+        permission: "admin.roles",
         response: syncResponseSchema,
         errors: [401, 403],
       }),
@@ -125,6 +126,7 @@ export async function rbacRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "The whole permission catalog, by category then key.",
         tags: TAGS,
+        permission: ["admin.roles", "admin.users"],
         response: permissionListResponseSchema,
         errors: [401, 403],
       }),
@@ -144,6 +146,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Move a permission through its lifecycle. DRAFT withholds it " +
           "from the resolver; DEPRECATED still grants.",
         tags: TAGS,
+        permission: "admin.roles",
         params: permissionKeyParamSchema,
         body: permissionPatchSchema,
         response: permissionResponseSchema,
@@ -165,6 +168,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Who holds this permission right now — by role membership and " +
           "by active delegation, counted separately.",
         tags: TAGS,
+        permission: ["admin.roles", "admin.audit_log"],
         params: permissionKeyParamSchema,
         response: permissionHoldersResponseSchema,
         errors: [401, 403, 404],
@@ -184,6 +188,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Every role with its permission set, inheritance parents and " +
           "member count.",
         tags: TAGS,
+        permission: ["admin.roles", "admin.users"],
         response: roleListResponseSchema,
         errors: [401, 403],
       }),
@@ -198,6 +203,7 @@ export async function rbacRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "One role with its permissions and inheritance parents.",
         tags: TAGS,
+        permission: ["admin.roles", "admin.users"],
         params: roleKeyParamSchema,
         response: roleDetailResponseSchema,
         errors: [401, 403, 404],
@@ -215,6 +221,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Create a custom role. Answers the bare role row — re-read it " +
           "to see the permission set that was applied.",
         tags: TAGS,
+        permission: "admin.roles",
         body: createRoleSchema,
         response: roleResponseSchema,
         status: 201,
@@ -236,6 +243,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Update a role's name, description, permission set or parents. " +
           "Answers the bare role row.",
         tags: TAGS,
+        permission: "admin.roles",
         params: roleKeyParamSchema,
         body: updateRoleSchema,
         response: roleResponseSchema,
@@ -259,6 +267,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Preview who loses what if this permission set is saved. " +
           "Read-only — writes nothing.",
         tags: TAGS,
+        permission: "admin.roles",
         params: roleKeyParamSchema,
         body: editImpactSchema,
         response: roleEditImpactResponseSchema,
@@ -277,6 +286,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Delete a custom role. System roles are refused — they are " +
           "referenced from code.",
         tags: TAGS,
+        permission: "admin.roles",
         params: roleKeyParamSchema,
         response: roleResponseSchema,
         // Both "no such role" and "that one is a system role" come back
@@ -298,6 +308,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Staff and borrower logins, newest first, with server-resolved " +
           "presence and role grants. Capped at 500.",
         tags: TAGS,
+        permission: "admin.users",
         response: userListResponseSchema,
         errors: [401, 403],
       }),
@@ -314,6 +325,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Create a login with any primary role, including ADMIN. The " +
           "public /auth/register can only make borrowers.",
         tags: TAGS,
+        permission: "admin.users",
         body: createUserSchema,
         response: userCreatedResponseSchema,
         status: 201,
@@ -340,6 +352,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Onboard up to 500 logins in one call. Partial success is the " +
           "normal outcome, hence 207.",
         tags: TAGS,
+        permission: "admin.users",
         body: userBulkImportSchema,
         response: userBulkImportResponseSchema,
         status: 207,
@@ -361,6 +374,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Enable or disable a login. Disabling also cuts the sessions " +
           "already in flight, not just the next sign-in.",
         tags: TAGS,
+        permission: "admin.users",
         params: userIdParamSchema,
         body: setUserActiveSchema,
         response: setUserActiveResponseSchema,
@@ -383,6 +397,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "A user's role grants, oldest first. Expired grants are still " +
           "listed; the resolver ignores them.",
         tags: TAGS,
+        permission: "admin.users",
         params: userIdParamSchema,
         response: userRoleListResponseSchema,
         errors: [401, 403],
@@ -400,6 +415,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Grant a role, optionally with an expiry. Re-granting only " +
           "moves the expiry — the original grant's trail is kept.",
         tags: TAGS,
+        permission: "admin.users",
         params: userIdParamSchema,
         body: assignSchema,
         response: roleAssignmentResponseSchema,
@@ -421,6 +437,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "Revoke a role grant. Removing your own ADMIN, or the org's " +
           "last one, is refused.",
         tags: TAGS,
+        permission: "admin.users",
         params: userRoleParamSchema,
         response: okResponseSchema,
         // Self-lockout is 400; last-admin is 409 — the request is fine,
@@ -455,6 +472,7 @@ export async function rbacRoutes(app: FastifyInstance) {
           "End every session a user holds. Does not disable the account — " +
           "they can sign back in immediately. Optional body: `{ reason }`.",
         tags: TAGS,
+        permission: "admin.force_logout",
         params: userIdParamSchema,
         response: forceLogoutResponseSchema,
         // 409 is targeting yourself: well-formed, and would have worked

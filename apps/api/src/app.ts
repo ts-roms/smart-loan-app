@@ -352,6 +352,22 @@ export async function buildApp() {
    * ones are the exception and should say so on themselves; a spec that
    * required each of 336 routes to repeat the rule would be wrong on the
    * first one somebody forgot.
+   *
+   * THE EXCEPTIONS NOW DO SAY SO. `routeSchema` emits `security` on
+   * every operation, so the twenty-four anonymous ones carry
+   * `security: []` and stop inheriting a token requirement that would
+   * send an integrator hunting for credentials a payment gateway cannot
+   * have. This global default stays exactly where it is — it is still
+   * the right answer for anything added tomorrow, and it is what a
+   * route that forgets to declare falls back to.
+   *
+   * TWO schemes, because there are two credentials. `/platform/*` is
+   * the vendor control plane: its token comes from a different login,
+   * carries `platform: true`, and each side rejects the other's token
+   * (see `platformAuthenticate` in platform.routes and the
+   * `payload.platform` check in @loan/auth). Publishing one scheme for
+   * both would tell a cooperative's integrator that the token they hold
+   * reaches the vendor console.
    */
   await app.register(swagger, {
     openapi: {
@@ -376,8 +392,18 @@ export async function buildApp() {
             scheme: "bearer",
             bearerFormat: "JWT",
             description:
-              "Access token from POST /auth/login. Short-lived; refresh " +
-              "with POST /auth/refresh.",
+              "Tenant access token from POST /auth/login. Short-lived; " +
+              "refresh with POST /auth/refresh. Rejected by /platform/*.",
+          },
+          platformAuth: {
+            type: "http",
+            scheme: "bearer",
+            bearerFormat: "JWT",
+            description:
+              "Vendor control-plane token from POST /platform/auth/login, " +
+              "carrying a `platform: true` claim. Only /platform/* accepts " +
+              "it, and every /api/v1 route rejects it — the two tokens are " +
+              "not interchangeable in either direction.",
           },
         },
       },

@@ -30,6 +30,20 @@ import { zodToJsonSchema } from "zod-to-json-schema";
  *   • ERRORS are shared components, because they are identical
  *     everywhere and repeating them 336 times would guarantee they
  *     diverge.
+ *   • AUTHENTICATION, AUTHORISATION and IDEMPOTENCY are declared by the
+ *     route beside the gate that enforces them, and rendered from that
+ *     one declaration into `security`, the operation `description` and
+ *     `x-` extensions. See `routeSchema` for why `security` is emitted
+ *     positively on every operation rather than left to the global
+ *     default in `app.ts`, and `RouteSchemaInput.public` for why an
+ *     anonymous route carries a written reason rather than a boolean.
+ *
+ * Those last three are the half of §67 the response-schema programme
+ * did not reach. They are worth stating precisely for the same reason
+ * the response shapes were: an integrator cannot discover from a route
+ * list that retrying a payment is safe, and "when in doubt, retry" and
+ * "when in doubt, don't" are both wrong answers to a question the
+ * document can simply answer.
  *
  * ONE SHARP EDGE, DEFUSED. Fastify does not merely document a response
  * schema, it SERIALISES against it, and a property the schema does not
@@ -196,7 +210,47 @@ export const ERRORS = {
     ...content(ERROR_BODY),
   },
   429: { description: "Rate limited.", ...content(ERROR_BODY) },
+  501: {
+    description:
+      "This installation does not implement the feature. A mode signal, " +
+      "not a failure and not a permission problem: the request was " +
+      "well-formed and the caller was entitled to make it, but the " +
+      "server is configured without the mode it needs. `/public/signup` " +
+      "and `/public/signup/confirm` answer this on a single-tenant " +
+      "deployment. No token, no input and no retry changes it.",
+    ...content(ERROR_BODY),
+  },
 } as const;
+
+/*
+ * 501 IS here; 500 deliberately is not.
+ *
+ * Both were reported as reachable-but-undeclarable by the batch that
+ * documented `/public/*`, and they are not the same kind of thing.
+ *
+ * 501 is a CONTRACT. `/public/signup` and `/public/signup/confirm`
+ * send it whenever the server is not in multi-tenant mode, which is the
+ * default — so on most deployments it is not an edge case, it is the
+ * only answer those two operations ever give. It carries the same
+ * `{ error, message }` envelope as every other refusal, and it belongs
+ * beside 402 for the same reason 402 is here: both say "the request was
+ * fine, this installation just doesn't do that", and both are wrongly
+ * read as authorisation failures by anyone who has to guess.
+ *
+ * 500 `ProvisioningFailed` is NOT a contract, and putting it in a
+ * shared table would break the one rule that makes this table useful.
+ * `errors` is a per-route list precisely because "this can 409" is real
+ * documentation and a blanket every-error-on-every-route is noise a
+ * reader learns to skip — and EVERY route can 500. The moment a shared
+ * 500 exists it is the entry that gets added everywhere and means
+ * nothing. It also would not describe one thing: `ModeDisabled` is a
+ * 501 from `public.controller` and a **400** from
+ * `platform.controller`'s retry-provisioning, so a shared entry would
+ * paper over a genuine inconsistency between two surfaces rather than
+ * document either. The one route where a 500 is a NAMED, expected
+ * outcome says so in its own summary, which is where a fact that
+ * generalises to nothing else belongs.
+ */
 
 function content(schema: unknown) {
   return { content: { "application/json": { schema } } };
@@ -228,6 +282,42 @@ function permissive(schema: Record<string, unknown>): Record<string, unknown> {
 /** A 204, which has no body and therefore no schema. */
 export const NO_CONTENT = { description: "Done. No body." } as const;
 
+/**
+ * How a route deduplicates a retry.
+ *
+ * Three genuinely different mechanisms live in this API, and collapsing
+ * them into one "idempotent: true" flag would be the lie. A caller needs
+ * to know WHERE the key goes, because sending it in the wrong place is
+ * silent — `POST /payments/intents` ignores the `Idempotency-Key`
+ * header entirely and mints a fresh UUID, so a caller who assumes the
+ * header works there gets a second intent and no error.
+ *
+ *   • `header` — the caller sends `Idempotency-Key`.
+ *   • `body`   — the caller sends a named field in the request body.
+ *   • `server` — the caller sends nothing; the server derives the key.
+ *                Documented rather than omitted because "you cannot
+ *                make this safe, it already is" is exactly what a
+ *                gateway integrator needs to hear before building a
+ *                dedupe layer that is not needed.
+ */
+export interface IdempotencyInput {
+  mode: "header" | "body" | "server";
+  /**
+   * Body field carrying the key. For `body` mode this IS the mechanism;
+   * for `header` mode it is the documented fallback when both exist.
+   */
+  field?: string;
+  /**
+   * Where the key comes from, for `server` mode.
+   */
+  derivedFrom?: string;
+  /**
+   * A truth about THIS route that the general wording gets wrong.
+   * Appended verbatim.
+   */
+  note?: string;
+}
+
 export interface RouteSchemaInput {
   /** One line. Shows as the operation summary in /docs. */
   summary: string;
@@ -253,6 +343,139 @@ export interface RouteSchemaInput {
    * every-error-on-every-route would tell a reader nothing.
    */
   errors?: (keyof typeof ERRORS)[];
+  /**
+   * This operation is ANONYMOUS — no bearer token.
+   *
+   * Opt-out rather than opt-in, because bearer auth is the default here
+   * and a default that has to be repeated 315 times is wrong on the
+   * first one somebody forgets. The exceptions are few, deliberate and
+   * individually surprising (`POST /auth/logout` takes no token;
+   * `/payments/webhook/*` cannot, because a gateway carries no JWT), so
+   * they are the ones worth making a route state out loud.
+   *
+   * The value is the REASON, not `true`. A bare boolean answers "is
+   * this public" and leaves "…should it be?" to a reviewer's memory;
+   * the reason is what lets the next reader tell a deliberate anonymous
+   * endpoint from a forgotten hook. It is published, so it has to be
+   * true and about this route.
+   */
+  public?: string;
+  /**
+   * WHICH credential, when it is not the ordinary tenant token.
+   *
+   * `/platform/*` is a different API behind the same host: its token
+   * comes from `POST /platform/auth/login`, carries `platform: true`,
+   * and a tenant token is actively REJECTED there (and vice versa —
+   * `app.authenticate` 401s any JWT carrying `platform: true`). One
+   * `bearerAuth` scheme covering both would tell an integrator that the
+   * token they already hold works on the vendor console, which is the
+   * one thing that is guaranteed not to be true.
+   */
+  auth?: "tenant" | "platform";
+  /**
+   * Platform role(s) `requirePlatformRole` gates this route on.
+   *
+   * A separate field from `permission` because it is a separate
+   * mechanism against a separate identity table — platform roles are
+   * not RBAC permission keys and do not appear in
+   * `GET /auth/me/permissions`. Folding them together would publish a
+   * permission key that no tenant role can ever hold.
+   */
+  platformRole?: string | string[];
+  /**
+   * Permission key(s) `requirePermission` gates this route on.
+   *
+   * An array means ANY of them suffices — that is exactly what
+   * `app.requirePermission("payments.intents", "loans.read")` does, and
+   * reading it as "all of them" is the mistake worth preventing.
+   *
+   * Omit on a route with no permission gate. Authenticated-but-ungated
+   * is a real posture here (`/auth/me`, `/uploads-api/*`) and claiming
+   * a permission it does not check would be worse than saying nothing.
+   */
+  permission?: string | string[];
+  /** How a retry is deduplicated, when it is. */
+  idempotency?: IdempotencyInput;
+}
+
+/** `Idempotency-Key`, described once. */
+const IDEMPOTENCY_HEADER = {
+  type: "object",
+  properties: {
+    "idempotency-key": {
+      type: "string",
+      description:
+        "Opaque caller-chosen key. A repeat with the same key returns " +
+        "the original result and records no second payment.",
+    },
+  },
+  /*
+   * `additionalProperties` is left at its default (true) and REQUIRED
+   * is left empty, and both matter.
+   *
+   * Fastify validates `headers` at preValidation with AJV, so this is
+   * not a documentation-only slot any more than `body` is. Marking the
+   * key required would turn every existing caller that omits it — which
+   * is all of them, including the web app — into a 400, and turn a
+   * documentation change into an outage. Setting
+   * `additionalProperties: false` would reject every request that
+   * carries any other header, i.e. every request.
+   *
+   * No `minLength` either, deliberately. The BODY field is
+   * `.min(8)`; the header has never been length-checked, and adding a
+   * bound here would start rejecting short keys that work today. The
+   * spec's job is to say what the route does, not to quietly tighten
+   * it.
+   */
+} as const;
+
+/** The prose for one idempotency mode. */
+function idempotencyText(i: IdempotencyInput): string {
+  const head = "**Idempotency.**";
+  const replay =
+    "A repeat carrying the same key returns the ORIGINAL result and " +
+    "creates no second financial record — a retry after a timeout is " +
+    "safe, and is not merely rejected.";
+
+  let how: string;
+  if (i.mode === "header") {
+    how =
+      "Send `Idempotency-Key`. It is ACCEPTED, not required: omit it " +
+      "and the request is not idempotent at all — two identical calls " +
+      "produce two records, because the stored key is NULL and Postgres " +
+      "treats NULLs as distinct." +
+      (i.field
+        ? ` A \`${i.field}\` field in the body is accepted as a fallback ` +
+          "for callers that cannot set headers; the header wins when both " +
+          "are present."
+        : "");
+  } else if (i.mode === "body") {
+    how =
+      `Send \`${i.field ?? "idempotencyKey"}\` in the request body. The ` +
+      "`Idempotency-Key` HEADER IS IGNORED HERE — sending it instead of " +
+      "the body field fails silently, because an absent field is filled " +
+      "with a fresh UUID and the call is simply not deduplicated.";
+  } else {
+    how =
+      "The caller supplies nothing. The server derives the key" +
+      (i.derivedFrom ? ` from ${i.derivedFrom}` : "") +
+      ", so an at-least-once delivery is already safe to redeliver and " +
+      "no caller-side dedupe is needed.";
+  }
+
+  return [head, how, replay, i.note].filter(Boolean).join(" ");
+}
+
+/** The prose for a permission gate. */
+function permissionText(keys: string[]): string {
+  if (keys.length === 1) {
+    return `**Authorization.** Requires the \`${keys[0]!}\` permission.`;
+  }
+  return (
+    "**Authorization.** Requires ANY ONE of " +
+    keys.map((k) => `\`${k}\``).join(", ") +
+    " — they are alternatives, not a set that must all be held."
+  );
 }
 
 /**
@@ -268,6 +491,37 @@ export interface RouteSchemaInput {
  * people reading the documentation, so the formatter reshapes Fastify's
  * rejection into the body callers already receive. The controller's own
  * parse still runs for everything Fastify lets through.
+ *
+ * ── AUTHENTICATION, AUTHORISATION, IDEMPOTENCY ──
+ *
+ * `security` is emitted on EVERY operation, positively, including the
+ * anonymous ones (as `security: []`).
+ *
+ * A global `security: [{ bearerAuth: [] }]` was already declared in
+ * `app.ts`, so it is not true that the spec said nothing about
+ * authentication — every operation inherited "needs a token". The
+ * problem was the opposite one, and worse: that inheritance was applied
+ * to the twenty-four operations that take NO token, so the document
+ * stated, with the authority of a machine-readable field, that
+ * `POST /public/leads` and the gateway settlement callback require a
+ * bearer JWT. An integrator who believed it would go hunting for
+ * credentials that cannot exist for a callback a payment gateway makes.
+ *
+ * Emitting it per operation rather than leaning on the global also
+ * makes the split COUNTABLE. "Which of these need a token" stops being
+ * a question answered by reading 44 route files and becomes one `jq`
+ * over `/docs/json` — the only form in which the answer stays true
+ * after the next batch.
+ *
+ * The global stays exactly where it is. It is the right default for
+ * anything added tomorrow; this is a belt beside it, not a replacement.
+ *
+ * Authorisation and idempotency go into `description` AND into `x-`
+ * extension fields. The prose is for the human reading /docs; the
+ * extensions are for anything generating a client, and @fastify/swagger
+ * copies any schema key beginning with `x-` onto the operation
+ * verbatim. Neither is a second SOURCE of truth — both are rendered
+ * from the same one input the route declares.
  */
 export function routeSchema(input: RouteSchemaInput): FastifySchema {
   const responses: Record<string, unknown> = {};
@@ -285,14 +539,93 @@ export function routeSchema(input: RouteSchemaInput): FastifySchema {
     responses[String(code)] = ERRORS[code];
   }
 
+  const permissions =
+    input.permission === undefined
+      ? []
+      : Array.isArray(input.permission)
+        ? input.permission
+        : [input.permission];
+
+  const platformRoles =
+    input.platformRole === undefined
+      ? []
+      : Array.isArray(input.platformRole)
+        ? input.platformRole
+        : [input.platformRole];
+
+  const scheme = input.auth === "platform" ? "platformAuth" : "bearerAuth";
+
+  const paragraphs: string[] = [];
+  if (input.public) {
+    paragraphs.push(`**Authentication.** None — ${input.public}`);
+  } else if (input.auth === "platform") {
+    paragraphs.push(
+      "**Authentication.** A PLATFORM token from " +
+        "`POST /platform/auth/login`, not a tenant token. The two are " +
+        "not interchangeable in either direction: a tenant token is " +
+        "rejected here, and a platform token is rejected by every " +
+        "`/api/v1` route.",
+    );
+  }
+  if (platformRoles.length > 0) {
+    paragraphs.push(
+      platformRoles.length === 1
+        ? `**Authorization.** Requires the \`${platformRoles[0]!}\` platform role.`
+        : "**Authorization.** Requires ANY ONE of the platform roles " +
+            platformRoles.map((r) => `\`${r}\``).join(", ") +
+            ".",
+    );
+  }
+  if (permissions.length > 0) paragraphs.push(permissionText(permissions));
+  if (input.idempotency) paragraphs.push(idempotencyText(input.idempotency));
+
+  /*
+   * Built as a loose record and spread rather than written into the
+   * literal below. `FastifySchema` names the keys @fastify/swagger
+   * understands and has no index signature, so `"x-required-permission"`
+   * in an object literal is an excess-property error even though the
+   * plugin copies it through faithfully.
+   */
+  const extensions: Record<string, unknown> = {
+    security: input.public ? [] : [{ [scheme]: [] }],
+  };
+  if (paragraphs.length > 0) extensions.description = paragraphs.join("\n\n");
+  if (permissions.length > 0) {
+    extensions["x-required-permission"] = permissions;
+  }
+  if (platformRoles.length > 0) {
+    extensions["x-required-platform-role"] = platformRoles;
+  }
+  if (input.idempotency) {
+    extensions["x-idempotency"] = {
+      mode: input.idempotency.mode,
+      /*
+       * Not one route in this API REQUIRES a key. Emitted as a literal
+       * `false` rather than omitted, because an absent "required" reads
+       * as "unknown", and the whole point of documenting this is that a
+       * caller who sends nothing gets a second payment rather than an
+       * error telling them so.
+       */
+      required: false,
+      ...(input.idempotency.field ? { field: input.idempotency.field } : {}),
+      ...(input.idempotency.derivedFrom
+        ? { derivedFrom: input.idempotency.derivedFrom }
+        : {}),
+    };
+  }
+
   return {
     summary: input.summary,
     tags: input.tags,
+    ...extensions,
     ...(input.body ? { body: jsonSchema(input.body) } : {}),
     ...(input.querystring
       ? { querystring: jsonSchema(input.querystring) }
       : {}),
     ...(input.params ? { params: jsonSchema(input.params) } : {}),
+    ...(input.idempotency?.mode === "header"
+      ? { headers: IDEMPOTENCY_HEADER }
+      : {}),
     response: responses,
   };
 }

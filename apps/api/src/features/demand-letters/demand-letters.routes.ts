@@ -92,6 +92,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
           "Loans eligible for a letter at ?stage — overdue past that " +
           "stage's threshold with no active letter already at it.",
         tags: TAGS,
+        permission: "collections.demand_letter",
         querystring: candidatesQuerySchema,
         response: candidateListResponseSchema,
         errors: [400, 401, 402, 403],
@@ -109,6 +110,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
           "Demand letters, newest first (up to 200), each with its loan " +
           "reference. Filter by ?stage, ?status and/or ?loanId.",
         tags: TAGS,
+        permission: "collections.read",
         querystring: listQuerySchema,
         response: letterListResponseSchema,
         errors: [400, 401, 402, 403],
@@ -126,6 +128,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
           "One demand letter, including the rendered body that was " +
           "captured at draft time.",
         tags: TAGS,
+        permission: "collections.read",
         params: letterIdParamSchema,
         response: letterResponseSchema,
         errors: [401, 402, 403, 404],
@@ -143,6 +146,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
           "Draft letters for a set of loans at one stage. Loans that " +
           "stopped qualifying since /candidates are skipped silently.",
         tags: TAGS,
+        permission: "collections.demand_letter",
         body: batchSchema,
         response: batchResponseSchema,
         status: 201,
@@ -166,6 +170,10 @@ export async function demandLetterRoutes(app: FastifyInstance) {
           "Approve a drafted letter. 403 if the stage needs the other " +
           "signatory, or if you are the drafter (segregation of duties).",
         tags: TAGS,
+        permission: [
+          "collections.dl_approve_company",
+          "collections.dl_approve_legal",
+        ],
         params: letterIdParamSchema,
         body: approveSchema,
         response: letterResponseSchema,
@@ -184,6 +192,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
           "Send an approved letter and record the channel it went by. " +
           "Fires the borrower notification.",
         tags: TAGS,
+        permission: "collections.dl_dispatch",
         params: letterIdParamSchema,
         body: dispatchSchema,
         response: letterResponseSchema,
@@ -202,6 +211,7 @@ export async function demandLetterRoutes(app: FastifyInstance) {
           "Close a letter as RESPONDED (the borrower paid or engaged) or " +
           "WAIVED (collections chose not to pursue it).",
         tags: TAGS,
+        permission: "collections.demand_letter",
         params: letterIdParamSchema,
         body: closeSchema,
         response: letterResponseSchema,

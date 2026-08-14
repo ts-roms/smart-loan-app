@@ -77,6 +77,7 @@ export async function decisionRuleRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "List the live rules, in priority order.",
         tags: TAGS,
+        permission: "loans.read",
         response: ruleListResponseSchema,
         errors: [401, 403],
       }),
@@ -99,6 +100,7 @@ export async function decisionRuleRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "The whole rule set as it stood at a moment.",
         tags: TAGS,
+        permission: "loans.read",
         querystring: asOfQuerySchema,
         response: ruleVersionListResponseSchema,
         errors: [400, 401, 403],
@@ -113,6 +115,7 @@ export async function decisionRuleRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Every revision of one rule, newest first.",
         tags: TAGS,
+        permission: "loans.read",
         params: idParamSchema,
         response: ruleVersionListResponseSchema,
         errors: [401, 403],
@@ -127,6 +130,7 @@ export async function decisionRuleRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Create a rule and open version 1.",
         tags: TAGS,
+        permission: "admin.decision_rules",
         body: createRuleSchema,
         response: ruleResponseSchema,
         status: 201,
@@ -144,6 +148,7 @@ export async function decisionRuleRoutes(app: FastifyInstance) {
         summary:
           "Edit a rule. Mints a version only when something decisive changed.",
         tags: TAGS,
+        permission: "admin.decision_rules",
         params: idParamSchema,
         body: updateRuleSchema,
         response: ruleResponseSchema,
@@ -163,6 +168,7 @@ export async function decisionRuleRoutes(app: FastifyInstance) {
           "Retire a rule. It stops firing; its history and the decisions " +
           "citing it survive.",
         tags: TAGS,
+        permission: "admin.decision_rules",
         params: idParamSchema,
         body: retireRuleSchema,
         response: ruleResponseSchema,
@@ -178,6 +184,7 @@ export async function decisionRuleRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Idempotently seed the shipped default rules.",
         tags: TAGS,
+        permission: "admin.decision_rules",
         response: seedResponseSchema,
         errors: [401, 403],
       }),

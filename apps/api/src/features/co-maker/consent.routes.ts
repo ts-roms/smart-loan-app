@@ -134,6 +134,12 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
           "What this co-maker is being asked to agree to. Anonymous — " +
           "the invite token is the authorization. 410 once it expires.",
         tags: TAGS,
+        public:
+          "a co-maker is not a user of this system and never becomes " +
+          "one. The single-use invite token in the path IS the " +
+          "credential — which is why these operations lapse (410) " +
+          "rather than living forever, and why 401 is not among their " +
+          "failures.",
         params: tokenParamSchema,
         response: consentViewResponseSchema,
         errors: [404, 410, 429],
@@ -216,6 +222,12 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
           "Approve or decline. A decline needs a reason. 409 once " +
           "answered — the decision is not revisable; 410 if expired.",
         tags: TAGS,
+        public:
+          "a co-maker is not a user of this system and never becomes " +
+          "one. The single-use invite token in the path IS the " +
+          "credential — which is why these operations lapse (410) " +
+          "rather than living forever, and why 401 is not among their " +
+          "failures.",
         params: tokenParamSchema,
         body: respondSchema,
         response: respondResponseSchema,
@@ -275,6 +287,12 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
           "Upload a supporting file (multipart). Answers the stored URL, " +
           "which /documents then records. 413 if it exceeds the cap.",
         tags: TAGS,
+        public:
+          "a co-maker is not a user of this system and never becomes " +
+          "one. The single-use invite token in the path IS the " +
+          "credential — which is why these operations lapse (410) " +
+          "rather than living forever, and why 401 is not among their " +
+          "failures.",
         params: tokenParamSchema,
         response: uploadResponseSchema,
         status: 201,
@@ -319,6 +337,12 @@ export async function coMakerConsentRoutes(app: FastifyInstance) {
           "Record an uploaded file against this co-maker. 409 if they " +
           "already declined — a declined co-maker has nothing to file.",
         tags: TAGS,
+        public:
+          "a co-maker is not a user of this system and never becomes " +
+          "one. The single-use invite token in the path IS the " +
+          "credential — which is why these operations lapse (410) " +
+          "rather than living forever, and why 401 is not among their " +
+          "failures.",
         params: tokenParamSchema,
         body: documentSchema,
         response: documentResponseSchema,

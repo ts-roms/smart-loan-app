@@ -96,6 +96,7 @@ export async function delegationRoutes(app: FastifyInstance) {
           "Active staff accounts available to delegate to, by name. " +
           "Borrower accounts are excluded.",
         tags: TAGS,
+        permission: "loans.read",
         response: userDirectoryResponseSchema,
         errors: [401, 403],
       }),
@@ -123,6 +124,7 @@ export async function delegationRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "Every delegation in the tenant, newest first. Capped at 200.",
         tags: TAGS,
+        permission: "admin.users",
         response: delegationListResponseSchema,
         errors: [401, 403],
       }),

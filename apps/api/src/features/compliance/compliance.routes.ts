@@ -95,6 +95,7 @@ export async function complianceRoutes(app: FastifyInstance) {
           "customer, flat by table, sent as a JSON file download. " +
           "Optional body: { reason } to tie the export to a ticket.",
         tags: TAGS,
+        permission: "admin.compliance",
         params: customerIdParamSchema,
         response: exportResponseSchema,
         errors: [400, 401, 403, 404],
@@ -112,6 +113,7 @@ export async function complianceRoutes(app: FastifyInstance) {
           "Irreversibly redact a customer's PII in place. Financial " +
           "records are retained; 409 if they were already erased.",
         tags: TAGS,
+        permission: "admin.compliance",
         params: customerIdParamSchema,
         body: eraseRequestSchema,
         response: eraseResponseSchema,
@@ -131,6 +133,7 @@ export async function complianceRoutes(app: FastifyInstance) {
           "The data-retention windows driving the nightly purge, plus " +
           "whether the audit window sits below the AMLA §9 floor.",
         tags: TAGS,
+        permission: "admin.compliance",
         response: retentionPolicyResponseSchema,
         errors: [401, 403],
       }),
@@ -147,6 +150,7 @@ export async function complianceRoutes(app: FastifyInstance) {
           "Set the retention windows. 0 means never purge. The AMLA " +
           "floor is warned about, not enforced — the change is audited.",
         tags: TAGS,
+        permission: "admin.compliance",
         body: retentionPolicyUpdateSchema,
         response: retentionPolicyResponseSchema,
         errors: [400, 401, 403],
@@ -164,6 +168,7 @@ export async function complianceRoutes(app: FastifyInstance) {
           "Run the retention purge now rather than waiting for the " +
           "nightly tick. Answers the cutoffs used and the rows deleted.",
         tags: TAGS,
+        permission: "admin.compliance",
         response: retentionPurgeResponseSchema,
         errors: [401, 403],
       }),

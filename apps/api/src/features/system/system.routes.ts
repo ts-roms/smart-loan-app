@@ -92,29 +92,29 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
       }),
     },
     async (req) => {
-    // SystemConfig is a singleton row; upsert the defaults on first read
-    // so a fresh install never returns nulls. Cheap; runs once per
-    // database lifetime.
-    const cfg = await req.tenantCtx.prisma.systemConfig.upsert({
-      where: { id: "singleton" },
-      update: {},
-      create: { id: "singleton" },
-      select: {
-        idleTimeoutSeconds: true,
-        idleWarningSeconds: true,
-        updatedAt: true,
-      },
-    });
-    return {
-      idleTimeoutSeconds: cfg.idleTimeoutSeconds,
-      idleWarningSeconds: cfg.idleWarningSeconds,
-      updatedAt: cfg.updatedAt,
-      bounds: {
-        idleTimeoutSeconds: { min: IDLE_TIMEOUT_MIN, max: IDLE_TIMEOUT_MAX },
-        idleWarningSeconds: { min: IDLE_WARNING_MIN, max: IDLE_WARNING_MAX },
-      },
-    };
-  },
+      // SystemConfig is a singleton row; upsert the defaults on first read
+      // so a fresh install never returns nulls. Cheap; runs once per
+      // database lifetime.
+      const cfg = await req.tenantCtx.prisma.systemConfig.upsert({
+        where: { id: "singleton" },
+        update: {},
+        create: { id: "singleton" },
+        select: {
+          idleTimeoutSeconds: true,
+          idleWarningSeconds: true,
+          updatedAt: true,
+        },
+      });
+      return {
+        idleTimeoutSeconds: cfg.idleTimeoutSeconds,
+        idleWarningSeconds: cfg.idleWarningSeconds,
+        updatedAt: cfg.updatedAt,
+        bounds: {
+          idleTimeoutSeconds: { min: IDLE_TIMEOUT_MIN, max: IDLE_TIMEOUT_MAX },
+          idleWarningSeconds: { min: IDLE_WARNING_MIN, max: IDLE_WARNING_MAX },
+        },
+      };
+    },
   );
 
   app.put(
@@ -126,6 +126,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
           "Set the idle-then-logout policy. Answers the stored values " +
           "without the bounds block the GET carries.",
         tags: TAGS,
+        permission: "admin.system_config",
         body: idlePolicyUpdateSchema,
         response: idlePolicyUpdateResponseSchema,
         errors: [400, 401, 403],
@@ -221,6 +222,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
           "Update company branding. Send null (or an empty string) in a " +
           "field to clear it; companyName is required.",
         tags: TAGS,
+        permission: "admin.system_config",
         body: brandingUpdateSchema,
         response: brandingResponseSchema,
         errors: [400, 401, 403],
@@ -288,6 +290,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
           "Per-tenant Twilio + SendGrid settings, with the secrets " +
           "MASKED — the full credentials are never returned after the PUT.",
         tags: TAGS,
+        permission: "admin.system_config",
         response: notificationProvidersResponseSchema,
         errors: [401, 403],
       }),
@@ -346,6 +349,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
           "Store Twilio + SendGrid credentials. Answers { ok: true } and " +
           "an X-Refresh-Needed header — re-GET for the masked view.",
         tags: TAGS,
+        permission: "admin.system_config",
         body: notificationProvidersUpdateSchema,
         response: notificationProvidersUpdateResponseSchema,
         errors: [400, 401, 403],

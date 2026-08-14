@@ -56,6 +56,7 @@ export async function auditRoutes(app: FastifyInstance) {
           "actor is flattened onto each row; `payload` carries " +
           "action-specific detail whose shape varies by `action`.",
         tags: TAGS,
+        permission: "admin.audit_log",
         querystring: listQuerySchema,
         response: auditListResponseSchema,
         errors: [400, 401, 403],
@@ -74,6 +75,7 @@ export async function auditRoutes(app: FastifyInstance) {
           "dropdown's source. Read from the table, so a new action " +
           "appears the first time it is recorded.",
         tags: TAGS,
+        permission: "admin.audit_log",
         response: auditActionsResponseSchema,
         errors: [401, 403],
       }),

@@ -78,6 +78,7 @@ export async function leaseRoutes(app: FastifyInstance) {
           "Lease agreements, newest first (up to 200), each with its loan " +
           "reference. Filter by ?status.",
         tags: TAGS,
+        permission: "lease.read",
         querystring: listQuerySchema,
         response: agreementListResponseSchema,
         errors: [400, 401, 402, 403],
@@ -95,6 +96,7 @@ export async function leaseRoutes(app: FastifyInstance) {
           "The lease agreement for one loan. 404 when the loan has none " +
           "— only lease products get an agreement at disbursement.",
         tags: TAGS,
+        permission: "lease.read",
         params: loanIdParamSchema,
         response: agreementResponseSchema,
         errors: [401, 402, 403, 404],
@@ -112,6 +114,7 @@ export async function leaseRoutes(app: FastifyInstance) {
           "Borrower pays the residual and takes title. Posts the buyout " +
           "journal entry and closes the loan; answers 201 with its id.",
         tags: TAGS,
+        permission: "lease.buyout",
         params: loanIdParamSchema,
         body: buyoutSchema,
         response: buyoutResponseSchema,
@@ -131,6 +134,7 @@ export async function leaseRoutes(app: FastifyInstance) {
           "Repossess the unit. Refused for an employee borrower — the " +
           "pull-out path is non-employee only.",
         tags: TAGS,
+        permission: "lease.pull_out",
         params: loanIdParamSchema,
         body: pullOutSchema,
         response: agreementResponseSchema,
@@ -149,6 +153,7 @@ export async function leaseRoutes(app: FastifyInstance) {
           "Close the agreement as RETURNED — the borrower gave the unit " +
           "back rather than buying it out.",
         tags: TAGS,
+        permission: "lease.close",
         params: loanIdParamSchema,
         body: closeSchema,
         response: agreementResponseSchema,
@@ -167,6 +172,7 @@ export async function leaseRoutes(app: FastifyInstance) {
           "Close the agreement as EXTENDED — the term was rolled forward " +
           "rather than settled.",
         tags: TAGS,
+        permission: "lease.close",
         params: loanIdParamSchema,
         body: closeSchema,
         response: agreementResponseSchema,

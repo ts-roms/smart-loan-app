@@ -71,6 +71,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           "Imported bank statements, most recent period first. Headers " +
           "only — fetch one by id for its lines.",
         tags: TAGS,
+        permission: "accounting.read",
         response: statementListResponseSchema,
         errors: [401, 402, 403],
       }),
@@ -85,6 +86,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary: "One statement with every imported line, oldest first.",
         tags: TAGS,
+        permission: "accounting.read",
         params: statementIdParamSchema,
         response: statementDetailResponseSchema,
         errors: [401, 402, 403, 404],
@@ -106,6 +108,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           "Matched/unmatched counts and amounts for one statement — the " +
           "reconciliation dashboard's counters.",
         tags: TAGS,
+        permission: "accounting.read",
         params: statementIdParamSchema,
         response: summaryResponseSchema,
         errors: [401, 402, 403],
@@ -121,8 +124,21 @@ export async function reconciliationRoutes(app: FastifyInstance) {
       schema: routeSchema({
         summary:
           "Import a bank statement and its lines in one call. Answers the " +
-          "statement header; the lines are not echoed back.",
+          "statement header; the lines are not echoed back. NOT " +
+          "idempotent — re-importing duplicates the whole statement.",
         tags: TAGS,
+        permission: "accounting.post_journal",
+        /*
+         * No `idempotency`. There is no key and no natural-key dedupe
+         * on (account, period) or line hash, so posting the same file
+         * twice creates a second statement and a second full set of
+         * lines. The `bank_line_match_unique` index does NOT help here:
+         * it stops two lines claiming the same payment, which is match
+         * exclusivity, not import idempotency. Named in the summary
+         * because re-uploading a statement is a normal thing for an
+         * operator to do when they are unsure whether the first one
+         * landed.
+         */
         body: statementSchema,
         response: statementResponseSchema,
         status: 201,
@@ -178,6 +194,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           "Run the auto-matcher over the statement's unmatched lines. " +
           "Conservative — anything ambiguous is left for a human.",
         tags: TAGS,
+        permission: "accounting.post_journal",
         params: statementIdParamSchema,
         response: autoMatchResponseSchema,
         errors: [401, 402, 403],
@@ -206,6 +223,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           "Pin a bank line to an internal record the auto-matcher could " +
           "not place. 409 if another line already claims that record.",
         tags: TAGS,
+        permission: "accounting.post_journal",
         params: lineIdParamSchema,
         body: manualMatchSchema,
         response: lineResponseSchema,
@@ -246,6 +264,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           "Release a line's match, clearing every matched* field back to " +
           "null so the record it claimed is free again.",
         tags: TAGS,
+        permission: "accounting.post_journal",
         params: lineIdParamSchema,
         response: lineResponseSchema,
         errors: [401, 402, 403],
@@ -267,6 +286,7 @@ export async function reconciliationRoutes(app: FastifyInstance) {
           "Scored match suggestions for one line, best first (up to 10). " +
           "Answers [] for an unknown line rather than 404.",
         tags: TAGS,
+        permission: "accounting.read",
         params: lineIdParamSchema,
         response: candidateListResponseSchema,
         errors: [401, 402, 403],

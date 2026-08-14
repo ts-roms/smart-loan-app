@@ -54,6 +54,7 @@ export async function eclRoutes(app: FastifyInstance) {
           "returned as exact decimal STRINGS — these are the stored " +
           "Decimal columns, unprojected.",
         tags: TAGS,
+        permission: "accounting.read",
         response: eclRunListResponseSchema,
         errors: [401, 402, 403],
       }),
@@ -88,6 +89,7 @@ export async function eclRoutes(app: FastifyInstance) {
           "Body is optional — omitted, it runs the current month. Money " +
           "here is a NUMBER, unlike the stored history above.",
         tags: TAGS,
+        permission: "accounting.accrue",
         response: eclRunResultResponseSchema,
         status: 201,
         errors: [400, 401, 402, 403],
