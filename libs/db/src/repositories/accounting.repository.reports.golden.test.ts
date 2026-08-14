@@ -393,3 +393,61 @@ describe("GOLDEN — accountBalance", () => {
     expect(await balanceOf(r, "acc-cash")).toBe(30500);
   });
 });
+
+/**
+ * `incomeStatement` shares `ledgerLines` with the two reports above, so it
+ * moves whenever they do even though F3 does not name it. Pinned for the same
+ * reason and at the same time.
+ */
+describe("GOLDEN — incomeStatement", () => {
+  const FROM = new Date("2026-01-01T00:00:00.000Z");
+
+  it("produces exactly these sections over the full window", async () => {
+    const { repo: r } = repo();
+    const is = await r.incomeStatement(FROM, AS_OF);
+
+    expect(is.income).toEqual({
+      rows: [{ code: "4100", name: "Fee Income", amount: 66.67 }],
+      total: 66.67,
+    });
+    expect(is.expense).toEqual({
+      rows: [{ code: "5000", name: "Operating Expense", amount: 1250.75 }],
+      total: 1250.75,
+    });
+    expect(is.netIncome).toBe(-1184.08);
+    expect(is.from).toBe(FROM.toISOString());
+    expect(is.to).toBe(AS_OF.toISOString());
+  });
+
+  it("bounds both ends of the window", async () => {
+    // March only: the two fee accruals (E3, E4), and neither the April
+    // reversal nor the May expense.
+    const { repo: r } = repo();
+    const is = await r.incomeStatement(
+      new Date("2026-03-01T00:00:00.000Z"),
+      new Date("2026-03-31T23:59:59.999Z"),
+    );
+    expect(is.income.total).toBe(200);
+    expect(is.expense.total).toBe(0);
+    expect(is.expense.rows).toEqual([]);
+    expect(is.netIncome).toBe(200);
+  });
+
+  it("ignores balance-sheet accounts entirely", async () => {
+    const { repo: r } = repo();
+    const is = await r.incomeStatement(FROM, AS_OF);
+    const codes = [...is.income.rows, ...is.expense.rows].map((x) => x.code);
+    expect(codes).toEqual(["4100", "5000"]);
+  });
+
+  it("returns empty sections for a window with no entries", async () => {
+    const { repo: r } = repo();
+    const is = await r.incomeStatement(
+      new Date("2025-01-01T00:00:00.000Z"),
+      new Date("2025-12-31T23:59:59.999Z"),
+    );
+    expect(is.income).toEqual({ rows: [], total: 0 });
+    expect(is.expense).toEqual({ rows: [], total: 0 });
+    expect(is.netIncome).toBe(0);
+  });
+});
