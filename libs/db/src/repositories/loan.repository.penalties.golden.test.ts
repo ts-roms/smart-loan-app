@@ -25,9 +25,22 @@ import { LoanRepository } from "./loan.repository";
  *
  *   Separately sums `PenaltyWaiver.waivedAmount` for the loan, also in float.
  *
- *   Returns all three figures rounded: `originalPenalty`, `waivedToDate`, and
- *   `outstanding = round2(originalPenalty - waivedToDate)` — note the
- *   subtraction happens on the UNROUNDED sums.
+ *   Returns the figures rounded: `originalPenalty`, `waivedToDate`,
+ *   `paidToDate`, and
+ *   `outstanding = round2(originalPenalty - waivedToDate - paidToDate)` —
+ *   note the subtraction happens on the UNROUNDED sums.
+ *
+ *   `paidToDate` — summed exactly from `LoanSchedule.penaltyPaid` — and its
+ *   subtraction from `outstanding` are the only changes these goldens took
+ *   when late fees became collectable. They are a deliberate behaviour
+ *   change, not a refinement: three consumers read `outstanding` (the loans
+ *   route, demand letters, repossession), and before penalties could be
+ *   paid, "accrued minus waived" and "still owed" were the same number. A
+ *   demand letter dunning a borrower for a penalty they had already paid
+ *   would have been the first visible consequence of leaving it alone.
+ *
+ *   Every figure below is zero on the paid side, so no amount in this file
+ *   moved — only the shape of the object did.
  *
  *   A loan with no schedule rows short-circuits to three zeroes without
  *   querying journal entries at all.
@@ -200,6 +213,7 @@ describe("GOLDEN — accruedPenaltiesFor", () => {
     expect(await repo().accruedPenaltiesFor("LN-0001")).toEqual({
       originalPenalty: 63.83,
       waivedToDate: 13.83,
+      paidToDate: 0,
       outstanding: 50,
     });
   });
@@ -216,6 +230,7 @@ describe("GOLDEN — accruedPenaltiesFor", () => {
     expect(await repo().accruedPenaltiesFor("LN-0002")).toEqual({
       originalPenalty: 0,
       waivedToDate: 0,
+      paidToDate: 0,
       outstanding: 0,
     });
   });
@@ -224,6 +239,7 @@ describe("GOLDEN — accruedPenaltiesFor", () => {
     expect(await repo().accruedPenaltiesFor("LN-0003")).toEqual({
       originalPenalty: 0,
       waivedToDate: 0,
+      paidToDate: 0,
       outstanding: 0,
     });
   });

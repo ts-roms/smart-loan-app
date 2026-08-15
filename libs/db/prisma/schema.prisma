@@ -1421,7 +1421,44 @@ model LoanSchedule {
   /// Payment allocation runs against `interestDue - interestPaid`; without
   /// it every partial payment would re-recognize the same interest income.
   interestPaid  Decimal   @default(0) @db.Decimal(14, 2)
-  /// Set once `principalPaid >= principalDue AND interestPaid >= interestDue`.
+  /// Late-fee penalty collected on THIS installment so far.
+  ///
+  /// There is deliberately no `penaltyDue` beside it. What accrued is the
+  /// ledger's answer, not a column's: `LATE_FEE_ACCRUAL` entries are keyed
+  /// `"<scheduleId>:<periodKey>"` and summing their Fee Income credit is
+  /// the figure `accruedPenaltiesFor` has always reported. Copying that
+  /// into a column would create a second version of a number the ledger
+  /// already holds, and the reconciliation job exists because this system
+  /// has been bitten by exactly that. These two columns are here because
+  /// they are the only parts that are NOT derivable — nothing in the
+  /// ledger records which instalment a payment's penalty portion settled,
+  /// and nothing records which instalment a loan-level waiver forgave.
+  ///
+  /// Allocation runs against `accrued - penaltyWaived - penaltyPaid`, the
+  /// same remaining-balance shape as interest and principal, for the same
+  /// reason: without it a borrower paying one penalty in five instalments
+  /// would be charged it five times.
+  penaltyPaid   Decimal   @default(0) @db.Decimal(14, 2)
+  /// The share of loan-level `PenaltyWaiver` rows attributed to THIS
+  /// instalment, oldest-instalment-first, frozen at the moment of waive.
+  ///
+  /// Frozen rather than recomputed: a waiver is attributed against the
+  /// arrears standing when it was granted, and a later accrual on an older
+  /// instalment would otherwise silently move a past concession onto a row
+  /// it was never granted against. `SUM(penaltyWaived)` per loan must equal
+  /// `SUM(PenaltyWaiver.waivedAmount)` per loan, and `runReconciliation`
+  /// checks it.
+  penaltyWaived Decimal   @default(0) @db.Decimal(14, 2)
+  /// Set once every tier the loan's allocation order actually collects is
+  /// covered. On `INTEREST_PRINCIPAL` that is interest and principal, which
+  /// is what it has always been. On an order carrying the penalty tier it
+  /// also requires the penalty to be settled — otherwise the row would be
+  /// stamped and leave the open set with a balance still on it, which is
+  /// how a late fee became uncollectable.
+  ///
+  /// A tier the order never collects cannot hold the row open. That is what
+  /// keeps every legacy loan closing exactly as before, including ones
+  /// carrying an accrued penalty they have no tier to pay it with.
   paidInFullAt  DateTime?
 
   /// RESTRICT, not Cascade. This row IS the receivable — what was owed on
@@ -1872,19 +1909,19 @@ model AuditEvent {
   /// regulator submissions, and once rows leave their schema the only thing
   /// carrying the tenant is the column. Also catches the class of bug where
   /// a request resolves one tenant and writes to another.
-  tenantId            String?
+  tenantId  String?
   /// Client IP as seen by the API (`req.ip`, which honours trustProxy).
   /// Sized as text rather than inet: the value can be an IPv4, an IPv6, or
   /// — behind a misconfigured proxy — something that is neither, and an
   /// audit row must record what actually arrived, not reject it.
-  ipAddress           String?
+  ipAddress String?
   /// Raw `User-Agent` header, truncated to 512 chars by the repository.
-  userAgent           String?
+  userAgent String?
   /// Correlation id for the HTTP request that caused this action — the
   /// same value echoed to the caller in the `X-Request-Id` response header
   /// and stamped on every pino log line for the request. This is what turns
   /// a support ticket into a log query.
-  requestId           String?
+  requestId String?
 
   // ─── §56 structured change record ──────────────────────────────────────
   //
@@ -1894,12 +1931,12 @@ model AuditEvent {
   // answerable without knowing each call site's private payload convention.
 
   /// State before the action, for mutations. Null for creates.
-  oldValue            Json?
+  oldValue Json?
   /// State after the action, for mutations. Null for deletes.
-  newValue            Json?
+  newValue Json?
   /// Operator-supplied justification, where the action collects one
   /// (write-off, penalty waiver, KYC rejection, period reopen).
-  reason              String?
+  reason   String?
 
   actor User @relation("AuditActor", fields: [actorId], references: [id])
   // ─── APPEND-ONLY IS ENFORCED IN THE DATABASE ─────────────────────────

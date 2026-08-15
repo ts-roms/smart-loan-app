@@ -58,6 +58,7 @@ export async function runReconciliation(
   checks.push(await everyEntryBalances(prisma));
   checks.push(await noDuplicateSourceRefs(prisma));
   checks.push(await scheduleProgressWithinBounds(prisma));
+  checks.push(await penaltyProgressMatchesLedger(prisma));
   checks.push(await receivableMatchesSubledger(prisma));
 
   return {
@@ -197,15 +198,129 @@ async function scheduleProgressWithinBounds(
 }
 
 /**
+ * The per-instalment penalty figures against the two things that produced
+ * them.
+ *
+ * `LoanSchedule.penaltyPaid` and `penaltyWaived` are the only part of the
+ * penalty story that is not derivable — the ledger records what accrued and
+ * what was forgiven in total, but nothing in it says which instalment a
+ * collection settled or which one a loan-level waiver relieved. That makes
+ * them the only place a per-instalment figure can drift away from the
+ * loan-level truth, so they are checked directly rather than hoped about.
+ *
+ * Two ways they can diverge, and both are caught here:
+ *
+ *   ATTRIBUTION. Every peso of every `PenaltyWaiver` is attributed to some
+ *   instalment when the waiver is granted, oldest-first. If those shares
+ *   stop adding up to the waiver row — a partial write, a repair script, a
+ *   waiver granted while the attribution loop was wrong — the loan-level
+ *   report and the per-instalment balances disagree about what a borrower
+ *   owes, and the borrower will meet whichever one the payment path reads.
+ *
+ *   OVER-RELIEF. An instalment cannot have been relieved of more penalty
+ *   than accrued against it. `paid + waived > accrued` means either the same
+ *   peso was both collected and written off, or a payment allocated against
+ *   a balance that was not there.
+ *
+ * The accrued side is reconstructed from the ledger exactly as the
+ * application reads it — `LATE_FEE_ACCRUAL` / `LoanScheduleLateFee` entries
+ * whose `sourceRefId` is `"<scheduleId>:<periodKey>"`, taking the Fee Income
+ * (4100) credit. `split_part(…, ':', 1)` is the same join the application's
+ * `startsWith '<id>:'` filter performs, read the other way: schedule ids are
+ * uuids and carry no colon.
+ */
+async function penaltyProgressMatchesLedger(
+  prisma: PrismaClient,
+): Promise<ReconciliationCheck> {
+  const rows = await prisma.$queryRaw<
+    { number: string; installment: number | null; reason: string }[]
+  >`
+    WITH accrual AS (
+      SELECT split_part(e."sourceRefId", ':', 1) AS schedule_id,
+             SUM(l."credit")                     AS accrued
+        FROM "JournalEntry" e
+        JOIN "JournalLine"  l ON l."entryId" = e."id"
+        JOIN "Account"      a ON a."id"      = l."accountId"
+       WHERE e."source"        = 'LATE_FEE_ACCRUAL'
+         AND e."sourceRefType" = 'LoanScheduleLateFee'
+         AND e."sourceRefId"  IS NOT NULL
+         AND a."code"          = '4100'
+       GROUP BY 1
+    ),
+    over_relieved AS (
+      SELECT l."number", s."installmentNo" AS installment,
+             CASE
+               WHEN s."penaltyPaid" < 0 OR s."penaltyWaived" < 0
+                 THEN 'negative penalty progress'
+               ELSE 'penalty relieved beyond what accrued'
+             END AS reason
+        FROM "LoanSchedule" s
+        JOIN "LoanApplication" l ON l."id" = s."loanId"
+        LEFT JOIN accrual ac ON ac."schedule_id" = s."id"
+       WHERE s."penaltyPaid" < 0
+          OR s."penaltyWaived" < 0
+          OR s."penaltyPaid" + s."penaltyWaived"
+             > COALESCE(ac."accrued", 0) + 0.01
+    ),
+    unattributed AS (
+      SELECT l."number", NULL::int AS installment,
+             'waivers do not match attributed shares' AS reason
+        FROM "LoanApplication" l
+        JOIN (
+          SELECT "loanId", SUM("waivedAmount") AS total
+            FROM "PenaltyWaiver" GROUP BY "loanId"
+        ) w ON w."loanId" = l."id"
+        LEFT JOIN (
+          SELECT "loanId", SUM("penaltyWaived") AS total
+            FROM "LoanSchedule" GROUP BY "loanId"
+        ) s ON s."loanId" = l."id"
+       WHERE ABS(w."total" - COALESCE(s."total", 0)) > 0.01
+    )
+    SELECT * FROM over_relieved
+    UNION ALL
+    SELECT * FROM unattributed
+    ORDER BY "number", installment
+  `;
+  return {
+    name: "penalty_subledger",
+    ok: rows.length === 0,
+    offenders: rows
+      .slice(0, SAMPLE)
+      .map((r) =>
+        r.installment === null
+          ? `${r.number}: ${r.reason}`
+          : `${r.number} #${r.installment}: ${r.reason}`,
+      ),
+    summary:
+      rows.length === 0
+        ? "Every instalment's penalty progress is backed by the ledger."
+        : `${rows.length} penalty balance(s) disagree with the ledger.`,
+  };
+}
+
+/**
  * The one that matters: does the general ledger agree with the loan
  * book?
  *
  * GL Loans Receivable should equal the outstanding principal across
  * every schedule, PLUS late fees accrued to the receivable and not yet
- * waived. Late-fee accrual debits Loans Receivable without touching
- * principalDue, so leaving it out would report a false difference on
- * any book with an overdue account — the exact false positive that
- * would get this job muted.
+ * waived, MINUS late fees the borrower has since paid. Late-fee accrual
+ * debits Loans Receivable without touching principalDue, so leaving it
+ * out would report a false difference on any book with an overdue
+ * account — the exact false positive that would get this job muted.
+ *
+ * The `penaltyPaid` term is the one this identity gained when penalties
+ * became collectable, and without it this check would have started
+ * failing on the first late fee anyone paid. Collecting a penalty is
+ * Dr Cash / Cr Loans Receivable: it reduces the GL side while leaving
+ * `principalDue - principalPaid` and the accrual totals exactly where
+ * they were, so the difference is the collection itself.
+ *
+ * That makes this check the tie between `LoanSchedule.penaltyPaid` and
+ * the general ledger. The column is the only record of which instalment
+ * a collection settled — the credit itself is indistinguishable from a
+ * principal credit but for its memo — so if the column and the posting
+ * ever disagree, the gap shows up here as a signed delta.
  *
  * A settled loan contributes nothing from either side: write-off,
  * restructure and closure all mark their instalments paid AND credit
@@ -220,7 +335,7 @@ async function receivableMatchesSubledger(
       _sum: { debit: true, credit: true },
     }),
     prisma.loanSchedule.aggregate({
-      _sum: { principalDue: true, principalPaid: true },
+      _sum: { principalDue: true, principalPaid: true, penaltyPaid: true },
     }),
     prisma.journalLine.aggregate({
       where: {
@@ -240,10 +355,12 @@ async function receivableMatchesSubledger(
     Number(sched._sum.principalDue ?? 0) -
       Number(sched._sum.principalPaid ?? 0),
   );
+  const penaltyCollected = r2(Number(sched._sum.penaltyPaid ?? 0));
   const netFees = r2(
     Number(feeAgg._sum.debit ?? 0) -
       Number(feeAgg._sum.credit ?? 0) +
-      (Number(waiveAgg._sum.debit ?? 0) - Number(waiveAgg._sum.credit ?? 0)),
+      (Number(waiveAgg._sum.debit ?? 0) - Number(waiveAgg._sum.credit ?? 0)) -
+      penaltyCollected,
   );
   const expected = r2(outstanding + netFees);
   const delta = r2(gl - expected);

@@ -19,7 +19,8 @@ import { LoanRepository } from "./loan.repository";
  *   and when. Changing one after the fact rewrites the contract, and that
  *   is what §12 forbids.
  *
- *   SERVICING columns — `principalPaid`, `interestPaid`, `paidInFullAt` —
+ *   SERVICING columns — `principalPaid`, `interestPaid`, `penaltyPaid`,
+ *   `penaltyWaived`, `paidInFullAt` —
  *   are how far through that promise the borrower has got. They are
  *   SUPPOSED to move as payments land. A rising `principalPaid` is the row
  *   doing its job, not a history rewrite.
@@ -60,7 +61,39 @@ const CONTRACTUAL = [
   "totalDue",
 ] as const;
 
-const SERVICING = ["principalPaid", "interestPaid", "paidInFullAt"] as const;
+/*
+ * `penaltyPaid` and `penaltyWaived` joined this list when late fees became
+ * collectable, and they belong on this side of the line for exactly the
+ * reason the line exists: they record what has been collected against an
+ * instalment and what has been forgiven on it, not what the borrower was
+ * promised. `principalDue`, `interestDue` and `totalDue` are untouched by
+ * the penalty work — a late fee is not part of the amortisation and never
+ * enters `totalDue`, which is why the accrued figure stays in the ledger
+ * rather than becoming a sixth contractual column.
+ */
+const SERVICING = [
+  "principalPaid",
+  "interestPaid",
+  "penaltyPaid",
+  "penaltyWaived",
+  "paidInFullAt",
+] as const;
+
+/**
+ * The subset the four force-settlement paths write. They mark an instalment
+ * covered and do not touch the penalty columns at all — a penalty is not
+ * settled by a write-off or a restructure, it is carried or waived, and
+ * `waivePenalty` is the only path that writes `penaltyWaived`.
+ */
+const SETTLEMENT = ["principalPaid", "interestPaid", "paidInFullAt"] as const;
+
+/** What `recordPayment` writes: the three above plus the penalty collected. */
+const PAYMENT = [
+  "principalPaid",
+  "interestPaid",
+  "penaltyPaid",
+  "paidInFullAt",
+] as const;
 
 // ─── Harness ───────────────────────────────────────────────────────────
 
@@ -433,7 +466,7 @@ describe("GOLDEN — restructure does not re-cut the original schedule", () => {
 
     await repo.restructure("LN-1", RESTRUCTURE_INPUT);
 
-    expect(updatedColumns(state.writes)).toEqual([...SERVICING].sort());
+    expect(updatedColumns(state.writes)).toEqual([...SETTLEMENT].sort());
   });
 
   it("leaves every contractual value on every row exactly as it was", async () => {
@@ -480,7 +513,7 @@ describe("GOLDEN — the settlement paths touch servicing columns only", () => {
       const updates = state.writes.filter((w) => w.op === "update");
       expect(updates.length).toBeGreaterThan(0);
       for (const write of updates) {
-        expect(Object.keys(write.data).sort()).toEqual([...SERVICING].sort());
+        expect(Object.keys(write.data).sort()).toEqual([...SETTLEMENT].sort());
       }
     });
 
@@ -508,7 +541,19 @@ describe("GOLDEN — the settlement paths touch servicing columns only", () => {
       recordedById: "teller-1",
     });
 
-    expect(updatedColumns(state.writes)).toEqual([...SERVICING].sort());
+    /*
+     * `penaltyPaid` joined this set when late fees became collectable. It is
+     * written on every payment, not only ones that carry a penalty, for the
+     * same reason `interestPaid` is: the update is the instalment's whole
+     * servicing state, and a conditional column would make "what did this
+     * payment do" depend on which branch ran.
+     *
+     * `penaltyWaived` is deliberately NOT here. `recordPayment` never writes
+     * it — a payment collects a penalty, it does not forgive one — and the
+     * attribution it holds is frozen by `waivePenalty` at the moment of
+     * waive.
+     */
+    expect(updatedColumns(state.writes)).toEqual([...PAYMENT].sort());
     // Instalment 1 had 400 of 1,000 principal paid and its interest cleared;
     // 600 more settles it exactly.
     const s1 = state.rows.find((r) => r.id === "s1")!;

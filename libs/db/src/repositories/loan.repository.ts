@@ -1,11 +1,16 @@
 import {
+  DEFAULT_ALLOCATION_ORDER,
+  type PaymentAllocationOrder,
   addMoney,
   agentCommissionEntry,
   allocatePayment,
   badDebtRecoveryEntry,
+  centavosToDecimalString,
   loanDisbursementEntry,
   isAtLeast,
   loanPaymentEntry,
+  openCentavos,
+  orderCollects,
   preTerminationFeeEntry,
 } from "@loan/accounting";
 import {
@@ -33,6 +38,8 @@ import type {
 } from "@prisma/client";
 
 import {
+  type LateFeeAccrualEntry,
+  accruedPenaltyOf,
   feeIncomeCreditOf,
   lateFeeAccrualsBySchedule,
 } from "../lib/late-fee-accruals";
@@ -1411,10 +1418,13 @@ export class LoanRepository {
    * Record a payment + auto-post journal entry.
    *
    * Allocation walks the open installments oldest-first, clearing each one's
-   * *remaining* interest before its remaining principal. "Remaining" is the
-   * key word: every payment persists its slice to `interestPaid` /
-   * `principalPaid`, and the next payment allocates against
-   * `interestDue - interestPaid` / `principalDue - principalPaid`.
+   * tiers in the order the loan was written under (§26) — interest before
+   * principal on the legacy order, with the penalty tier before or after
+   * them on the other two. "Remaining" is the key word throughout: every
+   * payment persists its slice to `interestPaid` / `principalPaid` /
+   * `penaltyPaid`, and the next payment allocates against
+   * `interestDue - interestPaid`, `principalDue - principalPaid`, and
+   * `accrued - penaltyWaived - penaltyPaid`.
    *
    * That is what makes partial payments behave. Allocating against the full
    * dues instead — which is what this did before — recognizes the same
@@ -1518,27 +1528,71 @@ export class LoanRepository {
       });
 
       /*
-       * §11: no money through float. The amount and every schedule figure
-       * are handed to the allocator as `Prisma.Decimal` and parsed from
-       * their decimal text — `Number(o.interestDue)` was the conversion
-       * this comment used to sit above, and `round2` laundered the error
-       * rather than removing it.
-       *
        * §26: the order comes from the LOAN, never from its product. The
        * product's setting is a default for new applications; reading it
        * here would let a product edit change how an in-flight borrower's
        * payments are applied. Legacy rows are backfilled to
        * INTEREST_PRINCIPAL, which is what they were already doing, so this
-       * line changes nothing for any loan written before §26.
+       * changes nothing for any loan written before §26.
+       */
+      const order: PaymentAllocationOrder =
+        loan.paymentAllocationOrder ?? DEFAULT_ALLOCATION_ORDER;
+
+      /*
+       * The penalty balance the allocator consumes, per instalment.
        *
-       * `feeDue` / `penaltyDue` are deliberately not passed: no
-       * per-instalment fee or penalty balance is modelled anywhere in this
-       * system, so there is nothing truthful to put in them. Both tiers
-       * therefore resolve to zero and an order carrying them allocates
-       * exactly as the legacy order does. See the note on `allocatePayment`
-       * for what closing that gap requires — in particular that collecting
-       * penalties needs a collected-to-date figure per instalment, without
-       * which every partial payment would re-collect the same penalty.
+       * Read from the ledger, not from a column: `LATE_FEE_ACCRUAL` entries
+       * keyed `"<scheduleId>:<periodKey>"` ARE the record of what accrued,
+       * and duplicating that into `LoanSchedule` would put a second version
+       * of the same number one drift away from the first. What the schedule
+       * row holds is the half the ledger cannot answer — which instalment a
+       * collection settled (`penaltyPaid`) and which one a loan-level waiver
+       * forgave (`penaltyWaived`).
+       *
+       * SKIPPED ENTIRELY when the order has no PENALTIES tier, which is
+       * every loan written before §26. That is not an optimisation dressed
+       * up as a safety property: an order with no penalty tier can never
+       * reduce a penalty, so reading the figure could only change the
+       * outcome by accident. Those payments issue exactly the queries they
+       * issued before this change, and `settled` below reduces to exactly
+       * the test it was.
+       *
+       * One extra query when it does run — an OR of `startsWith` prefixes
+       * over the loan's OPEN instalments only, served by
+       * `JournalEntry_source_refType_refId_prefix_idx`. Bounded by tenor,
+       * not by the size of the book; this is the same shape
+       * `accruedPenaltiesFor` has always run once per loan.
+       */
+      const collectsPenalties = orderCollects(order, "PENALTIES");
+      const accrued = collectsPenalties
+        ? await lateFeeAccrualsBySchedule(
+            tx,
+            open.map((o) => o.id),
+          )
+        : new Map<string, LateFeeAccrualEntry[]>();
+
+      /** Penalty still owed on an instalment: accrued, less waived. */
+      const penaltyDueOf = (o: (typeof open)[number]) =>
+        centavosToDecimalString(
+          openCentavos(
+            accruedPenaltyOf(accrued.get(o.id) ?? []),
+            moneyOrZero(o.penaltyWaived),
+          ),
+        );
+
+      /*
+       * §11: no money through float. The amount and every schedule figure
+       * are handed to the allocator as `Prisma.Decimal` and parsed from
+       * their decimal text — `Number(o.interestDue)` was the conversion
+       * this comment used to sit above, and `round2` laundered the error
+       * rather than removing it. The accrued figure joins them as exact
+       * decimal text out of `accruedPenaltyOf` for the same reason.
+       *
+       * `feeDue` is still not passed, and still correctly so: no fee in
+       * this system is ever owed as a balance. Processing, documentary
+       * stamp and origination fees are netted out of the disbursement
+       * proceeds and the pre-termination fee is cash at closure, so there
+       * is nothing to allocate against. The FEES tier stays inert.
        */
       const allocation = allocatePayment(
         input.amount,
@@ -1547,8 +1601,10 @@ export class LoanRepository {
           principalDue: o.principalDue,
           interestPaid: o.interestPaid,
           principalPaid: o.principalPaid,
+          penaltyDue: penaltyDueOf(o),
+          penaltyPaid: moneyOrZero(o.penaltyPaid),
         })),
-        loan.paymentAllocationOrder,
+        order,
       );
 
       // Persist the per-installment progress. `perInstallment[].index` maps
@@ -1564,25 +1620,56 @@ export class LoanRepository {
          */
         const interestPaid = addMoney(inst.interestPaid, slice.interest);
         const principalPaid = addMoney(inst.principalPaid, slice.principal);
+        const penaltyPaid = addMoney(
+          moneyOrZero(inst.penaltyPaid),
+          slice.penalty ?? 0,
+        );
         /*
-         * Settled when paid-to-date covers the due on BOTH tiers.
+         * Settled when paid-to-date covers every tier THIS LOAN'S ORDER
+         * ACTUALLY COLLECTS.
          *
-         * The old test was `paid + 0.005 >= due`, a half-centavo float
-         * tolerance. In centavos it is exact and the tolerance is not
-         * merely unnecessary but unreachable: both sides come from
-         * Decimal(14,2), so there is no representable value between
-         * `due - 0.01` (which must not settle) and `due` (which must).
-         * The golden tests pin both of those cases, and they pass
-         * unchanged — an instalment a centavo short still stays open.
+         * The tolerance question is unchanged: the old test was
+         * `paid + 0.005 >= due`, a half-centavo float guard. In centavos it
+         * is exact, and the tolerance is not merely unnecessary but
+         * unreachable — both sides come from Decimal(14,2), so nothing is
+         * representable between `due - 0.01` (which must not settle) and
+         * `due` (which must). The golden tests pin both cases.
+         *
+         * What is new is the penalty condition, and the fact that it is
+         * conditional is the point of it.
+         *
+         * It has to be there at all because `recordPayment` reads
+         * `paidInFullAt: null`. Stamping a row whose penalty is still
+         * outstanding drops it out of the set every future payment reads,
+         * so the fee stops being merely uncollected and becomes
+         * uncollectABLE — pinned as a golden before this change, and the
+         * defect this whole batch exists to close. It bites under
+         * INTEREST_PRINCIPAL_FEES_PENALTIES in particular, where the
+         * penalty is taken last and a payment covering exactly principal
+         * and interest would strand it.
+         *
+         * It has to be CONDITIONAL because a tier the order never collects
+         * must not be able to hold a row open. Every loan on the books is
+         * on INTEREST_PRINCIPAL, some of them are in arrears, and some of
+         * those carry an accrued penalty their order gives them no way to
+         * pay. Requiring it unconditionally would leave those instalments
+         * open forever: the loan would never close, and — because
+         * `lateFeeFor` charges any row whose `paidInFullAt` is null — they
+         * would go on accruing late fees to the policy cap on a debt that
+         * was already fully repaid. That is the regression this clause is
+         * shaped to avoid, and the no-penalty golden block is what proves
+         * it did not happen.
          */
         const settled =
           isAtLeast(interestPaid, inst.interestDue) &&
-          isAtLeast(principalPaid, inst.principalDue);
+          isAtLeast(principalPaid, inst.principalDue) &&
+          (!collectsPenalties || isAtLeast(penaltyPaid, penaltyDueOf(inst)));
         await tx.loanSchedule.update({
           where: { id: inst.id },
           data: {
             interestPaid,
             principalPaid,
+            penaltyPaid,
             paidInFullAt: settled ? input.paidOn : null,
           },
         });
@@ -1621,11 +1708,16 @@ export class LoanRepository {
               interestPortion: allocation.interest,
               principalPortion: allocation.principal,
               /*
-               * Zero on every order today, since nothing populates a fee or
-               * penalty balance to allocate against. Passed through anyway
-               * so the entry is already correct — and already balanced —
-               * on the day those balances become real, rather than the
-               * ledger being the last thing anyone remembers to update.
+               * `penaltyPortion` is now genuinely non-zero when a penalty
+               * was outstanding and the loan's order collects it. It
+               * credits Loans Receivable rather than Fee Income — the
+               * income was recognised when the fee accrued, and crediting
+               * it again here would book the same peso twice. Read the
+               * comment block on `loanPaymentEntry` before changing it.
+               *
+               * `feePortion` stays zero on every order: no fee in this
+               * system is ever owed as a balance. Passed through so the
+               * entry is already correct if one ever is.
                */
               feePortion: allocation.fees ?? 0,
               penaltyPortion: allocation.penalties ?? 0,
@@ -2166,23 +2258,49 @@ export class LoanRepository {
   // portion (Dr Fee Income / Cr Loans Receivable).
 
   /**
-   * Current outstanding penalty for a loan = total late-fee accruals
-   * minus prior waivers. Cheap enough to compute on demand from JE rows;
-   * we keep no running counter to avoid drift.
+   * Current outstanding penalty for a loan = total late-fee accruals, minus
+   * prior waivers, minus what the borrower has actually paid.
+   *
+   * The accrued figure is still computed on demand from journal rows and
+   * still has no running counter, for the reason it never had one: a
+   * counter is a second version of a number the ledger already holds.
+   *
+   * `paidToDate` is the one figure that CANNOT come from the ledger. A
+   * payment's penalty portion credits Loans Receivable exactly as principal
+   * does, separated only by a memo string, so the subledger has to say which
+   * instalment it settled. It is summed from `LoanSchedule.penaltyPaid`, and
+   * `runReconciliation`'s `receivable_subledger` check is what ties that
+   * column back to the general ledger.
+   *
+   * SUBTRACTING IT IS A BEHAVIOUR CHANGE AND A DELIBERATE ONE. Three
+   * consumers read `outstanding` — the loans route, demand letters and
+   * repossession. Before penalties were collectable, "accrued minus waived"
+   * and "still owed" were the same number. They are not any more, and a
+   * demand letter that dunned a borrower for a penalty they had already
+   * paid would be the first visible consequence of leaving this alone.
    */
   async accruedPenaltiesFor(loanIdOrNumber: string): Promise<{
     originalPenalty: number;
     waivedToDate: number;
+    paidToDate: number;
     outstanding: number;
   }> {
     const loan = await this.prisma.loanApplication.findFirst({
       where: idOrNumberWhere(loanIdOrNumber),
-      include: { schedule: { select: { id: true } } },
+      include: { schedule: { select: { id: true, penaltyPaid: true } } },
     });
     if (!loan) throw new Error("Loan not found");
     const scheduleIds = loan.schedule.map((s) => s.id);
+    const paidToDate = Number(
+      addMoney(...loan.schedule.map((s) => moneyOrZero(s.penaltyPaid)), 0),
+    );
     if (scheduleIds.length === 0) {
-      return { originalPenalty: 0, waivedToDate: 0, outstanding: 0 };
+      return {
+        originalPenalty: 0,
+        waivedToDate: 0,
+        paidToDate: 0,
+        outstanding: 0,
+      };
     }
     /*
      * All LATE_FEE_ACCRUAL entries whose sourceRefId starts with any of this
@@ -2215,7 +2333,8 @@ export class LoanRepository {
     return {
       originalPenalty: round2(originalPenalty),
       waivedToDate: round2(waivedToDate),
-      outstanding: round2(originalPenalty - waivedToDate),
+      paidToDate,
+      outstanding: round2(originalPenalty - waivedToDate - paidToDate),
     };
   }
 
@@ -2223,6 +2342,43 @@ export class LoanRepository {
    * Waive part (or all) of the outstanding penalty. Posts a reversing
    * journal entry and creates a PenaltyWaiver record snapshot. Gated by
    * `loans.waive_penalty` permission at the route layer.
+   *
+   * ── Attribution: OLDEST INSTALMENT FIRST ────────────────────────────
+   *
+   * A `PenaltyWaiver` is loan-level — a `loanId` and an amount — while the
+   * penalty it forgives accrued per instalment. Now that a penalty is a
+   * balance a payment can consume, "how much does instalment #3 still owe"
+   * has to have an answer, so the waiver has to land somewhere. The share
+   * each instalment absorbs is written to `LoanSchedule.penaltyWaived`
+   * inside this transaction and never recomputed.
+   *
+   * The rule is the allocator's own: walk instalments by `installmentNo`
+   * ascending and let each absorb what it still owes until the waived
+   * amount is exhausted. That is the same instalment-major, oldest-first
+   * walk `allocatePayment` performs, and the same arrears convention the
+   * collections queue, the aging report and the nightly accrual all use. A
+   * waiver is a concession on the oldest arrears, and clearing whole
+   * instalments is what an officer telling a borrower "we've written off
+   * your penalties on the first two months" actually means.
+   *
+   * Pro-rata was rejected: it leaves a fraction of a penalty owing on every
+   * overdue row, needs a residual rule for the sub-centavo remainder, and
+   * has no servicing convention behind it. An explicit instalment reference
+   * on `PenaltyWaiver` was rejected for a stronger reason than scope — the
+   * waiver form has never asked the approving officer which instalment they
+   * meant, so the field would be a required answer to a question nobody has
+   * the basis to give, and no historical row could supply it at all.
+   *
+   * FROZEN, NOT DERIVED. The attribution could be recomputed on demand from
+   * the same rule, and deliberately is not. The rule is stable only against
+   * a fixed set of accruals: a late fee accruing later on an OLDER
+   * instalment would re-run the greedy fill and silently move a past
+   * concession onto a row it was never granted against, changing what a
+   * borrower owes on instalments that were already settled. Freezing it
+   * means the loan-level total and the per-instalment shares can be
+   * reconciled against each other — `SUM(penaltyWaived)` per loan must
+   * equal `SUM(PenaltyWaiver.waivedAmount)` per loan, and the
+   * `penalty_subledger` check in `runReconciliation` asserts exactly that.
    */
   async waivePenalty(
     loanIdOrNumber: string,
@@ -2250,35 +2406,60 @@ export class LoanRepository {
       // snapshot stays consistent if accruals are running concurrently.
       const scheduleRows = await tx.loanSchedule.findMany({
         where: { loanId },
-        select: { id: true },
+        select: {
+          id: true,
+          installmentNo: true,
+          interestDue: true,
+          interestPaid: true,
+          principalDue: true,
+          principalPaid: true,
+          penaltyPaid: true,
+          penaltyWaived: true,
+          paidInFullAt: true,
+        },
+        // The attribution walk is oldest-first, so the read is too.
+        orderBy: { installmentNo: "asc" },
       });
       const scheduleIds = scheduleRows.map((s) => s.id);
-      const accruals =
-        scheduleIds.length === 0
-          ? []
-          : await tx.journalEntry.findMany({
-              where: {
-                source: "LATE_FEE_ACCRUAL",
-                sourceRefType: "LoanScheduleLateFee",
-                OR: scheduleIds.map((sid) => ({
-                  sourceRefId: { startsWith: `${sid}:` },
-                })),
-              },
-              include: { lines: { include: { account: true } } },
-            });
-      const originalAccrued = accruals.reduce((sum, e) => {
-        const feeLine = e.lines.find((l) => l.account.code === "4100");
-        return sum + (feeLine ? Number(feeLine.credit) : 0);
-      }, 0);
-      const priorWaivers = await tx.penaltyWaiver.findMany({
-        where: { loanId },
-        select: { waivedAmount: true },
-      });
-      const waivedSoFar = priorWaivers.reduce(
-        (s, w) => s + Number(w.waivedAmount),
+      /*
+       * Shares the chunked lookup with the nightly accrual and with
+       * `accruedPenaltiesFor` instead of re-implementing the prefix query
+       * and the 4100-credit sum inline, which is what this did before. Two
+       * copies of "what accrued against these instalments" was already a
+       * drift risk; with the figure now driving a per-instalment attribution
+       * that a reconciliation check compares against the ledger, a
+       * divergence between the two copies would surface as a phantom
+       * reconciliation failure. `lateFeeAccrualsBySchedule` takes a `Tx`, so
+       * the read still happens inside this transaction and the snapshot is
+       * still consistent against a concurrent accrual.
+       */
+      const accrued = await lateFeeAccrualsBySchedule(tx, scheduleIds);
+
+      /*
+       * Per-instalment outstanding penalty, in centavos:
+       * accrued, less what was already waived, less what has been PAID.
+       *
+       * Subtracting the paid figure is new and is a defect fix, not a
+       * refinement. The previous arithmetic was `accrued - alreadyWaived`
+       * and was harmless only because nothing could be collected. Now that
+       * a payment settles penalties, waiving against the gross accrual
+       * would let the same peso be relieved twice — collected from the
+       * borrower and then written off again — which overstates the waiver
+       * report and drives the receivable below what the loan book says.
+       */
+      const openOf = (s: (typeof scheduleRows)[number]) =>
+        openCentavos(
+          accruedPenaltyOf(accrued.get(s.id) ?? []),
+          moneyOrZero(s.penaltyWaived),
+          moneyOrZero(s.penaltyPaid),
+        );
+      const outstandingCentavos = scheduleRows.reduce(
+        (sum, s) => sum + openOf(s),
         0,
       );
-      const originalPenalty = round2(originalAccrued - waivedSoFar);
+      const originalPenalty = Number(
+        centavosToDecimalString(outstandingCentavos),
+      );
 
       const waivedAmount = round2(input.waivedAmount);
       if (waivedAmount <= 0) throw new Error("Waive amount must be > 0");
@@ -2288,6 +2469,96 @@ export class LoanRepository {
         );
       }
       const negotiatedPenalty = round2(originalPenalty - waivedAmount);
+
+      /*
+       * The attribution itself. Greedy, oldest instalment first, in
+       * integer centavos (§11) so the shares add back up to the waived
+       * total exactly rather than to within a rounding tolerance.
+       *
+       * A row whose penalty is fully relieved may become settled by this —
+       * it can be sitting open with its interest and principal already
+       * covered and only the penalty holding it there. Stamping it is what
+       * lets such a loan close; leaving it would keep the instalment in the
+       * overdue set and it would go on accruing late fees against a debt
+       * that no longer exists.
+       */
+      const order: PaymentAllocationOrder =
+        loan.paymentAllocationOrder ?? DEFAULT_ALLOCATION_ORDER;
+      const collectsPenalties = orderCollects(order, "PENALTIES");
+      let remaining = openCentavos(waivedAmount);
+      let settledCount = 0;
+      for (const s of scheduleRows) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, openOf(s));
+        if (take <= 0) continue;
+        remaining -= take;
+
+        const penaltyWaived = addMoney(
+          moneyOrZero(s.penaltyWaived),
+          centavosToDecimalString(take),
+        );
+        const settled =
+          s.paidInFullAt === null &&
+          isAtLeast(s.interestPaid, s.interestDue) &&
+          isAtLeast(s.principalPaid, s.principalDue) &&
+          (!collectsPenalties ||
+            openCentavos(
+              accruedPenaltyOf(accrued.get(s.id) ?? []),
+              penaltyWaived,
+              moneyOrZero(s.penaltyPaid),
+            ) === 0);
+        if (settled) settledCount += 1;
+        await tx.loanSchedule.update({
+          where: { id: s.id },
+          data: {
+            penaltyWaived,
+            ...(settled ? { paidInFullAt: new Date() } : {}),
+          },
+        });
+      }
+      /*
+       * `originalPenalty` was computed from the same `openOf` figures the
+       * walk consumes, and `waivedAmount` was validated against it, so the
+       * loop cannot run out of instalments with money left over. If it ever
+       * does, the per-instalment shares would no longer add up to the
+       * loan-level row and `penalty_subledger` would start failing on a
+       * book that is actually fine — so fail here instead, before the
+       * waiver row is written.
+       */
+      if (remaining > 0) {
+        throw new Error(
+          `Could not attribute ${centavosToDecimalString(remaining)} of the waived penalty to any instalment`,
+        );
+      }
+
+      /*
+       * A waiver can be the last thing a loan was waiting on: every
+       * instalment covered on interest and principal, the final one held
+       * open only by a penalty that has just been forgiven. Closing it here
+       * mirrors what `recordPayment` does when a payment settles the last
+       * row, and for the same reason — a loan left ACTIVE with nothing
+       * owing keeps appearing in the collections queue and keeps its
+       * instalments in the nightly accrual's overdue set.
+       *
+       * The same two guards as the payment path: a schedule must exist (an
+       * empty one makes "nothing open" vacuously true), and an already
+       * CLOSED loan must not have its closure date rewritten.
+       */
+      if (
+        settledCount > 0 &&
+        scheduleRows.length > 0 &&
+        loan.status !== "CLOSED"
+      ) {
+        const stillOpen = await tx.loanSchedule.count({
+          where: { loanId, paidInFullAt: null },
+        });
+        if (stillOpen === 0) {
+          await tx.loanApplication.update({
+            where: { id: loanId },
+            data: { status: "CLOSED", closedAt: new Date() },
+          });
+        }
+      }
 
       // Create the waiver row first (so the journal entry's sourceRefId
       // can reference it for idempotency).
@@ -2454,6 +2725,26 @@ function nextDueDate(
     due.setDate(due.getDate() + inc * installmentNo);
   }
   return due;
+}
+
+/**
+ * A money column the caller may not have projected, read as zero.
+ *
+ * `LoanSchedule.penaltyPaid` and `penaltyWaived` are NOT NULL DEFAULT 0, so
+ * a row read in full always carries them and this is never load-bearing in
+ * production. It exists for the same reason
+ * `paymentAllocationOrder ?? DEFAULT_ALLOCATION_ORDER` does: recording a
+ * payment is the money path, and a narrowly-projected row must pay the way
+ * it always did rather than failing a teller with
+ * `Not a decimal money value: undefined`.
+ *
+ * Absent is read as zero and that is the truthful reading — no penalty
+ * recorded against the instalment — rather than a guess. It cannot mask an
+ * unrun migration, because a column added with a non-null default cannot
+ * half-exist.
+ */
+function moneyOrZero(v: Prisma.Decimal | null | undefined): Prisma.Decimal | 0 {
+  return v ?? 0;
 }
 
 function round2(n: number): number {

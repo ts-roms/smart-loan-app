@@ -655,10 +655,20 @@ export const bulkPaymentResponseSchema = z.object({
   failed: z.number().int(),
 });
 
-/** GET /loans/:id/penalties — accrued vs waived, computed numbers. */
+/**
+ * GET /loans/:id/penalties — accrued vs waived vs paid, computed numbers.
+ *
+ * `outstanding` is `originalPenalty - waivedToDate - paidToDate`. The paid
+ * term arrived when late fees became collectable; before that it was always
+ * zero and the field did not exist. It is reported rather than merely
+ * subtracted so a borrower asking why their outstanding penalty fell can be
+ * told which of the two reasons it was — a payment they made, or a
+ * concession someone granted.
+ */
 export const penaltiesResponseSchema = z.object({
   originalPenalty: z.number(),
   waivedToDate: z.number(),
+  paidToDate: z.number(),
   outstanding: z.number(),
 });
 

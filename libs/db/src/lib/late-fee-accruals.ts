@@ -31,6 +31,7 @@
  * trips into a handful.
  */
 
+import { addMoney } from "@loan/accounting";
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
@@ -128,4 +129,34 @@ export function feeIncomeCreditOf(entries: LateFeeAccrualEntry[]): number {
     const feeLine = e.lines.find((l) => l.account.code === "4100");
     return sum + (feeLine ? Number(feeLine.credit) : 0);
   }, 0);
+}
+
+/**
+ * The same figure as `feeIncomeCreditOf`, as exact 2-decimal text.
+ *
+ * §11: this one feeds the payment allocator, so it must not be a float. The
+ * `Decimal` off the line is handed to `addMoney` as its own decimal text and
+ * summed in integer centavos; `Number(feeLine.credit)` never happens.
+ *
+ * Line SELECTION is identical to `feeIncomeCreditOf` on purpose — `find`,
+ * not a sum over matching lines, and a missing 4100 line contributing zero
+ * rather than being an error. An accrual entry has exactly one Fee Income
+ * credit, so the two agree on every row this system writes; keeping the
+ * selection identical means they also agree on any malformed historical row,
+ * and a reconciliation check comparing a column against the ledger cannot
+ * fail merely because two readers of the same entries disagreed about which
+ * line to read.
+ *
+ * `feeIncomeCreditOf` stays where it is and stays a float: the nightly
+ * accrual computes a delta against a policy figure that is itself a float,
+ * and moving one half of that subtraction to exact arithmetic would change
+ * postings by a centavo for no benefit. Callers that ALLOCATE use this one.
+ */
+export function accruedPenaltyOf(entries: LateFeeAccrualEntry[]): string {
+  const credits: string[] = [];
+  for (const e of entries) {
+    const feeLine = e.lines.find((l) => l.account.code === "4100");
+    if (feeLine) credits.push(feeLine.credit.toString());
+  }
+  return credits.length === 0 ? "0.00" : addMoney(...credits);
 }
