@@ -861,6 +861,32 @@ export const ALLOCATION_ORDERS = {
 export const DEFAULT_ALLOCATION_ORDER: PaymentAllocationOrder =
   "INTEREST_PRINCIPAL";
 
+/**
+ * Does this order actually collect `tier`?
+ *
+ * Not merely a convenience over `ALLOCATION_ORDERS[order].includes(tier)`.
+ * It answers a question two callers need and that is easy to get subtly
+ * wrong: an order that has no tier for a balance can never reduce it, so
+ * that balance must not be allowed to affect anything downstream of the
+ * allocation either.
+ *
+ * Concretely, `recordPayment` uses it twice. It skips reading the accrual
+ * ledger entirely for an order with no PENALTIES tier — every loan written
+ * before §26 — so those payments do exactly the work they did before, not
+ * merely the same arithmetic. And it decides settlement: an instalment is
+ * paid in full once every tier the order collects is covered, so an
+ * outstanding penalty holds a row open under an order that can collect it
+ * and, correctly, does not under one that cannot. Without the second use, a
+ * legacy loan carrying an accrued penalty it has no tier to pay would never
+ * close and would go on accruing late fees to the policy cap.
+ */
+export function orderCollects(
+  order: PaymentAllocationOrder,
+  tier: AllocationTier,
+): boolean {
+  return (ALLOCATION_ORDERS[order] as readonly AllocationTier[]).includes(tier);
+}
+
 export interface InstallmentDue {
   interestDue: MoneyInput;
   principalDue: MoneyInput;
@@ -891,13 +917,23 @@ export interface InstallmentDue {
    * Late-payment penalties accrued against this installment, and how much
    * has been collected. Both default to 0.
    *
-   * ALSO NOT POPULATED YET, but for a different reason than fees: the
-   * accrued side is real and derivable (`LATE_FEE_ACCRUAL` journal entries
-   * are keyed by schedule id), while the collected side has nowhere to live
-   * and loan-level `PenaltyWaiver` rows cannot be attributed back to an
-   * installment. Wiring this tier up without a collected-to-date figure
-   * would re-collect the same penalty on every partial payment — the exact
-   * defect `repair-payment-allocations.ts` exists to clean up after.
+   * THESE ARE POPULATED, unlike the fee pair above. `recordPayment` passes
+   * them for any loan on an order that carries the PENALTIES tier:
+   *
+   *   penaltyDue  = late fee accrued against this instalment, from the
+   *                 `LATE_FEE_ACCRUAL` entries keyed `"<scheduleId>:<day>"`,
+   *                 MINUS `LoanSchedule.penaltyWaived`
+   *   penaltyPaid = `LoanSchedule.penaltyPaid`
+   *
+   * The collected-to-date figure is what makes this safe, and it is why the
+   * tier stayed inert until there was a column to hold it: allocating
+   * against the accrued amount alone would re-collect the same penalty on
+   * every partial payment, which is precisely the defect
+   * `repair-payment-allocations.ts` exists to clean up after.
+   *
+   * The accrued side is deliberately still read from the ledger rather than
+   * stored beside the paid side — see the note on `LoanSchedule.penaltyPaid`
+   * in schema.prisma.
    */
   penaltyDue?: MoneyInput;
   penaltyPaid?: MoneyInput;
@@ -987,16 +1023,28 @@ type TierTotals = Record<AllocationTier, number>;
  * omitted. Anything left after every installment is settled comes back as
  * `overpayment` — the caller books that as a customer advance, not principal.
  *
- * ── The FEES and PENALTIES tiers are inert today ────────────────────────
+ * ── PENALTIES is live; FEES is still inert ──────────────────────────────
  *
- * Both resolve to a zero balance on every installment, because neither is
- * modelled as a payable per-installment amount (see `InstallmentDue`).
- * `FEES_PENALTIES_INTEREST_PRINCIPAL` therefore allocates identically to
- * `INTEREST_PRINCIPAL` right now — which is the safe place for this to
- * land, since it means selecting §26's order cannot move a peso until the
- * balances behind it are real. Closing the penalty half needs a
- * collected-to-date figure per installment and a rule attributing
- * loan-level waivers back to installments; neither is invented here.
+ * The penalty half is real. `recordPayment` passes `penaltyDue` and
+ * `penaltyPaid` for any loan whose order carries the tier, so
+ * `FEES_PENALTIES_INTEREST_PRINCIPAL` and `INTEREST_PRINCIPAL_FEES_PENALTIES`
+ * genuinely differ from `INTEREST_PRINCIPAL` on a borrower in arrears —
+ * that is what §26's configurability was for. The two things it was waiting
+ * on both exist now: a collected-to-date figure per instalment
+ * (`LoanSchedule.penaltyPaid`) and a rule attributing loan-level waivers
+ * back to instalments (oldest-first, frozen in `LoanSchedule.penaltyWaived`
+ * at the moment of waive).
+ *
+ * FEES still resolves to zero on every instalment and legitimately so: no
+ * fee in this system is ever owed as a balance. Processing, documentary
+ * stamp and origination fees are netted out of the disbursement proceeds
+ * and the pre-termination fee is cash at closure, so there is nothing to
+ * allocate against. The tier stays for the order to remain expressible.
+ *
+ * A loan with no accrued penalty therefore still allocates identically on
+ * all three orders — both tiers are zero and every tier takes
+ * `min(remaining, 0)`. That is the safety property, and it is the position
+ * every loan written before §26 is in.
  */
 export function allocatePayment(
   amount: MoneyInput,

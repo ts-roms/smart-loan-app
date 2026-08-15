@@ -25,8 +25,13 @@ interface Fixture {
   unbalancedEntries?: { number: string; debit: number; credit: number }[];
   duplicateRefs?: unknown[];
   badSchedule?: unknown[];
+  badPenalties?: unknown[];
   receivable?: { debit: number; credit: number };
-  schedule?: { principalDue: number; principalPaid: number };
+  schedule?: {
+    principalDue: number;
+    principalPaid: number;
+    penaltyPaid?: number;
+  };
   lateFees?: { debit: number; credit: number };
   waives?: { debit: number; credit: number };
 }
@@ -56,13 +61,25 @@ function fakePrisma(f: Fixture) {
     loanSchedule: {
       aggregate: () =>
         Promise.resolve({
-          _sum: f.schedule ?? { principalDue: 0, principalPaid: 0 },
+          _sum: f.schedule ?? {
+            principalDue: 0,
+            principalPaid: 0,
+            penaltyPaid: 0,
+          },
         }),
     },
     $queryRaw: (strings: TemplateStringsArray) => {
       const sql = strings.join(" ");
       if (sql.includes("HAVING ABS"))
         return Promise.resolve(f.unbalancedEntries ?? []);
+      /*
+       * The penalty branch must come BEFORE the duplicate-refs one: its
+       * query also mentions `sourceRefId`, because it reconstructs each
+       * instalment's accrued fee from the `"<scheduleId>:<periodKey>"`
+       * keys. Matched on `penaltyWaived`, which appears in no other check.
+       */
+      if (sql.includes("penaltyWaived"))
+        return Promise.resolve(f.badPenalties ?? []);
       if (sql.includes("sourceRefId"))
         return Promise.resolve(f.duplicateRefs ?? []);
       return Promise.resolve(f.badSchedule ?? []);
@@ -86,7 +103,7 @@ describe("runReconciliation — passes on a healthy ledger", () => {
       }),
     );
     expect(r.ok).toBe(true);
-    expect(r.checks).toHaveLength(5);
+    expect(r.checks).toHaveLength(6);
   });
 
   it("tolerates a centavo of rounding", async () => {
@@ -131,6 +148,118 @@ describe("runReconciliation — passes on a healthy ledger", () => {
       }),
     );
     expect(check(r, "receivable_subledger").ok).toBe(true);
+  });
+
+  it("nets a COLLECTED penalty back out too", async () => {
+    /*
+     * The term the identity gained when late fees became collectable, and
+     * the reason this check did not start failing on the first one anybody
+     * paid. Collecting a penalty is Dr Cash / Cr Loans Receivable: it
+     * reduces the GL side while `principalDue - principalPaid` and the
+     * accrual totals stay exactly where they were.
+     *
+     * 250 accrued, 150 since paid: the GL carries 1,000 of principal plus
+     * the 100 of fee still outstanding.
+     */
+    const r = await runReconciliation(
+      fakePrisma({
+        lineTotals: { debit: 1_000, credit: 1_000 },
+        receivable: { debit: 1_250, credit: 150 },
+        schedule: { principalDue: 1_000, principalPaid: 0, penaltyPaid: 150 },
+        lateFees: { debit: 250, credit: 0 },
+      }),
+    );
+    expect(check(r, "receivable_subledger").ok).toBe(true);
+    expect(check(r, "receivable_subledger").delta).toBe(0);
+  });
+
+  it("reports the difference when a collection never reaches the instalment", async () => {
+    /*
+     * The failure mode this term makes visible. The payment credited Loans
+     * Receivable but `LoanSchedule.penaltyPaid` was never written — the GL
+     * says the fee was collected and the subledger says it is still owed.
+     * Nothing else in the job can see that: the entry balances, the trial
+     * balance ties, and no instalment is over-relieved.
+     */
+    const r = await runReconciliation(
+      fakePrisma({
+        lineTotals: { debit: 1_000, credit: 1_000 },
+        receivable: { debit: 1_250, credit: 150 },
+        schedule: { principalDue: 1_000, principalPaid: 0, penaltyPaid: 0 },
+        lateFees: { debit: 250, credit: 0 },
+      }),
+    );
+    expect(check(r, "receivable_subledger").ok).toBe(false);
+    expect(check(r, "receivable_subledger").delta).toBe(-150);
+  });
+
+  it("passes penalty_subledger on a clean book", async () => {
+    const r = await runReconciliation(
+      fakePrisma({
+        lineTotals: { debit: 1_000, credit: 1_000 },
+        receivable: { debit: 500, credit: 200 },
+        schedule: { principalDue: 500, principalPaid: 200 },
+      }),
+    );
+    expect(check(r, "penalty_subledger").ok).toBe(true);
+    expect(check(r, "penalty_subledger").summary).toMatch(
+      /backed by the ledger/,
+    );
+  });
+});
+
+describe("runReconciliation — the penalty subledger", () => {
+  it("fails when a waiver is not attributed to any instalment", async () => {
+    /*
+     * The divergence the attribution rule exists to make checkable. A
+     * loan-level `PenaltyWaiver` whose per-instalment shares do not add
+     * back up to it means the loan-level report and the schedule disagree
+     * about what the borrower owes — and the borrower meets whichever one
+     * the payment path reads.
+     */
+    const r = await runReconciliation(
+      fakePrisma({
+        lineTotals: { debit: 1_000, credit: 1_000 },
+        receivable: { debit: 500, credit: 200 },
+        schedule: { principalDue: 500, principalPaid: 200 },
+        badPenalties: [
+          {
+            number: "LN-0007",
+            installment: null,
+            reason: "waivers do not match attributed shares",
+          },
+        ],
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(check(r, "penalty_subledger").ok).toBe(false);
+    expect(check(r, "penalty_subledger").offenders).toEqual([
+      "LN-0007: waivers do not match attributed shares",
+    ]);
+  });
+
+  it("fails when an instalment is relieved beyond what accrued against it", async () => {
+    // paid + waived > accrued means the same peso was both collected and
+    // written off, or a payment allocated against a balance that was not
+    // there.
+    const r = await runReconciliation(
+      fakePrisma({
+        lineTotals: { debit: 1_000, credit: 1_000 },
+        receivable: { debit: 500, credit: 200 },
+        schedule: { principalDue: 500, principalPaid: 200 },
+        badPenalties: [
+          {
+            number: "LN-0007",
+            installment: 3,
+            reason: "penalty relieved beyond what accrued",
+          },
+        ],
+      }),
+    );
+    expect(check(r, "penalty_subledger").ok).toBe(false);
+    expect(check(r, "penalty_subledger").offenders).toEqual([
+      "LN-0007 #3: penalty relieved beyond what accrued",
+    ]);
   });
 });
 

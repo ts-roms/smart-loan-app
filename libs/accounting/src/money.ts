@@ -163,6 +163,32 @@ export function addMoney(...values: MoneyInput[]): string {
 }
 
 /**
+ * What is still owed, in integer centavos: `max(0, due - Σsettled)`.
+ *
+ * The same arithmetic `openByTier` performs inside the allocator, exposed
+ * because callers outside this package have to compute it too — a penalty
+ * balance is `accrued - waived - paid`, three figures that arrive from three
+ * different places (the ledger and two columns) and must be combined without
+ * any of them becoming a float on the way.
+ *
+ * Clamped at 0 for the reason the allocator clamps: an over-credited row —
+ * a repair script, a manual edit — must hand back "nothing owed" rather than
+ * negative headroom that would silently inflate something downstream.
+ *
+ * Returns centavos rather than a decimal because the callers go on to
+ * compare and subtract; `centavosToDecimalString` is the way back out to a
+ * `Decimal(14, 2)` column.
+ */
+export function openCentavos(
+  due: MoneyInput,
+  ...settled: MoneyInput[]
+): number {
+  let open = toCentavos(due);
+  for (const s of settled) open -= toCentavos(s);
+  return Math.max(0, open);
+}
+
+/**
  * `a >= b`, compared exactly in centavos.
  *
  * This is the settlement test: has enough been collected on this

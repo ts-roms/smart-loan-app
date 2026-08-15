@@ -29,7 +29,9 @@ import { useState } from "react";
 /**
  * Penalty Panel "Facility to Waive Penalties".
  *
- * Shows: total accrued late-fees, total waived-to-date, current outstanding.
+ * Shows: total accrued late-fees, paid-to-date, waived-to-date, and the
+ * current outstanding — which is the first three subtracted, so all four
+ * are shown together or none of them reconcile.
  * Gated waive button opens a dialog (amount + reason) which posts a
  * reversing journal entry and snapshots the waiver row. History of prior
  * waivers is listed with each row's original vs negotiated amounts and
@@ -55,6 +57,14 @@ export function PenaltyPanel({ loanId }: { loanId: string }) {
   const outstanding = penalties.data?.outstanding ?? 0;
   const original = penalties.data?.originalPenalty ?? 0;
   const waived = penalties.data?.waivedToDate ?? 0;
+  /*
+   * Shown as its own figure rather than folded into the outstanding
+   * number. `outstanding` is now `accrued - waived - paid`, so without
+   * this tile the three panels stop adding up the moment a borrower pays a
+   * late fee — a loan reading "accrued 310.00, waived 0.00, outstanding
+   * 0.00" invites exactly the dispute this panel exists to answer.
+   */
+  const paid = penalties.data?.paidToDate ?? 0;
 
   return (
     <Card>
@@ -74,8 +84,13 @@ export function PenaltyPanel({ loanId }: { loanId: string }) {
         {penalties.isLoading ? (
           <SkeletonLine />
         ) : (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <Stat label="Total accrued" value={formatMoney(original)} />
+            <Stat
+              label="Paid to date"
+              value={formatMoney(paid)}
+              accent="emerald"
+            />
             <Stat
               label="Waived to date"
               value={formatMoney(waived)}

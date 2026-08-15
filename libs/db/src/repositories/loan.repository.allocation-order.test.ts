@@ -21,18 +21,28 @@ import { LoanRepository } from "./loan.repository";
  * that is structural rather than behavioural — the payment path must not
  * touch `LoanProduct` at all — so the double below throws if it does.
  *
- * ── Why order-sensitivity is not observable end to end yet ──────────────
+ * ── Order-sensitivity, now that it is observable ────────────────────────
  *
- * `recordPayment` passes no fee or penalty due, because no per-instalment
- * fee or penalty balance is modelled anywhere in this system (see the note
- * on `allocatePayment`). With both tiers at zero, all three orders allocate
- * identically — which is exactly what the first test here asserts, and is
- * the property that makes it safe to offer §26's order on a new product
- * today: selecting it cannot move a peso until those balances are real.
+ * This file used to close by asserting that all three orders produced
+ * identical figures, because `recordPayment` passed no penalty due and
+ * there was no per-instalment balance for it to pass. It asked, in as many
+ * words, for "a companion test driving a loan with a genuine penalty
+ * balance through both orders and pinning the difference" once the balances
+ * became real. That is the last block below, and the identity claim it
+ * replaces is gone: it is no longer true, and a test asserting it would now
+ * be asserting the absence of the feature.
  *
- * When they become real this file needs a companion test driving a loan
- * with a genuine penalty balance through both orders and pinning the
- * difference. It cannot be written honestly before then.
+ * What survives from it — narrowed to what is still true and still worth
+ * guarding — is the block before it: with NO accrued penalty, all three
+ * orders still agree to the centavo. That is the position every loan
+ * written before §26 is in, and it is the safety property, not a statement
+ * about the tiers being inert.
+ *
+ * The arithmetic of the orders is covered in `@loan/accounting`
+ * `posting.allocation-order.test.ts`; the borrower-level consequences on a
+ * real book are in `loan.repository.penalty-collection.golden.test.ts`.
+ * What these two blocks add is that `recordPayment` genuinely feeds the
+ * allocator the ledger's figures rather than zeros.
  */
 
 const ROWS = [
@@ -66,6 +76,8 @@ class Db {
   loans: Array<Record<string, unknown>> = [];
   schedules: Array<Record<string, unknown>> = [];
   entries: Array<{ sourceRefId: string | null; lines: Line[] }> = [];
+  /** Late fee accrued per schedule id, as the ledger would report it. */
+  accruals: Array<{ scheduleId: string; amount: string }> = [];
   accounts = DEFAULT_CHART_OF_ACCOUNTS.map((a) => ({
     id: `acct-${a.code}`,
     code: a.code,
@@ -74,6 +86,8 @@ class Db {
   periods: Array<{ id: string; year: number; month: number }> = [];
   /** Set if anything reads LoanProduct during a payment. */
   productWasRead = false;
+  /** How many LATE_FEE_ACCRUAL prefix lookups the payment path issued. */
+  accrualLookups = 0;
   seq = 0;
 
   next(p: string): string {
@@ -199,6 +213,38 @@ function makeClient(db: Db): PrismaClient {
 
     journalEntry: {
       findFirst: async () => null,
+
+      /*
+       * The accrual lookup `recordPayment` runs for an order that collects
+       * penalties. Counted as well as answered: "the legacy order does not
+       * read this at all" is a property worth asserting directly.
+       */
+      findMany: async ({
+        where,
+      }: {
+        where: {
+          source?: string;
+          sourceRefType?: string;
+          OR?: Array<{ sourceRefId: { startsWith: string } }>;
+        };
+      }) => {
+        if (where.source === "LATE_FEE_ACCRUAL") db.accrualLookups += 1;
+        return db.accruals
+          .filter((a) =>
+            (where.OR ?? []).some((o) =>
+              `${a.scheduleId}:`.startsWith(o.sourceRefId.startsWith),
+            ),
+          )
+          .map((a) => ({
+            sourceRefId: `${a.scheduleId}:2026-04-09`,
+            lines: [
+              {
+                credit: new Prisma.Decimal(a.amount),
+                account: { code: "4100" },
+              },
+            ],
+          }));
+      },
       create: async ({
         data,
       }: {
@@ -218,11 +264,15 @@ function makeClient(db: Db): PrismaClient {
 }
 
 /** Seeds an ACTIVE loan carrying `order` as its snapshotted allocation order. */
-function seed(order: (typeof ORDERS)[number]): {
+function seed(
+  order: (typeof ORDERS)[number],
+  accruals: Array<{ scheduleId: string; amount: string }> = [],
+): {
   db: Db;
   repo: LoanRepository;
 } {
   const db = new Db();
+  db.accruals = accruals;
   db.loans.push({
     id: LOAN_ID,
     number: "LN-2026-000077",
@@ -241,6 +291,8 @@ function seed(order: (typeof ORDERS)[number]): {
       totalDue: new Prisma.Decimal(r.principalDue).plus(r.interestDue),
       principalPaid: new Prisma.Decimal(0),
       interestPaid: new Prisma.Decimal(0),
+      penaltyPaid: new Prisma.Decimal(0),
+      penaltyWaived: new Prisma.Decimal(0),
       paidInFullAt: null,
     });
   });
@@ -285,14 +337,23 @@ describe("recordPayment — the loan's snapshotted order governs", () => {
     expect(money(db.inst(1).principalPaid)).toBe("8026.26");
   });
 });
-
-describe("the new tiers are inert until fee and penalty balances exist", () => {
+describe("a loan with no accrued penalty pays the same under every order", () => {
   /*
-   * End-to-end statement of the property that makes §26's order safe to
-   * offer today. `recordPayment` supplies no fee or penalty due — there is
-   * no per-instalment balance to supply — so all three orders land on the
-   * same figures. Selecting §26's order on a new product cannot move a
-   * peso until those balances are modelled.
+   * WHAT THIS BLOCK REPLACED, AND WHY IT IS NARROWER.
+   *
+   * It used to be called "the new tiers are inert until fee and penalty
+   * balances exist" and its comment said `recordPayment` supplies no fee or
+   * penalty due because there is no per-instalment balance to supply. That
+   * is no longer true — it now supplies both, from the accrual ledger and
+   * from `LoanSchedule.penaltyWaived`/`penaltyPaid` — so the reason has
+   * been removed and only the surviving fact is asserted: with nothing
+   * accrued, every tier resolves to zero and the orders agree.
+   *
+   * That is the safety property, and it is the one that matters most,
+   * because it is the position every loan written before §26 is in. It is
+   * checked on this fixture and, as literal peso amounts rather than as an
+   * equality between three runs, in
+   * `loan.repository.penalty-collection.golden.test.ts`.
    */
   const AMOUNTS = ["5000.00", "8776.26", "12000.00", "30000.00"];
 
@@ -309,6 +370,7 @@ describe("the new tiers are inert until fee and penalty balances exist", () => {
           progress: [1, 2, 3].map((n) => [
             money(db.inst(n).interestPaid),
             money(db.inst(n).principalPaid),
+            money(db.inst(n).penaltyPaid),
             db.inst(n).paidInFullAt === null,
           ]),
         });
@@ -335,5 +397,65 @@ describe("the new tiers are inert until fee and penalty balances exist", () => {
         expect(money(d)).toBe(money(c));
       }
     }
+  });
+});
+
+describe("a real penalty balance reaches the allocator", () => {
+  /*
+   * The companion this file asked for in as many words when the tiers were
+   * still inert: "a companion test driving a loan with a genuine penalty
+   * balance through both orders and pinning the difference."
+   *
+   * 250.00 accrued against instalment 1, in the ledger, exactly as the
+   * nightly job would have posted it. Nothing on the schedule row records
+   * it — the point is that `recordPayment` goes and reads it.
+   */
+  const ACCRUED = [{ scheduleId: "s-1", amount: "250.00" }];
+
+  it("§26's order pays the penalty first and 250.00 less principal", async () => {
+    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL", ACCRUED);
+    await pay(repo, "5000.00");
+
+    expect(money(db.inst(1).penaltyPaid)).toBe("250.00");
+    expect(money(db.inst(1).interestPaid)).toBe("750.00");
+    expect(money(db.inst(1).principalPaid)).toBe("4000.00");
+    expect(db.memos().some((m) => m.startsWith("Penalties on"))).toBe(true);
+  });
+
+  it("the legacy order pays exactly what it always did", async () => {
+    // Same loan, same ledger, same payment. The tier does not exist in this
+    // order, so the accrued 250.00 cannot touch the split.
+    const { db, repo } = seed("INTEREST_PRINCIPAL", ACCRUED);
+    await pay(repo, "5000.00");
+
+    expect(money(db.inst(1).penaltyPaid)).toBe("0.00");
+    expect(money(db.inst(1).interestPaid)).toBe("750.00");
+    expect(money(db.inst(1).principalPaid)).toBe("4250.00");
+    expect(db.memos().some((m) => m.startsWith("Penalties on"))).toBe(false);
+  });
+
+  it("does not even read the accrual ledger for the legacy order", async () => {
+    /*
+     * The safety property as work done rather than as arithmetic. An order
+     * with no PENALTIES tier can never reduce a penalty, so reading the
+     * figure could only change the outcome by accident — and every loan on
+     * the books today is on that order, so this is also why none of them
+     * pays for the feature in query time.
+     */
+    const legacy = seed("INTEREST_PRINCIPAL", ACCRUED);
+    await pay(legacy.repo, "5000.00");
+    expect(legacy.db.accrualLookups).toBe(0);
+
+    const s26 = seed("FEES_PENALTIES_INTEREST_PRINCIPAL", ACCRUED);
+    await pay(s26.repo, "5000.00");
+    expect(s26.db.accrualLookups).toBe(1);
+  });
+
+  it("still never reads LoanProduct, penalty or no penalty", async () => {
+    // The file's central guarantee, re-checked on the path that now does
+    // strictly more work.
+    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL", ACCRUED);
+    await pay(repo, "5000.00");
+    expect(db.productWasRead).toBe(false);
   });
 });

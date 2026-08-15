@@ -238,16 +238,39 @@ describe("every order conserves the payment", () => {
   });
 });
 
-describe("the tiers are inert until the balances behind them are real", () => {
+describe("an instalment with nothing charged on it allocates the same way under every order", () => {
   /*
-   * The safety property that lets §26's order be offered at all today.
-   * Nothing populates a per-instalment fee or penalty balance, so
-   * `recordPayment` passes neither — and with both at zero, every order
-   * allocates identically. Selecting §26's order on a new product cannot
-   * move a peso until those balances exist.
+   * WHAT THIS BLOCK USED TO SAY, AND WHY THE WORDS CHANGED.
    *
-   * When they do exist, THIS test is the one that starts failing, which is
-   * the right alarm to have wired up in advance.
+   * It was called "the tiers are inert until the balances behind them are
+   * real", and it justified itself with: nothing populates a per-instalment
+   * fee or penalty balance, so `recordPayment` passes neither, so selecting
+   * §26's order cannot move a peso. It ended by predicting that THIS test
+   * would be the one to start failing when the balances became real.
+   *
+   * The balances are real now. `recordPayment` passes `penaltyDue` and
+   * `penaltyPaid` for any loan whose order carries the tier, read from the
+   * `LATE_FEE_ACCRUAL` ledger and from `LoanSchedule`. So the reason is
+   * dead — but the prediction was only half right, and the half it got
+   * wrong is worth recording. THESE ASSERTIONS STILL PASS, and correctly
+   * so: they hand `allocatePayment` instalments with no charges on them,
+   * and an allocator asked to divide money between tiers that are all zero
+   * has nothing to do differently. The claim that died was the prose, not
+   * the arithmetic.
+   *
+   * A unit test of a pure function could never have caught the change,
+   * because the function never changed. The tests that had to move are the
+   * ones that drive `recordPayment`, where the inputs come from somewhere:
+   * `loan.repository.allocation-order.test.ts` and
+   * `loan.repository.penalty-collection.golden.test.ts`. That is the real
+   * lesson here — an alarm wired to a pure function cannot detect a change
+   * in what its callers feed it.
+   *
+   * What survives is the property itself, which is now the safety property
+   * rather than a statement about the feature being incomplete: an
+   * instalment carrying no fee and no penalty pays identically under every
+   * order. Every loan written before §26 is in exactly that position, and
+   * most of them will stay there.
    */
   const NO_CHARGES: InstallmentDue[] = [
     { interestDue: 750.0, principalDue: 8026.26 },
@@ -261,6 +284,27 @@ describe("the tiers are inert until the balances behind them are real", () => {
         allocatePayment(amount, NO_CHARGES, o),
       );
       for (const r of results) expect(r).toEqual(results[0]);
+    }
+  });
+
+  it("still does so once a penalty has been fully paid off", () => {
+    /*
+     * The same property one step further on, and the one that makes the
+     * paid-to-date figure load-bearing rather than decorative. An
+     * instalment whose 250.00 penalty has been collected has nothing left
+     * on that tier, so it must go back to allocating like an unpenalised
+     * one. Without `penaltyPaid` the tier would still read 250.00 open and
+     * every subsequent payment would collect it again.
+     */
+    const settled: InstallmentDue[] = NO_CHARGES.map((i, n) =>
+      n === 0 ? { ...i, penaltyDue: 250.0, penaltyPaid: 250.0 } : i,
+    );
+    for (const amount of [0, 5_000, 8_776.26, 20_000, 30_000]) {
+      const results = ALL_ORDERS.map((o) =>
+        allocatePayment(amount, settled, o),
+      );
+      for (const r of results) expect(r).toEqual(results[0]);
+      expect(results[0]!.penalties).toBeUndefined();
     }
   });
 

@@ -8,73 +8,83 @@ import { LoanRepository } from "./loan.repository";
 /**
  * GOLDEN TESTS — what happens to an accrued late fee when the borrower pays.
  *
- * Written against the CURRENT implementation and committed passing BEFORE it
- * is touched, per §81. The answer today is "nothing happens to it", and that
- * is the defect this file exists to state as evidence rather than as a
- * remark: a late fee accrues to the receivable, is recognised as income, and
- * then there is no path by which a borrower can hand over money that settles
- * it.
+ * First committed against the pre-change implementation, per §81, where it
+ * documented the defect: a late fee accrued to the receivable, was
+ * recognised as income, and there was no path by which a borrower could
+ * hand over money that settled it. Those figures have now moved, which is
+ * the feature. Every one that moved is named below with what it was.
  *
- * The two files next door each pin half of the picture and neither pins this
- * one:
+ * The two files next door each pin half of the picture and neither pins
+ * this one:
  *
- *   - `loan.repository.penalties.golden.test.ts` pins what `accruedPenaltiesFor`
- *     REPORTS. It never records a payment.
- *   - `loan.repository.allocation-order.test.ts` pins that the three §26
- *     orders agree. It seeds no accruals at all, so it demonstrates the
- *     agreement on a book with no penalties rather than on one with them.
+ *   - `loan.repository.penalties.golden.test.ts` pins what
+ *     `accruedPenaltiesFor` REPORTS. It never records a payment.
+ *   - `loan.repository.allocation-order.test.ts` pins the snapshot rule and
+ *     the orders at the repository. It seeds no accruals.
  *
- * What is missing between them is the case that matters: a loan carrying a
- * REAL `LATE_FEE_ACCRUAL` balance in the ledger, driven through
- * `recordPayment`. That is what is pinned here.
+ * What is between them is the case that matters: a loan carrying a REAL
+ * `LATE_FEE_ACCRUAL` balance in the ledger, driven through `recordPayment`.
  *
- * ── What the current implementation does, exactly ───────────────────────
+ * ── What the implementation now does ────────────────────────────────────
  *
- * `recordPayment` reads the loan's open instalments and calls
- * `allocatePayment` with four fields per row — `interestDue`,
- * `principalDue`, `interestPaid`, `principalPaid` — and nothing else.
- * `feeDue` and `penaltyDue` are not passed and there is nowhere on
- * `LoanSchedule` they could be read from. `openByTier` therefore resolves
- * both to `max(0, 0 - 0) = 0`, every order's FEES and PENALTIES tiers take
- * `min(remaining, 0) = 0`, and `allocation.penalties` comes back
- * `undefined`. `loanPaymentEntry` receives `penaltyPortion: 0` and omits the
- * line.
+ * For a loan whose order carries the PENALTIES tier, `recordPayment` reads
+ * the `LATE_FEE_ACCRUAL` entries for its OPEN instalments and passes, per
+ * row, `penaltyDue = accrued - penaltyWaived` and
+ * `penaltyPaid = LoanSchedule.penaltyPaid`. The allocator's PENALTIES tier
+ * then takes `min(remaining, accrued - waived - paid)` in its position in
+ * the order, the slice is persisted to `penaltyPaid`, and
+ * `loanPaymentEntry` posts it as a Loans Receivable credit memoed
+ * "Penalties on …" — not a Fee Income credit, because the income was
+ * recognised when the fee accrued.
  *
- * The accrual in the ledger is not consulted on the payment path at all. It
- * is read only by `accruedPenaltiesFor`, which is a display figure, and by
- * the nightly accrual, which uses it to compute the delta to post.
+ * For a loan on `INTEREST_PRINCIPAL` the accrual ledger is not read at all
+ * and nothing about the payment changes.
  *
- * Three consequences, each pinned below:
+ * ── The figures that moved, and what they were ──────────────────────────
  *
- *   1. All three allocation orders produce identical figures on a loan that
- *      HAS an accrued penalty, not merely on one that has none. The tiers
- *      are inert because their inputs are absent, not because the book is
- *      clean.
- *   2. An instalment is stamped `paidInFullAt` once its interest and
- *      principal are covered, while its penalty is still outstanding — and
- *      it then drops out of the `paidInFullAt: null` set `recordPayment`
- *      reads, so no later payment can reach it either. The fee is not
- *      merely uncollected; after that moment it is uncollectABLE.
- *   3. A borrower who pays the entire schedule to the last centavo still
- *      owes every peso of penalty, and `accruedPenaltiesFor` still reports
- *      it as outstanding.
+ *   ₱5,000 on FEES_PENALTIES_INTEREST_PRINCIPAL: principal was 4,250.00,
+ *   is now 4,000.00, with 250.00 to penalty. That 250.00 is the borrower's
+ *   money going somewhere different and is the entire point of §26. The
+ *   legacy order and `INTEREST_PRINCIPAL_FEES_PENALTIES` are unchanged on
+ *   this amount — the latter because ₱5,000 never gets past principal.
+ *
+ *   ₱8,776.26 (instalment 1 exactly) on INTEREST_PRINCIPAL_FEES_PENALTIES:
+ *   the row WAS stamped `paidInFullAt` with 250.00 of penalty outstanding,
+ *   which dropped it out of the `paidInFullAt: null` set every future
+ *   payment reads and made the fee uncollectable. It now stays open. This
+ *   is the defect the batch exists to close, and it is why settlement asks
+ *   about every tier the order collects rather than only two.
+ *
+ *   ₱26,328.78 (the whole schedule) on either penalty-collecting order:
+ *   the loan WAS closed with 310.00 of penalty still owing. The same money
+ *   now settles the 310.00 and leaves 310.00 of principal, so the loan
+ *   stays open — the borrower owes the same total either way, but the
+ *   ledger and the schedule now agree about what it is.
+ *
+ *   ₱26,638.78 (schedule + 310.00) on either penalty-collecting order: the
+ *   surplus WAS booked to Customer Advances while the borrower
+ *   simultaneously owed 310.00 of penalty — the same peso on both sides of
+ *   the balance sheet. It now clears the loan outright.
+ *
+ *   Waiving after full settlement: `waivePenalty` accepted a waiver of the
+ *   full 310.00 against a penalty the borrower had already paid. It now
+ *   refuses, because the outstanding figure is net of collections. That
+ *   was pinned before the change precisely so this would have to be a
+ *   deliberate decision rather than an oversight.
  *
  * ── The control, and the safety property ────────────────────────────────
  *
  * The last describe block runs the same payments against a loan with NO
- * accrual anywhere in the ledger. Those figures are the safety property:
- * they are what must not move by a centavo when penalties become
- * collectable. Every loan on the books today is in exactly that position on
- * the legacy order, so "existing borrowers are unaffected" is checkable here
- * rather than merely asserted.
+ * accrual anywhere in the ledger. NOT ONE OF ITS FIGURES MOVED. Every loan
+ * on the books is on the legacy order and the overwhelming majority have
+ * never been late, so that block is the evidence for "existing borrowers
+ * are unaffected" rather than the claim.
  *
  * ── Reading a number in this file ───────────────────────────────────────
  *
- * A figure moving here is a borrower's money moving. The penalty-bearing
- * expectations are EXPECTED to move when the feature lands — that is the
- * point of the feature — and each one that moves must be changed with a
- * written reason. The control block's figures are not expected to move and
- * a change to one of them is a regression, not an update.
+ * A figure moving here is a borrower's money moving. Change one only with
+ * a written reason, and only after confirming the change was meant to
+ * reach borrowers at all.
  */
 
 // ─── Fixture ────────────────────────────────────────────────────────────
@@ -171,6 +181,8 @@ class Db {
     active: true,
   }));
   periods: Array<{ id: string; year: number; month: number }> = [];
+  /** How many times the LATE_FEE_ACCRUAL prefix lookup has been issued. */
+  accrualLookups = 0;
   seq = 0;
 
   next(p: string): string {
@@ -362,8 +374,9 @@ function makeClient(db: Db): PrismaClient {
           sourceRefType?: string;
           OR?: Array<{ sourceRefId: { startsWith: string } }>;
         };
-      }) =>
-        db.entries
+      }) => {
+        if (where.source === "LATE_FEE_ACCRUAL") db.accrualLookups += 1;
+        return db.entries
           .filter(
             (e) =>
               (where.source === undefined || e.source === where.source) &&
@@ -384,7 +397,8 @@ function makeClient(db: Db): PrismaClient {
                   db.accounts.find((a) => a.id === l.accountId)?.code ?? "????",
               },
             })),
-          })),
+          }));
+      },
 
       create: async ({
         data,
@@ -434,6 +448,8 @@ function seed(
       totalDue: new Prisma.Decimal(r.principalDue).plus(r.interestDue),
       principalPaid: new Prisma.Decimal(0),
       interestPaid: new Prisma.Decimal(0),
+      penaltyPaid: new Prisma.Decimal(0),
+      penaltyWaived: new Prisma.Decimal(0),
       paidInFullAt: null,
     });
   });
@@ -469,7 +485,17 @@ function pay(repo: LoanRepository, amount: string) {
   });
 }
 
-/** Everything a borrower could dispute about one payment, in one object. */
+/**
+ * Everything a borrower could dispute about one payment, in one object.
+ *
+ * `receivable` is the TOTAL credited to Loans Receivable, and it is
+ * deliberately not enough on its own: a penalty credit and a principal
+ * credit land on the same account, separated only by their memo, so an
+ * order that collects 250.00 of penalty and 4,000.00 of principal is
+ * indistinguishable here from one that collects 4,250.00 of principal. The
+ * per-instalment `progress` rows are what tell them apart, which is exactly
+ * why `LoanSchedule.penaltyPaid` has to exist.
+ */
 function outcome(db: Db) {
   return {
     interestIncome: db.credited(ACCOUNT_CODES.INTEREST_INCOME),
@@ -479,6 +505,7 @@ function outcome(db: Db) {
     progress: [1, 2, 3].map((n) => [
       money(db.inst(n).interestPaid),
       money(db.inst(n).principalPaid),
+      money(db.inst(n).penaltyPaid),
       db.inst(n).paidInFullAt === null ? "open" : "settled",
     ]),
   };
@@ -487,14 +514,23 @@ function outcome(db: Db) {
 // ─── The book the fixture describes ─────────────────────────────────────
 
 describe("GOLDEN — the accrued penalty this fixture starts from", () => {
-  it("is 310.00 across the loan, and is real ledger, not a column", async () => {
-    // Stated here so that every expectation below can be read against a
-    // known starting balance. It comes from `LATE_FEE_ACCRUAL` entries; no
-    // column on `LoanSchedule` records any part of it.
+  it("is 310.00 across the loan, and is still real ledger, not a column", async () => {
+    /*
+     * Stated here so every expectation below can be read against a known
+     * starting balance — and to pin the design decision. The accrued figure
+     * comes from `LATE_FEE_ACCRUAL` entries and STILL does. No column on
+     * `LoanSchedule` records it. The two columns this batch added hold only
+     * the halves the ledger cannot answer: which instalment a collection
+     * settled, and which one a waiver relieved.
+     *
+     * `paidToDate` is new on this response. It is zero here because nothing
+     * has been paid yet.
+     */
     const { repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
     expect(await repo.accruedPenaltiesFor(LOAN_ID)).toEqual({
       originalPenalty: TOTAL_ACCRUED,
       waivedToDate: 0,
+      paidToDate: 0,
       outstanding: TOTAL_ACCRUED,
     });
   });
@@ -502,7 +538,7 @@ describe("GOLDEN — the accrued penalty this fixture starts from", () => {
   it("sits on instalments 1 and 2 and nowhere else", async () => {
     // 250.00 on #1, 60.00 on #2, nothing on #3. The per-instalment split is
     // recoverable from the ledger keys — `"<scheduleId>:<periodKey>"` — and
-    // is precisely the figure no consumer currently derives.
+    // is the figure the allocator now consumes.
     const { db } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
     const byId = new Map<string, number>();
     for (const e of db.entries) {
@@ -520,174 +556,461 @@ describe("GOLDEN — the accrued penalty this fixture starts from", () => {
   });
 });
 
-// ─── 1. The orders agree even when the penalty is real ──────────────────
+// ─── 1. The orders now diverge, because the balance is real ─────────────
 
-describe("GOLDEN — all three orders allocate identically, penalty or no penalty", () => {
+describe("GOLDEN — a real penalty makes the three orders disagree", () => {
   /*
-   * The claim `loan.repository.allocation-order.test.ts` makes is that the
-   * §26 tiers are inert. It demonstrates that on a loan with no accruals,
-   * which leaves open the reading "they are inert because this book happens
-   * to be clean". They are not. They are inert because `recordPayment`
-   * never passes the balances, so a book with 310.00 of accrued penalty
-   * allocates exactly as one with none.
+   * The replacement for what this block used to assert. It previously
+   * pinned that all three orders produced IDENTICAL figures on a loan
+   * carrying 310.00 of accrued penalty — the tiers were inert because
+   * `recordPayment` never passed the balances, not because the book was
+   * clean. That is no longer true and must no longer be asserted.
    *
-   * This is the test whose figures the feature is meant to change.
+   * What replaces it is the same question asked properly: given a real
+   * penalty balance, what does each order actually do with the borrower's
+   * money? The answer is stated as literal amounts rather than as an
+   * inequality, because "they differ" is not a fact anyone can check a
+   * statement against.
    */
-  const AMOUNTS = ["5000.00", INSTALMENT_1, "12000.00", "30000.00"];
 
-  it("produces identical figures on all three orders", async () => {
-    for (const amount of AMOUNTS) {
-      const results: Array<ReturnType<typeof outcome>> = [];
-      for (const order of ORDERS) {
-        const { db, repo } = seed(order);
-        await pay(repo, amount);
-        results.push(outcome(db));
-      }
-      for (const r of results) expect(r).toEqual(results[0]);
-    }
-  });
-
-  it("posts no Penalties line on any order", async () => {
-    for (const order of ORDERS) {
-      const { db, repo } = seed(order);
-      await pay(repo, "12000.00");
-      expect(db.memos().some((m) => m.startsWith("Penalties on"))).toBe(false);
-      expect(db.memos().some((m) => m.startsWith("Fees on"))).toBe(false);
-    }
-  });
-
-  it("splits ₱5,000 as 750.00 interest / 4,250.00 principal on every order", async () => {
-    // The figure itself, so that a change to it is visible as a number and
-    // not only as an equality between three runs.
-    for (const order of ORDERS) {
-      const { db, repo } = seed(order);
-      await pay(repo, "5000.00");
-      expect(outcome(db)).toEqual({
-        interestIncome: "750.00",
-        receivable: "4250.00",
-        advances: "0.00",
-        // The 310.00 already credited by the accrual entries, untouched.
-        feeIncome: "310.00",
-        progress: [
-          ["750.00", "4250.00", "open"],
-          ["0.00", "0.00", "open"],
-          ["0.00", "0.00", "open"],
-        ],
-      });
-    }
-  });
-});
-
-// ─── 2. Settling an instalment strands its penalty ──────────────────────
-
-describe("GOLDEN — an instalment closes with its penalty outstanding", () => {
-  it("stamps paidInFullAt on interest + principal alone", async () => {
-    // 8,776.26 is instalment 1's totalDue exactly. 250.00 of penalty is
-    // accrued against it and is not consulted.
-    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
-    await pay(repo, INSTALMENT_1);
-
-    expect(money(db.inst(1).interestPaid)).toBe("750.00");
-    expect(money(db.inst(1).principalPaid)).toBe("8026.26");
-    expect(db.inst(1).paidInFullAt).toEqual(PAID_ON);
-  });
-
-  it("then removes that instalment from the set any later payment can reach", async () => {
+  it("₱5,000 — §26's order takes the penalty first and kills 250.00 less principal", async () => {
     /*
-     * The reason this is worse than "uncollected". `recordPayment` reads
-     * `{ loanId, paidInFullAt: null }`. Once #1 is stamped, its 250.00 is
-     * behind a filter no payment path ever lifts, so the fee cannot be
-     * collected by any subsequent payment either — however large, however
-     * the order is configured.
+     * WAS: 750.00 interest / 4,250.00 principal, penalty untouched.
+     * NOW: 250.00 penalty / 750.00 interest / 4,000.00 principal.
+     *
+     * The 250.00 is the borrower's money going somewhere different, and it
+     * is precisely the change §26 asked for. Note `receivable` is 4,250.00
+     * either way: the penalty credit and the principal credit hit the same
+     * account. Only `progress` distinguishes them, which is why the column
+     * had to exist.
      */
     const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
-    await pay(repo, INSTALMENT_1);
-
-    const reachable = db.schedules
-      .filter((s) => s.paidInFullAt === null)
-      .map((s) => s.id);
-    expect(reachable).toEqual(["s-2", "s-3"]);
-
-    // A second, generous payment confirms it: nothing lands on s-1.
-    await pay(repo, "50000.00");
-    expect(money(db.inst(1).interestPaid)).toBe("750.00");
-    expect(money(db.inst(1).principalPaid)).toBe("8026.26");
-    expect(db.memos().some((m) => m.startsWith("Penalties on"))).toBe(false);
-  });
-});
-
-// ─── 3. Paying the whole schedule leaves the whole penalty owing ────────
-
-describe("GOLDEN — the borrower cannot pay the late fee at all", () => {
-  it("still owes 310.00 after paying every instalment in full", async () => {
-    // The headline. Total schedule = 8,776.26 × 3 = 26,328.78.
-    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
-    await pay(repo, "26328.78");
-
-    expect(db.schedules.every((s) => s.paidInFullAt !== null)).toBe(true);
-    expect(await repo.accruedPenaltiesFor(LOAN_ID)).toEqual({
-      originalPenalty: TOTAL_ACCRUED,
-      waivedToDate: 0,
-      outstanding: TOTAL_ACCRUED,
+    await pay(repo, "5000.00");
+    expect(outcome(db)).toEqual({
+      interestIncome: "750.00",
+      receivable: "4250.00",
+      advances: "0.00",
+      // Unmoved: the income was recognised when the fee accrued. Collecting
+      // it is the asset converting to cash, not a second recognition.
+      feeIncome: "310.00",
+      progress: [
+        ["750.00", "4000.00", "250.00", "open"],
+        ["0.00", "0.00", "0.00", "open"],
+        ["0.00", "0.00", "0.00", "open"],
+      ],
     });
   });
 
-  it("books the excess to Customer Advances rather than to the penalty", async () => {
+  it("₱5,000 — the legacy order is untouched, to the centavo", async () => {
+    // The safety property at the amount where §26's order visibly differs.
+    const { db, repo } = seed("INTEREST_PRINCIPAL");
+    await pay(repo, "5000.00");
+    expect(outcome(db)).toEqual({
+      interestIncome: "750.00",
+      receivable: "4250.00",
+      advances: "0.00",
+      feeIncome: "310.00",
+      progress: [
+        ["750.00", "4250.00", "0.00", "open"],
+        ["0.00", "0.00", "0.00", "open"],
+        ["0.00", "0.00", "0.00", "open"],
+      ],
+    });
+  });
+
+  it("₱5,000 — the borrower-friendly order never reaches the penalty", async () => {
+    // Charges last, and ₱5,000 does not get past instalment 1's principal.
+    // Identical to the legacy order here, and that is a real property of
+    // the order rather than a leftover of the tiers being inert.
+    const { db, repo } = seed("INTEREST_PRINCIPAL_FEES_PENALTIES");
+    await pay(repo, "5000.00");
+    expect(outcome(db).progress).toEqual([
+      ["750.00", "4250.00", "0.00", "open"],
+      ["0.00", "0.00", "0.00", "open"],
+      ["0.00", "0.00", "0.00", "open"],
+    ]);
+  });
+
+  it("posts a Penalties line crediting Loans Receivable, never Fee Income", async () => {
     /*
-     * Handing over MORE than the schedule does not settle the fee either.
-     * The 310.00 surplus becomes a liability to the borrower while the
-     * borrower simultaneously owes 310.00 of penalty — the same peso on
-     * both sides of the balance sheet, which is the clearest possible
-     * statement that the two are not connected.
+     * The accounting §26 built and this batch finally exercises. A late fee
+     * is income the moment it accrues (`lateFeeAccrualEntry` posts
+     * Dr Loans Receivable / Cr Fee Income), so collecting it is
+     * Dr Cash / Cr Loans Receivable. Crediting Fee Income again here would
+     * book the same peso of income twice.
      */
     const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
+    await pay(repo, "5000.00");
+
+    expect(db.linesMemoed("Penalties on")).toEqual([
+      { memo: "Penalties on LN-2026-000077", credit: "250.00" },
+    ]);
+    const penaltyLine = db.entries
+      .flatMap((e) => e.lines)
+      .find((l) => (l.memo ?? "").startsWith("Penalties on"))!;
+    expect(penaltyLine.accountId).toBe(
+      db.accountId(ACCOUNT_CODES.LOANS_RECEIVABLE),
+    );
+    // Fee Income is exactly the 310.00 the accruals credited. Not a centavo
+    // more.
+    expect(db.credited(ACCOUNT_CODES.FEE_INCOME)).toBe("310.00");
+  });
+
+  it("still posts no Fees line, on any order", async () => {
+    // The FEES tier stays inert and correctly so: no fee in this system is
+    // ever owed as a balance.
+    for (const order of ORDERS) {
+      const { db, repo } = seed(order);
+      await pay(repo, "12000.00");
+      expect(db.linesMemoed("Fees on")).toEqual([]);
+    }
+  });
+
+  it("every entry still balances, on every order", async () => {
+    for (const order of ORDERS) {
+      const { db, repo } = seed(order);
+      await pay(repo, "12000.00");
+      for (const e of db.entries) {
+        const d = e.lines.reduce((s, l) => s + Number(l.debit), 0);
+        const c = e.lines.reduce((s, l) => s + Number(l.credit), 0);
+        expect(money(d)).toBe(money(c));
+      }
+    }
+  });
+});
+
+// ─── 2. An instalment is no longer stamped over its own penalty ─────────
+
+describe("GOLDEN — settlement asks about every tier the order collects", () => {
+  it("holds the row open when the penalty is taken last and the money runs out", async () => {
+    /*
+     * ₱8,776.26 is instalment 1's totalDue exactly, and 250.00 of penalty
+     * is accrued against it.
+     *
+     * WAS: interest and principal covered, `paidInFullAt` stamped, 250.00
+     * stranded — and stranded permanently, because `recordPayment` reads
+     * `paidInFullAt: null` and the row had just left that set.
+     *
+     * NOW: the row stays open. That is the defect this batch closes, and
+     * `INTEREST_PRINCIPAL_FEES_PENALTIES` is where it bit hardest, because
+     * the penalty is the last tier and is the one the money runs out on.
+     */
+    const { db, repo } = seed("INTEREST_PRINCIPAL_FEES_PENALTIES");
+    await pay(repo, INSTALMENT_1);
+
+    expect(money(db.inst(1).interestPaid)).toBe("750.00");
+    expect(money(db.inst(1).principalPaid)).toBe("8026.26");
+    expect(money(db.inst(1).penaltyPaid)).toBe("0.00");
+    expect(db.inst(1).paidInFullAt).toBeNull();
+  });
+
+  it("so a later payment can still reach it", async () => {
+    // The consequence, and the whole point. A second payment settles the
+    // penalty that used to be unreachable.
+    const { db, repo } = seed("INTEREST_PRINCIPAL_FEES_PENALTIES");
+    await pay(repo, INSTALMENT_1);
+    await pay(repo, "250.00");
+
+    expect(money(db.inst(1).penaltyPaid)).toBe("250.00");
+    expect(db.inst(1).paidInFullAt).toEqual(PAID_ON);
+    expect(db.linesMemoed("Penalties on")).toEqual([
+      { memo: "Penalties on LN-2026-000077", credit: "250.00" },
+    ]);
+  });
+
+  it("does not re-collect the penalty on the next payment", async () => {
+    /*
+     * The reason `penaltyPaid` had to be a persisted column rather than a
+     * figure derived at payment time. Allocation runs against
+     * `accrued - waived - paid`; without the paid term a borrower settling
+     * one penalty across several payments would be charged it each time —
+     * the exact defect `repair-payment-allocations.ts` exists to clean up
+     * after.
+     */
+    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
+    await pay(repo, "100.00");
+    await pay(repo, "100.00");
+    await pay(repo, "100.00");
+
+    expect(money(db.inst(1).penaltyPaid)).toBe("250.00");
+    // 250.00 of penalty then 50.00 of interest — not 300.00 of penalty.
+    expect(money(db.inst(1).interestPaid)).toBe("50.00");
+    expect(
+      db.linesMemoed("Penalties on").reduce((s, l) => s + Number(l.credit), 0),
+    ).toBe(250.0);
+  });
+
+  it("still stamps a legacy-order row on interest and principal alone", async () => {
+    /*
+     * THE SAFETY PROPERTY, at its sharpest. This loan HAS an accrued
+     * penalty and its order has no tier that can ever collect it. Requiring
+     * the penalty for settlement would leave the row open forever: the loan
+     * would never close, and `lateFeeFor` charges any row whose
+     * `paidInFullAt` is null, so it would go on accruing late fees to the
+     * policy cap against a debt already repaid in full.
+     *
+     * A tier the order does not collect must not be able to hold a row
+     * open. Unchanged from before the batch, deliberately.
+     */
+    const { db, repo } = seed("INTEREST_PRINCIPAL");
+    await pay(repo, INSTALMENT_1);
+
+    expect(money(db.inst(1).principalPaid)).toBe("8026.26");
+    expect(money(db.inst(1).penaltyPaid)).toBe("0.00");
+    expect(db.inst(1).paidInFullAt).toEqual(PAID_ON);
+  });
+});
+
+// ─── 3. Paying the schedule now settles the fee ─────────────────────────
+
+describe("GOLDEN — the borrower can pay the late fee", () => {
+  it("clears all 310.00 of penalty out of the same ₱26,328.78", async () => {
+    /*
+     * The headline, and the reversal of the one this file was written to
+     * record. Total schedule = 8,776.26 x 3 = 26,328.78.
+     *
+     * WAS: every instalment settled, loan CLOSED, all 310.00 still owing.
+     * NOW: the penalty is settled and 310.00 of PRINCIPAL is left instead,
+     * so the loan stays open. The borrower owes the same total either way;
+     * the difference is that the schedule and the ledger now agree about
+     * what it is, and the remaining 310.00 is collectable by the ordinary
+     * payment path instead of sitting in a figure nothing could reduce.
+     */
+    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
+    await pay(repo, "26328.78");
+
+    expect(await repo.accruedPenaltiesFor(LOAN_ID)).toEqual({
+      originalPenalty: TOTAL_ACCRUED,
+      waivedToDate: 0,
+      paidToDate: TOTAL_ACCRUED,
+      outstanding: 0,
+    });
+    expect(outcome(db).progress).toEqual([
+      ["750.00", "8026.26", "250.00", "settled"],
+      ["629.61", "8146.65", "60.00", "settled"],
+      // 310.00 of principal short — the money that used to leave as an
+      // uncollectable penalty now stays visible as debt on the schedule.
+      ["507.41", "7958.85", "0.00", "open"],
+    ]);
+    expect(db.loans[0]!.status).toBe("ACTIVE");
+  });
+
+  it("clears the loan outright when the borrower pays schedule + penalty", async () => {
+    /*
+     * WAS: 310.00 booked to Customer Advances while the borrower
+     * simultaneously owed 310.00 of penalty — the same peso on both sides
+     * of the balance sheet.
+     * NOW: nothing to advances, nothing owing, loan CLOSED.
+     */
+    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
+    await pay(repo, "26638.78");
+
+    expect(db.credited(ACCOUNT_CODES.CUSTOMER_ADVANCES)).toBe("0.00");
+    expect((await repo.accruedPenaltiesFor(LOAN_ID)).outstanding).toBe(0);
+    expect(db.schedules.every((s) => s.paidInFullAt !== null)).toBe(true);
+    expect(db.loans[0]!.status).toBe("CLOSED");
+  });
+
+  it("reaches the same figures from either penalty-collecting order", async () => {
+    /*
+     * A payment large enough to reach every tier of every instalment
+     * settles the same amounts whichever order it walks them in — order
+     * decides who loses out when the money runs short, not what is owed.
+     * The legacy order is deliberately excluded: it has no penalty tier, so
+     * it genuinely lands somewhere else, which is the §26 promise.
+     */
+    const figures = [] as Array<ReturnType<typeof outcome>>;
+    for (const order of [
+      "FEES_PENALTIES_INTEREST_PRINCIPAL",
+      "INTEREST_PRINCIPAL_FEES_PENALTIES",
+    ] as const) {
+      const { db, repo } = seed(order);
+      await pay(repo, "26638.78");
+      figures.push(outcome(db));
+    }
+    expect(figures[1]).toEqual(figures[0]);
+  });
+
+  it("leaves a legacy-order borrower exactly where they were", async () => {
+    // Same payment, same loan, no penalty tier: all 310.00 still owing and
+    // the surplus still an advance. Unchanged from before the batch.
+    const { db, repo } = seed("INTEREST_PRINCIPAL");
     await pay(repo, "26638.78");
 
     expect(db.credited(ACCOUNT_CODES.CUSTOMER_ADVANCES)).toBe("310.00");
     expect((await repo.accruedPenaltiesFor(LOAN_ID)).outstanding).toBe(
       TOTAL_ACCRUED,
     );
-  });
-
-  it("closes the loan with the penalty still on the books", async () => {
-    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
-    await pay(repo, "26328.78");
     expect(db.loans[0]!.status).toBe("CLOSED");
-    expect((await repo.accruedPenaltiesFor(LOAN_ID)).outstanding).toBe(
-      TOTAL_ACCRUED,
-    );
   });
 });
 
-// ─── 4. A waiver leaves no per-instalment trace ─────────────────────────
+// ─── 4. A waiver now lands on instalments ───────────────────────────────
 
-describe("GOLDEN — waiving is loan-level and unattributed", () => {
-  it("reduces the loan-level figure and touches no instalment", async () => {
+describe("GOLDEN — waiving is attributed oldest instalment first", () => {
+  it("puts the whole waiver on the oldest instalment that can absorb it", async () => {
     /*
-     * `PenaltyWaiver` carries a `loanId` and an amount. Nothing anywhere
-     * records WHICH instalment's penalty was forgiven, so the loan-level
-     * total and the per-instalment accruals cannot be reconciled against
-     * each other — there is no per-instalment figure to reconcile.
+     * WAS: the loan-level figure moved and not one schedule row changed —
+     * there was no per-instalment figure for it to move.
+     * NOW: 100.00 against instalment 1, which has 250.00 outstanding.
+     *
+     * Oldest-first because it is the allocator's own walk and the arrears
+     * convention everywhere else in this system; a waiver is a concession
+     * on the oldest arrears.
      */
     const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
-    const before = db.schedules.map((s) => ({ ...s }));
-
     await repo.waivePenalty(LOAN_ID, {
       waivedAmount: 100,
       reason: "Goodwill — first arrears",
       waivedById: OFFICER,
     });
 
+    expect([1, 2, 3].map((n) => money(db.inst(n).penaltyWaived))).toEqual([
+      "100.00",
+      "0.00",
+      "0.00",
+    ]);
     expect(await repo.accruedPenaltiesFor(LOAN_ID)).toEqual({
       originalPenalty: TOTAL_ACCRUED,
       waivedToDate: 100,
+      paidToDate: 0,
       outstanding: 210,
     });
-    // Not one schedule row differs.
-    expect(db.schedules).toEqual(before);
   });
 
-  it("posts the reversal against the loan, not against an instalment", async () => {
+  it("spills onto the next instalment once the oldest is exhausted", async () => {
+    // 280.00 against 250.00 on #1 and 60.00 on #2: #1 takes all 250.00 and
+    // #2 takes the remaining 30.00. Whole instalments cleared in order,
+    // which is what "we've written off your first month" means.
+    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
+    await repo.waivePenalty(LOAN_ID, {
+      waivedAmount: 280,
+      reason: "Restructure concession",
+      waivedById: OFFICER,
+    });
+
+    expect([1, 2, 3].map((n) => money(db.inst(n).penaltyWaived))).toEqual([
+      "250.00",
+      "30.00",
+      "0.00",
+    ]);
+  });
+
+  it("adds the per-instalment shares back up to the loan-level row", async () => {
+    /*
+     * The reconcilable identity the whole attribution exists for, and what
+     * `runReconciliation`'s `penalty_subledger` check asserts across the
+     * whole book: SUM(LoanSchedule.penaltyWaived) per loan must equal
+     * SUM(PenaltyWaiver.waivedAmount) per loan.
+     */
+    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
+    await repo.waivePenalty(LOAN_ID, {
+      waivedAmount: 100,
+      reason: "First",
+      waivedById: OFFICER,
+    });
+    await repo.waivePenalty(LOAN_ID, {
+      waivedAmount: 175,
+      reason: "Second",
+      waivedById: OFFICER,
+    });
+
+    const attributed = db.schedules.reduce(
+      (s, r) => s + Number(money(r.penaltyWaived)),
+      0,
+    );
+    const waived = db.waivers.reduce((s, w) => s + Number(w.waivedAmount), 0);
+    expect(attributed).toBe(waived);
+    expect(attributed).toBe(275);
+    // 250.00 on #1, then 25.00 of #2's 60.00.
+    expect([1, 2, 3].map((n) => money(db.inst(n).penaltyWaived))).toEqual([
+      "250.00",
+      "25.00",
+      "0.00",
+    ]);
+  });
+
+  it("reduces what the next payment collects, by the waived amount", async () => {
+    // The waiver has to reach the borrower's wallet, not just a report.
+    // 250.00 accrued on #1 less 100.00 waived leaves 150.00 collectable.
+    const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
+    await repo.waivePenalty(LOAN_ID, {
+      waivedAmount: 100,
+      reason: "Goodwill",
+      waivedById: OFFICER,
+    });
+    await pay(repo, "5000.00");
+
+    expect(money(db.inst(1).penaltyPaid)).toBe("150.00");
+    expect(money(db.inst(1).principalPaid)).toBe("4100.00");
+  });
+
+  it("refuses to waive a penalty the borrower has already paid", async () => {
+    /*
+     * WAS: allowed, and vacuous — `waivePenalty` validated against
+     * `accrued - alreadyWaived` because nothing could be collected, so a
+     * full 310.00 waiver was accepted after the borrower had settled the
+     * whole schedule.
+     * NOW: refused. The outstanding figure is net of collections, so the
+     * same peso cannot be both collected from the borrower and written off
+     * again. Pinned before the change precisely so closing it would be a
+     * decision rather than an accident.
+     */
+    const { repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
+    await pay(repo, "26638.78"); // schedule + the full 310.00 of penalty
+
+    await expect(
+      repo.waivePenalty(LOAN_ID, {
+        waivedAmount: TOTAL_ACCRUED,
+        reason: "Full waive after settlement",
+        waivedById: OFFICER,
+      }),
+    ).rejects.toThrow(/exceeds outstanding penalty 0/);
+  });
+
+  it("closes a loan the waiver was the last thing holding open", async () => {
+    /*
+     * A penalty can be the only thing left owing on a loan, and when it is
+     * forgiven the loan has to close. Otherwise it sits ACTIVE with nothing
+     * outstanding, keeps appearing in the collections queue, and — because
+     * `lateFeeFor` charges any row whose `paidInFullAt` is null — keeps
+     * accruing late fees against a debt that no longer exists. That is the
+     * mirror of the settlement clause in `recordPayment` and it has to live
+     * in `waivePenalty` too.
+     *
+     * Constructed with the accrual on the LAST instalment: allocation is
+     * oldest-first, so under the borrower-friendly order the shortfall on a
+     * partial payment always lands on the final row. Paying the schedule
+     * exactly covers all interest and principal and leaves only #3's 75.00
+     * penalty.
+     */
+    const LAST_ONLY = [
+      { scheduleId: "s-3", day: "2026-06-09", amount: "75.00" },
+    ];
+    const { db, repo } = seed("INTEREST_PRINCIPAL_FEES_PENALTIES", LAST_ONLY);
+    await pay(repo, "26328.78");
+
+    expect([1, 2, 3].map((n) => db.inst(n).paidInFullAt === null)).toEqual([
+      false,
+      false,
+      true,
+    ]);
+    expect(db.loans[0]!.status).toBe("ACTIVE");
+
+    await repo.waivePenalty(LOAN_ID, {
+      waivedAmount: 75,
+      reason: "Written off on settlement",
+      waivedById: OFFICER,
+    });
+
+    expect(db.inst(3).paidInFullAt).not.toBeNull();
+    expect(db.loans[0]!.status).toBe("CLOSED");
+  });
+
+  it("still posts the reversal against the loan, not against an instalment", async () => {
+    // The ledger entry is unchanged: one loan-level reversal per waiver,
+    // keyed to the waiver id. The attribution lives in the subledger, which
+    // is where a per-instalment figure belongs.
     const { db, repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
     const { journalEntryId } = await repo.waivePenalty(LOAN_ID, {
       waivedAmount: 100,
@@ -697,30 +1020,7 @@ describe("GOLDEN — waiving is loan-level and unattributed", () => {
     const entry = db.entries.find((e) => e.id === journalEntryId)!;
     expect(entry.source).toBe("PENALTY_WAIVE");
     expect(entry.sourceRefType).toBe("PenaltyWaiver");
-    // The ref is the waiver id. No schedule id appears anywhere on it.
     expect(entry.sourceRefId).not.toMatch(/^s-\d/);
-  });
-
-  it("lets a waiver be granted for a penalty the borrower has already settled — vacuously, today", async () => {
-    /*
-     * `waivePenalty` validates against `accrued - alreadyWaived`. It does
-     * not subtract anything collected, because nothing can be collected.
-     * The moment penalties become payable this becomes a live double-relief
-     * hole, so the current arithmetic is pinned here to make the change to
-     * it deliberate.
-     */
-    const { repo } = seed("FEES_PENALTIES_INTEREST_PRINCIPAL");
-    await pay(repo, "26328.78"); // pays the entire schedule
-    // The full 310.00 is still waivable afterwards.
-    await expect(
-      repo.waivePenalty(LOAN_ID, {
-        waivedAmount: TOTAL_ACCRUED,
-        reason: "Full waive after settlement",
-        waivedById: OFFICER,
-      }),
-    ).resolves.toMatchObject({
-      waiver: { originalPenalty: TOTAL_ACCRUED, negotiatedPenalty: 0 },
-    });
   });
 });
 
@@ -739,6 +1039,10 @@ describe("GOLDEN — a loan with no accrued penalty (the safety property)", () =
    *
    * Kept deliberately as literal amounts rather than as a comparison
    * between orders: an equality between three wrong answers still passes.
+   *
+   * The only edit this block took when penalties became collectable was a
+   * third column of "0.00" in each `progress` row — `outcome` now reports
+   * `penaltyPaid`. Not one existing figure changed, which is the claim.
    */
   const NONE: typeof ACCRUALS = [];
 
@@ -752,9 +1056,9 @@ describe("GOLDEN — a loan with no accrued penalty (the safety property)", () =
         advances: "0.00",
         feeIncome: "0.00",
         progress: [
-          ["750.00", "4250.00", "open"],
-          ["0.00", "0.00", "open"],
-          ["0.00", "0.00", "open"],
+          ["750.00", "4250.00", "0.00", "open"],
+          ["0.00", "0.00", "0.00", "open"],
+          ["0.00", "0.00", "0.00", "open"],
         ],
       });
     }
@@ -770,9 +1074,9 @@ describe("GOLDEN — a loan with no accrued penalty (the safety property)", () =
         advances: "0.00",
         feeIncome: "0.00",
         progress: [
-          ["750.00", "8026.26", "settled"],
-          ["0.00", "0.00", "open"],
-          ["0.00", "0.00", "open"],
+          ["750.00", "8026.26", "0.00", "settled"],
+          ["0.00", "0.00", "0.00", "open"],
+          ["0.00", "0.00", "0.00", "open"],
         ],
       });
     }
@@ -799,9 +1103,9 @@ describe("GOLDEN — a loan with no accrued penalty (the safety property)", () =
         advances: "3671.22",
         feeIncome: "0.00",
         progress: [
-          ["750.00", "8026.26", "settled"],
-          ["629.61", "8146.65", "settled"],
-          ["507.41", "8268.85", "settled"],
+          ["750.00", "8026.26", "0.00", "settled"],
+          ["629.61", "8146.65", "0.00", "settled"],
+          ["507.41", "8268.85", "0.00", "settled"],
         ],
       });
       expect(db.loans[0]!.status).toBe("CLOSED");
@@ -828,7 +1132,27 @@ describe("GOLDEN — a loan with no accrued penalty (the safety property)", () =
     expect(await repo.accruedPenaltiesFor(LOAN_ID)).toEqual({
       originalPenalty: 0,
       waivedToDate: 0,
+      paidToDate: 0,
       outstanding: 0,
     });
+  });
+
+  it("issues no accrual lookup at all on the legacy order", async () => {
+    /*
+     * The safety property stated as work done rather than as arithmetic.
+     * An order with no PENALTIES tier can never reduce a penalty, so
+     * `recordPayment` does not read the accrual ledger for it — every loan
+     * written before §26 runs exactly the queries it ran before this batch,
+     * not merely the same sums.
+     */
+    const { db, repo } = seed("INTEREST_PRINCIPAL", ACCRUALS);
+    db.accrualLookups = 0;
+    await pay(repo, "5000.00");
+    expect(db.accrualLookups).toBe(0);
+
+    const other = seed("FEES_PENALTIES_INTEREST_PRINCIPAL", ACCRUALS);
+    other.db.accrualLookups = 0;
+    await pay(other.repo, "5000.00");
+    expect(other.db.accrualLookups).toBe(1);
   });
 });

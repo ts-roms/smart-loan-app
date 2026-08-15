@@ -1972,6 +1972,8 @@ export interface ExpiringAnnualDocument extends AnnualDocument {
 export interface LoanPenaltyTotals {
   originalPenalty: number;
   waivedToDate: number;
+  /** Late fee the borrower has actually paid. `outstanding` is net of it. */
+  paidToDate: number;
   outstanding: number;
 }
 
