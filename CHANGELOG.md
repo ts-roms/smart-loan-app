@@ -10,6 +10,95 @@ automation depends on the manifest.
 
 ---
 
+## Unreleased — worktree batch: late fees, notifications, ECL residuals
+
+### Added — a borrower can pay a late fee, and a waiver lands somewhere
+
+§26's penalties tier resolved to zero because nothing recorded what was owed
+per instalment. Two columns close it — `penaltyPaid` and `penaltyWaived` — and
+deliberately **not** `penaltyAccrued`. What accrued is already in the ledger
+exactly, as `LATE_FEE_ACCRUAL` entries keyed `"<scheduleId>:<periodKey>"`; a
+column would be a second version of a number the books already hold. The two
+added are the parts genuinely not derivable: nothing says which instalment a
+payment's penalty portion settled, and nothing says which instalment a
+loan-level waiver forgave.
+
+Waivers attribute **oldest-instalment-first, frozen at waive**. An explicit
+instalment reference was rejected for a stronger reason than scope — the waiver
+form has never asked the approving officer which instalment they meant, so the
+field would demand an answer nobody has the basis to give and no historical row
+could supply.
+
+**The backfill differs by column, and the asymmetry is the point.**
+`penaltyPaid` starts at 0 and forgives nothing — provably, since `recordPayment`
+never passed `penaltyDue`, so `allocation.penalties` was `undefined` on every
+payment ever recorded. `penaltyWaived` **is** backfilled, because leaving it at
+zero would make every already-forgiven peso collectable again, re-charging debt
+a manager signed off writing away.
+
+Found and fixed on the way: `waivePenalty` validated against accrued-minus-waived
+with nothing subtracted for collections — a live double-relief hole the moment
+penalties became payable. Reconciliation gained a `- SUM(penaltyPaid)` term it
+would have started failing without on the first fee anyone paid, plus a
+`penalty_subledger` check tying waiver shares to the loan-level rows.
+
+One test **did not** fail when it should have, which is the more useful finding:
+`posting.allocation-order.test.ts` feeds the allocator zero-charge instalments,
+and the allocator never changed — only what its caller feeds it did. **An alarm
+wired to a pure function cannot detect a change in its callers.**
+
+### Added — real SendGrid and Twilio adapters
+
+No email or SMS had ever been delivered on any deployment: both tenant builders
+discarded their config and returned a mock, and neither SDK was in any
+`package.json`. Same reframe as the storage adapter — credentials block
+_running_, not building.
+
+**No dependency added**, and the reasoning differs from the storage lib's: there
+is no algorithm to hand-roll (SendGrid is a bearer header, Twilio is HTTP
+Basic), so the SDKs would add a client tree and retry middleware to the
+dependency path of an app that moves money, for ~60 lines of `fetch`. `MOCK` now
+**refuses to boot** under `NODE_ENV=production`, and so does `SES`.
+
+**The §48 guarantee held only because a mock cannot fail.** `loans.service`
+awaits the disbursement notification in the request path _after the money has
+moved_, and `ledger.service` awaits with no try/catch. Real adapters would have
+turned a hung socket into a hung disbursement, so both carry an
+`AbortSignal.timeout`.
+
+Still needed: credentials and a live round-trip; Twilio's 201 means accepted,
+not delivered, with no `StatusCallback` handling; scheduled jobs get the
+unwrapped platform provider so tenant credentials are ignored for reminders; and
+a FAILED row is terminal, so transient 429s become permanently undelivered.
+
+### Fixed — the ECL period key was neither stable nor a day
+
+Two defects, not the one reported. The known UTC-boundary bug left the
+double-post open for most of every working day at UTC+8. And `periodStart` came
+from local midnight, which read back as a UTC date lands on the **last day of
+the previous month** on any host east of UTC — so the same request keyed
+differently on a UTC host and a Manila one, in immutable stored data.
+
+The key derivation changed; `asOf` did not. That was the trap: once `periodEnd`
+becomes a date, the repository's `asOf = periodEnd` fallback would have silently
+re-measured every run as of local midnight, moving DPD, staging and every ECL
+figure **under cover of an idempotency fix**. No figure moved.
+
+The movement report now reports **both** the computed and booked movement with
+the divergence named, rather than filtering to runs that posted — which would
+have made the report agree with the ledger by hiding the disagreement.
+
+`EclRun` uniqueness on the period is specified as **must not** be added: the
+model is deliberately multi-row, and a constraint would make the second run
+throw, destroying the `ALREADY_POSTED` path.
+
+**Open, and it is a promise the system cannot keep:** the UI advises reversing
+before restating, but `postIfAbsent` matches on the key with no reversal filter,
+so a reversed entry still occupies it and a re-post returns the reversed entry
+with `created: false`. Needs a revision-bearing key in `posting.ts`.
+
+---
+
 ## Unreleased — worktree batch: append-only audit, auth declarations, suite stability
 
 ### Added — the audit log is append-only in the database, not by convention
